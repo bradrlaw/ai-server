@@ -1,0 +1,31 @@
+# LiteLLM gateway config — fronts the native llama-swap router (127.0.0.1:9090).
+# LiteLLM runs with network_mode: host, so 127.0.0.1 = the host, where llama-swap
+# listens. llama-swap is default-allow on localhost; api_key here is a placeholder.
+#
+# Exposed model names match llama-swap's IDs so clients see coding/chat/big.
+
+model_list:
+  - model_name: coding
+    litellm_params:
+      model: openai/coding
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
+  - model_name: chat
+    litellm_params:
+      model: openai/chat
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
+  - model_name: big
+    litellm_params:
+      model: openai/big
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
+
+litellm_settings:
+  # llama-server may not accept every OpenAI param; drop unknowns instead of erroring.
+  drop_params: true
+  # Model loads can take ~30-70s (cold + BF16). Don't time out early.
+  request_timeout: 600
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

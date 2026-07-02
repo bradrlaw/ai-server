@@ -442,3 +442,28 @@ in `reasoning_content`; budget `max_tokens` generously (≥512) or `content` ret
 `finish_reason: length`. `--jinja` is on (tool-calling chat template). API is default-allow on
 localhost; auth is enforced at the LiteLLM gateway (next phase). Endpoints: `/v1/models`,
 `/v1/chat/completions`, `/running`, `POST /api/models/unload`, web UI at `:9090`.
+
+## Phase 2b — LiteLLM gateway (2026-07-02)
+
+OpenAI/Anthropic-compatible gateway (container, hybrid ADR-0006) in front of the native
+llama-swap router. Compose stack at `/srv/ai/docker/`; image `ghcr.io/berriai/litellm:v1.90.0`.
+Start/stop: `cd /srv/ai/docker && docker compose up -d` / `down`. Auto-starts on boot
+(`restart: unless-stopped` + docker enabled).
+
+**Networking:** `network_mode: host` — reaches llama-swap on `127.0.0.1:9090` and exposes the
+gateway on the host at `:4000`. (Bridge networking can't reach a localhost-bound host service,
+hence host mode.) Config `docker/litellm/config.yaml` maps model names `coding`/`chat`/`big` to
+`openai/<id>` at `api_base http://127.0.0.1:9090/v1`.
+
+**Auth:** `master_key` from `LITELLM_MASTER_KEY` in `docker/.env` (gitignored; template in
+`.env.example`). Clients send it as their OpenAI API key (`Authorization: Bearer sk-...`).
+Requests without a key get 401. Verified 2026-07-02: `/v1/models` lists all three; full path
+client→LiteLLM(:4000)→llama-swap(:9090)→llama-server returns correct output.
+
+**Client setup** (Copilot CLI / VS Code / any OpenAI client):
+- Base URL: `http://<server-or-tailscale-ip>:4000/v1`
+- API key: the `LITELLM_MASTER_KEY`
+- Models: `coding`, `chat`, `big`
+Later phases add a reverse proxy + Tailscale-only binding; for now access over the trusted
+network. `drop_params: true` and `request_timeout: 600` accommodate llama-server quirks and
+cold model loads (~30-70s).

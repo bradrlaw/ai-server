@@ -1,0 +1,24 @@
+# Containerized app tier for /srv/ai (hybrid model, ADR-0006).
+# Native GPU engines (llama-swap/llama-server) stay on the host; this stack holds
+# the CPU app tier. Start: `cd /srv/ai/docker && docker compose up -d`.
+
+services:
+  # LiteLLM — OpenAI/Anthropic-compatible gateway in front of the native
+  # llama-swap router. Uses host networking to reach llama-swap on 127.0.0.1:9090
+  # and to expose the gateway on the host at :4000.
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.90.0
+    container_name: litellm
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ./.env
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
