@@ -427,7 +427,7 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
-| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 32768 | ~23 GB |
+| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 163840 | ~31.5 GB |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
 
@@ -485,3 +485,20 @@ Env vars (see `scripts/copilot-byok.sh`, which sources the key from `docker/.env
 
 On the server just run `/srv/ai/scripts/copilot-byok.sh`. If the endpoint 404s, try the base URL
 without the trailing `/v1`.
+
+### coding context-window sweep (2026-07-02)
+
+Qwen3.6-27B Q6_K on one V100-32GB, `--parallel 1 --flash-attn on`, f16 KV. Model's trained
+context is 262144 (256k), so VRAM is the limit. KV grows ~65 MB per 1k tokens; the flash-attn
+compute buffer is fixed (scales with u-batch, not prompt length), so load-time VRAM ≈ peak.
+
+| ctx     | VRAM used | free    | notes                                   |
+|---------|-----------|---------|-----------------------------------------|
+| 32768   | ~23.3 GB  | ~9.4 GB | previous default                        |
+| 131072  | 29.4 GB   | 3.3 GB  | meets Copilot BYOK ≥128k recommendation |
+| 163840  | 31.5 GB   | 1.25 GB | **chosen** — practical max with f16 KV  |
+| ≥172032 | —         | —       | exceeds 32 GB (would OOM)               |
+
+Chose **163840 (160k)**. Switched coding to `--parallel 1` so the full window serves one agent
+(concurrent coding requests serialize — fine for personal use). To reach the model's full 256k,
+use `--cache-type-k q8_0 --cache-type-v q8_0` (halves KV, slight quality trade-off).

@@ -43,8 +43,8 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf
-      --ctx-size 32768
-      --parallel 2
+      --ctx-size 163840
+      --parallel 1
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K on V100 #2 (idx2) -------------------
