@@ -9,6 +9,7 @@
 !/LICENSE
 !/docs/
 !/scripts/
+!/docker/
 
 # --- drop generated/cache files inside tracked dirs ---
 __pycache__/
