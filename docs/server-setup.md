@@ -503,6 +503,21 @@ Chose **163840 (160k)**. Switched coding to `--parallel 1` so the full window se
 (concurrent coding requests serialize — fine for personal use). To reach the model's full 256k,
 use `--cache-type-k q8_0 --cache-type-v q8_0` (halves KV, slight quality trade-off).
 
+### Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)
+
+Raising `--ubatch-size` (`-ub`, default 512) speeds **prefill / time-to-first-token** (helps
+large prompts, e.g. tool results injected into context). It does **not** change generation
+speed. Cost = a larger CUDA compute buffer (VRAM). `llama-bench` on a V100:
+
+| model              | -ub 512 | -ub 1024 | -ub 2048 | applied |
+|--------------------|---------|----------|----------|---------|
+| coding (27B Q6_K, 1×V100) | 746 t/s | **858 (+15%)** | 892 (+20%) | **`-ub 1024`** — 2048 nearly OOMs at ctx 163840 (~0.4 GB free) |
+| chat (35B-A3B UD-Q6_K, 1×V100) | — | — | +~20% | **`-ub 2048`** — has ~4 GB headroom |
+| big (27B BF16, 2×V100 layer-split) | **232 t/s** | 205 | 167 | **default 512** — larger *hurts* (inter-GPU sync) |
+
+Key lesson: bigger `-ub` helps single-GPU models but **hurts layer-split multi-GPU** models.
+`coding` at `-ub 1024` uses ≈ the same VRAM as 512 (free +15%). Verified both load without OOM.
+
 ## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
 
 App-tier containers (compose `/srv/ai/docker/`), all pointing at the LiteLLM gateway.

@@ -45,6 +45,7 @@ models:
       --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf
       --ctx-size 163840
       --parallel 1
+      --batch-size 2048 --ubatch-size 1024
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K on V100 #2 (idx2) -------------------
@@ -62,11 +63,15 @@ models:
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
+      --batch-size 2048 --ubatch-size 2048
       ${common}
 
   # --- big: Qwen3.6-27B BF16 across BOTH V100s (idx1+idx2), TP -----------
   # ~50GB weights split over 64GB. Highest-quality dense model; occasional use.
   # Auto-unloads after 5 min idle so coding+chat can reclaim the cards.
+  # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
+  # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
+  # sync overhead of the layer split. Do not add --ubatch-size.
   "big":
     name: "Qwen3.6-27B (BF16) — max quality, dual-V100"
     description: "Full-precision dense 27B split across both V100s. Preempts coding+chat."
