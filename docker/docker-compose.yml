@@ -87,6 +87,10 @@ services:
       - "/config/config.json"
     volumes:
       - ./mcpo:/config:ro
+      # Read-only mount of the ai-server repo so the `git` MCP server can
+      # inspect it (log/diff/status/show). RO by design: LLM-driven agents
+      # cannot commit/mutate the real repo. Add more repos as extra :ro mounts.
+      - /srv/ai:/repos/ai-server:ro
     networks:
       - ai
 

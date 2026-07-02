@@ -6,6 +6,21 @@
     "time": {
       "command": "uvx",
       "args": ["mcp-server-time", "--local-timezone=America/New_York"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "git": {
+      "//": "Repo is mounted read-only at /repos/ai-server (see docker-compose mcpo volumes). Read ops work; commit/add/checkout fail by design on the RO mount.",
+      "//_safe": "GIT_CONFIG_* env marks the mounted repo as safe (container user != host owner uid), avoiding git's 'dubious ownership' error without writing any host files.",
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "/repos/ai-server"],
+      "env": {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": "/repos/ai-server"
+      }
     }
   }
 }

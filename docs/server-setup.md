@@ -529,11 +529,22 @@ the `open-webui-data` volume.
 **mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
 format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
-(Python servers work; Node/`npx` needs a node-enabled image). Verified the bundled `time`
-server: `POST /time/get_current_time {"timezone":"America/New_York"}` → correct datetime.
+(Python servers work; Node/`npx` needs a node-enabled image). Registered servers (all uvx):
+`time`, `fetch` (URL→markdown), `git` (inspect the ai-server repo). Verified live, e.g.
+`POST /time/get_current_time {"timezone":"America/New_York"}` → datetime;
+`POST /fetch/fetch {"url":"https://example.com"}` → page markdown;
+`POST /git/git_log {"repo_path":"/repos/ai-server"}` → commit history.
 Published on `0.0.0.0:8000` (API-key protected) because Open WebUI fetches/validates tool
 specs and the browser may too — the URL must be reachable from the client, not just the
 open-webui backend.
+
+_git server notes:_ `/srv/ai` is bind-mounted **read-only** at `/repos/ai-server` (compose
+mcpo `volumes`). Read ops (log/diff/status/show) work; `git_commit`/`git_add` fail by design
+(`Read-only file system`) — no LLM-driven mutation of the real repo. The container user ≠
+host owner (uid 1000), so the git server sets `safe.directory` via `GIT_CONFIG_*` env in
+config.json (avoids git's "dubious ownership" error without writing host files). **Adding a
+repo/volume mount requires `docker compose up -d --force-recreate mcpo`** — hot-reload only
+picks up config.json edits, not new env/volumes.
 
 To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
 Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://192.168.4.57:8000/time`; the IP
