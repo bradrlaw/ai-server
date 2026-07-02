@@ -514,7 +514,7 @@ is reached from containers via `host.docker.internal:4000`.
 |-------------|------------------------------------|----------------------------|---------|
 | open-webui  | ghcr.io/open-webui/open-webui:v0.10.2 | `http://<host>:3000`    | Family chat UI + accounts |
 | searxng     | searxng/searxng:latest             | `127.0.0.1:8888` (debug)   | Private web search (JSON) |
-| mcpo        | ghcr.io/open-webui/mcpo:main       | `127.0.0.1:8000` / `mcpo:8000` | MCP→OpenAPI proxy (ADR-0011) |
+| mcpo        | ghcr.io/open-webui/mcpo:main       | `0.0.0.0:8000` / `mcpo:8000` | MCP→OpenAPI proxy (ADR-0011) |
 
 **Open WebUI:** backend `OPENAI_API_BASE_URL=http://host.docker.internal:4000/v1` with the
 LiteLLM master key; sees `coding`/`chat`/`big`. First browser signup becomes **admin**; add
@@ -531,7 +531,18 @@ format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
 (Python servers work; Node/`npx` needs a node-enabled image). Verified the bundled `time`
 server: `POST /time/get_current_time {"timezone":"America/New_York"}` → correct datetime.
-To register in Open WebUI: Admin → Settings → Tools → add the mcpo route URL + `MCPO_API_KEY`.
+Published on `0.0.0.0:8000` (API-key protected) because Open WebUI fetches/validates tool
+specs and the browser may too — the URL must be reachable from the client, not just the
+open-webui backend.
+
+To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
+Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://192.168.4.57:8000/time`; the IP
+**must match the address your browser uses to reach Open WebUI** — LAN vs Tailscale),
+Auth = Bearer `MCPO_API_KEY`. Gotchas: the Integrations row may not show a tool **count**
+even when working (cosmetic); external tool servers do **not** appear in the `+` menu —
+enable them per-chat via the **tools/🔧 icon next to `+`**; set the model's **Function
+Calling = Native** (Workspace → Models → Advanced Params) for reliable invocation. Confirm
+a call actually lands with `docker compose logs mcpo | grep 'Calling endpoint'`.
 Coding harnesses (Copilot CLI, opencode, Claude Code) can also use the same MCP servers
 natively over stdio (mcpo is only for HTTP/OpenAPI consumers).
 
