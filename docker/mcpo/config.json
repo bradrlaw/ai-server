@@ -1,0 +1,11 @@
+{
+  "//": "MCP server inventory for /srv/ai — single source of truth (tracked in git).",
+  "//_docs": "https://github.com/open-webui/mcpo — Claude-Desktop mcpServers format. Edit + hot-reload picks it up.",
+  "//_note": "The mcpo image ships uv (uvx). Node-based servers (npx) require a node-enabled image; start with uvx servers.",
+  "mcpServers": {
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time", "--local-timezone=America/New_York"]
+    }
+  }
+}

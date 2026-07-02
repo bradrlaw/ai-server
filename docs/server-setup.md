@@ -502,3 +502,38 @@ compute buffer is fixed (scales with u-batch, not prompt length), so load-time V
 Chose **163840 (160k)**. Switched coding to `--parallel 1` so the full window serves one agent
 (concurrent coding requests serialize — fine for personal use). To reach the model's full 256k,
 use `--cache-type-k q8_0 --cache-type-v q8_0` (halves KV, slight quality trade-off).
+
+## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
+
+App-tier containers (compose `/srv/ai/docker/`), all pointing at the LiteLLM gateway.
+Start/stop: `cd /srv/ai/docker && docker compose up -d` / `down`. Reboot-safe
+(`restart: unless-stopped`). Shared bridge network `ai`; LiteLLM stays host-networked and
+is reached from containers via `host.docker.internal:4000`.
+
+| Service     | Image                              | Access                     | Purpose |
+|-------------|------------------------------------|----------------------------|---------|
+| open-webui  | ghcr.io/open-webui/open-webui:v0.10.2 | `http://<host>:3000`    | Family chat UI + accounts |
+| searxng     | searxng/searxng:latest             | `127.0.0.1:8888` (debug)   | Private web search (JSON) |
+| mcpo        | ghcr.io/open-webui/mcpo:main       | `127.0.0.1:8000` / `mcpo:8000` | MCP→OpenAPI proxy (ADR-0011) |
+
+**Open WebUI:** backend `OPENAI_API_BASE_URL=http://host.docker.internal:4000/v1` with the
+LiteLLM master key; sees `coding`/`chat`/`big`. First browser signup becomes **admin**; add
+family accounts under Admin → Users. Web search is pre-wired (`ENABLE_WEB_SEARCH=true`,
+`WEB_SEARCH_ENGINE=searxng`); enable it per-chat with the web/globe toggle. Data persists in
+the `open-webui-data` volume.
+
+**SearXNG:** `search/formats` includes `json` (required by Open WebUI). Secret injected from
+`SEARXNG_SECRET` (settings.yml keeps the literal `ultrasecretkey` placeholder). Verified:
+`/search?q=...&format=json` returns results.
+
+**mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
+format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
+`http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
+(Python servers work; Node/`npx` needs a node-enabled image). Verified the bundled `time`
+server: `POST /time/get_current_time {"timezone":"America/New_York"}` → correct datetime.
+To register in Open WebUI: Admin → Settings → Tools → add the mcpo route URL + `MCPO_API_KEY`.
+Coding harnesses (Copilot CLI, opencode, Claude Code) can also use the same MCP servers
+natively over stdio (mcpo is only for HTTP/OpenAPI consumers).
+
+**Secrets** (in `docker/.env`, gitignored; template `.env.example`): `WEBUI_SECRET_KEY`,
+`SEARXNG_SECRET`, `MCPO_API_KEY`.

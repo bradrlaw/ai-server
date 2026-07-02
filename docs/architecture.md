@@ -87,6 +87,8 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 | OpenClaw | native systemd (Node 24) | — |
 | LiteLLM | container | — |
 | Open WebUI | container | — |
+| SearXNG (web search) | container | — |
+| mcpo (MCP→OpenAPI proxy, ADR-0011) | container | — |
 | Qdrant / Postgres | container | — |
 | Immich | container (+ GPU ML worker) | P100 for ML (TBD) |
 | n8n / Prefect | container | — |
@@ -100,6 +102,7 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 | LLM router/serving | llama.cpp + **llama-swap** | Ollama · vLLM (V100-only) · SGLang · TGI |
 | Family chat + web search | Open WebUI | LibreChat · AnythingLLM (search: SearXNG/Brave/Tavily) |
 | Personal assistant (multi-channel/voice) | OpenClaw | — |
+| MCP tools hosting/inventory (ADR-0011) | mcpo (config = inventory, hot-reload) | native MCP stdio for coding harnesses |
 | STT | faster-whisper | whisper.cpp · WhisperX · Wyoming (streaming) |
 | TTS (later) | Piper (CPU) | Kokoro · XTTSv2 · OpenedAI-speech |
 | Embeddings | TEI / Infinity | llama.cpp embeddings |
@@ -114,13 +117,14 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 
 ## 6. Phased rollout
 
-1. **Foundation** — Docker + NVIDIA Container Toolkit; validate a GPU container.
+1. ✅ **Foundation** — Docker + NVIDIA Container Toolkit; validate a GPU container.
    (llama.cpp/llama-swap stay native.)
-2. **Core serving** — llama-swap (`coding` + `chat` on-demand, `big` TP=2 profile) →
-   LiteLLM gateway → point Copilot CLI/VS Code at it.
+2. ✅ **Core serving** — llama-swap (`coding` + `chat` on-demand, `big` TP=2 profile) →
+   LiteLLM gateway → point Copilot CLI/VS Code at it (BYOK, verified tool-calling+streaming).
 2b. **OpenClaw** — `npm install -g openclaw@latest` → `openclaw onboard` → point at
    LiteLLM → wire Telegram + Control UI behind Tailscale. (Node 24 already installed.)
-3. **Family chat** — Open WebUI + web search + accounts.
+3. ✅ **Family chat** — Open WebUI + web search (SearXNG) + accounts; **mcpo** for MCP
+   tool hosting/inventory (ADR-0011).
 4. **Aux (P100)** — embeddings + faster-whisper (validate real-time latency) + captioner.
 5. **RAG** — Qdrant + ingestion (Docling) + retrieval for family docs.
 6. **Media** — ComfyUI burst (V100) + Immich for the photo library.

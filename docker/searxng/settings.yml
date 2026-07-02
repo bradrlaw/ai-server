@@ -1,0 +1,20 @@
+# SearXNG settings for the /srv/ai app tier. Private metasearch backend for
+# Open WebUI web search. JSON output format is REQUIRED for Open WebUI.
+# Docs: https://docs.searxng.org/admin/settings/
+use_default_settings: true
+
+server:
+  # secret_key is overridden at container start from SEARXNG_SECRET (the image
+  # entrypoint substitutes the literal "ultrasecretkey"). Real secret lives in .env.
+  secret_key: "ultrasecretkey"
+  limiter: false
+  image_proxy: true
+
+search:
+  # Open WebUI parses JSON; html is default so json must be added explicitly.
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true

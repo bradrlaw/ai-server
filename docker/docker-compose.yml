@@ -22,3 +22,78 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # Open WebUI — family-facing chat UI + multi-user accounts. Points at the
+  # LiteLLM gateway (host :4000, reached via host.docker.internal). Web search
+  # via the SearXNG service; MCP tools via the mcpo service.
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.10.2
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    ports:
+      - "3000:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Backend = LiteLLM gateway (OpenAI-compatible).
+      OPENAI_API_BASE_URL: "http://host.docker.internal:4000/v1"
+      OPENAI_API_KEY: "${LITELLM_MASTER_KEY}"
+      WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY}"
+      # Web search via self-hosted SearXNG.
+      ENABLE_WEB_SEARCH: "true"
+      WEB_SEARCH_ENGINE: "searxng"
+      SEARXNG_QUERY_URL: "http://searxng:8080/search?q=<query>"
+    volumes:
+      - open-webui-data:/app/backend/data
+    networks:
+      - ai
+
+  # SearXNG — private metasearch backend for Open WebUI web search. No API key;
+  # aggregates Google/Bing/Brave/DDG/etc. Internal-only + a localhost debug port.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8888:8080"
+    environment:
+      SEARXNG_SECRET: "${SEARXNG_SECRET}"
+      SEARXNG_BASE_URL: "http://localhost:8888/"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks:
+      - ai
+
+  # mcpo — MCP-to-OpenAPI proxy. Exposes each MCP server in mcpo/config.json as
+  # an authenticated OpenAPI endpoint (http://mcpo:8000/<tool>) for Open WebUI.
+  # config.json is the versioned MCP inventory; --hot-reload picks up edits.
+  mcpo:
+    image: ghcr.io/open-webui/mcpo:main
+    container_name: mcpo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--api-key"
+      - "${MCPO_API_KEY}"
+      - "--hot-reload"
+      - "--config"
+      - "/config/config.json"
+    volumes:
+      - ./mcpo:/config:ro
+    networks:
+      - ai
+
+networks:
+  ai:
+    name: ai
+
+volumes:
+  open-webui-data:
+    name: open-webui-data
