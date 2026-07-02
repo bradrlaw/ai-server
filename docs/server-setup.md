@@ -467,3 +467,21 @@ client→LiteLLM(:4000)→llama-swap(:9090)→llama-server returns correct outpu
 Later phases add a reverse proxy + Tailscale-only binding; for now access over the trusted
 network. `drop_params: true` and `request_timeout: 600` accommodate llama-server quirks and
 cold model loads (~30-70s).
+
+## GitHub Copilot CLI via BYOK (2026-07-02)
+
+Copilot CLI supports OpenAI-compatible endpoints (BYOK). It points at the LiteLLM gateway.
+Requirements (both verified through the full stack 2026-07-02): **tool calling** (Qwen3.6 +
+`--jinja` → `finish_reason: tool_calls`) and **streaming** (SSE). Docs recommend a ≥128k context
+window for best results; our `coding` model is currently 32768 (tunable).
+
+Env vars (see `scripts/copilot-byok.sh`, which sources the key from `docker/.env`):
+
+    export COPILOT_PROVIDER_BASE_URL=http://<host>:4000/v1   # e.g. Tailscale <tailscale-ip>
+    export COPILOT_PROVIDER_TYPE=openai
+    export COPILOT_PROVIDER_API_KEY=$LITELLM_MASTER_KEY
+    export COPILOT_MODEL=coding        # or chat / big
+    copilot
+
+On the server just run `/srv/ai/scripts/copilot-byok.sh`. If the endpoint 404s, try the base URL
+without the trailing `/v1`.
