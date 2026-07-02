@@ -430,9 +430,9 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 163840 | ~31.5 GB |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
-| `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 16384 | ~7.7 GB, always-on, `--reasoning-budget 0` |
-| `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 32768 | ~18 GB, ttl 600s (evicts coding) |
-| `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 32768 | ~14 GB, ttl 600s (evicts chat) |
+| `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 131072 | ~10.8 GB, always-on, `--reasoning-budget 0`, ub2048 |
+| `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 65536 | ~25 GB, ttl 600s (evicts coding), ub2048 |
+| `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
 **Routing = matrix (3 cards).** `f`(fast, P100) is in every set so it's never evicted and runs
 CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
@@ -525,6 +525,42 @@ speed. Cost = a larger CUDA compute buffer (VRAM). `llama-bench` on a V100:
 
 Key lesson: bigger `-ub` helps single-GPU models but **hurts layer-split multi-GPU** models.
 `coding` at `-ub 1024` uses ≈ the same VRAM as 512 (free +15%). Verified both load without OOM.
+
+### Gemma-4 benchmarks + context/ubatch tuning (2026-07-02)
+
+`llama-bench` (`-p 2048 -n 128`, flash-attn on, `CUDA_DEVICE_ORDER=PCI_BUS_ID`). **Note:** without
+`CUDA_DEVICE_ORDER=PCI_BUS_ID`, CUDA orders devices by *speed* (V100s first, P100 last) — the
+opposite of nvidia-smi/llama-swap — so always export it when pinning a card for benchmarks.
+
+**Throughput** (t/s):
+
+| model | card | pp2048 ub512 | ub1024 | ub2048 | tg128 |
+|-------|------|--------------|--------|--------|-------|
+| Gemma-4-12B (dense) | **P100** | 368 | 324 | 458 | **30** |
+| Gemma-4-12B (dense) | **V100** | 1526 | 1814 | **1987** | **71** |
+| Gemma-4-31B (dense) | V100 | 583 | 697 | **760** | 34 |
+| Gemma-4-26B-A4B (MoE) | V100 | 1486 | 1887 | **2269** | **110** |
+
+- **P100 vs V100 (12B):** the V100 is ~4.3× faster prefill and ~2.35× faster generation. `fast`
+  stays on the P100 anyway (frees both V100s for the big Qwen/Gemma models); 30 t/s is fine for
+  chat, and the P100 is otherwise idle.
+- **26B-A4B MoE is the fastest model on the box** — 110 t/s gen (only ~3.8B active params),
+  beating even the dense 12B. Best quality/speed Gemma for daily use.
+- **ubatch:** `-ub 2048` is optimal prefill for *all* single-GPU Gemmas (dense +28-30%, MoE +53%).
+  Applied `-ub 2048` to `fast`, `gemma-31b`, `gemma-26b`.
+
+**Context / VRAM.** All three Gemma-4 models are **256K-native** (`context_length 262144`) and use
+**sliding-window attention** (1024 window, 5 SWA : 1 global layer), so KV cache grows very slowly —
+only the 1-in-6 global layers hold full-length KV. Measured resident VRAM (f16 KV, `-ub` default):
+
+| model | ctx 32k | 65k | 131k | 262k (full) | applied ctx |
+|-------|---------|-----|------|-------------|-------------|
+| 12B / P100 16GB | 8.8 | 9.3 | 10.4 | 12.6 GB | **131072** (10.8GB @ub2048; leaves P100 aux room) |
+| 31B / V100 32GB | 23.2 | 25.8 | 31.0 | OOM | **65536** (25.3GB @ub2048; 131k too tight for compute buf) |
+| 26B-A4B / V100 32GB | 15.6 | 16.3 | 17.6 | 20.3 | **131072** (18.0GB @ub2048; full 256k also fits) |
+
+Full 256K only costs +2-4 GB over 16K thanks to SWA. Verified all three co-resident after tuning:
+P100 10.8GB / V100#1 25.3GB / V100#2 18.0GB, all answering correctly.
 
 ## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
 

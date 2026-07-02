@@ -100,13 +100,15 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
-      --ctx-size 16384
+      --ctx-size 131072
       --parallel 1
+      --batch-size 2048 --ubatch-size 2048
       --reasoning-budget 0
       ${common}
 
   # --- gemma-31b: Gemma-4-31B (QAT UD-Q4_K_XL) on a V100 (idx1) ----------
-  # Comparison model vs Qwen coding/big. ~18GB on 32GB. Evicts coding when used.
+  # Comparison model vs Qwen coding/big. ~16GB weights; ctx 65536 -> ~26GB on
+  # 32GB (f16 KV, SWA). ub2048 = best prefill (760 t/s). Evicts coding when used.
   "gemma-31b":
     name: "Gemma-4-31B — max-quality Gemma"
     description: "Dense 31B for quality comparison. Single V100; evicts coding."
@@ -117,9 +119,9 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf
-      --ctx-size 32768
+      --ctx-size 65536
       --parallel 1
-      --batch-size 2048 --ubatch-size 1024
+      --batch-size 2048 --ubatch-size 2048
       ${common}
 
   # --- gemma-26b: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on a V100 (idx2) --
@@ -135,7 +137,7 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
-      --ctx-size 32768
+      --ctx-size 131072
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       ${common}

@@ -41,11 +41,11 @@ Power caps (ADR-0009): V100 175W, P100 200W. Caps don't affect VRAM.
 | V100 #1 | 1 / bus03 | Qwen3.6-27B **coding** (Q6_K) | ~22 GB + KV | ~8 GB |
 | V100 #2 | 2 / bus04 | Qwen3.6-35B-A3B **chat** (Q4_K_M) | ~21 GB + KV | ~10 GB |
 | both V100 | 1+2 | *Occasional* big/high-quant (TP=2 `-sm layer`) | preempts the two above | — |
-| P100 | 0 / bus01 | **Gemma-4-12B `fast`** (always-on) + aux mix (co-resident) | ~7.7 GB + aux, see below | — |
+| P100 | 0 / bus01 | **Gemma-4-12B `fast`** (always-on) + aux mix (co-resident) | ~10.8 GB + aux, see below | — |
 
-**P100 16 GB budget:** the always-on `fast` chat model (Gemma-4-12B QAT, `--reasoning-budget 0`)
-now occupies ~7.7 GB, leaving ~8 GB for the aux mix below. Phase 4 (embeddings/STT/caption)
-must fit in that remainder — pick the smaller variants, or move `fast` to a V100 spare slot
+**P100 16 GB budget:** the always-on `fast` chat model (Gemma-4-12B QAT, `--reasoning-budget 0`,
+ctx 131072) now occupies ~10.8 GB, leaving ~5 GB for the aux mix below. Phase 4 (embeddings/STT/caption)
+must fit in that remainder — pick the smaller variants, lower `fast`'s ctx, or move `fast` to a V100 spare slot
 if the P100 aux mix grows.
 
 **P100 16 GB aux budget (co-resident, on-demand):**
