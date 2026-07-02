@@ -74,7 +74,7 @@ services:
     container_name: mcpo
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     command:
       - "--host"
       - "0.0.0.0"
