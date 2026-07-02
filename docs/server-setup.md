@@ -415,3 +415,30 @@ at startup (logged as `power cap GPUN -> W W`). A capping failure is **non-fatal
 fan daemon keeps running (airflow is the safety-critical function). To change caps, edit the
 config and re-run `sudo install-fan-service.sh` (validates 50-400 W range). Board limits:
 V100 100-250 W, P100 125-250 W.
+
+## Phase 2 — llama-swap model router (2026-07-02)
+
+Native on-demand model router in front of `llama-server`, OpenAI-compatible. Binary
+`/srv/ai/bin/llama-swap` (v234); config `/srv/ai/config/llama-swap.yaml`; systemd unit
+`llama-swap.service` (binds `127.0.0.1:9090`, runs as `brad`, `-watch-config`).
+Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
+
+**Models / GPU map** (`CUDA_DEVICE_ORDER=PCI_BUS_ID`; idx0=P100, idx1/2=V100):
+
+| model    | file                               | GPU(s)      | ctx   | VRAM   |
+|----------|------------------------------------|-------------|-------|--------|
+| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 32768 | ~23 GB |
+| `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
+| `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
+
+**Routing = matrix.** `coding`+`chat` run CONCURRENTLY (set `drivers: "c & h"`, one model
+per card). Requesting `big` (set `max: "b"`) evicts both and splits the 50GB BF16 across both
+V100s (`--split-mode layer`); `big` auto-unloads after 5 min idle so the single-card drivers
+reload. Verified 2026-07-02: coding 23GB/idx1 (~28s cold), chat 28GB/idx2 (~35s), both
+co-resident, big TP=2 preempt+load ~70s, reverse transition back to coding all correct.
+
+**Behavioural notes:** these are reasoning models — final answer is in `content`, chain-of-thought
+in `reasoning_content`; budget `max_tokens` generously (≥512) or `content` returns empty with
+`finish_reason: length`. `--jinja` is on (tool-calling chat template). API is default-allow on
+localhost; auth is enforced at the LiteLLM gateway (next phase). Endpoints: `/v1/models`,
+`/v1/chat/completions`, `/running`, `POST /api/models/unload`, web UI at `:9090`.

@@ -1,0 +1,101 @@
+# llama-swap configuration — /srv/ai (Phase 2, Core serving)
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
+#
+# Native model router in front of llama.cpp's llama-server. Provides an
+# OpenAI-compatible endpoint that LiteLLM (container) fronts for Copilot CLI /
+# VS Code / Open WebUI / OpenClaw.
+#
+# GPU map (CUDA_DEVICE_ORDER=PCI_BUS_ID):
+#   idx0 = Tesla P100-16GB  (aux tier — not used here)
+#   idx1 = Tesla V100-32GB  -> "coding"  (Qwen3.6-27B Q6_K)
+#   idx2 = Tesla V100-32GB  -> "chat"    (Qwen3.6-35B-A3B UD-Q6_K)
+#   idx1+idx2 (both)        -> "big"     (Qwen3.6-27B BF16, TP=2, preempts the above)
+#
+# Routing engine = matrix: `coding` and `chat` run CONCURRENTLY (one per card);
+# requesting `big` evicts both, and `big` auto-unloads after idle so the two
+# single-card drivers can reload.
+
+healthCheckTimeout: 900     # BF16 50GB load can be slow; give it room
+logLevel: info
+startPort: 10001
+sendLoadingState: true      # surface "loading..." in the reasoning field for chat UIs
+
+macros:
+  "llama-server": "/srv/ai/src/llama.cpp/build/bin/llama-server"
+  "models_dir": "/srv/ai/models"
+  # Common server args shared by all models. Host/port are per-model via ${PORT}.
+  "common": >
+    --host 127.0.0.1 --port ${PORT}
+    --n-gpu-layers 999
+    --flash-attn on
+    --cont-batching
+    --jinja
+    --metrics
+
+models:
+  # --- coding: Qwen3.6-27B Q6_K on V100 #1 (idx1) -------------------------
+  "coding":
+    name: "Qwen3.6-27B (Q6_K) — coding"
+    description: "Daily-driver coding model, single V100."
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=1"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf
+      --ctx-size 32768
+      --parallel 2
+      ${common}
+
+  # --- chat: Qwen3.6-35B-A3B UD-Q6_K on V100 #2 (idx2) -------------------
+  # 27.3GB weights on a 32GB card -> use q8_0 KV cache to fit a useful context.
+  "chat":
+    name: "Qwen3.6-35B-A3B (UD-Q6_K) — chat"
+    description: "General/family chat MoE, single V100."
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf
+      --ctx-size 16384
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --parallel 1
+      ${common}
+
+  # --- big: Qwen3.6-27B BF16 across BOTH V100s (idx1+idx2), TP -----------
+  # ~50GB weights split over 64GB. Highest-quality dense model; occasional use.
+  # Auto-unloads after 5 min idle so coding+chat can reclaim the cards.
+  "big":
+    name: "Qwen3.6-27B (BF16) — max quality, dual-V100"
+    description: "Full-precision dense 27B split across both V100s. Preempts coding+chat."
+    ttl: 300
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=1,2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-BF16-00001-of-00002.gguf
+      --ctx-size 16384
+      --split-mode layer
+      --parallel 1
+      ${common}
+
+routing:
+  router:
+    use: matrix
+    settings:
+      matrix:
+        vars:
+          c: coding
+          h: chat
+          b: big
+        evict_costs:
+          b: 50   # BF16 is very slow to load; prefer keeping it if already up
+        sets:
+          # coding + chat run together (one per card). Subset semantics also
+          # permit [c] or [h] alone.
+          drivers: "c & h"
+          # big uses both cards, so it runs alone (evicts c and h).
+          max: "b"

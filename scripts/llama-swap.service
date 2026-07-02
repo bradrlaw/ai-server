@@ -1,0 +1,22 @@
+[Unit]
+Description=llama-swap — on-demand model router (llama.cpp) for /srv/ai
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+# Deterministic GPU numbering so CUDA_VISIBLE_DEVICES in the config maps to the
+# same physical cards as nvidia-smi (idx0=P100, idx1/2=V100).
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Bind to localhost only; LiteLLM (container, via host gateway) fronts it.
+ExecStart=/srv/ai/bin/llama-swap -config /srv/ai/config/llama-swap.yaml -listen 127.0.0.1:9090 -watch-config
+Restart=on-failure
+RestartSec=3
+# Give in-flight model loads time to finish on stop before SIGKILL.
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
