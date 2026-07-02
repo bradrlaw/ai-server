@@ -87,20 +87,81 @@ models:
       --parallel 1
       ${common}
 
+  # --- fast: Gemma-4-12B (QAT UD-Q4_K_XL) on the P100 (idx0) --------------
+  # Always-on, non-reasoning chat. Runs CONCURRENTLY with coding+chat (own
+  # card). ~6.3GB weights on 16GB -> comfortable. Gemma is not a reasoning
+  # model, so replies are immediate (no thinking phase).
+  "fast":
+    name: "Gemma-4-12B — fast non-reasoning chat"
+    description: "Snappy general chat on the P100; no reasoning phase. Always available."
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=0"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
+      --ctx-size 16384
+      --parallel 1
+      --reasoning-budget 0
+      ${common}
+
+  # --- gemma-31b: Gemma-4-31B (QAT UD-Q4_K_XL) on a V100 (idx1) ----------
+  # Comparison model vs Qwen coding/big. ~18GB on 32GB. Evicts coding when used.
+  "gemma-31b":
+    name: "Gemma-4-31B — max-quality Gemma"
+    description: "Dense 31B for quality comparison. Single V100; evicts coding."
+    ttl: 600
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=1"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf
+      --ctx-size 32768
+      --parallel 1
+      --batch-size 2048 --ubatch-size 1024
+      ${common}
+
+  # --- gemma-26b: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on a V100 (idx2) --
+  # 25B total / ~3.8B active -> fast like a small model, higher quality.
+  # Comparison vs Qwen chat. ~14GB on 32GB. Evicts chat when used.
+  "gemma-26b":
+    name: "Gemma-4-26B-A4B (MoE) — fast+quality Gemma"
+    description: "MoE 25B/3.8B-active for comparison. Single V100; evicts chat."
+    ttl: 600
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+      --ctx-size 32768
+      --parallel 1
+      --batch-size 2048 --ubatch-size 2048
+      ${common}
+
 routing:
   router:
     use: matrix
     settings:
       matrix:
+        # Card map: idx0(P100)=fast ; idx1(V100)=coding|gemma-31b|big ;
+        #           idx2(V100)=chat|gemma-26b|big. `f` (P100) coexists with all.
         vars:
           c: coding
           h: chat
           b: big
+          f: fast
+          x: gemma-31b
+          y: gemma-26b
         evict_costs:
           b: 50   # BF16 is very slow to load; prefer keeping it if already up
         sets:
-          # coding + chat run together (one per card). Subset semantics also
-          # permit [c] or [h] alone.
-          drivers: "c & h"
-          # big uses both cards, so it runs alone (evicts c and h).
-          max: "b"
+          # Each set = models that CAN be co-resident (subset semantics allow
+          # any subset, e.g. just [f], or [c] alone). f (P100) is in every set
+          # so the fast model is never evicted by V100 activity.
+          qq: "c & h & f"        # daily: coding(idx1) + chat(idx2) + fast(P100)
+          qg: "c & y & f"        # coding vs gemma-26b head-to-head
+          gq: "x & h & f"        # gemma-31b vs chat head-to-head
+          gg: "x & y & f"        # both Gemmas (idx1+idx2) + fast
+          max: "b & f"           # big(idx1+idx2) + fast(P100)

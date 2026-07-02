@@ -20,6 +20,21 @@ model_list:
       model: openai/big
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
+  - model_name: fast
+    litellm_params:
+      model: openai/fast
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
+  - model_name: gemma-31b
+    litellm_params:
+      model: openai/gemma-31b
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
+  - model_name: gemma-26b
+    litellm_params:
+      model: openai/gemma-26b
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
 
 litellm_settings:
   # llama-server may not accept every OpenAI param; drop unknowns instead of erroring.

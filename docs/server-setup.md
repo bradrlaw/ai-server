@@ -430,12 +430,20 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 163840 | ~31.5 GB |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
+| `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 16384 | ~7.7 GB, always-on, `--reasoning-budget 0` |
+| `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 32768 | ~18 GB, ttl 600s (evicts coding) |
+| `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 32768 | ~14 GB, ttl 600s (evicts chat) |
 
-**Routing = matrix.** `coding`+`chat` run CONCURRENTLY (set `drivers: "c & h"`, one model
-per card). Requesting `big` (set `max: "b"`) evicts both and splits the 50GB BF16 across both
-V100s (`--split-mode layer`); `big` auto-unloads after 5 min idle so the single-card drivers
-reload. Verified 2026-07-02: coding 23GB/idx1 (~28s cold), chat 28GB/idx2 (~35s), both
-co-resident, big TP=2 preempt+load ~70s, reverse transition back to coding all correct.
+**Routing = matrix (3 cards).** `f`(fast, P100) is in every set so it's never evicted and runs
+CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
+`gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
+(big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+fast(P100) all
+co-resident (31.8/28.4/7.7 GB); `fast` answers immediately (Gemma reasoning disabled).
+
+**Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
+`fast` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
+`gemma-31b`/`gemma-26b` keep reasoning on. All use QAT UD-Q4_K_XL (unsloth) — 4-bit quality
+close to full precision. Our llama.cpp build (9850, `LLM_ARCH_GEMMA4`) supports them natively.
 
 **Behavioural notes:** these are reasoning models — final answer is in `content`, chain-of-thought
 in `reasoning_content`; budget `max_tokens` generously (≥512) or `content` returns empty with
