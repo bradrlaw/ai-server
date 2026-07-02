@@ -1,0 +1,17 @@
+[Unit]
+Description=GPU shroud fan control (nvidia-smi temp -> nct6775 PWM)
+After=multi-user.target
+# Ensure the nvidia driver is up before we start querying temps.
+Wants=nvidia-persistenced.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /srv/ai/scripts/gpu-fan-control.py
+Restart=on-failure
+RestartSec=3
+# If the daemon stops for any reason, the script hands fans back to BIOS auto;
+# on-failure restart re-establishes active control quickly.
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

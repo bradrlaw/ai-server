@@ -1,0 +1,24 @@
+# Whitelist repo: ignore everything at the root by default, then re-include only
+# the things we want tracked (docs, scripts, and base project files). Large/local
+# artifacts (models, venvs, source checkouts, datasets, service data) stay local.
+/*
+
+# --- tracked top-level paths ---
+!/.gitignore
+!/README.md
+!/LICENSE
+!/docs/
+!/scripts/
+
+# --- drop generated/cache files inside tracked dirs ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- never commit secrets/local env ---
+*.env
+.env
+*.key
+*.pem
+*_token
+*.secret

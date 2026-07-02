@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Wrapper around the fast `hf` CLI (Xet backend) that injects the Hugging Face
+# access token from the gnome-keyring at call time -- so the token is never
+# written to disk in cleartext (unlike `hf auth login`) and only lives in this
+# process's environment for the duration of the command.
+#
+# One-time setup (stores token in the keyring, no-echo prompt, not in chat/history):
+#     secret-tool store --label='Hugging Face access token' service huggingface key token
+#
+# Usage (same args as `hf`):
+#     /srv/ai/scripts/hf-dl download <repo_id> <file> --local-dir /srv/ai/models/...
+#     /srv/ai/scripts/hf-dl auth whoami
+set -euo pipefail
+
+HF_BIN=/srv/ai/venvs/hf/bin/hf
+[[ -x "$HF_BIN" ]] || { echo "hf CLI not found at $HF_BIN" >&2; exit 1; }
+
+# Pull token from the keyring (requires the login keyring to be unlocked, which
+# it is on password SSH login). If absent, fall through to anonymous access.
+if token="$(secret-tool lookup service huggingface key token 2>/dev/null)" && [[ -n "$token" ]]; then
+  export HF_TOKEN="$token"
+else
+  echo "note: no HF token in keyring (anonymous access)." >&2
+  echo "      store one with: secret-tool store --label='Hugging Face access token' service huggingface key token" >&2
+fi
+
+# Xet backend at its default gave ~157 MB/s; do NOT set HF_XET_HIGH_PERFORMANCE=1
+# (it stalled at 0.5 GB / 8 GB RSS on large files).
+exec "$HF_BIN" "$@"

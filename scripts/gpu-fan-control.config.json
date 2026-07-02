@@ -1,0 +1,73 @@
+{
+  "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (P100 reports no memory temp -> uses core). Wiring/pwm verified: pwm5=V100 GPU1(bus03), pwm4=V100 GPU2(bus04), pwm1=P100 GPU0(bus01). Fans 40x28mm high-static-pressure; V100 15k rpm max, P100 6k rpm max. Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=P100(bus01), 1=V100(bus03), 2=V100(bus04). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
+  "interval_sec": 4,
+  "power_limits": {
+    "0": 200,
+    "1": 175,
+    "2": 175
+  },
+  "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W). Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)/GPU2(idx2)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C). P100(idx0)=200W: never throttles (settles ~70-75C, 15C headroom), so this is a longevity/noise trim at ~0% throughput cost. Board limits: V100 100-250W, P100 125-250W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
+  "zones": [
+    {
+      "name": "V100 GPU1 (bus03)",
+      "gpus": [
+        1
+      ],
+      "hwmon_name": "nct6792",
+      "pwm": "pwm5",
+      "min_duty": 35,
+      "hysteresis_c": 3,
+      "curve": [
+        [
+          39,
+          35
+        ],
+        [
+          70,
+          100
+        ]
+      ]
+    },
+    {
+      "name": "V100 GPU2 (bus04)",
+      "gpus": [
+        2
+      ],
+      "hwmon_name": "nct6792",
+      "pwm": "pwm4",
+      "min_duty": 35,
+      "hysteresis_c": 3,
+      "curve": [
+        [
+          39,
+          35
+        ],
+        [
+          70,
+          100
+        ]
+      ]
+    },
+    {
+      "name": "P100 (PUMP_FAN)",
+      "gpus": [
+        0
+      ],
+      "hwmon_name": "nct6792",
+      "pwm": "pwm1",
+      "min_duty": 70,
+      "hysteresis_c": 3,
+      "curve": [
+        [
+          38,
+          70
+        ],
+        [
+          70,
+          100
+        ]
+      ]
+    }
+  ],
+  "_pwm_mapping_note": "PHYSICAL mapping verified via verify-gpu-fan-mapping.sh 2026-07-01 (idle cross-test, one V100 fan MAX / other FLOOR): pwm5 cools GPU1(bus03), pwm4 cools GPU2(bus04). This is SWAPPED vs the naive identify-fan.sh guess. pwm1=P100(6.5k). pwm2=case/CPU, pwm3=3-pin side fan over V100s (non-PWM, BIOS). NOTE: fan RPM correlating with a GPU's temp under the daemon only proves the daemon drives that pwm from that GPU -- NOT which card it physically cools; only the forced-fan cross-test does."
+}
