@@ -148,8 +148,10 @@ models:
   # Abliterated/uncensored MoE (35B total / ~3B active). ~20GB weights on a 32GB
   # card -> lots of room, so q8_0 KV gives a big context. Shares idx2 with chat /
   # gemma-26b / the Q6 build, so requesting it evicts those.
-  # Verified 2026-07-03: ctx 131072 (128k) with a full 120k prefill peaks at
-  # 22.8GB/32GB (~9.7GB headroom). Comfortable; could go to full 256k if wanted.
+  # Verified 2026-07-03: ctx 262144 (256k = native max) loads at 24.8GB/32GB
+  # (~7.8GB headroom). Also tested 524288 (512k) -> loads at 29.1GB (~3.6GB
+  # headroom) but that is 2x native; without YaRN, quality degrades past 256k,
+  # so we cap at the native 262144 for trustworthy full-context use.
   "chat-uncensored-q4":
     name: "Qwen3.6-35B-A3B Uncensored (Q4_K_M) — chat"
     description: "Uncensored general chat MoE (abliterated), Q4. Single V100; evicts chat."
@@ -160,7 +162,7 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
-      --ctx-size 131072
+      --ctx-size 262144
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
