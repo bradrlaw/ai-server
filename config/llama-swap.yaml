@@ -77,6 +77,12 @@ models:
   # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
   # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
   # sync overhead of the layer split. Do not add --ubatch-size.
+  # KV: dense arch (64 layers, 4 KV heads, 256-dim) makes KV ~2x pricier than the
+  # A3B MoE, so f16 KV overflows above ~16k -> use q8_0 KV. Native ctx 262144.
+  # Verified 2026-07-03: ctx 131072 (128k) q8_0 with a 105k-token prefill peaks
+  # at 28.4GB(idx1)/28.7GB(idx2) -> ~4GB headroom per card; compute buffer stays
+  # flat under load (flash-attn). 128k is half native, no RoPE concerns. Deep
+  # fills are slow though (105k prefill ~8 min) due to layer-split + ubatch 512.
   "big":
     name: "Qwen3.6-27B (BF16) — max quality, dual-V100"
     description: "Full-precision dense 27B split across both V100s. Preempts coding+chat."
@@ -87,7 +93,9 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-BF16-00001-of-00002.gguf
-      --ctx-size 16384
+      --ctx-size 131072
+      --cache-type-k q8_0
+      --cache-type-v q8_0
       --split-mode layer
       --parallel 1
       ${common}
