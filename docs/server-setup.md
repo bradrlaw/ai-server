@@ -620,3 +620,52 @@ natively over stdio (mcpo is only for HTTP/OpenAPI consumers).
 
 **Secrets** (in `docker/.env`, gitignored; template `.env.example`): `WEBUI_SECRET_KEY`,
 `SEARXNG_SECRET`, `MCPO_API_KEY`.
+
+## Phase 6 (partial) — ComfyUI generative media (2026-07-03)
+
+Headless **ComfyUI** for image generation, **native** (venv, ADR-0006) as a **burst V100**
+workload (ADR-0010 — Pascal/P100 is too weak for SDXL/Flux). No X/display needed: it's a web
+server on port **8188**; the canvas renders in your browser. Connect from a laptop over
+LAN/Tailscale at `http://<host>:8188`.
+
+**Layout**
+- Repo: `/srv/ai/comfyui` (git clone of comfyanonymous/ComfyUI; **gitignored** like `src/`).
+- Venv: `/srv/ai/venvs/comfyui` (Python 3.12). PyTorch **2.6.0+cu124** stock wheels — support
+  V100 sm_70 (and P100 sm_60), so no custom build (unlike llama.cpp). Arch list = sm_50…sm_90.
+- Models (`comfyui/models/checkpoints/`, gitignored): all-in-one checkpoints, loaded with the
+  standard **Load Checkpoint** node:
+  | file | ~size | use |
+  |------|-------|-----|
+  | `flux1-dev-fp8.safetensors` (Comfy-Org/flux1-dev, ungated) | 17 GB | FLUX.1-dev — quality |
+  | `sd_xl_base_1.0.safetensors` (stabilityai, ungated) | 6.9 GB | SDXL base — speed |
+  | `sd_xl_refiner_1.0.safetensors` (stabilityai, ungated) | 6.1 GB | SDXL refiner (optional 2nd pass) |
+
+**Env-setup gotchas (Ubuntu 24.04 headless):**
+- `python3.12-venv` is **not installed** → create the venv with `python3 -m venv --without-pip`
+  then bootstrap pip via `get-pip.py` (same trick as the `hf` venv).
+- ComfyUI's `comfy_kitchen`/Triton backend **JIT-compiles a CUDA helper at import** and needs
+  the Python dev headers → **`sudo apt install python3.12-dev`** (provides `Python.h`), else
+  startup dies with `fatal error: Python.h: No such file or directory`. `gcc` + `libcuda.so`
+  are already present.
+
+**Service** (`scripts/comfyui.service`, install via `sudo scripts/install-comfyui-service.sh`):
+native systemd unit, `User=brad`, `CUDA_DEVICE_ORDER=PCI_BUS_ID`, pinned to **`CUDA_VISIBLE_DEVICES=1`**
+(V100 #1). Installed but **not enabled at boot** (burst). `--listen 0.0.0.0 --port 8188`
+exposes the UI on LAN/Tailscale — **ComfyUI has no auth**, so keep it on the private/Tailscale
+network only. Start/stop: `sudo systemctl start|stop comfyui`.
+
+**Auto-free the GPU (no manual step).** A tiny ComfyUI server hook —
+`scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` — adds an
+aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), first calls
+llama-swap `GET /unload` to free the V100, then runs the generation. So a family member just
+opens the UI and hits generate; the coding/chat models are evicted automatically and reload
+on-demand the next time they're used. It triggers **only on generate**, not on page loads, so
+merely opening the tab does not disturb chat. Configurable via the `LLAMASWAP_URL` env in the
+unit. Verified: with `coding` resident (idx1 = 32.1 GB), a queued SDXL run auto-unloaded it and
+completed — log shows `free_gpu: unloading llama-swap models before generation: coding`.
+
+**Burst performance / VRAM.** Measured on a V100 (idx1), 1024×1024 @ 20 steps: **SDXL ~12 s**
+(~10 GB), **Flux fp8 ~54 s** (~23 GB resident). Both verified end-to-end via the `/prompt` API.
+Output images land in `comfyui/output/`. Caveat: if someone starts a chat *during* an active
+image gen, llama-swap may try to reload a 31 GB LLM onto the busy card and briefly fail/queue —
+rare in home use, and it resolves once the (short) generation finishes.

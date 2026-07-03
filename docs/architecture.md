@@ -135,7 +135,9 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
    tool hosting/inventory (ADR-0011).
 4. **Aux (P100)** — embeddings + faster-whisper (validate real-time latency) + captioner.
 5. **RAG** — Qdrant + ingestion (Docling) + retrieval for family docs.
-6. **Media** — ComfyUI burst (V100) + Immich for the photo library.
+6. 🟡 **Media** — **ComfyUI** ✅ (native venv, burst on V100 idx1; FLUX.1-dev fp8 +
+   SDXL; headless web UI :8188; auto-frees the card via a `free_gpu` hook on generate).
+   Immich photo library still to do.
 7. **Orchestration** — n8n/Prefect for batch culling/metadata + long-running agents.
 8. **Observability** — Langfuse + Grafana/DCGM dashboards.
 

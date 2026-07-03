@@ -1,0 +1,36 @@
+[Unit]
+Description=ComfyUI — generative media (image/video) web server for /srv/ai
+Documentation=https://github.com/comfyanonymous/ComfyUI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/comfyui
+# Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
+# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Burst workload: pin to V100 #1 (idx1). Generation competes with the `coding`
+# model on this card — the free_gpu hook (custom_nodes/free_gpu.py) auto-unloads
+# llama-swap models on generate, so no manual step is needed. Change to 2 to
+# burst on V100 #2 (chat's card) instead.
+Environment=CUDA_VISIBLE_DEVICES=1
+# Where the free_gpu hook reaches llama-swap to free the GPU before a run.
+Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+# Headless web server; no X/display needed. Rendering happens in the browser.
+# --listen 0.0.0.0 exposes the UI on the LAN + Tailscale (ComfyUI has NO auth;
+# acceptable on the private/Tailscale network only).
+ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
+  --listen 0.0.0.0 --port 8188 \
+  --output-directory /srv/ai/comfyui/output \
+  --preview-method auto
+Restart=on-failure
+RestartSec=3
+# Give in-flight generations a moment to finish on stop before SIGKILL.
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
