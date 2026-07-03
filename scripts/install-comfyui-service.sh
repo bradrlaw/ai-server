@@ -26,6 +26,16 @@ chown brad:brad /srv/ai/comfyui/output
 # queued, so the V100 is freed automatically — no manual unload for the family).
 mkdir -p /srv/ai/comfyui/custom_nodes
 install -m644 "$SRC/comfyui-free-gpu-node.py" /srv/ai/comfyui/custom_nodes/free_gpu.py
+
+# Install ComfyUI-Manager (server-side installer for missing models/nodes, so the
+# family can add models from the web UI — downloads land server-side in
+# /srv/ai/comfyui/models/). Idempotent: clone if absent, then install its deps.
+MGR=/srv/ai/comfyui/custom_nodes/comfyui-manager
+if [[ ! -d "$MGR/.git" ]]; then
+  sudo -u brad git clone --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git "$MGR"
+fi
+sudo -u brad /srv/ai/venvs/comfyui/bin/pip install -q -r "$MGR/requirements.txt"
+
 chown -R brad:brad /srv/ai/comfyui/custom_nodes
 
 install -m644 "$SRC/comfyui.service" "$UNIT"

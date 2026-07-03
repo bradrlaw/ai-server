@@ -664,6 +664,17 @@ merely opening the tab does not disturb chat. Configurable via the `LLAMASWAP_UR
 unit. Verified: with `coding` resident (idx1 = 32.1 GB), a queued SDXL run auto-unloaded it and
 completed — log shows `free_gpu: unloading llama-swap models before generation: coding`.
 
+**Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
+`comfyui/custom_nodes/comfyui-manager` (the install script clones it + installs its deps into the
+venv). It adds a **Manager** button in the web UI so the family can install missing models and
+custom nodes from a curated list — **downloads happen server-side** into `/srv/ai/comfyui/models/`,
+not on the client. (Clicking a raw download link in the plain "missing models" dialog would save to
+the *laptop* and is useless; use the Manager button instead, or `hf-dl` on the server.) Config lives
+at `comfyui/user/__manager/config.ini`; `security_level = normal` (default) allows curated model
+installs even over LAN but blocks arbitrary git/pip installs from a remote browser. To allow those
+too on the trusted LAN, set `allow_git_url_install = True` / `allow_pip_install = True` or lower
+`security_level` (e.g. `normal-`) — only do this on the private/Tailscale network.
+
 **Burst performance / VRAM.** Measured on a V100 (idx1), 1024×1024 @ 20 steps: **SDXL ~12 s**
 (~10 GB), **Flux fp8 ~54 s** (~23 GB resident). Both verified end-to-end via the `/prompt` API.
 Output images land in `comfyui/output/`. Caveat: if someone starts a chat *during* an active
