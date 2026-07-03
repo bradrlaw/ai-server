@@ -6,6 +6,7 @@
 # --- tracked top-level paths ---
 !/.gitignore
 !/README.md
+!/AGENTS.md
 !/LICENSE
 !/docs/
 !/scripts/
