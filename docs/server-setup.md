@@ -431,7 +431,7 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
 | `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 131072 | ~10.8 GB, always-on, `--reasoning-budget 0`, ub2048 |
-| `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 65536 | ~25 GB, ttl 600s (evicts coding), ub2048 |
+| `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
 **Routing = matrix (3 cards).** `f`(fast, P100) is in every set so it's never evicted and runs
@@ -556,11 +556,13 @@ only the 1-in-6 global layers hold full-length KV. Measured resident VRAM (f16 K
 | model | ctx 32k | 65k | 131k | 262k (full) | applied ctx |
 |-------|---------|-----|------|-------------|-------------|
 | 12B / P100 16GB | 8.8 | 9.3 | 10.4 | 12.6 GB | **131072** (10.8GB @ub2048; leaves P100 aux room) |
-| 31B / V100 32GB | 23.2 | 25.8 | 31.0 | OOM | **65536** (25.3GB @ub2048; 131k too tight for compute buf) |
+| 31B / V100 32GB | 23.2 | 25.8 | 31.0 | OOM | **131072** (q8_0 KV → 26.7GB @ub2048; f16 OOMs at 131k) |
 | 26B-A4B / V100 32GB | 15.6 | 16.3 | 17.6 | 20.3 | **131072** (18.0GB @ub2048; full 256k also fits) |
 
-Full 256K only costs +2-4 GB over 16K thanks to SWA. Verified all three co-resident after tuning:
-P100 10.8GB / V100#1 25.3GB / V100#2 18.0GB, all answering correctly.
+Full 256K only costs +2-4 GB over 16K thanks to SWA. **31B needs `--cache-type-k/v q8_0`** (halves
+KV, needs flash-attn) to reach 128k — f16 KV at 131k hits 31GB + compute buffer and OOMs; q8_0
+brings it to ~26.7GB. The 12B and 26B-A4B have room to spare with f16 KV. Verified all three
+co-resident after tuning: P100 10.8GB / V100#1 26GB (31B@131k) / V100#2 18.0GB, all answering.
 
 ## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
 
