@@ -138,6 +138,12 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 6. 🟡 **Media** — **ComfyUI** ✅ (native venv, burst on V100 idx1; FLUX.1-dev fp8 +
    SDXL; headless web UI :8188; auto-frees the card via a `free_gpu` hook on generate).
    Immich photo library still to do.
+   - _Future:_ **ComfyUI multi-GPU** — install `pollockjj/ComfyUI-MultiGPU` and expose
+     both V100s (`CUDA_VISIBLE_DEVICES=1,2`) so large two-model workflows (e.g. Wan 2.2
+     I2V high+low-noise 14B, ~28 GB combined) hold each model on a separate card instead
+     of swapping per stage. Note: not tensor-parallel (no NVLink, PCIe PHB) — this is
+     memory distribution, not faster single-step compute. Tradeoff: video gen would then
+     evict BOTH daily LLMs (coding idx1 + chat idx2) via the free_gpu hook.
 7. **Orchestration** — n8n/Prefect for batch culling/metadata + long-running agents.
 8. **Observability** — Langfuse + Grafana/DCGM dashboards.
 
