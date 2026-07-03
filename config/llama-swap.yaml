@@ -144,6 +144,47 @@ models:
       --batch-size 2048 --ubatch-size 2048
       ${common}
 
+  # --- chat-uncensored-q4: Qwen3.6-35B-A3B Uncensored (Q4_K_M) on V100 (idx2) -
+  # Abliterated/uncensored MoE (35B total / ~3B active). ~20GB weights on a 32GB
+  # card -> lots of room, so q8_0 KV gives a big context. Shares idx2 with chat /
+  # gemma-26b / the Q6 build, so requesting it evicts those.
+  "chat-uncensored-q4":
+    name: "Qwen3.6-35B-A3B Uncensored (Q4_K_M) — chat"
+    description: "Uncensored general chat MoE (abliterated), Q4. Single V100; evicts chat."
+    ttl: 600
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+      --ctx-size 65536
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --parallel 1
+      --batch-size 2048 --ubatch-size 2048
+      ${common}
+
+  # --- chat-uncensored-q6: Qwen3.6-35B-A3B Uncensored (Q6_K_P) on V100 (idx2) -
+  # Higher-quality uncensored quant. ~29GB weights on a 32GB card -> q8_0 KV and a
+  # modest context to fit. Shares idx2 with chat / gemma-26b / the Q4 build.
+  "chat-uncensored-q6":
+    name: "Qwen3.6-35B-A3B Uncensored (Q6_K_P) — chat"
+    description: "Uncensored general chat MoE (abliterated), Q6. Single V100; evicts chat."
+    ttl: 600
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q6_K_P.gguf
+      --ctx-size 16384
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --parallel 1
+      --batch-size 2048 --ubatch-size 2048
+      ${common}
+
 routing:
   router:
     use: matrix
@@ -158,6 +199,8 @@ routing:
           f: fast
           x: gemma-31b
           y: gemma-26b
+          u: chat-uncensored-q4
+          w: chat-uncensored-q6
         evict_costs:
           b: 50   # BF16 is very slow to load; prefer keeping it if already up
         sets:
@@ -168,4 +211,6 @@ routing:
           qg: "c & y & f"        # coding vs gemma-26b head-to-head
           gq: "x & h & f"        # gemma-31b vs chat head-to-head
           gg: "x & y & f"        # both Gemmas (idx1+idx2) + fast
+          qu: "c & u & f"        # coding(idx1) + uncensored-Q4(idx2) + fast(P100)
+          qw: "c & w & f"        # coding(idx1) + uncensored-Q6(idx2) + fast(P100)
           max: "b & f"           # big(idx1+idx2) + fast(P100)
