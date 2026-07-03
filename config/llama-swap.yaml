@@ -91,6 +91,11 @@ models:
   # Always-on, non-reasoning chat. Runs CONCURRENTLY with coding+chat (own
   # card). ~6.3GB weights on 16GB -> comfortable. Gemma is not a reasoning
   # model, so replies are immediate (no thinking phase).
+  # Verified 2026-07-03: ctx 131072 (128k) with a 103k-token prefill peaks at
+  # 10.9GB/16GB (~5.5GB headroom) — Gemma's sliding-window attention makes KV
+  # nearly free (only +0.2GB vs idle). CAVEAT: the P100 is slow at extreme
+  # depth (103k prefill took ~9.5 min, ~180 t/s); 128k is available but deep
+  # fills are slow. Short/medium chats stay snappy as intended.
   "fast":
     name: "Gemma-4-12B — fast non-reasoning chat"
     description: "Snappy general chat on the P100; no reasoning phase. Always available."
