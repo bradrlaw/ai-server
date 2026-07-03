@@ -129,6 +129,13 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
    (llama.cpp/llama-swap stay native.)
 2. ✅ **Core serving** — llama-swap (`coding` + `chat` on-demand, `big` TP=2 profile) →
    LiteLLM gateway → point Copilot CLI/VS Code at it (BYOK, verified tool-calling+streaming).
+   - _Future — hybrid local/cloud model routing:_
+     - **Copilot CLI `/subagents`** — assign delegated subagent tasks (explore, task-runner)
+       to the local `coding` model while a frontier model drives; role-based, no new cost. Quick win.
+     - **LiteLLM difficulty routing** — route simple prompts → local `coding`, hard prompts →
+       frontier (BYOK own cloud key). Needs all traffic through LiteLLM + a classifier (RouteLLM,
+       semantic-router, or a custom pre-call hook), since LiteLLM native routing is tag/cost/fallback,
+       not semantic difficulty. Re-verify tool-calling+streaming through the gateway. Mini-project.
 2b. **OpenClaw** — `npm install -g openclaw@latest` → `openclaw onboard` → point at
    LiteLLM → wire Telegram + Control UI behind Tailscale. (Node 24 already installed.)
 3. ✅ **Family chat** — Open WebUI + web search (SearXNG) + accounts; **mcpo** for MCP
