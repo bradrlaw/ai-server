@@ -166,11 +166,12 @@ models:
       ${common}
 
   # --- chat-uncensored-q6: Qwen3.6-35B-A3B Uncensored (Q6_K_P) on V100 (idx2) -
-  # Higher-quality uncensored quant. ~29GB weights on a 32GB card -> q8_0 KV and a
-  # modest context to fit. Shares idx2 with chat / gemma-26b / the Q4 build.
-  # Verified 2026-07-03: full 15k-token prefill peaks at 29.9GB/32GB (~2.8GB
-  # headroom, no OOM). llama.cpp preallocates KV+compute at load, so the footprint
-  # does NOT grow as context fills. Do not raise ctx much without re-testing.
+  # Higher-quality uncensored quant. ~29GB weights on a 32GB card -> q8_0 KV.
+  # KV is cheap here (40 layers x 2 KV heads, q8_0) so context is affordable.
+  # Verified 2026-07-03: ctx 49152 with a full 47k-token prefill peaks at
+  # 30.4GB/32GB (~2.3GB headroom, no OOM). Tripling ctx from 16k->48k cost only
+  # ~0.5GB. Flash-attn keeps the compute buffer flat vs context. Room to go
+  # higher, but 48k keeps a safe margin; re-test if raising further.
   "chat-uncensored-q6":
     name: "Qwen3.6-35B-A3B Uncensored (Q6_K_P) — chat"
     description: "Uncensored general chat MoE (abliterated), Q6. Single V100; evicts chat."
@@ -181,7 +182,7 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q6_K_P.gguf
-      --ctx-size 16384
+      --ctx-size 49152
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
