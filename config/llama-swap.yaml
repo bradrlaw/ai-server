@@ -50,6 +50,11 @@ models:
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K on V100 #2 (idx2) -------------------
   # 27.3GB weights on a 32GB card -> use q8_0 KV cache to fit a useful context.
+  # Verified 2026-07-03: ctx 131072 (128k) with a 105k-token prefill peaks at
+  # 30.4GB/32GB (~2.4GB headroom, no OOM) — a bit safer than chat-uncensored-q6
+  # (~1GB) since these weights are ~1.7GB lighter. 128k is the realistic max for
+  # a Q6 on this card; 256k would add ~7-8GB of KV and OOM. Same base model/arch
+  # as the uncensored Q6 (40 layers, 2 KV heads), so KV stays cheap.
   "chat":
     name: "Qwen3.6-35B-A3B (UD-Q6_K) — chat"
     description: "General/family chat MoE, single V100."
@@ -59,7 +64,7 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf
-      --ctx-size 16384
+      --ctx-size 131072
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
