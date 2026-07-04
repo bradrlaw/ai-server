@@ -34,16 +34,22 @@ macros:
 
 models:
   # --- coding: Qwen3.6-27B Q6_K on V100 #1 (idx1) -------------------------
+  # KV is q8_0 (near-lossless 8-bit): halves KV vs f16, which both fixes a CUDA
+  # OOM on large prompts (f16 KV @160k left <1GB free, so the ub1024 prefill
+  # compute buffer couldn't allocate and the server crashed) AND frees enough
+  # room to raise context 160k -> 200k. At 200k q8_0 the card sits ~29.8/32GB
+  # (~3GB headroom); a 11k-token prompt prefills at ~790 t/s with no OOM.
   "coding":
     name: "Qwen3.6-27B (Q6_K) — coding"
-    description: "Daily-driver coding model, single V100."
+    description: "Daily-driver coding model, single V100. 200k ctx, q8_0 KV."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1"
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf
-      --ctx-size 163840
+      --ctx-size 204800
+      --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 1024
       ${common}

@@ -427,7 +427,7 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
-| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 163840 | ~31.5 GB |
+| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 204800 | ~29.8 GB (q8_0 KV) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
 | `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 131072 | ~10.8 GB, always-on, `--reasoning-budget 0`, ub2048 |
@@ -504,12 +504,18 @@ compute buffer is fixed (scales with u-batch, not prompt length), so load-time V
 |---------|-----------|---------|-----------------------------------------|
 | 32768   | ~23.3 GB  | ~9.4 GB | previous default                        |
 | 131072  | 29.4 GB   | 3.3 GB  | meets Copilot BYOK ≥128k recommendation |
-| 163840  | 31.5 GB   | 1.25 GB | **chosen** — practical max with f16 KV  |
-| ≥172032 | —         | —       | exceeds 32 GB (would OOM)               |
+| 163840  | 31.5 GB   | 1.25 GB | earlier f16-KV pick — too tight (see below) |
+| ≥172032 | —         | —       | exceeds 32 GB with f16 KV (would OOM)   |
 
-Chose **163840 (160k)**. Switched coding to `--parallel 1` so the full window serves one agent
-(concurrent coding requests serialize — fine for personal use). To reach the model's full 256k,
-use `--cache-type-k q8_0 --cache-type-v q8_0` (halves KV, slight quality trade-off).
+Originally chose **163840 (160k)** with f16 KV, but that left only ~1.25 GB free — and a
+large prompt's `-ub 1024` prefill compute buffer then couldn't allocate, so `coding` hit a
+**CUDA OOM and crashed** on any prompt beyond a couple thousand tokens (`cuMemCreate ... out of
+memory` during `graph_compute`). Fixed 2026-07-04 by switching coding to **q8_0 KV**
+(`--cache-type-k q8_0 --cache-type-v q8_0`, near-lossless 8-bit): it halves KV, which both cures
+the OOM and frees enough room to **raise context to 200k (204800)**. At 200k q8_0 the card sits
+~29.8/32 GB (~3 GB headroom) and an 11k-token prompt prefills at ~790 t/s with no OOM. Coding
+runs `--parallel 1` so the full window serves one agent (concurrent requests serialize — fine
+for personal use).
 
 ### Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)
 
@@ -519,7 +525,7 @@ speed. Cost = a larger CUDA compute buffer (VRAM). `llama-bench` on a V100:
 
 | model              | -ub 512 | -ub 1024 | -ub 2048 | applied |
 |--------------------|---------|----------|----------|---------|
-| coding (27B Q6_K, 1×V100) | 746 t/s | **858 (+15%)** | 892 (+20%) | **`-ub 1024`** — 2048 nearly OOMs at ctx 163840 (~0.4 GB free) |
+| coding (27B Q6_K, 1×V100) | 746 t/s | **858 (+15%)** | 892 (+20%) | **`-ub 1024`** — with q8_0 KV @200k (~3 GB free) 1024 fits; 2048 risks OOM |
 | chat (35B-A3B UD-Q6_K, 1×V100) | — | — | +~20% | **`-ub 2048`** — has ~4 GB headroom |
 | big (27B BF16, 2×V100 layer-split) | **232 t/s** | 205 | 167 | **default 512** — larger *hurts* (inter-GPU sync) |
 
@@ -616,6 +622,9 @@ the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` c
 (P100, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
+`fast_plan_and_build` (the interactive path: plan with `chat` + implement with `coding` — the
+two daily V100 models that stay co-resident, so **no GPU swap**; may also be called from those
+V100 models, not just `fast`),
 `implement_spec` (implement a given spec directly with `coder-next`, no planning), and
 `reset_models` (the "done" call: warm the default V100 models — `coding`+`chat`,
 `PLAN_BUILD_DEFAULT_MODELS` — back onto the cards, evicting any `big`/`coder-next` left

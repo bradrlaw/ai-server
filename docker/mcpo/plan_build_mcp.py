@@ -7,6 +7,7 @@ and relays their output; the tools do the heavy lifting on the V100s:
 
   * `make_plan`       - a reasoning model designs a detailed plan (planning only)
   * `plan_and_build`  - plan with a reasoning model, then implement with a coder
+  * `fast_plan_and_build` - quick plan+build on the resident V100 models (no swap)
   * `implement_spec`  - implement directly from a given spec/plan (no planning)
   * `reset_models`    - "done": warm the default V100 models back (evict big/coder-next)
 
@@ -51,32 +52,54 @@ DEFAULT_MODELS = [
     for m in os.environ.get("PLAN_BUILD_DEFAULT_MODELS", "coding,chat").split(",")
     if m.strip()
 ]
+# `fast_plan_and_build` only uses the resident daily V100 models (`chat`+`coding`),
+# so it never evicts them and may also be called from those V100 models -- not just
+# the P100 `fast` model. Override with PLAN_BUILD_FAST_SAFE_GPUS (comma-separated).
+FAST_SAFE_GPUS = {
+    g.strip().lower()
+    for g in os.environ.get("PLAN_BUILD_FAST_SAFE_GPUS", "p100,v100").split(",")
+    if g.strip()
+}
+
+# Human-readable "who may call this" clauses, embedded in guard refusal messages.
+_STRICT_WHO = (
+    "a model that lives exclusively on the P100 (the `fast` chat model) -- this tool "
+    "swaps `big`/`coder-next` onto the V100s and would otherwise evict the caller and "
+    "break the conversation"
+)
+_FAST_WHO = (
+    "the P100 `fast` model or a V100 daily model (`chat`/`coding`) -- this tool uses the "
+    "resident `chat`+`coding` models in place and won't evict them"
+)
 
 mcp = FastMCP("plan-build")
 
 
-def _gpu_guard(caller_gpu: str) -> str | None:
-    """Return a refusal message if the caller is not P100-exclusive, else None.
+def _gpu_guard(
+    caller_gpu: str,
+    allowed: set[str] | None = None,
+    who: str = _STRICT_WHO,
+) -> str | None:
+    """Return a refusal message if the caller's GPU isn't allowed, else None.
 
-    The tools evict V100 models; a caller that lives on the V100s would evict
-    itself and break the conversation. The caller must report its GPU/tier.
+    Callers must report their GPU/tier via `caller_gpu` (injected by the model's
+    system prompt). `allowed` defaults to `SAFE_GPUS` (P100-only); tools that don't
+    evict the daily V100 models can pass a wider set (e.g. `FAST_SAFE_GPUS`).
     """
+    allowed = SAFE_GPUS if allowed is None else allowed
     val = (caller_gpu or "").strip().lower()
     if not val:
         return (
-            "⚠️ Refused: this tool must be called from a model that lives exclusively "
-            "on the P100 (the `fast` chat model), because it runs `big`/`coder-next` on "
-            "the V100s and would evict the calling model. The caller did not report its "
-            "GPU. Set the model's system prompt to always pass `caller_gpu` (e.g. "
-            '"p100") on plan-build calls, and only enable this tool on the `fast` model.'
+            f"⚠️ Refused: this tool must be called from {who}. The caller did not report "
+            "its GPU (`caller_gpu`). Set the model's system prompt to always pass "
+            "`caller_gpu` on plan-build calls, and only enable this tool on the "
+            "appropriate model(s)."
         )
-    if any(safe in val for safe in SAFE_GPUS):
+    if any(safe in val for safe in allowed):
         return None
     return (
-        f"⚠️ Refused: this tool runs `big`/`coder-next` on the V100s, which would evict "
-        f"the calling model and break this conversation. The caller reported "
-        f"caller_gpu='{caller_gpu}', which is not P100-exclusive. Please switch to the "
-        f"`fast` model (P100) and try again."
+        f"⚠️ Refused: the caller reported caller_gpu='{caller_gpu}', which is not "
+        f"permitted here. This tool must be called from {who}."
     )
 
 
@@ -225,6 +248,54 @@ def plan_and_build(
     impl = _chat(coder_model, _impl_prompt(plan["content"]), max_tokens=8000)
     return (
         f"# Plan-and-build\n\n**Task:** {task.strip()}\n\n"
+        f"## Plan\n_by `{planner_model}`_\n\n{plan['content']}\n\n"
+        f"## Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+    )
+
+
+@mcp.tool()
+def fast_plan_and_build(
+    task: str,
+    caller_gpu: str = "",
+    planner_model: str = "chat",
+    coder_model: str = "coding",
+) -> str:
+    """Quick plan + implement using the resident daily V100 models (no GPU swap).
+
+    The interactive counterpart to `plan_and_build`: it plans with `chat`
+    (Qwen3.6 MoE reasoner) and implements with `coding` (Qwen3.6-27B) -- the two
+    models normally already resident together on the V100s (idx2 + idx1). Because
+    it uses them in place, there is NO model swap, so it is fast and well-suited to
+    interactive programming sessions.
+
+    Prefer this for everyday/interactive tasks. Use `plan_and_build` (`big` +
+    `coder-next`) instead for very complex or long-running / overnight work that
+    needs maximum planning depth and the 80B coder.
+
+    Args:
+        task: Natural-language description of what to build.
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+            `fast` model, or "v100" for the `chat`/`coding` models). Injected by
+            your system prompt. Because this tool only uses the resident
+            `chat`/`coding` models, it may be called from the P100 `fast` model OR
+            those V100 daily models.
+        planner_model: Planner. Default 'chat'.
+        coder_model: Coder. Default 'coding'.
+
+    Returns:
+        Markdown containing both the plan and the implementation.
+    """
+    refusal = _gpu_guard(caller_gpu, FAST_SAFE_GPUS, who=_FAST_WHO)
+    if refusal:
+        return refusal
+    if not task or not task.strip():
+        return "Error: `task` must be a non-empty description of what to build."
+    plan = _chat(planner_model, _plan_prompt(task), max_tokens=24000)
+    if plan["finish"] == "length":
+        plan["content"] += "\n\n_(plan was truncated by the token limit)_"
+    impl = _chat(coder_model, _impl_prompt(plan["content"]), max_tokens=8000)
+    return (
+        f"# Fast plan-and-build\n\n**Task:** {task.strip()}\n\n"
         f"## Plan\n_by `{planner_model}`_\n\n{plan['content']}\n\n"
         f"## Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
     )
