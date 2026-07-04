@@ -50,3 +50,22 @@ Host MCP servers **on this machine** (CPU app tier), and manage them centrally w
   inventory, per-client wiring.
 - **Ad-hoc per-tool HTTP servers** — rejected: reinvents what mcpo standardizes
   (auth, OpenAPI docs, hot-reload, one config).
+
+## Addendum (2026-07-04) — in-house `plan-build` server
+
+The inventory now also hosts a **first-party** MCP server, not just off-the-shelf
+`uvx` ones: `docker/mcpo/plan_build_mcp.py` (a FastMCP script mounted read-only at
+`/config`, run via `uv run --with mcp`). It exposes a planner→coder pipeline
+(`make_plan`, `plan_and_build`, `implement_spec`) that the general chat model calls
+to offload heavy work onto the V100 models (`big` for planning, `coder-next` for
+implementation). See `docs/server-setup.md` (Phase 3 mcpo) for behaviour/GPU-swap
+details. Two wiring notes that generalize to future in-house servers:
+
+- **Reaching the LiteLLM gateway from a container:** LiteLLM runs `network_mode: host`
+  (`:4000`), so mcpo needs `extra_hosts: host.docker.internal:host-gateway`; the tool
+  targets `http://host.docker.internal:4000/v1`. (llama-swap `127.0.0.1:9090` is
+  loopback-only and not reachable from containers — go through LiteLLM.)
+- **Secrets without committing them:** mcpo launches stdio children with
+  `{**os.environ, **cfg.env}`, so a key placed in the mcpo container env (via
+  `env_file: ./.env`) is inherited by the child. The tool reads `LITELLM_MASTER_KEY`
+  from `os.environ`; the git-tracked `config.json` holds only non-secret overrides.

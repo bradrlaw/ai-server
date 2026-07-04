@@ -21,6 +21,16 @@
         "GIT_CONFIG_KEY_0": "safe.directory",
         "GIT_CONFIG_VALUE_0": "/repos/ai-server"
       }
+    },
+    "plan-build": {
+      "//": "In-house planner->coder pipeline (docker/mcpo/plan_build_mcp.py, mounted at /config). Tools: make_plan, plan_and_build, implement_spec. Calls the LiteLLM gateway via host.docker.internal:4000; reads LITELLM_MASTER_KEY from inherited env (set via the mcpo service env_file) so no secret lives here.",
+      "//_deps": "uv creates an ephemeral venv with the `mcp` package on first launch; UV_CACHE_DIR points at a writable path since /config is read-only.",
+      "command": "uv",
+      "args": ["run", "--with", "mcp", "/config/plan_build_mcp.py"],
+      "env": {
+        "UV_CACHE_DIR": "/tmp/uv-cache",
+        "LITELLM_BASE": "http://host.docker.internal:4000/v1"
+      }
     }
   }
 }

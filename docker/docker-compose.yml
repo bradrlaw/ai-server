@@ -75,6 +75,16 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # LITELLM_MASTER_KEY (+ others) from .env enter mcpo's env and are inherited
+    # by the stdio MCP subprocesses it spawns (mcpo passes {**os.environ, **cfg.env}),
+    # so the plan-build server reads the key from os.environ — no secret in the
+    # git-tracked config.json.
+    env_file:
+      - ./.env
+    # host.docker.internal -> host gateway, so the plan-build server can reach the
+    # LiteLLM gateway (network_mode: host, bound on the host at :4000).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - "--host"
       - "0.0.0.0"

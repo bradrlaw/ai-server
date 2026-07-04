@@ -590,8 +590,9 @@ the `open-webui-data` volume.
 **mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
 format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
-(Python servers work; Node/`npx` needs a node-enabled image). Registered servers (all uvx):
-`time`, `fetch` (URL→markdown), `git` (inspect the ai-server repo). Verified live, e.g.
+(Python servers work; Node/`npx` needs a node-enabled image). Registered servers:
+`time`, `fetch` (URL→markdown), `git` (inspect the ai-server repo) — all `uvx` — plus
+`plan-build`, an in-house planner→coder pipeline (see below). Verified live, e.g.
 `POST /time/get_current_time {"timezone":"America/New_York"}` → datetime;
 `POST /fetch/fetch {"url":"https://example.com"}` → page markdown;
 `POST /git/git_log {"repo_path":"/repos/ai-server"}` → commit history.
@@ -606,6 +607,26 @@ host owner (uid 1000), so the git server sets `safe.directory` via `GIT_CONFIG_*
 config.json (avoids git's "dubious ownership" error without writing host files). **Adding a
 repo/volume mount requires `docker compose up -d --force-recreate mcpo`** — hot-reload only
 picks up config.json edits, not new env/volumes.
+
+_plan-build server (in-house planner→coder pipeline):_ source
+`docker/mcpo/plan_build_mcp.py` (mounted at `/config`), launched with
+`uv run --with mcp` (uv builds an ephemeral venv with the `mcp` package on first start;
+`UV_CACHE_DIR=/tmp/uv-cache` since `/config` is read-only). It exposes three tools that call
+the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` chat model
+(P100, never evicted) invokes them and relays output:
+`make_plan` (a reasoning model — default `big` — writes a detailed plan),
+`plan_and_build` (plan with `big`, then implement with `coder-next`), and
+`implement_spec` (implement a given spec directly with `coder-next`, no planning). Planner
+(`big`/`chat`/`fast`) and coder are overridable per call. Because `big` and `coder-next`
+both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
+`coder-next` in (evicting `big`); `fast` stays resident so the chat keeps responding. **This
+needs container networking + the gateway key:** the mcpo service adds
+`extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
+`:4000`) and `env_file: ./.env`; mcpo passes `{**os.environ, **cfg.env}` to the stdio child,
+so `LITELLM_MASTER_KEY` reaches the tool via inherited env — **no secret in the git-tracked
+config.json**. `big` planning can take several minutes (deep reasoning) plus GPU swaps;
+`PLAN_BUILD_TIMEOUT` (default 1800s) bounds the HTTP call. Verified live 2026-07-04:
+`POST /plan-build/implement_spec` → code from `coder-next` in ~60s (incl. GPU swap).
 
 To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
 Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://192.168.4.57:8000/time`; the IP
