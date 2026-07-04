@@ -619,7 +619,14 @@ the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` c
 `implement_spec` (implement a given spec directly with `coder-next`, no planning). Planner
 (`big`/`chat`/`fast`) and coder are overridable per call. Because `big` and `coder-next`
 both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
-`coder-next` in (evicting `big`); `fast` stays resident so the chat keeps responding. **This
+`coder-next` in (evicting `big`); `fast` stays resident so the chat keeps responding. **So it
+must only be called from a P100-exclusive model** — a V100 caller (coding/chat/big) would
+evict *itself* mid-call and break the conversation. The tool can't see its caller through the
+MCP protocol, so it takes a **`caller_gpu`** arg the model reports (via its system prompt) and
+refuses anything not P100-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `p100`). Enforce
+it two ways: (1) in Open WebUI, enable this tool **only on the `fast` model**; (2) add to the
+`fast` model's system prompt: _"When calling any plan-build tool, always pass
+`caller_gpu="p100"`."_ **This
 needs container networking + the gateway key:** the mcpo service adds
 `extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
 `:4000`) and `env_file: ./.env`; mcpo passes `{**os.environ, **cfg.env}` to the stdio child,

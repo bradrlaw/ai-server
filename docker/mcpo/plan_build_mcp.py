@@ -32,8 +32,43 @@ LITELLM_BASE = os.environ.get("LITELLM_BASE", "http://host.docker.internal:4000/
 LITELLM_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
 # Reasoning planners (esp. `big`) can spend minutes thinking; allow long calls.
 HTTP_TIMEOUT = float(os.environ.get("PLAN_BUILD_TIMEOUT", "1800"))
+# Only models that live *exclusively* on the P100 (never evicted) may call these
+# tools, because the tools swap `big`/`coder-next` onto the V100s and would
+# otherwise evict the calling conversation model. The caller reports its GPU via
+# the `caller_gpu` arg (injected by the model's system prompt); anything matching
+# an entry here is allowed. Override with PLAN_BUILD_SAFE_GPUS (comma-separated).
+SAFE_GPUS = {
+    g.strip().lower()
+    for g in os.environ.get("PLAN_BUILD_SAFE_GPUS", "p100").split(",")
+    if g.strip()
+}
 
 mcp = FastMCP("plan-build")
+
+
+def _gpu_guard(caller_gpu: str) -> str | None:
+    """Return a refusal message if the caller is not P100-exclusive, else None.
+
+    The tools evict V100 models; a caller that lives on the V100s would evict
+    itself and break the conversation. The caller must report its GPU/tier.
+    """
+    val = (caller_gpu or "").strip().lower()
+    if not val:
+        return (
+            "⚠️ Refused: this tool must be called from a model that lives exclusively "
+            "on the P100 (the `fast` chat model), because it runs `big`/`coder-next` on "
+            "the V100s and would evict the calling model. The caller did not report its "
+            "GPU. Set the model's system prompt to always pass `caller_gpu` (e.g. "
+            '"p100") on plan-build calls, and only enable this tool on the `fast` model.'
+        )
+    if any(safe in val for safe in SAFE_GPUS):
+        return None
+    return (
+        f"⚠️ Refused: this tool runs `big`/`coder-next` on the V100s, which would evict "
+        f"the calling model and break this conversation. The caller reported "
+        f"caller_gpu='{caller_gpu}', which is not P100-exclusive. Please switch to the "
+        f"`fast` model (P100) and try again."
+    )
 
 
 def _chat(model: str, prompt: str, max_tokens: int) -> dict:
@@ -101,7 +136,7 @@ def _impl_prompt(spec: str) -> str:
 
 
 @mcp.tool()
-def make_plan(task: str, planner_model: str = "big") -> str:
+def make_plan(task: str, caller_gpu: str = "", planner_model: str = "big") -> str:
     """Design a detailed implementation plan for a coding task (planning only).
 
     Use to think through a non-trivial or under-specified task before writing
@@ -110,6 +145,11 @@ def make_plan(task: str, planner_model: str = "big") -> str:
 
     Args:
         task: Natural-language description of what to build.
+        caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
+            "p100"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on the P100 (the `fast` model), because it
+            swaps `big`/`coder-next` onto the V100s and would otherwise evict the
+            caller. Always pass this.
         planner_model: Model that writes the plan. 'big' (default, highest
             precision, slower) or 'chat' (reasoning MoE, faster) on the V100s, or
             'fast' (P100, quickest, weaker plans, no GPU swap).
@@ -119,6 +159,9 @@ def make_plan(task: str, planner_model: str = "big") -> str:
 
     Note: 'big' can take several minutes (deep reasoning) and swaps onto the V100s.
     """
+    refusal = _gpu_guard(caller_gpu)
+    if refusal:
+        return refusal
     if not task or not task.strip():
         return "Error: `task` must be a non-empty description of what to build."
     plan = _chat(planner_model, _plan_prompt(task), max_tokens=24000)
@@ -134,6 +177,7 @@ def make_plan(task: str, planner_model: str = "big") -> str:
 @mcp.tool()
 def plan_and_build(
     task: str,
+    caller_gpu: str = "",
     planner_model: str = "big",
     coder_model: str = "coder-next",
 ) -> str:
@@ -144,6 +188,11 @@ def plan_and_build(
 
     Args:
         task: Natural-language description of what to build.
+        caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
+            "p100"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on the P100 (the `fast` model), because it
+            swaps `big`/`coder-next` onto the V100s and would otherwise evict the
+            caller. Always pass this.
         planner_model: Model that writes the plan. Default 'big' (highest
             precision). Alternatives: 'chat' (faster reasoning) or 'fast' (P100,
             quickest, no GPU swap).
@@ -156,6 +205,9 @@ def plan_and_build(
     reasoning) plus a GPU swap from the planner to the coder. The 'fast' chat
     model stays resident on the P100, so your conversation keeps responding.
     """
+    refusal = _gpu_guard(caller_gpu)
+    if refusal:
+        return refusal
     if not task or not task.strip():
         return "Error: `task` must be a non-empty description of what to build."
     plan = _chat(planner_model, _plan_prompt(task), max_tokens=24000)
@@ -170,7 +222,7 @@ def plan_and_build(
 
 
 @mcp.tool()
-def implement_spec(spec: str, coder_model: str = "coder-next") -> str:
+def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-next") -> str:
     """Implement code directly from a specification or plan (no planning step).
 
     Use when you already have a clear spec/plan -- e.g. one produced by
@@ -178,11 +230,19 @@ def implement_spec(spec: str, coder_model: str = "coder-next") -> str:
 
     Args:
         spec: The specification or implementation plan to build from.
+        caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
+            "p100"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on the P100 (the `fast` model), because it
+            swaps `coder-next` onto the V100s and would otherwise evict the
+            caller. Always pass this.
         coder_model: Coding model that implements it. Default 'coder-next'.
 
     Returns:
         Markdown with the implementation produced by the coding model.
     """
+    refusal = _gpu_guard(caller_gpu)
+    if refusal:
+        return refusal
     if not spec or not spec.strip():
         return "Error: `spec` must be a non-empty specification or plan."
     impl = _chat(coder_model, _impl_prompt(spec), max_tokens=8000)
