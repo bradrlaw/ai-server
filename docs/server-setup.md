@@ -434,6 +434,23 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
+**Open WebUI display names.** The model-picker dropdown shows a friendly label per
+model so the profile names aren't mixed up, set via **Admin Panel → Settings → Models →**
+(edit each model's **Name**). This overrides *only* the display label — the API id stays
+the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap routing, and all
+`model=…` calls are unaffected. It persists in Open WebUI's DB (not in this repo). Mapping:
+
+| API id (unchanged) | Open WebUI display name |
+|--------------------|-------------------------|
+| `coding`           | `coding (Qwen3.6-27B)` |
+| `chat`             | `chat (Qwen3.6-35B-A3B MoE)` |
+| `big`              | `big (Qwen3.6-27B BF16)` |
+| `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
+| `fast`             | `fast (Gemma-4-12B)` |
+
+(The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
+`MODEL_LABELS` map — keep the two in sync if a model is swapped.)
+
 **Routing = matrix (3 cards).** `f`(fast, P100) is in every set so it's never evicted and runs
 CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
 `gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
