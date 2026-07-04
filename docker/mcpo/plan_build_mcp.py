@@ -105,6 +105,23 @@ def _gpu_guard(
     )
 
 
+# Human-readable model labels shown in output bylines and docstrings so profile
+# names ("chat", "coding", ...) are never confused with each other.
+MODEL_LABELS = {
+    "fast": "Gemma-4-12B, P100",
+    "coding": "Qwen3.6-27B",
+    "chat": "Qwen3.6-35B-A3B MoE",
+    "big": "Qwen3.6-27B BF16",
+    "coder-next": "Qwen3-Coder-Next 80B-A3B",
+}
+
+
+def _by(model: str) -> str:
+    """Byline like ``_by `chat` (Qwen3.6-35B-A3B MoE)_`` for tool output."""
+    label = MODEL_LABELS.get(model)
+    return f"_by `{model}` ({label})_" if label else f"_by `{model}`_"
+
+
 def _chat(model: str, prompt: str, max_tokens: int) -> dict:
     """Call the LiteLLM gateway; return {content, finish, tokens}."""
     body = json.dumps(
@@ -184,9 +201,10 @@ def make_plan(task: str, caller_gpu: str = "", planner_model: str = "big") -> st
             caller lives exclusively on the P100 (the `fast` model), because it
             swaps `big`/`coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
-        planner_model: Model that writes the plan. 'big' (default, highest
-            precision, slower) or 'chat' (reasoning MoE, faster) on the V100s, or
-            'fast' (P100, quickest, weaker plans, no GPU swap).
+        planner_model: Model that writes the plan. 'big' (default, Qwen3.6-27B
+            BF16, highest precision, slower) or 'chat' (Qwen3.6-35B-A3B MoE,
+            reasoning, faster) on the V100s, or 'fast' (Gemma-4-12B on the P100,
+            quickest, weaker plans, no GPU swap).
 
     Returns:
         Markdown plan.
@@ -202,7 +220,7 @@ def make_plan(task: str, caller_gpu: str = "", planner_model: str = "big") -> st
     if plan["finish"] == "length":
         plan["content"] += "\n\n_(plan was truncated by the token limit)_"
     return (
-        f"# Plan\n_by `{planner_model}`_\n\n**Task:** {task.strip()}\n\n"
+        f"# Plan\n{_by(planner_model)}\n\n**Task:** {task.strip()}\n\n"
         f"{plan['content']}\n\n"
         "> Next: review/edit this plan, then call `implement_spec` to build it."
     )
@@ -227,10 +245,11 @@ def plan_and_build(
             caller lives exclusively on the P100 (the `fast` model), because it
             swaps `big`/`coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
-        planner_model: Model that writes the plan. Default 'big' (highest
-            precision). Alternatives: 'chat' (faster reasoning) or 'fast' (P100,
+        planner_model: Model that writes the plan. Default 'big' (Qwen3.6-27B
+            BF16, highest precision). Alternatives: 'chat' (Qwen3.6-35B-A3B MoE,
+            faster reasoning) or 'fast' (Gemma-4-12B, P100,
             quickest, no GPU swap).
-        coder_model: Coding model that implements the plan. Default 'coder-next'.
+        coder_model: Coding model that implements the plan. Default 'coder-next' (Qwen3-Coder-Next 80B-A3B).
 
     Returns:
         Markdown containing both the plan and the implementation.
@@ -250,8 +269,8 @@ def plan_and_build(
     impl = _chat(coder_model, _impl_prompt(plan["content"]), max_tokens=8000)
     return (
         f"# Plan-and-build\n\n**Task:** {task.strip()}\n\n"
-        f"## Plan\n_by `{planner_model}`_\n\n{plan['content']}\n\n"
-        f"## Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+        f"## Plan\n{_by(planner_model)}\n\n{plan['content']}\n\n"
+        f"## Implementation\n{_by(coder_model)}\n\n{impl['content']}\n"
     )
 
 
@@ -281,8 +300,8 @@ def fast_plan_and_build(
             your system prompt. Because this tool only uses the resident
             `chat`/`coding` models, it may be called from the P100 `fast` model OR
             those V100 daily models.
-        planner_model: Planner. Default 'chat'.
-        coder_model: Coder. Default 'coding'.
+        planner_model: Planner. Default 'chat' (Qwen3.6-35B-A3B MoE).
+        coder_model: Coder. Default 'coding' (Qwen3.6-27B).
 
     Returns:
         Markdown containing both the plan and the implementation.
@@ -298,8 +317,8 @@ def fast_plan_and_build(
     impl = _chat(coder_model, _impl_prompt(plan["content"]), max_tokens=8000)
     return (
         f"# Fast plan-and-build\n\n**Task:** {task.strip()}\n\n"
-        f"## Plan\n_by `{planner_model}`_\n\n{plan['content']}\n\n"
-        f"## Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+        f"## Plan\n{_by(planner_model)}\n\n{plan['content']}\n\n"
+        f"## Implementation\n{_by(coder_model)}\n\n{impl['content']}\n"
     )
 
 
@@ -320,7 +339,7 @@ def fast_make_plan(task: str, caller_gpu: str = "", planner_model: str = "chat")
             your system prompt. Because this tool only uses the resident `chat`
             model, it may be called from the P100 `fast` model OR those V100 daily
             models.
-        planner_model: Planner. Default 'chat'.
+        planner_model: Planner. Default 'chat' (Qwen3.6-35B-A3B MoE).
 
     Returns:
         Markdown plan.
@@ -334,7 +353,7 @@ def fast_make_plan(task: str, caller_gpu: str = "", planner_model: str = "chat")
     if plan["finish"] == "length":
         plan["content"] += "\n\n_(plan was truncated by the token limit)_"
     return (
-        f"# Plan\n_by `{planner_model}`_\n\n**Task:** {task.strip()}\n\n"
+        f"# Plan\n{_by(planner_model)}\n\n**Task:** {task.strip()}\n\n"
         f"{plan['content']}\n\n"
         "> Next: review/edit this plan, then call `fast_implement_spec` to build it."
     )
@@ -354,7 +373,7 @@ def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-ne
             caller lives exclusively on the P100 (the `fast` model), because it
             swaps `coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
-        coder_model: Coding model that implements it. Default 'coder-next'.
+        coder_model: Coding model that implements it. Default 'coder-next' (Qwen3-Coder-Next 80B-A3B).
 
     Returns:
         Markdown with the implementation produced by the coding model.
@@ -365,7 +384,7 @@ def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-ne
     if not spec or not spec.strip():
         return "Error: `spec` must be a non-empty specification or plan."
     impl = _chat(coder_model, _impl_prompt(spec), max_tokens=8000)
-    return f"# Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+    return f"# Implementation\n{_by(coder_model)}\n\n{impl['content']}\n"
 
 
 @mcp.tool()
@@ -386,7 +405,7 @@ def fast_implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "cod
             your system prompt. Because this tool only uses the resident `coding`
             model, it may be called from the P100 `fast` model OR those V100 daily
             models.
-        coder_model: Coder. Default 'coding'.
+        coder_model: Coder. Default 'coding' (Qwen3.6-27B).
 
     Returns:
         Markdown with the implementation produced by the coding model.
@@ -397,7 +416,7 @@ def fast_implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "cod
     if not spec or not spec.strip():
         return "Error: `spec` must be a non-empty specification or plan."
     impl = _chat(coder_model, _impl_prompt(spec), max_tokens=8000)
-    return f"# Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+    return f"# Implementation\n{_by(coder_model)}\n\n{impl['content']}\n"
 
 
 @mcp.tool()
