@@ -8,6 +8,7 @@ and relays their output; the tools do the heavy lifting on the V100s:
   * `make_plan`       - a reasoning model designs a detailed plan (planning only)
   * `plan_and_build`  - plan with a reasoning model, then implement with a coder
   * `implement_spec`  - implement directly from a given spec/plan (no planning)
+  * `reset_models`    - "done": warm the default V100 models back (evict big/coder-next)
 
 GPU model: the default planner is `big` (highest-precision, dual-V100) and the
 default coder is `coder-next` (dual-V100). Both live on the two V100s and swap
@@ -42,6 +43,14 @@ SAFE_GPUS = {
     for g in os.environ.get("PLAN_BUILD_SAFE_GPUS", "p100").split(",")
     if g.strip()
 }
+# Default V100 models to restore on `reset_models` (the daily base state). Warming
+# these evicts any planner/coder (`big`/`coder-next`) left resident. Override with
+# PLAN_BUILD_DEFAULT_MODELS (comma-separated).
+DEFAULT_MODELS = [
+    m.strip()
+    for m in os.environ.get("PLAN_BUILD_DEFAULT_MODELS", "coding,chat").split(",")
+    if m.strip()
+]
 
 mcp = FastMCP("plan-build")
 
@@ -247,6 +256,46 @@ def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-ne
         return "Error: `spec` must be a non-empty specification or plan."
     impl = _chat(coder_model, _impl_prompt(spec), max_tokens=8000)
     return f"# Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+
+
+@mcp.tool()
+def reset_models(caller_gpu: str = "") -> str:
+    """Reset the V100s to their default daily models (free the planner/coder).
+
+    Call this when the user is finished planning/building and wants to return to
+    the base state -- e.g. they say "stop", "reset", "done", "free the GPUs", or
+    "go back to normal". It warms the default coding models back onto the V100s,
+    which evicts any planner/coder (`big`/`coder-next`) left resident from earlier
+    plan-build calls. The `fast` chat model on the P100 is unaffected, so this
+    conversation keeps responding.
+
+    Args:
+        caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
+            "p100"). Injected by your system prompt. Same P100-exclusive rule as
+            the other tools.
+
+    Returns:
+        A short status line listing which models were restored.
+    """
+    refusal = _gpu_guard(caller_gpu)
+    if refusal:
+        return refusal
+    if not DEFAULT_MODELS:
+        return "No default models configured (PLAN_BUILD_DEFAULT_MODELS is empty)."
+    restored, failed = [], []
+    for m in DEFAULT_MODELS:
+        try:
+            _chat(m, "ok", max_tokens=1)  # tiny warmup request triggers the load
+            restored.append(m)
+        except RuntimeError as e:
+            failed.append(f"`{m}` ({e})")
+    parts = []
+    if restored:
+        parts.append("✅ Reset the V100s to the default models: " + ", ".join(f"`{m}`" for m in restored) + ".")
+    if failed:
+        parts.append("⚠️ Failed to restore: " + "; ".join(failed) + ".")
+    parts.append("The `fast` model (P100) was unaffected.")
+    return " ".join(parts)
 
 
 if __name__ == "__main__":

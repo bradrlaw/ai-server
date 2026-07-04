@@ -616,7 +616,10 @@ the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` c
 (P100, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
-`implement_spec` (implement a given spec directly with `coder-next`, no planning). Planner
+`implement_spec` (implement a given spec directly with `coder-next`, no planning), and
+`reset_models` (the "done" call: warm the default V100 models — `coding`+`chat`,
+`PLAN_BUILD_DEFAULT_MODELS` — back onto the cards, evicting any `big`/`coder-next` left
+resident). Planner
 (`big`/`chat`/`fast`) and coder are overridable per call. Because `big` and `coder-next`
 both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
 `coder-next` in (evicting `big`); `fast` stays resident so the chat keeps responding. **So it
