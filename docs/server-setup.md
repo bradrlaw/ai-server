@@ -624,7 +624,8 @@ the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` c
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
 `fast_plan_and_build` (the interactive path: plan with `chat` + implement with `coding` — the
 two daily V100 models that stay co-resident, so **no GPU swap**; may also be called from those
-V100 models, not just `fast`),
+V100 models, not just `fast`), `fast_make_plan` / `fast_implement_spec` (the plan-only /
+implement-only halves of that fast path, using `chat` / `coding` respectively),
 `implement_spec` (implement a given spec directly with `coder-next`, no planning), and
 `reset_models` (the "done" call: warm the default V100 models — `coding`+`chat`,
 `PLAN_BUILD_DEFAULT_MODELS` — back onto the cards, evicting any `big`/`coder-next` left

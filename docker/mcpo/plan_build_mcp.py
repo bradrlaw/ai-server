@@ -8,7 +8,9 @@ and relays their output; the tools do the heavy lifting on the V100s:
   * `make_plan`       - a reasoning model designs a detailed plan (planning only)
   * `plan_and_build`  - plan with a reasoning model, then implement with a coder
   * `fast_plan_and_build` - quick plan+build on the resident V100 models (no swap)
+  * `fast_make_plan`  - plan only with the resident `chat` model (no swap)
   * `implement_spec`  - implement directly from a given spec/plan (no planning)
+  * `fast_implement_spec` - implement with the resident `coding` model (no swap)
   * `reset_models`    - "done": warm the default V100 models back (evict big/coder-next)
 
 GPU model: the default planner is `big` (highest-precision, dual-V100) and the
@@ -302,6 +304,43 @@ def fast_plan_and_build(
 
 
 @mcp.tool()
+def fast_make_plan(task: str, caller_gpu: str = "", planner_model: str = "chat") -> str:
+    """Design an implementation plan using the resident `chat` model (no GPU swap).
+
+    The interactive counterpart to `make_plan`: it plans with `chat` (Qwen3.6 MoE
+    reasoner), a daily V100 model that stays resident, so there is no model swap.
+    Review/edit the returned plan, then pass it to `fast_implement_spec` (or use
+    `fast_plan_and_build` to do both in one step). Use `make_plan` (`big`) instead
+    for very complex or long-running work that needs maximum planning depth.
+
+    Args:
+        task: Natural-language description of what to build.
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+            `fast` model, or "v100" for the `chat`/`coding` models). Injected by
+            your system prompt. Because this tool only uses the resident `chat`
+            model, it may be called from the P100 `fast` model OR those V100 daily
+            models.
+        planner_model: Planner. Default 'chat'.
+
+    Returns:
+        Markdown plan.
+    """
+    refusal = _gpu_guard(caller_gpu, FAST_SAFE_GPUS, who=_FAST_WHO)
+    if refusal:
+        return refusal
+    if not task or not task.strip():
+        return "Error: `task` must be a non-empty description of what to build."
+    plan = _chat(planner_model, _plan_prompt(task), max_tokens=24000)
+    if plan["finish"] == "length":
+        plan["content"] += "\n\n_(plan was truncated by the token limit)_"
+    return (
+        f"# Plan\n_by `{planner_model}`_\n\n**Task:** {task.strip()}\n\n"
+        f"{plan['content']}\n\n"
+        "> Next: review/edit this plan, then call `fast_implement_spec` to build it."
+    )
+
+
+@mcp.tool()
 def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-next") -> str:
     """Implement code directly from a specification or plan (no planning step).
 
@@ -321,6 +360,38 @@ def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-ne
         Markdown with the implementation produced by the coding model.
     """
     refusal = _gpu_guard(caller_gpu)
+    if refusal:
+        return refusal
+    if not spec or not spec.strip():
+        return "Error: `spec` must be a non-empty specification or plan."
+    impl = _chat(coder_model, _impl_prompt(spec), max_tokens=8000)
+    return f"# Implementation\n_by `{coder_model}`_\n\n{impl['content']}\n"
+
+
+@mcp.tool()
+def fast_implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coding") -> str:
+    """Implement code from a spec/plan using the resident `coding` model (no swap).
+
+    The interactive counterpart to `implement_spec`: it implements with `coding`
+    (Qwen3.6-27B), a daily V100 model that stays resident, so there is no model
+    swap. Use when you already have a clear spec/plan -- e.g. one from
+    `fast_make_plan` (optionally edited), or a detailed spec you wrote yourself.
+    Use `implement_spec` (`coder-next`, 80B) instead for the largest/most complex
+    implementations.
+
+    Args:
+        spec: The specification or implementation plan to build from.
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+            `fast` model, or "v100" for the `chat`/`coding` models). Injected by
+            your system prompt. Because this tool only uses the resident `coding`
+            model, it may be called from the P100 `fast` model OR those V100 daily
+            models.
+        coder_model: Coder. Default 'coding'.
+
+    Returns:
+        Markdown with the implementation produced by the coding model.
+    """
+    refusal = _gpu_guard(caller_gpu, FAST_SAFE_GPUS, who=_FAST_WHO)
     if refusal:
         return refusal
     if not spec or not spec.strip():
