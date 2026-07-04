@@ -71,31 +71,36 @@ models:
       --batch-size 2048 --ubatch-size 2048
       ${common}
 
-  # --- big: Qwen3.6-27B BF16 across BOTH V100s (idx1+idx2), TP -----------
-  # ~50GB weights split over 64GB. Highest-quality dense model; occasional use.
-  # Auto-unloads after 5 min idle so coding+chat can reclaim the cards.
+  # --- big: Qwen3.6-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------
+  # Highest-quality dense model, tuned for OVERNIGHT long-context planning where
+  # accuracy/precision matter more than speed. Occasional use; auto-unloads
+  # after 5 min idle so coding+chat can reclaim the cards.
+  # WEIGHTS: UD-Q6_K_XL (Unsloth Dynamic, imatrix-calibrated ~24GB) at FULL f16
+  # KV — chosen over BF16/Q8 after a 256k head-to-head (Tarjan SCC @ temp 0):
+  # UD-Q6_K_XL+f16 gave the most VRAM headroom, the fastest decode, full KV
+  # precision (best long-context recall), and 5/5 correct code. Q8 weights added
+  # no correctness (also 5/5) but cost ~6GB headroom; BF16+q8_0 KV was razor-thin
+  # at 256k (idx2 <1GB free).
   # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
   # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
   # sync overhead of the layer split. Do not add --ubatch-size.
-  # KV: dense arch (64 layers, 4 KV heads, 256-dim) makes KV ~2x pricier than the
-  # A3B MoE, so f16 KV overflows above ~16k -> use q8_0 KV. Native ctx 262144.
-  # Verified 2026-07-03: ctx 131072 (128k) q8_0 with a 105k-token prefill peaks
-  # at 28.4GB(idx1)/28.7GB(idx2) -> ~4GB headroom per card; compute buffer stays
-  # flat under load (flash-attn). 128k is half native, no RoPE concerns. Deep
-  # fills are slow though (105k prefill ~8 min) due to layer-split + ubatch 512.
+  # Verified 2026-07-03: ctx 262144 (256k NATIVE, no RoPE scaling) with f16 KV and
+  # a 104k-token prefill peaks at ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
+  # card; decode ~22.6 t/s (layer-split limits GPU util ~47%). Deep 256k fills are
+  # slow (~8+ min) — acceptable for unattended overnight passes.
   "big":
-    name: "Qwen3.6-27B (BF16) — max quality, dual-V100"
-    description: "Full-precision dense 27B split across both V100s. Preempts coding+chat."
+    name: "Qwen3.6-27B (UD-Q6_K_XL) — max quality, dual-V100, 256k"
+    description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k. Preempts coding+chat."
     ttl: 300
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-BF16-00001-of-00002.gguf
-      --ctx-size 131072
-      --cache-type-k q8_0
-      --cache-type-v q8_0
+      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-UD-Q6_K_XL.gguf
+      --ctx-size 262144
+      --cache-type-k f16
+      --cache-type-v f16
       --split-mode layer
       --parallel 1
       ${common}
