@@ -20,6 +20,11 @@ model_list:
       model: openai/big
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
+  - model_name: coder-next
+    litellm_params:
+      model: openai/coder-next
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
   - model_name: fast
     litellm_params:
       model: openai/fast

@@ -105,6 +105,37 @@ models:
       --parallel 1
       ${common}
 
+  # --- coder-next: Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) dual-V100 --------
+  # Agentic coding model: 80B total / 3B ACTIVE MoE with a hybrid Gated-DeltaNet
+  # (linear attention) + Gated-Attention layout. Only 12 of 48 layers carry a
+  # real KV cache, so 256k KV is cheap (~6GB f16) — full native 256k fits with
+  # room to spare. NON-THINKING (no reasoning phase → direct code, no wasted
+  # tokens). 256k native ctx, tuned for CLI/IDE coding agents + tool use.
+  # Requires llama.cpp b9850+ (native qwen3next / delta-net support).
+  # Weights split across BOTH V100s (idx1+idx2); preempts coding+chat like big.
+  # WEIGHTS: UD-Q4_K_XL (Unsloth dynamic imatrix, 49.6GB) — beat plain Q5_K_M in
+  # testing (Q5 was correct-but-buggy on Tarjan and can't hold 256k). Despite the
+  # dual-card split, decode is ~77 t/s (only 3B active) vs ~22 t/s for dense big.
+  # Verified 2026-07-04: ctx 262144 (256k native) + f16 KV peaks at 29.5GB(idx1)/
+  # 27.4GB(idx2) -> ~3.0GB / ~5.0GB free per card; VRAM stays flat under a deep
+  # prefill (flash-attn preallocates). Coding bench: Tarjan 5/5, LRU 4/4.
+  "coder-next":
+    name: "Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) — agentic coding, 256k"
+    description: "Hybrid-MoE coding model split across both V100s, 256k, non-thinking. Preempts coding+chat."
+    ttl: 300
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=1,2"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf
+      --ctx-size 262144
+      --cache-type-k f16
+      --cache-type-v f16
+      --split-mode layer
+      --parallel 1
+      ${common}
+
   # --- fast: Gemma-4-12B (QAT UD-Q4_K_XL) on the P100 (idx0) --------------
   # Always-on, non-reasoning chat. Runs CONCURRENTLY with coding+chat (own
   # card). ~6.3GB weights on 16GB -> comfortable. Gemma is not a reasoning
@@ -232,12 +263,14 @@ routing:
           h: chat
           b: big
           f: fast
+          n: coder-next
           x: gemma-31b
           y: gemma-26b
           u: chat-uncensored-q4
           w: chat-uncensored-q6
         evict_costs:
           b: 50   # BF16 is very slow to load; prefer keeping it if already up
+          n: 30   # 50GB Q4 across both V100s is slow to load; prefer keeping it
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
           # any subset, e.g. just [f], or [c] alone). f (P100) is in every set
@@ -249,3 +282,4 @@ routing:
           qu: "c & u & f"        # coding(idx1) + uncensored-Q4(idx2) + fast(P100)
           qw: "c & w & f"        # coding(idx1) + uncensored-Q6(idx2) + fast(P100)
           max: "b & f"           # big(idx1+idx2) + fast(P100)
+          cn: "n & f"            # coder-next(idx1+idx2) + fast(P100)
