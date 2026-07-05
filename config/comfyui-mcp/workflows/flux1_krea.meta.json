@@ -1,0 +1,9 @@
+{
+  "name": "Flux.1 Krea Dev",
+  "description": "Photorealistic text-to-image using FLUX.1 Krea [dev] (diffusion_models/flux1-krea-dev_fp8_scaled.safetensors) with dual text encoders (clip_l + t5xxl_fp16, DualCLIPLoader type 'flux') and the Flux ae VAE. Guidance-distilled: KSampler cfg 1, euler/simple, ~20 steps, negative via ConditioningZeroOut. Known for natural, aesthetic, non-oversaturated photographic output. Slower than z_image_turbo. On the V100 (sm_70) fp8 is storage-only (fp16 compute). Params: prompt (required), width, height, steps (20 default), seed.",
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 20
+  }
+}
