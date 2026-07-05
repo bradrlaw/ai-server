@@ -799,12 +799,15 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   `host.docker.internal`/`127.0.0.1`, which the browser can't resolve). `COMFY_MCP_RETURN_MARKDOWN=1`
   enables the markdown path. **If the server's LAN IP changes, update `COMFY_MCP_PUBLIC_URL`.**
 - **Reliable inline embedding (recommended):** models sometimes present the link as a plain
-  `[link](…)` (dropping the leading `!`), so it renders as a hyperlink, not an image. The
-  deterministic fix is an **OWUI Filter Function** —
-  `docker/open-webui/functions/comfyui_inline_images.py` — whose `outlet` rewrites any ComfyUI
-  `/view?...filename=…` link or bare URL in the assistant's reply into `![](…)`, regardless of
-  model. Install it once: OWUI **Admin Panel → Functions → `+` (New Function)** → paste the file
-  contents → Save → toggle it **on** (global). Model-independent and needs no restart.
+  `[link](…)` (dropping the leading `!` → hyperlink, not image) or copy a **placeholder host**
+  like `http://host:8188/…` (→ broken-image icon). The deterministic fix is an **OWUI Filter
+  Function** — `docker/open-webui/functions/comfyui_inline_images.py` — whose `outlet` (a) rewrites
+  any ComfyUI `/view?...filename=…` link or bare URL into `![](…)`, and (b) normalizes
+  placeholder/loopback hosts (`host`, `localhost`, `127.0.0.1`, `host.docker.internal`) to the real
+  browser-reachable address (Valve `comfyui_base_url`, default `http://192.168.4.57:8188`).
+  Model-independent. Install once: OWUI **Admin Panel → Functions → `+` (New Function)** → paste
+  the file contents → Save → toggle it **on** (global). If your browser reaches the box via
+  Tailscale, set the `comfyui_base_url` Valve accordingly.
 
 Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through mcpo (bearer
 `MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at
