@@ -1,0 +1,32 @@
+[Unit]
+Description=ComfyUI MCP server — bridges ComfyUI to MCP clients (mcpo / agents) for /srv/ai
+Documentation=https://github.com/joenorton/comfyui-mcp-server
+# Bridge only (no GPU); wants ComfyUI reachable. It retries on startup if ComfyUI
+# is not yet up, but ordering after it avoids noisy restarts on boot.
+After=network-online.target comfyui.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+# Upstream clone (kept pristine for `git pull`); our launcher overrides the bind host.
+WorkingDirectory=/srv/ai/src/comfyui-mcp-server
+# ComfyUI endpoint the bridge talks to (native, same host).
+Environment=COMFYUI_URL=http://127.0.0.1:8188
+# Style workflow library — tracked in the ai-server repo (config/ whitelist), NOT in
+# the upstream clone, so styles are version-controlled and survive re-cloning.
+Environment=COMFY_MCP_WORKFLOW_DIR=/srv/ai/config/comfyui-mcp/workflows
+# Bind on all interfaces so the mcpo container reaches it via host.docker.internal.
+# The server has NO auth (like ComfyUI) — acceptable on the private LAN/Tailscale only.
+Environment=FASTMCP_HOST=0.0.0.0
+# set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
+Environment=HOME=/home/brad
+ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

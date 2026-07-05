@@ -31,6 +31,11 @@
         "UV_CACHE_DIR": "/tmp/uv-cache",
         "LITELLM_BASE": "http://host.docker.internal:4000/v1"
       }
+    },
+    "comfyui": {
+      "//": "Image/media generation via the (vendored) joenorton/comfyui-mcp-server, run natively as a streamable-http service (scripts/comfyui-mcp.service) on the host at :9000, talking to native ComfyUI at :8188. mcpo proxies it to Open WebUI + agents. Style workflows live in config/comfyui-mcp/workflows/. Tools: z_image_turbo (+ any style file), generate_image, run_workflow, get_job, view_image, list_assets, regenerate, cancel_job, etc.",
+      "type": "streamable-http",
+      "url": "http://host.docker.internal:9000/mcp"
     }
   }
 }

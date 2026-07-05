@@ -749,3 +749,51 @@ too on the trusted LAN, set `allow_git_url_install = True` / `allow_pip_install 
 Output images land in `comfyui/output/`. Caveat: if someone starts a chat *during* an active
 image gen, llama-swap may try to reload a 31 GB LLM onto the busy card and briefly fail/queue —
 rare in home use, and it resolves once the (short) generation finishes.
+
+### ComfyUI MCP server — image gen as agent tools (ADR-0012)
+
+Open WebUI's native ComfyUI integration only holds **one** workflow globally and its image
+"Model" dropdown just swaps the *checkpoint* inside that one graph — it can't pick between
+different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multiple styles** and
+**agent / long-running** use, we expose ComfyUI as MCP tools via the vendored
+[joenorton/comfyui-mcp-server](https://github.com/joenorton/comfyui-mcp-server).
+
+- **Clone (updatable):** `/srv/ai/src/comfyui-mcp-server` (gitignored). Kept pristine except one
+  local commit — a real bug fix (`_load_workflows` didn't skip `.meta.json` sidecars → startup
+  crash; parity with `get_workflow_catalog`), pinned on upstream `e0101b2`, candidate to upstream.
+  Update with `git -C /srv/ai/src/comfyui-mcp-server pull --rebase`.
+- **Venv:** `/srv/ai/venvs/comfyui-mcp` (`--without-pip` + get-pip; deps `requests`, `mcp[cli]`,
+  `Pillow`).
+- **Service:** `scripts/comfyui-mcp.service` (install via
+  `sudo scripts/install-comfyui-mcp-service.sh`). CPU-only bridge, `User=brad`, streamable-http on
+  **`0.0.0.0:9000`**, talks to native ComfyUI at `127.0.0.1:8188`. Enabled at boot (cheap, no GPU).
+  A tracked launcher `scripts/comfyui-mcp-launch.py` imports upstream's `mcp` object and (a)
+  forces the bind host to `0.0.0.0` (upstream hard-codes 127.0.0.1) and (b) allows the mcpo
+  `Host: host.docker.internal:9000` header (FastMCP's DNS-rebinding guard else returns **421
+  Misdirected Request**) — **no fork of upstream**. Auth-less like ComfyUI → LAN/Tailscale only.
+- **Style library (tracked in this repo):** `config/comfyui-mcp/workflows/` (set via
+  `COMFY_MCP_WORKFLOW_DIR`), so styles are versioned and survive re-cloning. Each **API-format**
+  `*.json` using `PARAM_<TYPE>_<NAME>` placeholders (e.g. `PARAM_PROMPT`, `PARAM_INT_SEED`,
+  `PARAM_INT_WIDTH`) auto-registers its **own MCP tool** named after the file; an optional
+  `*.meta.json` sidecar gives it a friendly name/description + parameter defaults. First style:
+  **`z_image_turbo`** (4-step Lumina2/AuraFlow, 1024², cfg baked at 1). Add a style = drop in a
+  new `<name>.json` (+ optional `.meta.json`); the tool `<name>` appears after a service restart.
+- **Exposed via mcpo** (ADR-0011): `docker/mcpo/config.json` → `comfyui` entry, type
+  `streamable-http`, url `http://host.docker.internal:9000/mcp`. **mcpo does not retry a backend
+  that was down at its startup**, so the install script bounces mcpo after the service is up.
+- **Tools:** per-style (`z_image_turbo`, …), plus `generate_image`, `run_workflow`,
+  `list_workflows`, `list_models`, async jobs (`get_job`, `get_queue_status`, `cancel_job`),
+  `regenerate`, `view_image` (inline base64), `list_assets`, `get_asset_metadata`,
+  `get/set_defaults`, publish tools. Long renders return `{"status":"running","prompt_id":…}` —
+  poll `get_job(prompt_id=…)`. Ideal for agents/long-running processes.
+- **GPU coordination:** the tool hits ComfyUI's `/prompt`, so the existing `free_gpu` hook still
+  fires (unloads idx1's LLM keeping chat+fast, idle watchdog restores `coding`) regardless of
+  caller.
+- **Displaying images:** results reference ComfyUI outputs — use `view_image` for inline base64,
+  or a browser-reachable `http://<server-LAN-ip>:8188/view?filename=…` (NOT `host.docker.internal`,
+  which only resolves inside containers).
+
+Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through mcpo (bearer
+`MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at
+`http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
+(Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).

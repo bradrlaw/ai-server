@@ -28,6 +28,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0009](0009-gpu-shroud-fan-control.md) | GPU shroud fan control via nct6775 PWM + nvidia-smi temps | Accepted |
 | [0010](0010-overall-serving-architecture.md) | Overall serving architecture (gateway + on-demand router + aux) | Accepted |
 | [0011](0011-mcp-hosting-inventory.md) | MCP server hosting & inventory (mcpo) | Accepted |
+| [0012](0012-comfyui-image-generation-mcp.md) | ComfyUI image-generation MCP tool (vendored comfyui-mcp-server) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

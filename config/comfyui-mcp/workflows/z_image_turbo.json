@@ -1,0 +1,86 @@
+{
+  "60": {
+    "inputs": {
+      "filename_prefix": "z-image-turbo",
+      "images": ["104:88", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  },
+  "104:85": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": { "title": "Load CLIP" }
+  },
+  "104:86": {
+    "inputs": { "vae_name": "ae.safetensors" },
+    "class_type": "VAELoader",
+    "_meta": { "title": "Load VAE" }
+  },
+  "104:87": {
+    "inputs": { "conditioning": ["104:90", 0] },
+    "class_type": "ConditioningZeroOut",
+    "_meta": { "title": "ConditioningZeroOut" }
+  },
+  "104:88": {
+    "inputs": {
+      "samples": ["104:92", 0],
+      "vae": ["104:86", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "104:89": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": { "title": "Load Diffusion Model" }
+  },
+  "104:90": {
+    "inputs": {
+      "text": "PARAM_PROMPT",
+      "clip": ["104:85", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Prompt)" }
+  },
+  "104:91": {
+    "inputs": {
+      "width": "PARAM_INT_WIDTH",
+      "height": "PARAM_INT_HEIGHT",
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": { "title": "EmptySD3LatentImage" }
+  },
+  "104:92": {
+    "inputs": {
+      "seed": "PARAM_INT_SEED",
+      "steps": "PARAM_INT_STEPS",
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["104:93", 0],
+      "positive": ["104:90", 0],
+      "negative": ["104:87", 0],
+      "latent_image": ["104:91", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": { "title": "KSampler" }
+  },
+  "104:93": {
+    "inputs": {
+      "shift": 3,
+      "model": ["104:89", 0]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": { "title": "ModelSamplingAuraFlow" }
+  }
+}

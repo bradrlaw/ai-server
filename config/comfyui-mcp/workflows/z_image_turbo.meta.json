@@ -1,0 +1,9 @@
+{
+  "name": "Z-Image Turbo",
+  "description": "Fast 4-step text-to-image using the Z-Image Turbo (Lumina2/AuraFlow) diffusion model. Distilled turbo model: cfg is fixed at 1 and res_multistep/simple sampling is baked in. Good default for quick, high-quality 1024x1024 generations. Params: prompt (required), width, height, steps (4 recommended), seed.",
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 4
+  }
+}
