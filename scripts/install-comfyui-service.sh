@@ -22,8 +22,9 @@ UNIT=/etc/systemd/system/comfyui.service
 mkdir -p /srv/ai/comfyui/output
 chown brad:brad /srv/ai/comfyui/output
 
-# Install the free_gpu hook (auto-unloads llama-swap models when a generation is
-# queued, so the V100 is freed automatically — no manual unload for the family).
+# Install the free_gpu hook (on Queue, unloads only the model(s) on ComfyUI's
+# idx1 card via llama-swap per-model unload; keeps chat+fast loaded — no manual
+# unload for the family).
 mkdir -p /srv/ai/comfyui/custom_nodes
 install -m644 "$SRC/comfyui-free-gpu-node.py" /srv/ai/comfyui/custom_nodes/free_gpu.py
 

@@ -712,15 +712,18 @@ native systemd unit, `User=brad`, `CUDA_DEVICE_ORDER=PCI_BUS_ID`, pinned to **`C
 exposes the UI on LAN/Tailscale — **ComfyUI has no auth**, so keep it on the private/Tailscale
 network only. Start/stop: `sudo systemctl start|stop comfyui`.
 
-**Auto-free the GPU (no manual step).** A tiny ComfyUI server hook —
+**Auto-free the GPU (no manual step, keeps chat loaded).** A tiny ComfyUI server hook —
 `scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` — adds an
-aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), first calls
-llama-swap `GET /unload` to free the V100, then runs the generation. So a family member just
-opens the UI and hits generate; the coding/chat models are evicted automatically and reload
-on-demand the next time they're used. It triggers **only on generate**, not on page loads, so
-merely opening the tab does not disturb chat. Configurable via the `LLAMASWAP_URL` env in the
-unit. Verified: with `coding` resident (idx1 = 32.1 GB), a queued SDXL run auto-unloaded it and
-completed — log shows `free_gpu: unloading llama-swap models before generation: coding`.
+aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), frees the
+V100 ComfyUI needs, then runs the generation. ComfyUI is pinned to **idx1 (the `coding` card)**,
+so the hook unloads **only** the model(s) squatting there via llama-swap's per-model endpoint
+(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `fast` (P100) resident** so
+family chat stays responsive during image gen. Models to keep are set by the `FREE_GPU_KEEP` env
+(default `chat,fast`); everything else running (`coding`, or a split `big`/`coder-next`) is
+evicted and reloads on-demand. It triggers **only on generate**, not on page loads. Configurable
+via `LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
+(idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/fast untouched) — log shows
+`free_gpu: unloading ['coding'] before generation (keeping ['chat', 'fast'])`.
 
 **Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
 `comfyui/custom_nodes/comfyui-manager` (the install script clones it + installs its deps into the

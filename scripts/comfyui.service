@@ -19,6 +19,10 @@ Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 Environment=CUDA_VISIBLE_DEVICES=1
 # Where the free_gpu hook reaches llama-swap to free the GPU before a run.
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+# Models the free_gpu hook KEEPS loaded during image gen (they live on idx2/P100,
+# not on ComfyUI's idx1 card). Only the idx1 occupant (coding/big/coder-next) is
+# unloaded per-run; chat + fast stay responsive.
+Environment=FREE_GPU_KEEP=chat,fast
 # Headless web server; no X/display needed. Rendering happens in the browser.
 # --listen 0.0.0.0 exposes the UI on the LAN + Tailscale (ComfyUI has NO auth;
 # acceptable on the private/Tailscale network only).
