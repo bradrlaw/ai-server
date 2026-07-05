@@ -50,6 +50,11 @@ model_list:
       model: openai/chat-uncensored-q6
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
+  - model_name: fast-uncensored
+    litellm_params:
+      model: openai/fast-uncensored
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
 
 litellm_settings:
   # llama-server may not accept every OpenAI param; drop unknowns instead of erroring.

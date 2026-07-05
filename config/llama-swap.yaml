@@ -166,7 +166,28 @@ models:
       --reasoning-budget 0
       ${common}
 
-  # --- gemma-31b: Gemma-4-31B (QAT UD-Q4_K_XL) on a V100 (idx1) ----------
+  # --- fast-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
+  # Abliterated/uncensored counterpart to `fast` (HauhauCS Balanced). ~7.4GB
+  # weights; shares the P100 (idx0) with `fast`, so the two are MUTUALLY
+  # EXCLUSIVE (10.9GB + 7.4GB > 16GB) — the matrix P100 slot is `(f | fu)`, so
+  # requesting this evicts `fast` and vice-versa. Reasoning off for snappy chat;
+  # roleplay/creative-writing focus. ttl unloads it so `fast` reclaims the card.
+  "fast-uncensored":
+    name: "Gemma-4-12B Uncensored — fast non-reasoning chat"
+    description: "Uncensored/abliterated Gemma-4-12B on the P100; roleplay/creative. Shares idx0 with fast (mutually exclusive)."
+    ttl: 600
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=0"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf
+      --ctx-size 131072
+      --parallel 1
+      --batch-size 2048 --ubatch-size 2048
+      --reasoning-budget 0
+      ${common}
+
   # Comparison model vs Qwen coding/big. ~16GB weights; ctx 131072 with q8_0 KV
   # -> ~26.7GB on 32GB (SWA). f16 KV at 131k OOMs (31GB+compute buf); q8_0 halves
   # KV to reach 128k. ub2048 = best prefill (760 t/s). Evicts coding when used.
@@ -262,13 +283,16 @@ routing:
     use: matrix
     settings:
       matrix:
-        # Card map: idx0(P100)=fast ; idx1(V100)=coding|gemma-31b|big ;
-        #           idx2(V100)=chat|gemma-26b|big. `f` (P100) coexists with all.
+        # Card map: idx0(P100)=fast|fast-uncensored ; idx1(V100)=coding|gemma-31b|big ;
+        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `fast`
+        #           and `fast-uncensored` are mutually exclusive on idx0 (they
+        #           evict each other); one of them coexists with all V100 activity.
         vars:
           c: coding
           h: chat
           b: big
           f: fast
+          fu: fast-uncensored
           n: coder-next
           x: gemma-31b
           y: gemma-26b
@@ -279,13 +303,15 @@ routing:
           n: 30   # 50GB Q4 across both V100s is slow to load; prefer keeping it
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
-          # any subset, e.g. just [f], or [c] alone). f (P100) is in every set
-          # so the fast model is never evicted by V100 activity.
-          qq: "c & h & f"        # daily: coding(idx1) + chat(idx2) + fast(P100)
-          qg: "c & y & f"        # coding vs gemma-26b head-to-head
-          gq: "x & h & f"        # gemma-31b vs chat head-to-head
-          gg: "x & y & f"        # both Gemmas (idx1+idx2) + fast
-          qu: "c & u & f"        # coding(idx1) + uncensored-Q4(idx2) + fast(P100)
-          qw: "c & w & f"        # coding(idx1) + uncensored-Q6(idx2) + fast(P100)
-          max: "b & f"           # big(idx1+idx2) + fast(P100)
-          cn: "n & f"            # coder-next(idx1+idx2) + fast(P100)
+          # any subset, e.g. just [f], or [c] alone). The P100 slot `(f | fu)`
+          # expands each set into a `fast` and a `fast-uncensored` variant, so
+          # exactly one P100 model coexists with V100 activity and requesting the
+          # other swaps it in.
+          qq: "c & h & (f | fu)"    # daily: coding(idx1) + chat(idx2) + P100 chat
+          qg: "c & y & (f | fu)"    # coding vs gemma-26b head-to-head
+          gq: "x & h & (f | fu)"    # gemma-31b vs chat head-to-head
+          gg: "x & y & (f | fu)"    # both Gemmas (idx1+idx2) + P100 chat
+          qu: "c & u & (f | fu)"    # coding(idx1) + uncensored-Q4(idx2) + P100 chat
+          qw: "c & w & (f | fu)"    # coding(idx1) + uncensored-Q6(idx2) + P100 chat
+          max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
+          cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat
