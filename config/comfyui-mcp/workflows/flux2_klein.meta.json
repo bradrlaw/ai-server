@@ -1,0 +1,9 @@
+{
+  "name": "Flux.2 Klein 4B",
+  "description": "High-quality text-to-image using Flux.2 [Klein] base 4B (diffusion_models/flux-2-klein-base-4b.safetensors) with the Qwen3-4B text encoder and Flux.2 VAE. Uses CFGGuider (cfg 5), euler sampler and the Flux2 scheduler; ~20 steps recommended. Slower but higher fidelity than z_image_turbo. On the V100 (sm_70) it runs in fp16 compute (no fp8 fast path). Params: prompt (required), width, height, steps (20 default), seed.",
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 20
+  }
+}
