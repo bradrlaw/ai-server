@@ -20,6 +20,13 @@ Environment=COMFY_MCP_WORKFLOW_DIR=/srv/ai/config/comfyui-mcp/workflows
 # Bind on all interfaces so the mcpo container reaches it via host.docker.internal.
 # The server has NO auth (like ComfyUI) — acceptable on the private LAN/Tailscale only.
 Environment=FASTMCP_HOST=0.0.0.0
+# Browser-reachable ComfyUI URL used ONLY for display/asset links (the connection
+# above stays on localhost). A chat client's browser can't reach 127.0.0.1:8188, so
+# image links must use the host's LAN/Tailscale address. Update if the address changes.
+Environment=COMFY_MCP_PUBLIC_URL=http://192.168.4.57:8188
+# Return markdown image links (not MCP ImageContent) so Open WebUI via mcpo renders
+# generated images inline — mcpo serializes ImageContent to inert data-URI text.
+Environment=COMFY_MCP_RETURN_MARKDOWN=1
 # set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
 Environment=HOME=/home/brad
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py

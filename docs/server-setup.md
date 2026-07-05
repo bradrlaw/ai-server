@@ -789,9 +789,15 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 - **GPU coordination:** the tool hits ComfyUI's `/prompt`, so the existing `free_gpu` hook still
   fires (unloads idx1's LLM keeping chat+fast, idle watchdog restores `coding`) regardless of
   caller.
-- **Displaying images:** results reference ComfyUI outputs — use `view_image` for inline base64,
-  or a browser-reachable `http://<server-LAN-ip>:8188/view?filename=…` (NOT `host.docker.internal`,
-  which only resolves inside containers).
+- **Displaying images inline:** mcpo serializes an MCP `ImageContent` (what `view_image`'s
+  `FastMCPImage` produces) into an inert data-URI **string**; Open WebUI feeds that to the model
+  as text and never renders it. So every generation tool response includes a **`markdown`** field
+  (`![id](http://<server-LAN-ip>:8188/view?filename=…)`) and `view_image` returns the same — the
+  model echoes it and OWUI renders the image. The URL is built from **`COMFY_MCP_PUBLIC_URL`**
+  (set to the host's LAN/Tailscale address in `comfyui-mcp.service`; the bridge still *connects*
+  to ComfyUI on localhost). It must match how the browser reaches the box (NOT
+  `host.docker.internal`/`127.0.0.1`, which the browser can't resolve). `COMFY_MCP_RETURN_MARKDOWN=1`
+  enables the markdown path. **If the server's LAN IP changes, update `COMFY_MCP_PUBLIC_URL`.**
 
 Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through mcpo (bearer
 `MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at

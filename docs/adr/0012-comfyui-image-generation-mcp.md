@@ -52,12 +52,15 @@ First style shipped: **Z-Image Turbo** (`z_image_turbo`), 4-step Lumina2/AuraFlo
 - Negative / trade-offs: a community dependency (audited: deps = requests/mcp/Pillow, no
   exec/subprocess/external hosts; pinned at upstream `e0101b2`). Auth-less on the LAN like
   ComfyUI. One local patch means `git pull` may need `--rebase`.
-- Local patch: upstream `_load_workflows` did not skip `.meta.json` sidecars (unlike
-  `get_workflow_catalog`), crashing startup when a sidecar exists. Fixed locally
-  (`managers/workflow_manager.py`) — candidate PR upstream.
+- Local patches: (1) upstream `_load_workflows` did not skip `.meta.json` sidecars (unlike
+  `get_workflow_catalog`), crashing startup when a sidecar exists; (2) mcpo serializes MCP
+  `ImageContent` to an inert data-URI string OWUI won't render, so responses now carry a
+  browser-reachable `markdown` image link (env `COMFY_MCP_RETURN_MARKDOWN` / `COMFY_MCP_PUBLIC_URL`).
+  Both fixed locally in the clone — candidate PRs upstream.
 - Follow-ups: add more styles (Flux, SDXL, LoRA stacks) as workflow files; consider a thin
-  OWUI Pipe later if native-picker UX is wanted; images returned as ComfyUI output refs —
-  use `view_image` (inline base64) or a LAN-reachable `:8188/view?...` URL for display.
+  OWUI Pipe later if native-picker UX is wanted. Inline display uses the `markdown` field
+  (`![id](http://<server-LAN-ip>:8188/view?filename=…)`) which the model echoes; the LAN/Tailscale
+  URL must match how the browser reaches the host (set via `COMFY_MCP_PUBLIC_URL`).
 
 ## Alternatives considered
 - **Build our own MCP server** — rejected: joenorton already provides the workflow-library

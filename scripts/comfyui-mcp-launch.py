@@ -11,6 +11,10 @@ Config via env (see comfyui-mcp.service):
   COMFYUI_URL              ComfyUI base URL (default http://127.0.0.1:8188)
   COMFY_MCP_WORKFLOW_DIR   workflow library dir
   FASTMCP_HOST             bind host for the MCP server (default 0.0.0.0)
+  COMFY_MCP_PUBLIC_URL     browser-reachable ComfyUI base URL used only for
+                           display/asset links (e.g. http://192.168.4.57:8188)
+  COMFY_MCP_RETURN_MARKDOWN  when truthy, tools return a markdown image link for
+                           inline display in mcpo/Open WebUI (not MCP ImageContent)
   COMFY_MCP_SRC            path to the upstream clone (default /srv/ai/src/comfyui-mcp-server)
 """
 import os
@@ -24,6 +28,17 @@ os.chdir(SRC)
 import server  # noqa: E402  (module-level ComfyUI availability check runs on import)
 
 server.mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
+_port = os.getenv("FASTMCP_PORT", "").strip()
+if _port:
+    server.mcp.settings.port = int(_port)
+
+# Asset URLs (returned to clients for inline display) are built from the ComfyUI
+# base URL. The MCP server connects to ComfyUI over localhost, but a browser
+# rendering an image needs a LAN/Tailscale-reachable URL. COMFY_MCP_PUBLIC_URL
+# overrides only the *display* base URL, leaving the connection URL untouched.
+_public_url = os.getenv("COMFY_MCP_PUBLIC_URL", "").strip()
+if _public_url:
+    server.asset_registry.comfyui_base_url = _public_url.rstrip("/")
 
 # FastMCP's streamable-http transport has DNS-rebinding protection that only trusts
 # localhost by default, so it rejects mcpo's "Host: host.docker.internal:9000" header
