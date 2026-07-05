@@ -23,6 +23,10 @@ Environment=LLAMASWAP_URL=http://127.0.0.1:9090
 # not on ComfyUI's idx1 card). Only the idx1 occupant (coding/big/coder-next) is
 # unloaded per-run; chat + fast stay responsive.
 Environment=FREE_GPU_KEEP=chat,fast
+# Idle watchdog: after this many seconds with no generation, free ComfyUI's VRAM
+# and warm the daily model(s) below back onto idx1 (0 disables).
+Environment=FREE_GPU_IDLE_SECS=300
+Environment=FREE_GPU_RESTORE=coding
 # Headless web server; no X/display needed. Rendering happens in the browser.
 # --listen 0.0.0.0 exposes the UI on the LAN + Tailscale (ComfyUI has NO auth;
 # acceptable on the private/Tailscale network only).

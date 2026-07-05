@@ -725,6 +725,14 @@ via `LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` r
 (idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/fast untouched) — log shows
 `free_gpu: unloading ['coding'] before generation (keeping ['chat', 'fast'])`.
 
+**Idle watchdog (reverse direction).** ComfyUI caches its models in VRAM after a run, which
+would keep idx1 occupied and block `coding` from reloading. The same hook runs a background task
+that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
+(`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release idx1,
+then warms `FREE_GPU_RESTORE` (default `coding`) back onto the card via llama-swap — so the box
+returns to its daily resident state (coding + chat + fast) with no manual step. Runs at most once
+per idle period; set `FREE_GPU_IDLE_SECS=0` to disable.
+
 **Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
 `comfyui/custom_nodes/comfyui-manager` (the install script clones it + installs its deps into the
 venv). It adds a **Manager** button in the web UI so the family can install missing models and
