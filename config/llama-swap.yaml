@@ -170,11 +170,14 @@ models:
   # Abliterated/uncensored counterpart to `fast` (HauhauCS Balanced). ~7.4GB
   # weights; shares the P100 (idx0) with `fast`, so the two are MUTUALLY
   # EXCLUSIVE (10.9GB + 7.4GB > 16GB) — the matrix P100 slot is `(f | fu)`, so
-  # requesting this evicts `fast` and vice-versa. Reasoning off for snappy chat;
-  # roleplay/creative-writing focus. ttl unloads it so `fast` reclaims the card.
+  # requesting this evicts `fast` and vice-versa. Reasoning ON by default (the
+  # Balanced tune reasons before answering); roleplay/creative-writing focus.
+  # Vision via --mmproj; MTP speculative decoding (Unsloth draft head) for ~60%
+  # faster generation with identical output. Tuned sampling per the model card.
+  # ttl unloads it so `fast` reclaims the card.
   "fast-uncensored":
-    name: "Gemma-4-12B Uncensored — fast non-reasoning chat"
-    description: "Uncensored/abliterated Gemma-4-12B on the P100; roleplay/creative. Shares idx0 with fast (mutually exclusive)."
+    name: "Gemma-4-12B Uncensored — reasoning chat + vision (MTP)"
+    description: "Uncensored/abliterated Gemma-4-12B on the P100; reasoning on, vision (mmproj), MTP speculative decoding. Shares idx0 with fast (mutually exclusive)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -182,10 +185,14 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf
+      --mmproj ${models_dir}/gemma-4-12b-uncensored/mmproj-Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf
+      --model-draft ${models_dir}/gemma-4-12b-uncensored/mtp-gemma-4-12B-it.gguf
+      --spec-type draft-mtp
+      --n-gpu-layers-draft 99
       --ctx-size 131072
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
-      --reasoning-budget 0
+      --temp 0.6 --top-k 64 --top-p 0.9 --min-p 0.05 --repeat-penalty 1.1
       ${common}
 
   # Comparison model vs Qwen coding/big. ~16GB weights; ctx 131072 with q8_0 KV
