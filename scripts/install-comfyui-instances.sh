@@ -36,10 +36,14 @@ echo "==> Installing new unit files"
 install -m 0644 "$SRC/comfyui-open.service"   "$DEST/comfyui-open.service"
 install -m 0644 "$SRC/comfyui-secure.service" "$DEST/comfyui-secure.service"
 
-echo "==> Reloading systemd and enabling both instances"
+echo "==> Reloading systemd, enabling and (re)starting both instances"
 systemctl daemon-reload
-systemctl enable --now comfyui-open.service
-systemctl enable --now comfyui-secure.service
+# enable for boot, then RESTART (not `enable --now`): `--now` only *starts* an
+# inactive unit, so on an upgrade where the services are already running it would
+# leave the old code + old command line live. restart applies the new unit file
+# and reloads the process (picking up the current free_gpu hook).
+systemctl enable  comfyui-open.service comfyui-secure.service
+systemctl restart comfyui-open.service comfyui-secure.service
 
 echo
 echo "==> Status"
