@@ -30,6 +30,7 @@ ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
   --input-directory /srv/ai/comfyui/input-open \
   --temp-directory /srv/ai/comfyui/temp-open \
   --user-directory /srv/ai/comfyui/user \
+  --database-url sqlite:////srv/ai/comfyui/user/comfyui-open.db \
   --preview-method auto
 Restart=on-failure
 RestartSec=3

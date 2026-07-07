@@ -151,10 +151,31 @@ async def _restore_models():
                 log.warning("free_gpu: failed to warm %s (continuing): %s", name, e)
 
 
+def _generation_in_progress():
+    """True if ComfyUI has a running or queued prompt. Used by the idle watchdog
+    to avoid freeing VRAM during a long single generation (e.g. WAN video, which
+    can run many minutes on one POST /prompt)."""
+    try:
+        import server
+        inst = getattr(server.PromptServer, "instance", None)
+        q = getattr(inst, "prompt_queue", None)
+        if q is None:
+            return False
+        return q.get_tasks_remaining() > 0
+    except Exception:
+        return False
+
+
 async def _idle_watchdog():
     """Background loop: once ComfyUI has been idle past IDLE_TIMEOUT, free its VRAM
-    and restore the daily model. Runs at most once per idle period."""
-    global _freed_since_activity
+    and restore the daily model. Runs at most once per idle period.
+
+    A long single generation (e.g. a multi-minute WAN video) issues only ONE POST
+    /prompt, so we must NOT treat "no new request" as idle while that job is still
+    running — otherwise we'd unload the model mid-sampling. We therefore also skip
+    (and reset the idle timer) whenever ComfyUI's prompt queue is non-empty.
+    """
+    global _freed_since_activity, _last_activity
     log.info(
         "free_gpu: idle watchdog running (timeout=%ds, restore=%s)",
         IDLE_TIMEOUT, RESTORE_MODELS or "none",
@@ -162,6 +183,12 @@ async def _idle_watchdog():
     while True:
         await asyncio.sleep(CHECK_INTERVAL)
         try:
+            if _generation_in_progress():
+                # A job is still running/queued — defer the idle countdown so we
+                # never free VRAM out from under an in-flight generation.
+                _last_activity = time.monotonic()
+                _freed_since_activity = False
+                continue
             if _freed_since_activity:
                 continue
             if time.monotonic() - _last_activity < IDLE_TIMEOUT:

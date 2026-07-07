@@ -42,7 +42,11 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
   via `CUDA_VISIBLE_DEVICES` is as hard a boundary as a container `--gpus` for a
   single-tenant-per-card instance.
 * **Shared**: `models/`, `custom_nodes/`, and `--user-directory` (→ workflows +
-  UI settings).
+  UI settings). Each instance uses its **own** `--database-url`
+  (`user/comfyui-open.db` vs `user/comfyui-secure.db`) — ComfyUI's sqlite DB
+  cannot be locked by two processes, so a shared DB path throws
+  "Could not acquire lock on database". Separate DBs avoid this; workflows
+  (files under `user/default/workflows`) are still shared.
 * **Separate**: `--output-directory` / `--input-directory` / `--temp-directory`
   per instance — this is the asset-isolation boundary between open and locked.
 * **Auth isolation trick**: ComfyUI-Login is installed into an *isolated*
@@ -64,9 +68,14 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
 * Heavy image use on both cards can transiently evict *both* daily LLMs
   (`coding`, `chat`); they reload automatically. Acceptable for a family box.
 * Shared `--user-directory` means both instances share workflows **and** UI
-  settings; concurrent settings writes could race (rare). If it becomes annoying,
-  give each instance its own `--user-directory` and symlink only the
-  `default/workflows` subdir to a common folder.
+  settings; concurrent settings writes could race (rare). Each instance has its
+  own sqlite DB (`--database-url`) so the DB itself does not conflict. If the
+  shared settings become annoying, give each instance its own `--user-directory`
+  and symlink only the `default/workflows` subdir to a common folder.
+* The `free_gpu` idle watchdog must not fire during a single long generation
+  (a WAN video can run 20+ min on one POST `/prompt`). The hook now checks the
+  ComfyUI prompt queue (`_generation_in_progress`) and defers the idle countdown
+  while a job is running/queued, so it never unloads a model mid-sampling.
 * ComfyUI-Login is "basic protection" (its own words) — a shared password, not
   per-user isolation. If true per-user asset separation is later needed, revisit
   ComfyUI-Usgromana or one-instance-per-user.
