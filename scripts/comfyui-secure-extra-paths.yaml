@@ -1,0 +1,10 @@
+# Extra search paths for the LOCKED ComfyUI instance (comfyui-secure.service) only.
+# Adds an isolated custom_nodes dir that contains ComfyUI-Login, so the password
+# gate loads ONLY on the locked instance. The OPEN instance (comfyui-open.service)
+# does not use this file, so it never loads the login node and stays auth-free
+# (that instance serves the MCP / Open WebUI image-gen on :8188).
+#
+# ComfyUI merges this with the default custom_nodes dir, so the locked instance
+# still gets all the shared nodes (ComfyUI-GGUF, rgthree, free_gpu, ...) too.
+secure_nodes:
+  custom_nodes: /srv/ai/comfyui/custom_nodes_secure

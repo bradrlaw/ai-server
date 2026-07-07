@@ -1,0 +1,40 @@
+[Unit]
+Description=ComfyUI (OPEN) — no-auth generative media server on V100 #1 (idx1), :8188
+Documentation=https://github.com/comfyanonymous/ComfyUI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/comfyui
+# Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
+# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# OPEN instance: pin to V100 #1 (idx1 = the `coding` card). This instance serves
+# the MCP / Open WebUI image-gen and the open (no-login) canvas.
+Environment=CUDA_VISIBLE_DEVICES=1
+Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+# Free the idx1 occupant (`coding`) on generate; keep chat (idx2) + fast (P100).
+Environment=FREE_GPU_KEEP=chat,fast
+Environment=FREE_GPU_IDLE_SECS=300
+Environment=FREE_GPU_RESTORE=coding
+# NO auth: acceptable because this port backs the MCP/Open WebUI (which has its
+# own auth) and is only reachable on the private LAN + Tailscale.
+# Shared: models/, custom_nodes/, --user-directory (workflows + settings).
+# Separate: output/input/temp (isolates assets from the locked instance).
+ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
+  --listen 0.0.0.0 --port 8188 \
+  --output-directory /srv/ai/comfyui/output-open \
+  --input-directory /srv/ai/comfyui/input-open \
+  --temp-directory /srv/ai/comfyui/temp-open \
+  --user-directory /srv/ai/comfyui/user \
+  --preview-method auto
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

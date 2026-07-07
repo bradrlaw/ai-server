@@ -1,0 +1,42 @@
+[Unit]
+Description=ComfyUI (LOCKED) — password-gated generative media server on V100 #2 (idx2), :8189
+Documentation=https://github.com/comfyanonymous/ComfyUI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/comfyui
+# Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
+# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# LOCKED instance: pin to V100 #2 (idx2 = the `chat` card) so it never contends
+# for GPU with the OPEN instance (idx1).
+Environment=CUDA_VISIBLE_DEVICES=2
+Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+# Free the idx2 occupant (`chat`) on generate; keep coding (idx1) + fast (P100).
+Environment=FREE_GPU_KEEP=coding,fast
+Environment=FREE_GPU_IDLE_SECS=300
+Environment=FREE_GPU_RESTORE=chat
+# Auth: ComfyUI-Login is loaded via the extra custom_nodes path below (present
+# ONLY on this instance). Set the shared password on first visit to :8189/login.
+# The PASSWORD lives at /srv/ai/comfyui/login/PASSWORD (delete it to reset).
+# Shared: models/, custom_nodes/, --user-directory (workflows + settings).
+# Separate: output/input/temp (isolates assets from the open instance).
+ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
+  --listen 0.0.0.0 --port 8189 \
+  --extra-model-paths-config /srv/ai/scripts/comfyui-secure-extra-paths.yaml \
+  --output-directory /srv/ai/comfyui/output-secure \
+  --input-directory /srv/ai/comfyui/input-secure \
+  --temp-directory /srv/ai/comfyui/temp-secure \
+  --user-directory /srv/ai/comfyui/user \
+  --preview-method auto
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
