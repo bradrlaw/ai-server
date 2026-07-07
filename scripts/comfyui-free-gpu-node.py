@@ -33,6 +33,16 @@ Config via env (set in comfyui.service):
                       and the daily model restored (default 300; 0 disables)
   FREE_GPU_RESTORE    comma list of models to warm back after freeing ComfyUI
                       (default "coding" — the idx1 daily model; empty = none)
+  FREE_GPU_WAIT_SECS  after issuing an unload, how long to wait for the card to
+                      actually free before proceeding (default 45; 0 disables the
+                      wait). llama-swap's unload endpoint returns as soon as it
+                      *signals* the model to stop, but the llama.cpp subprocess
+                      needs a few more seconds to exit and release VRAM — starting
+                      a generation before then races the teardown and OOMs.
+  FREE_GPU_WAIT_RELEASE_MB  how much VRAM must be handed back (vs. the reading
+                      taken just before unloading) for the card to count as freed
+                      (default 6000). Guards against proceeding while the LLM is
+                      still resident, without demanding the card be totally empty.
 """
 import asyncio
 import os
@@ -58,6 +68,17 @@ CHECK_INTERVAL = 30  # how often the watchdog polls (seconds)
 RESTORE_MODELS = [
     m.strip() for m in os.environ.get("FREE_GPU_RESTORE", "coding").split(",") if m.strip()
 ]
+# After issuing an unload, wait up to this long for the card to actually free
+# before letting the generation proceed (llama-swap's unload returns before the
+# llama.cpp subprocess exits and releases VRAM). 0 disables the wait.
+WAIT_SECS = float(os.environ.get("FREE_GPU_WAIT_SECS", "45"))
+# How much VRAM (MB) must be handed back — measured against the free reading taken
+# just before unloading — for the card to count as freed.
+WAIT_RELEASE_MB = int(os.environ.get("FREE_GPU_WAIT_RELEASE_MB", "6000"))
+# Physical GPU this ComfyUI instance is pinned to (CUDA_DEVICE_ORDER=PCI_BUS_ID is
+# set in the unit, so this index matches nvidia-smi's numbering). First entry only.
+_cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
+PINNED_GPU = _cvd if _cvd and _cvd.lstrip("-").isdigit() else None
 
 # Watchdog state. Start "already freed" so a box that never generates stays idle.
 _last_activity = time.monotonic()
@@ -66,6 +87,76 @@ _freed_since_activity = True
 # ComfyUI expects custom nodes to export these; we have no nodes, just a hook.
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
+
+
+async def _gpu_free_mb():
+    """Free VRAM (MB) on this instance's pinned GPU via nvidia-smi, or None if it
+    can't be read. Runs the query off the event loop so we never block serving."""
+    if PINNED_GPU is None:
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "nvidia-smi", "-i", PINNED_GPU,
+            "--query-gpu=memory.free", "--format=csv,noheader,nounits",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        return int(out.decode().strip().splitlines()[0])
+    except Exception:
+        return None
+
+
+async def _targets_still_live(targets):
+    """True if any unload target is still in a live state per llama-swap /running."""
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(f"{LLAMASWAP_URL}/running", timeout=aiohttp.ClientTimeout(total=3)) as r:
+                data = await r.json()
+                live = {
+                    m.get("model") for m in data.get("running", [])
+                    if m.get("state") in ("ready", "loading", "starting")
+                }
+        return bool(set(targets) & live)
+    except Exception:
+        return False  # can't tell — don't hang the generation on this
+
+
+async def _wait_for_release(targets, free_before):
+    """Block until the card ComfyUI needs is actually free, or WAIT_SECS elapses.
+
+    llama-swap's unload endpoint returns as soon as it *signals* the model to stop;
+    the llama.cpp subprocess then takes a few seconds to exit and hand VRAM back to
+    the driver. Proceeding immediately races that teardown and OOMs (the card still
+    holds the ~20 GB LLM). We wait until BOTH: llama-swap no longer lists the target
+    as live, AND the pinned GPU has handed back at least WAIT_RELEASE_MB (vs. the
+    reading taken before unloading). If we can't read VRAM, we fall back to the
+    /running signal plus a short settle.
+    """
+    if WAIT_SECS <= 0 or not targets:
+        return
+    start = time.monotonic()
+    while time.monotonic() - start < WAIT_SECS:
+        gone = not await _targets_still_live(targets)
+        free_now = await _gpu_free_mb()
+        if free_now is None:
+            # No VRAM telemetry — rely on the unload signal plus a brief settle so
+            # the subprocess has a moment to release before we start.
+            if gone:
+                await asyncio.sleep(2)
+                log.info("free_gpu: unload signalled (no VRAM telemetry); proceeding")
+                return
+        elif gone and (free_before is None or free_now - free_before >= WAIT_RELEASE_MB):
+            log.info(
+                "free_gpu: card freed in %.1fs (free %s→%s MB)",
+                time.monotonic() - start, free_before, free_now,
+            )
+            return
+        await asyncio.sleep(0.5)
+    log.warning(
+        "free_gpu: card not confirmed free after %.0fs (free_before=%s MB); "
+        "proceeding anyway", WAIT_SECS, free_before,
+    )
 
 
 async def _free_gpu():
@@ -95,6 +186,9 @@ async def _free_gpu():
                     [m.get("model") for m in running], sorted(KEEP_MODELS),
                 )
                 return
+            # Snapshot free VRAM before unloading so _wait_for_release can tell when
+            # the card has actually handed the LLM's memory back.
+            free_before = await _gpu_free_mb()
             log.info(
                 "free_gpu: unloading %s before generation (keeping %s)",
                 targets, sorted(KEEP_MODELS),
@@ -108,6 +202,9 @@ async def _free_gpu():
                         await r.read()
                 except Exception as e:
                     log.warning("free_gpu: unload of %s failed (continuing): %s", name, e)
+            # Wait for the teardown to actually release VRAM before returning, so the
+            # generation doesn't start on a still-occupied card and OOM.
+            await _wait_for_release(targets, free_before)
     except Exception as e:  # never block a generation because freeing failed
         log.warning("free_gpu: unload attempt failed (continuing anyway): %s", e)
 
