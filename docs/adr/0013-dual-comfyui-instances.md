@@ -77,5 +77,9 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
 * `scripts/comfyui-secure-extra-paths.yaml`
 * `scripts/install-comfyui-instances.sh` (run with sudo; supersedes the old
   single `comfyui.service`)
+* `scripts/reset-comfyui-password.sh` (run with sudo; deletes the bcrypt
+  `login/PASSWORD` and restarts the locked instance so a new one can be set)
+* Network exposure & firewall guidance: `docs/server-setup.md` — the open
+  `:8188` has no auth and must stay LAN/Tailscale-only (ufw ruleset provided)
 * Local (gitignored): `comfyui/custom_nodes_secure/ComfyUI-Login`,
   `comfyui/{output,input,temp}-{open,secure}`, `comfyui/user`, `comfyui/login/`

@@ -813,3 +813,40 @@ Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through m
 `MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at
 `http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
 (Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).
+
+## Network exposure & firewall (2026-07-07)
+
+The AI services bind `0.0.0.0` and are meant for the **trusted LAN + Tailscale
+only** — they must never be port-forwarded to the public internet. Auth posture:
+
+| Service | Port | Auth |
+| --- | --- | --- |
+| ComfyUI **open** (`comfyui-open`) | 8188 | **none** — do NOT expose to WAN |
+| ComfyUI **locked** (`comfyui-secure`) | 8189 | ComfyUI-Login (basic password only) |
+| Open WebUI | 3000 | app login |
+| LiteLLM gateway | 4000 | `LITELLM_MASTER_KEY` |
+| mcpo | 8000 | `MCPO_API_KEY` |
+| SearXNG | 8888 | none |
+| llama-swap mgmt | 127.0.0.1:9090 | localhost-only (safe) |
+
+The box sits behind home-router NAT (`eno1 = 192.168.4.57/22`), so nothing is
+WAN-reachable unless the router forwards a port. `ufw` (installed) adds
+defense-in-depth: allow only LAN + Tailscale, deny everything else. Run with sudo
+(agents cannot):
+
+```bash
+# Order matters — add the allow rules BEFORE enabling, or you can lock out SSH.
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow in on tailscale0            # trust the Tailscale mesh
+sudo ufw allow from 192.168.4.0/22         # trust the local LAN (all ports)
+# (LAN rule already covers SSH; if you tighten it, keep: sudo ufw allow 22/tcp)
+sudo ufw enable
+sudo ufw status verbose
+```
+
+This keeps the no-auth `:8188` (and everything else) reachable from your LAN and
+Tailscale devices while blocking any other source. If you ever must reach a
+service from outside, prefer Tailscale over a router port-forward — never expose
+`:8188`. To reset the locked instance's password:
+`sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013).
