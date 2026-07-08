@@ -824,6 +824,7 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | ComfyUI **open** (`comfyui-open`) | 8188 | **none** — do NOT expose to WAN |
 | ComfyUI **locked** (`comfyui-secure`) | 8189 | ComfyUI-Login (basic password only) |
 | Open WebUI | 3000 | app login |
+| Filebrowser (ComfyUI media) | 8083 | own login (change admin/admin on first visit) |
 | LiteLLM gateway | 4000 | `LITELLM_MASTER_KEY` |
 | mcpo | 8000 | `MCPO_API_KEY` |
 | SearXNG | 8888 | none |
