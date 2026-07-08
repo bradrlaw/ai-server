@@ -127,6 +127,9 @@ services:
       - /srv/ai/comfyui/input-open:/data/input-open
       - /srv/ai/comfyui/output-secure:/data/output-secure
       - /srv/ai/comfyui/input-secure:/data/input-secure
+      # Read-write access to the ComfyUI models tree for manual model uploads
+      # (checkpoints/, loras/, vae/, diffusion_models/, text_encoders/, etc.).
+      - /srv/ai/comfyui/models:/data/models
       - filebrowser-data:/database
     networks:
       - ai
