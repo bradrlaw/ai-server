@@ -104,6 +104,33 @@ services:
     networks:
       - ai
 
+  # Filebrowser — web file manager for the ComfyUI media dirs (browse/preview/
+  # download images & videos, upload, rename/delete). Serves the two instances'
+  # output+input folders mounted under /data. Has its own login (first-run creds
+  # admin/admin — CHANGE IT immediately in Settings → User Management). DB/config
+  # live in the named volume so no runtime state lands in the git-tracked docker/.
+  filebrowser:
+    image: filebrowser/filebrowser:v2.32.0
+    container_name: filebrowser
+    restart: unless-stopped
+    ports:
+      - "8083:80"
+    environment:
+      FB_ROOT: "/data"
+      FB_DATABASE: "/database/filebrowser.db"
+      FB_ADDRESS: "0.0.0.0"
+      FB_PORT: "80"
+      FB_LOG: "stdout"
+    volumes:
+      # Read-write access to both instances' outputs + inputs (per user choice).
+      - /srv/ai/comfyui/output-open:/data/output-open
+      - /srv/ai/comfyui/input-open:/data/input-open
+      - /srv/ai/comfyui/output-secure:/data/output-secure
+      - /srv/ai/comfyui/input-secure:/data/input-secure
+      - filebrowser-data:/database
+    networks:
+      - ai
+
 networks:
   ai:
     name: ai
@@ -111,3 +138,5 @@ networks:
 volumes:
   open-webui-data:
     name: open-webui-data
+  filebrowser-data:
+    name: filebrowser-data
