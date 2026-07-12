@@ -16,8 +16,11 @@ Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 # for GPU with the OPEN instance (idx1).
 Environment=CUDA_VISIBLE_DEVICES=2
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Free the idx2 occupant (`chat`) on generate; keep coding (idx1) + fast (P100).
-Environment=FREE_GPU_KEEP=coding,fast
+# Free the idx2 occupants (chat / gemma-26b) on generate; keep everything on the
+# cards this instance does NOT use — idx1 (coding, gemma-31b, chat-uncensored-q4/q6)
+# and P100 (fast, fast-uncensored). Dual-card big/coder-next are intentionally
+# omitted so they get freed (they occupy idx2). Keep in sync with llama-swap.yaml.
+Environment=FREE_GPU_KEEP=coding,gemma-31b,chat-uncensored-q4,chat-uncensored-q6,fast,fast-uncensored
 Environment=FREE_GPU_IDLE_SECS=300
 Environment=FREE_GPU_RESTORE=chat
 # Auth: ComfyUI-Login is loaded via the extra custom_nodes path below (present

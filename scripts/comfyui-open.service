@@ -16,8 +16,11 @@ Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 # the MCP / Open WebUI image-gen and the open (no-login) canvas.
 Environment=CUDA_VISIBLE_DEVICES=1
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Free the idx1 occupant (`coding`) on generate; keep chat (idx2) + fast (P100).
-Environment=FREE_GPU_KEEP=chat,fast
+# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
+# keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
+# and P100 (fast, fast-uncensored). Dual-card big/coder-next are intentionally
+# omitted so they get freed (they occupy idx1). Keep in sync with llama-swap.yaml.
+Environment=FREE_GPU_KEEP=chat,gemma-26b,fast,fast-uncensored
 Environment=FREE_GPU_IDLE_SECS=300
 Environment=FREE_GPU_RESTORE=coding
 # NO auth: acceptable because this port backs the MCP/Open WebUI (which has its
