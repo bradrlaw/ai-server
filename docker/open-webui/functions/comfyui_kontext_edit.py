@@ -196,6 +196,15 @@ class Tools:
                     "data": {"description": desc, "done": done},
                 })
 
+        async def emit_message(content: str):
+            # Append markdown straight into the assistant message so the image
+            # renders even if the model doesn't echo the returned link.
+            if __event_emitter__:
+                await __event_emitter__({
+                    "type": "message",
+                    "data": {"content": content},
+                })
+
         api = self.valves.comfyui_api_url.rstrip("/")
         public = self.valves.comfyui_public_url.rstrip("/")
 
@@ -215,7 +224,10 @@ class Tools:
 
             url = f"{public}/view?filename={filename}&type=output"
             await emit("Edit complete.", done=True)
-            return f"Edited image:\n\n![{filename}]({url})"
+            await emit_message(f"\n\n![{filename}]({url})\n")
+            return (f"The edited image has been generated and displayed inline as "
+                    f"![{filename}]({url}). Do not repeat the image markdown; just "
+                    f"briefly confirm the edit to the user.")
         except Exception as e:
             await emit(f"Edit failed: {e}", done=True)
             return f"Image edit failed: {e}"
