@@ -196,13 +196,14 @@ class Tools:
                     "data": {"description": desc, "done": done},
                 })
 
-        async def emit_message(content: str):
-            # Append markdown straight into the assistant message so the image
-            # renders even if the model doesn't echo the returned link.
+        async def emit_image(url: str):
+            # Render the image via a "files" event (same mechanism OWUI's native
+            # image-gen uses). It persists on message.files independently of the
+            # streamed assistant content, so the model's reply can't overwrite it.
             if __event_emitter__:
                 await __event_emitter__({
-                    "type": "message",
-                    "data": {"content": content},
+                    "type": "files",
+                    "data": {"files": [{"type": "image", "url": url}]},
                 })
 
         api = self.valves.comfyui_api_url.rstrip("/")
@@ -222,12 +223,25 @@ class Tools:
             graph = self._build_graph(image_ref, prompt)
             filename = self._run(api, graph)
 
-            url = f"{public}/view?filename={filename}&type=output"
+            # Fetch the result server-side and embed as a data URL so it renders
+            # regardless of whether the browser can reach the ComfyUI host.
+            view = f"{api}/view?filename={filename}&type=output"
+            data_url = None
+            try:
+                ir = requests.get(view, timeout=60)
+                ir.raise_for_status()
+                mime = ir.headers.get("Content-Type", "image/png").split(";")[0]
+                b64 = base64.b64encode(ir.content).decode()
+                data_url = f"data:{mime};base64,{b64}"
+            except Exception:
+                data_url = None
+
+            public_url = f"{public}/view?filename={filename}&type=output"
             await emit("Edit complete.", done=True)
-            await emit_message(f"\n\n![{filename}]({url})\n")
-            return (f"The edited image has been generated and displayed inline as "
-                    f"![{filename}]({url}). Do not repeat the image markdown; just "
-                    f"briefly confirm the edit to the user.")
+            await emit_image(data_url or public_url)
+            return ("The edited image has been generated and is now shown inline in "
+                    "the chat. Briefly confirm the edit to the user; do NOT output any "
+                    "image markdown or link yourself.")
         except Exception as e:
             await emit(f"Edit failed: {e}", done=True)
             return f"Image edit failed: {e}"
