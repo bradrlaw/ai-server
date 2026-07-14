@@ -3,7 +3,8 @@ Description=ComfyUI MCP server — bridges ComfyUI to MCP clients (mcpo / agents
 Documentation=https://github.com/joenorton/comfyui-mcp-server
 # Bridge only (no GPU); wants ComfyUI reachable. It retries on startup if ComfyUI
 # is not yet up, but ordering after it avoids noisy restarts on boot.
-After=network-online.target comfyui.service
+# docker.service is ordered before us so the ExecStartPost mcpo bounce (below) works.
+After=network-online.target comfyui.service docker.service
 Wants=network-online.target
 
 [Service]
@@ -30,6 +31,11 @@ Environment=COMFY_MCP_RETURN_MARKDOWN=1
 # set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
 Environment=HOME=/home/brad
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py
+# mcpo (docker) does NOT retry a failed MCP server and, on boot, races ahead of this
+# service — mounting 0 comfyui tools until it reconnects. Bounce the mcpo container
+# once this bridge is up (after a short bind delay) so the comfyui tools always load.
+# Leading '-' + guard: never fail this service if docker/mcpo isn't present.
+ExecStartPost=-/bin/bash -c 'sleep 5; docker restart mcpo 2>/dev/null || true'
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15
