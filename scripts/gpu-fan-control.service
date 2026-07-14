@@ -1,7 +1,9 @@
 [Unit]
 Description=GPU shroud fan control (nvidia-smi temp -> nct6775 PWM)
-After=multi-user.target
-# Ensure the nvidia driver is up before we start querying temps.
+After=multi-user.target nvidia-persistenced.service
+# Ensure the nvidia driver is up before we start querying temps. The daemon also
+# waits (bounded) for all expected GPUs at startup, so this ordering is a hint,
+# not the sole guard against the boot enumeration race.
 Wants=nvidia-persistenced.service
 
 [Service]

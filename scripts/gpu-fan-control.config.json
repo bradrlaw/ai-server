@@ -1,6 +1,10 @@
 {
   "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (P100 reports no memory temp -> uses core). Wiring/pwm verified: pwm5=V100 GPU1(bus03), pwm4=V100 GPU2(bus04), pwm1=P100 GPU0(bus01). Fans 40x28mm high-static-pressure; V100 15k rpm max, P100 6k rpm max. Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=P100(bus01), 1=V100(bus03), 2=V100(bus04). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
   "interval_sec": 4,
+  "expected_gpu_count": 3,
+  "gpu_wait_timeout_sec": 90,
+  "power_recheck_sec": 30,
+  "_boot_robustness_note": "expected_gpu_count/gpu_wait_timeout_sec: at startup the daemon waits (bounded) until nvidia-smi reports this many GPUs before applying caps, avoiding the boot race where it starts before the driver enumerates every card. power_recheck_sec: the main loop re-reconciles power caps at this cadence, so a GPU that was missing at boot or 'fell off the bus' and returned (e.g. after a PCIe re-probe following a power loss, 2026-07-14) gets its cap re-applied automatically with no manual intervention. All bounded/non-fatal: a truly-absent card never hangs the fan daemon.",
   "power_limits": {
     "0": 200,
     "1": 175,

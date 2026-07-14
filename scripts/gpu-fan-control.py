@@ -65,8 +65,63 @@ def gpu_temps():
     return temps
 
 
-def apply_power_limits(power_limits):
-    """Apply per-GPU power caps (W) + persistence mode at startup.
+def query_present_gpus():
+    """Return the set of GPU indices nvidia-smi can currently see (empty on error)."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader,nounits"],
+            text=True, stderr=subprocess.DEVNULL)
+        return {int(x.strip()) for x in out.strip().splitlines() if x.strip() != ""}
+    except Exception:
+        return set()
+
+
+def current_power_limits():
+    """Return {gpu_index: enforced_power_limit_W} for GPUs nvidia-smi can see."""
+    limits = {}
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index,power.limit",
+             "--format=csv,noheader,nounits"], text=True, stderr=subprocess.DEVNULL)
+        for line in out.strip().splitlines():
+            parts = [x.strip() for x in line.split(",")]
+            if len(parts) < 2:
+                continue
+            try:
+                limits[int(parts[0])] = int(round(float(parts[1])))
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return limits
+
+
+def wait_for_gpus(expected, timeout_sec):
+    """Block until nvidia-smi reports >= expected GPUs, or timeout (bounded).
+
+    Guards against the boot-time race where the daemon starts before the driver
+    has enumerated every card (partial cap application). Bounded so a genuinely
+    dead/absent card can never hang the fan daemon -- we proceed with whatever is
+    present once the timeout elapses (fans are safety-critical and self-heal).
+    """
+    if not expected or expected <= 0:
+        return
+    deadline = time.time() + max(0, timeout_sec)
+    while True:
+        present = query_present_gpus()
+        if len(present) >= expected:
+            log(f"all {expected} GPU(s) present: {sorted(present)}")
+            return
+        if time.time() >= deadline:
+            log(f"WARNING: only {len(present)} of {expected} GPU(s) present "
+                f"after {timeout_sec}s ({sorted(present)}); proceeding -- "
+                f"power caps will be applied to any card as it reappears")
+            return
+        time.sleep(2)
+
+
+def reconcile_power_limits(power_limits, quiet=False):
+    """Idempotently enforce per-GPU power caps (W) + persistence mode.
 
     power_limits: {gpu_index(str|int): watts}. For longevity/thermal reasons the
     passively-cooled Teslas are capped below their default board limit (V100 HBM2
@@ -74,11 +129,17 @@ def apply_power_limits(power_limits):
     has headroom and is trimmed to 200 W for ~0% loss). Persistence mode keeps the
     cap sticky and the driver resident on this headless box.
 
+    Called at startup AND periodically from the main loop, so a GPU that was
+    missing at boot (or fell off the bus and returned after a PCIe re-probe) gets
+    its cap applied automatically -- no manual intervention. Only acts on drift:
+    GPUs already at their target are skipped (idempotent, quiet).
+
     Non-fatal: a failure here must NEVER stop the fan daemon -- airflow is the
     safety-critical function, power capping is only an optimization.
     """
     if not power_limits:
         return
+    current = current_power_limits()
     for idx, watts in sorted(power_limits.items(), key=lambda kv: int(kv[0])):
         idx = int(idx)
         try:
@@ -86,12 +147,16 @@ def apply_power_limits(power_limits):
         except (TypeError, ValueError):
             log(f"power cap for GPU{idx}: invalid value {watts!r}, skipping")
             continue
+        if idx not in current:
+            continue  # GPU absent right now; retry on a later reconcile pass
+        if current[idx] == watts:
+            continue  # already at target -- nothing to do
         try:
             subprocess.run(["nvidia-smi", "-i", str(idx), "-pm", "1"],
                            check=True, capture_output=True, text=True)
             subprocess.run(["nvidia-smi", "-i", str(idx), "-pl", str(watts)],
                            check=True, capture_output=True, text=True)
-            log(f"power cap GPU{idx} -> {watts}W (persistence on)")
+            log(f"power cap GPU{idx} {current[idx]}W -> {watts}W (persistence on)")
         except subprocess.CalledProcessError as e:
             log(f"power cap GPU{idx} -> {watts}W FAILED (non-fatal): "
                 f"{(e.stderr or e.stdout or '').strip()}")
@@ -180,11 +245,22 @@ def main():
     with open(CONFIG) as f:
         cfg = json.load(f)
     interval = cfg.get("interval_sec", 4)
+    expected_gpus = cfg.get("expected_gpu_count", 0)
+    startup_wait = cfg.get("gpu_wait_timeout_sec", 90)
+    power_recheck = cfg.get("power_recheck_sec", 30)
+    power_limits = cfg.get("power_limits")
+
+    # Guard the boot race: wait (bounded) for the driver to enumerate every card
+    # before capping, so no GPU is silently left at its default limit.
+    wait_for_gpus(expected_gpus, startup_wait)
+
     zones = [Zone(z) for z in cfg["zones"]]
-    apply_power_limits(cfg.get("power_limits"))
+    reconcile_power_limits(power_limits)
+    last_power_check = time.time()
     for z in zones:
         z.set_enable(1)  # manual PWM
-    log(f"controlling {len(zones)} zone(s), interval {interval}s")
+    log(f"controlling {len(zones)} zone(s), interval {interval}s, "
+        f"power recheck {power_recheck}s")
 
     stop = {"flag": False}
 
@@ -199,6 +275,11 @@ def main():
 
     try:
         while not stop["flag"]:
+            # Periodically re-enforce power caps so a GPU that was missing at
+            # boot or fell off the bus and returned gets capped automatically.
+            if time.time() - last_power_check >= power_recheck:
+                reconcile_power_limits(power_limits)
+                last_power_check = time.time()
             try:
                 temps = gpu_temps()
             except Exception as e:
