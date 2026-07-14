@@ -410,11 +410,36 @@ a top-level `power_limits` object in `gpu-fan-control.config.json`:
 ```json
 "power_limits": { "0": 200, "1": 175, "2": 175 }   // gpu_index: watts
 ```
-`gpu-fan-control.py:apply_power_limits()` runs `nvidia-smi -i N -pm 1 -pl W` for each entry
-at startup (logged as `power cap GPUN -> W W`). A capping failure is **non-fatal** — the
+`gpu-fan-control.py:reconcile_power_limits()` runs `nvidia-smi -i N -pm 1 -pl W` for each
+entry (logged as `power cap GPUN 250W -> 175W`). A capping failure is **non-fatal** — the
 fan daemon keeps running (airflow is the safety-critical function). To change caps, edit the
 config and re-run `sudo install-fan-service.sh` (validates 50-400 W range). Board limits:
 V100 100-250 W, P100 125-250 W.
+
+**Boot/recovery self-heal (2026-07-14).** After a wall-power loss, a V100 (bus04/idx2)
+"fell off the bus" (`NVRM: ... has fallen off the bus`; visible in `lspci` but not
+`nvidia-smi`). A PCIe re-probe recovered it, but it came back at its default **250 W**
+because the old `apply_power_limits()` ran only **once** at startup — when idx2 was still
+absent — and never re-checked. The daemon now hardens both cold and warm starts so no
+manual capping is needed:
+- **`wait_for_gpus()`** — bounded startup wait until `nvidia-smi` reports
+  `expected_gpu_count` (3) GPUs before capping, guarding the boot enumeration race.
+- **`reconcile_power_limits()`** — idempotent, drift-only (queries live `power.limit`,
+  fixes only what's wrong/missing); called at startup **and every `power_recheck_sec`
+  (30 s)** in the main loop, so a GPU missing at boot or returning after a re-probe gets
+  capped automatically. Fans already self-heal (loop re-queries temps each cycle).
+- Config keys: `expected_gpu_count`, `gpu_wait_timeout_sec`, `power_recheck_sec`.
+
+Recovering a fallen-off-the-bus card without a full reboot (needs root):
+```bash
+echo 1 | sudo tee /sys/bus/pci/devices/0000:04:00.0/remove
+sudo sh -c 'echo 1 > /sys/bus/pci/rescan'
+nvidia-smi -L                              # card should reappear
+sudo systemctl restart gpu-fan-control     # (or just wait ≤30 s for auto-reconcile)
+```
+A **full cold power cycle** (PSU off ~30 s) clears the latched fault more reliably than a
+warm reboot, which keeps standby power on the card. If it keeps recurring, reseat the PCIe
+power cables and the card in its slot.
 
 ## Phase 2 — llama-swap model router (2026-07-02)
 
