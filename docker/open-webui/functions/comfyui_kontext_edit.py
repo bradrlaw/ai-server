@@ -21,6 +21,7 @@ import random
 import re
 import time
 import uuid
+import asyncio
 from typing import Awaitable, Callable, Optional
 
 import requests
@@ -143,6 +144,16 @@ class Tools:
         )
         return json.loads(raw)
 
+    def _fetch_data_url(self, view_url: str) -> Optional[str]:
+        try:
+            ir = requests.get(view_url, timeout=60)
+            ir.raise_for_status()
+            mime = ir.headers.get("Content-Type", "image/png").split(";")[0]
+            b64 = base64.b64encode(ir.content).decode()
+            return f"data:{mime};base64,{b64}"
+        except Exception:
+            return None
+
     def _run(self, api: str, graph: dict) -> str:
         client_id = uuid.uuid4().hex
         r = requests.post(
@@ -217,24 +228,16 @@ class Tools:
 
         try:
             await emit("Uploading image to ComfyUI…")
-            image_ref = self._upload(api, img)
+            image_ref = await asyncio.to_thread(self._upload, api, img)
 
             await emit(f"Editing with Flux Kontext ({self.valves.steps} steps)…")
             graph = self._build_graph(image_ref, prompt)
-            filename = self._run(api, graph)
+            filename = await asyncio.to_thread(self._run, api, graph)
 
             # Fetch the result server-side and embed as a data URL so it renders
             # regardless of whether the browser can reach the ComfyUI host.
             view = f"{api}/view?filename={filename}&type=output"
-            data_url = None
-            try:
-                ir = requests.get(view, timeout=60)
-                ir.raise_for_status()
-                mime = ir.headers.get("Content-Type", "image/png").split(";")[0]
-                b64 = base64.b64encode(ir.content).decode()
-                data_url = f"data:{mime};base64,{b64}"
-            except Exception:
-                data_url = None
+            data_url = await asyncio.to_thread(self._fetch_data_url, view)
 
             public_url = f"{public}/view?filename={filename}&type=output"
             await emit("Edit complete.", done=True)
