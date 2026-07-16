@@ -133,6 +133,8 @@ Things others running older multi-GPU boxes may find reusable:
 | `scripts/comfyui-free-gpu-node.py` | ComfyUI node that **unloads llama-swap LLMs and waits for VRAM** to actually free before a render, avoiding OOM on shared GPUs. |
 | `scripts/comfyui-snapshot.sh` | **Reversible snapshots** of the ComfyUI custom-node/pip state so you can undo a bad node-pack install. |
 | `scripts/gpu-fan-control.py` (+ `.service`, `.config.json`) | Temperature-driven **shroud-fan control + self-healing power caps** (drives off V100 HBM temp; re-caps GPUs that fall off/return on the bus). |
+| `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. |
+| `docker/open-webui/functions/server_status_inlet.py` | Open WebUI **new-chat status banner** — shows what's running at the start of each chat, sourced from the status service. |
 | `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_60/sm_70** with the P100 fp16-precision carveout applied. |
 | `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
 | `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |

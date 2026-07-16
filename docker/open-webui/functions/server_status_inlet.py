@@ -39,10 +39,12 @@ class Filter:
             ),
         )
         status_api_url: str = Field(
-            default="",
+            default="http://host.docker.internal:9095/status.json",
             description=(
-                "Optional JSON status endpoint (the detailed web status page). If it "
-                "returns an object, its 'summary' string and/or 'gpus' list are appended."
+                "Primary source: JSON status endpoint served by the host-side status "
+                "service (scripts/server-status-service.py). When reachable it provides "
+                "models, ComfyUI, and GPU data. If empty/unreachable, the filter falls "
+                "back to the direct llama-swap/ComfyUI URLs below."
             ),
         )
         inject_mode: str = Field(
@@ -133,48 +135,80 @@ class Filter:
             return None
         return "**ComfyUI:** " + "  ·  ".join(parts)
 
-    def _extra_status(self) -> Optional[str]:
-        url = (self.valves.status_api_url or "").strip()
-        if not url:
-            return None
-        data = self._get_json(url)
-        if not isinstance(data, dict):
-            return None
+    def _render_from_api(self, data: dict) -> Optional[str]:
+        """Render the full status block from the host-side status service JSON."""
         lines = []
-        if isinstance(data.get("summary"), str) and data["summary"].strip():
-            lines.append(data["summary"].strip())
+
+        models = data.get("models") or {}
+        if isinstance(models, dict):
+            if models.get("reachable") is False:
+                lines.append("**Loaded models:** llama-swap unreachable")
+            else:
+                loaded = models.get("loaded") or []
+                names = [
+                    f"{m.get('model', '?')} ({m.get('state', '?')})"
+                    for m in loaded
+                    if isinstance(m, dict)
+                ]
+                if names:
+                    line = "**Loaded models:** " + ", ".join(names)
+                else:
+                    line = "**Loaded models:** none (idle — first request will load one)"
+                total = models.get("available")
+                if total:
+                    line += f"  ·  {total} available"
+                lines.append(line)
+
         gpus = data.get("gpus")
         if isinstance(gpus, list) and gpus:
             g = []
             for gpu in gpus:
                 if not isinstance(gpu, dict):
                     continue
-                idx = gpu.get("index", "?")
-                util = gpu.get("util")
-                mem_used = gpu.get("mem_used")
-                mem_total = gpu.get("mem_total")
-                power = gpu.get("power")
-                temp = gpu.get("temp")
-                bits = [f"GPU{idx}"]
-                if util is not None:
-                    bits.append(f"{util}% util")
-                if mem_used is not None and mem_total is not None:
-                    bits.append(f"{mem_used}/{mem_total} MB")
-                if power is not None:
-                    bits.append(f"{power} W")
-                if temp is not None:
-                    bits.append(f"{temp}°C")
+                bits = [f"GPU{gpu.get('index', '?')}"]
+                if gpu.get("util") is not None:
+                    bits.append(f"{gpu['util']}%")
+                if gpu.get("mem_used") is not None and gpu.get("mem_total"):
+                    bits.append(f"{gpu['mem_used']}/{gpu['mem_total']}MB")
+                if gpu.get("power") is not None:
+                    bits.append(f"{gpu['power']}W")
+                if gpu.get("temp") is not None:
+                    bits.append(f"{gpu['temp']}°C")
                 g.append(" ".join(bits))
             if g:
                 lines.append("**GPUs:** " + "  ·  ".join(g))
+
+        comfyui = data.get("comfyui")
+        if isinstance(comfyui, list) and comfyui:
+            parts = []
+            for c in comfyui:
+                if not isinstance(c, dict):
+                    continue
+                state = c.get("state", "?")
+                if state == "busy":
+                    parts.append(
+                        f"{c.get('label', '?')}: {c.get('running', 0)} running, "
+                        f"{c.get('pending', 0)} queued"
+                    )
+                else:
+                    parts.append(f"{c.get('label', '?')}: {state}")
+            if parts:
+                lines.append("**ComfyUI:** " + "  ·  ".join(parts))
+
         return "\n".join(lines) if lines else None
 
     def _build_status(self) -> Optional[str]:
-        sections = [
-            self._models_status(),
-            self._comfy_status(),
-            self._extra_status(),
-        ]
+        # Prefer the host-side status service (reachable from the container and the
+        # only source that can report GPU stats).
+        api = (self.valves.status_api_url or "").strip()
+        if api:
+            data = self._get_json(api)
+            if isinstance(data, dict):
+                rendered = self._render_from_api(data)
+                if rendered:
+                    return rendered
+        # Fallback: query llama-swap / ComfyUI directly (no GPU data).
+        sections = [self._models_status(), self._comfy_status()]
         sections = [s for s in sections if s]
         if not sections:
             return None

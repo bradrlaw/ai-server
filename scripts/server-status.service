@@ -1,0 +1,22 @@
+[Unit]
+Description=AI-server status service — aggregates llama-swap/ComfyUI/GPU state as JSON + HTML
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+# Bind on all interfaces so bridge containers (Open WebUI) and browsers can reach it.
+# Reads its upstreams (llama-swap, ComfyUI) on loopback locally.
+Environment=STATUS_HOST=0.0.0.0
+Environment=STATUS_PORT=9095
+Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+Environment=COMFYUI_URLS=open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+ExecStart=/usr/bin/python3 /srv/ai/scripts/server-status-service.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
