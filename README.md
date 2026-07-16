@@ -47,6 +47,33 @@ Capabilities:
 - **GPUs:** 2× Tesla V100-32GB (sm_70) + 1× Tesla P100-16GB (sm_60), no NVLink (PCIe)
 - **OS:** Ubuntu 24.04, NVIDIA driver 580-server, CUDA 12.x toolkit
 
+## Build cost
+
+A rough bill of materials for the build. The goal was capable multi-GPU inference on
+a tight budget by using previous-generation datacenter GPUs and a used base PC.
+
+| Item | Cost |
+|------|------|
+| Used PC (motherboard, RAM, Intel SSD, Titan X GPU†, Rosewill 1200W PSU†) | $650 |
+| Corsair HX1200i PSU (replaced the Rosewill) | $321 |
+| NVIDIA Tesla V100 PCIe 32GB | $1,612 |
+| NVIDIA Tesla P100 PCIe 16GB | $79 |
+| Additional GPU power cable | $14 |
+| Dual-GPU-to-single-connector power adapters | $30 |
+| Fan ARGB extension cables | $8 |
+| GPU fan shrouds | $54 |
+| Arctic S4028-15K fans | $25 |
+| Arctic S4028-6K fan | $9 |
+| Rolling tower stand | $45 |
+| GPU support bracket | $16 |
+| Smart power plug | $23 |
+| **Total** | **$2,886** |
+
+† The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC and are no
+longer used.
+
+> **Power usage & running costs:** to be added after real-world power measurement.
+
 ## Layout
 
 | Path | Tracked | Contents |
