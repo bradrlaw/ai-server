@@ -94,8 +94,21 @@ The V100s idle at their memory clock (877 MHz) while the P100 clocks down to 405
 core. Power caps applied at boot by the fan-control daemon keep the cards within thermal
 limits (P100 200 W, V100 175 W each).
 
-> **Load draw & electricity cost:** whole-system wall power under inference and the
-> resulting $/month (via the smart power plug) to be added after measurement.
+### Whole-system idle (at the wall)
+
+| Metric | Value |
+|--------|-------|
+| Whole-system draw (models loaded, idle) | **170 W** |
+| Electricity rate | $0.105 / kWh |
+| Cost per day (24 h) | ~$0.43 |
+| Cost per month (~730 h) | **~$13** (~124 kWh) |
+| Cost per year | ~$156 (~1,489 kWh) |
+
+The extra ~72 W over the ~98 W of GPUs is the CPU, motherboard, NVMe, fans, and PSU
+conversion losses. Running costs under sustained inference load will be higher.
+
+> **Load draw:** whole-system wall power and $/month under sustained inference to be
+> added after measurement.
 
 ## Layout
 
