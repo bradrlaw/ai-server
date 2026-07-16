@@ -40,6 +40,10 @@ Capabilities:
 - **Thermal & power safety, unattended.** A custom daemon drives per-GPU shroud fans from
   memory temperature and applies self-healing power caps, keeping V100 HBM under its
   throttle point for longevity and quiet operation on a headless box.
+- **Live status at a glance.** A host-side status service aggregates loaded models, ComfyUI
+  queues, and per-GPU util/VRAM/power/temp (JSON + HTML on `:9095`) and pushes a live
+  **banner into Open WebUI** — so the blank new-chat screen shows what's currently running
+  on the box before you type a word.
 
 ## Hardware
 
