@@ -90,6 +90,7 @@ separately by their respective creators and are not redistributed here.)
 | Hugging Face Hub / `hf` CLI + Xet | https://github.com/huggingface/huggingface_hub | Fast model downloads (Xet backend) into local model dirs. |
 | NVIDIA Container Toolkit | https://github.com/NVIDIA/nvidia-container-toolkit | GPU access for the containerized app tier. |
 | Tailscale | https://github.com/tailscale/tailscale | Private mesh network for remote access to the headless box. |
+| GitHub Copilot CLI | https://github.com/github/copilot-cli | AI pair-programmer used throughout to build, debug, and document this server. |
 
 ## License
 
