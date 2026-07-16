@@ -322,3 +322,14 @@ routing:
           qw: "w & h & (f | fu)"    # uncensored-Q6(idx1) + chat(idx2) + P100 chat
           max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
           cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat
+
+# hooks: run actions on lifecycle events. Preload `fast` on startup so the P100
+# (idx0) is never left empty after a llama-swap (re)start — the P100 slot is
+# `(f | fu)`, so `fast` is the always-ready default there. (This covers restarts;
+# if `fast-uncensored` is requested it evicts `fast` and, once its ttl expires,
+# the P100 stays empty until `fast` is requested again — request `fast` to
+# restore it. Single-model preload = no group needed.)
+hooks:
+  on_startup:
+    preload:
+      - "fast"
