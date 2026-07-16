@@ -9,6 +9,38 @@ single OpenAI-compatible API.
 > Python venvs, source checkouts, datasets, and per-service data — live on the box
 > under `/srv/ai/` and are intentionally git-ignored.
 
+## What it does
+
+This is the full config + runbook for turning a single multi-GPU workstation into a
+private, always-on AI appliance — one OpenAI-compatible endpoint that a household of
+users (and their editors, chat apps, and agents) can point at instead of a paid cloud
+API. The design goal is to squeeze modern models onto older, cheap datacenter GPUs
+(Pascal/Volta, no NVLink) and keep them running cool, reliably, and unattended.
+
+Capabilities:
+
+- **Local LLM serving with automatic model swapping.** [llama.cpp](https://github.com/ggml-org/llama.cpp)
+  behind [llama-swap](https://github.com/mostlygeek/llama-swap) loads models on demand
+  and a *matrix router* picks co-resident model sets that fit across the three GPUs, so
+  a coding model, a chat model, and a fast model can stay hot simultaneously and swap in
+  heavier models on request — no manual juggling.
+- **One OpenAI-compatible API for everything.** [LiteLLM](https://github.com/BerriAI/litellm)
+  fronts the local router (and optional cloud fallbacks) so any OpenAI client — editors,
+  scripts, [Open WebUI](https://github.com/open-webui/open-webui), IDE assistants — works
+  unchanged. A helper script even points GitHub Copilot at the box (BYOK).
+- **Image & video generation as callable tools.** Two [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
+  instances (an open one and a password-locked one) run natively; curated style workflows
+  (z-image, FLUX.1/FLUX.2, Krea-2, WAN video, song generation) are exposed as **MCP tools**
+  so chat models and agents can generate media by name.
+- **Local VLM, RAG & embeddings.** Vision-language inference runs inside ComfyUI; the app
+  tier includes vector-DB/RAG plumbing and web search ([SearXNG](https://github.com/searxng/searxng)).
+- **An agent/tool ecosystem.** [mcpo](https://github.com/open-webui/mcpo) surfaces MCP tool
+  servers (time, fetch, git, ComfyUI, and a custom **plan-and-build** tool) to any client —
+  including a "plan with one model, implement with another" GPU-aware coding workflow.
+- **Thermal & power safety, unattended.** A custom daemon drives per-GPU shroud fans from
+  memory temperature and applies self-healing power caps, keeping V100 HBM under its
+  throttle point for longevity and quiet operation on a headless box.
+
 ## Hardware
 
 - **CPU/RAM:** Intel i7-6950X (MSI X99A), 128 GB RAM, 2 TB NVMe
@@ -21,7 +53,28 @@ single OpenAI-compatible API.
 |------|---------|----------|
 | `docs/` | ✅ | Runbook (`server-setup.md`), architecture (`architecture.md`), ADRs (`adr/`) |
 | `scripts/` | ✅ | Setup, build, benchmark, and service scripts (fan/power control, CUDA, llama.cpp) |
+| `config/` | ✅ | llama-swap router config, ComfyUI MCP workflow definitions |
+| `docker/` | ✅ | Compose stack for the CPU app tier (LiteLLM, Open WebUI, mcpo, SearXNG, plan-build MCP) |
 | `models/`, `venvs/`, `src/`, `datasets/`, … | ❌ (local) | Model weights, virtualenvs, source builds, data |
+
+## Notable components & scripts
+
+Things others running older multi-GPU boxes may find reusable:
+
+| Component | What it gives you |
+|-----------|-------------------|
+| `config/llama-swap.yaml` | Matrix router that auto-swaps **co-resident model sets** across 3 GPUs so daily models stay hot and heavy models swap in on demand. |
+| `docker/mcpo/plan_build_mcp.py` | **Plan-and-build MCP tool** — plan a task with one model, implement it with another; GPU-aware so planner + coder stay co-resident (no swap). |
+| `config/comfyui-mcp/workflows/*.json` + `scripts/comfyui-mcp-launch.py` | Turn ComfyUI style workflows into **MCP image/video/song tools** callable by name from chat/agents. |
+| `scripts/install-comfyui-instances.sh` + `comfyui-*.service` | **Dual ComfyUI** setup — an open instance plus a password-locked one — from a single install, as systemd services. |
+| `scripts/comfyui-free-gpu-node.py` | ComfyUI node that **unloads llama-swap LLMs and waits for VRAM** to actually free before a render, avoiding OOM on shared GPUs. |
+| `scripts/comfyui-snapshot.sh` | **Reversible snapshots** of the ComfyUI custom-node/pip state so you can undo a bad node-pack install. |
+| `scripts/gpu-fan-control.py` (+ `.service`, `.config.json`) | Temperature-driven **shroud-fan control + self-healing power caps** (drives off V100 HBM temp; re-caps GPUs that fall off/return on the bus). |
+| `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_60/sm_70** with the P100 fp16-precision carveout applied. |
+| `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
+| `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |
+| `scripts/bench-*.sh`, `power-cap-sweep.sh`, `verify-gpu-*.sh` | Benchmarking, power/thermal sweeps, and GPU/fan-mapping verification helpers. |
+| `scripts/copilot-byok.sh` | Point **GitHub Copilot** at the local endpoint (bring-your-own-key). |
 
 ## Documentation
 
