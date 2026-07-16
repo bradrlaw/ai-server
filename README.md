@@ -74,6 +74,29 @@ longer used.
 
 > **Power usage & running costs:** to be added after real-world power measurement.
 
+## Power usage
+
+Measured with `nvidia-smi dmon`. These are **GPU-only** figures — whole-system draw at
+the wall is higher (CPU, motherboard, NVMe, fans, and PSU conversion losses on top).
+
+### Idle (models loaded, no active inference)
+
+| GPU | Card | Power | Core temp | Mem temp |
+|-----|------|-------|-----------|----------|
+| 0 | Tesla P100-16GB | ~24 W | 38 °C | n/a¹ |
+| 1 | Tesla V100-32GB | ~36 W | 42 °C | 41 °C |
+| 2 | Tesla V100-32GB | ~38 W | 44 °C | 43 °C |
+| **Total** | | **~98 W** | | |
+
+¹ The P100 does not report an HBM memory-junction temperature.
+
+The V100s idle at their memory clock (877 MHz) while the P100 clocks down to 405 MHz
+core. Power caps applied at boot by the fan-control daemon keep the cards within thermal
+limits (P100 200 W, V100 175 W each).
+
+> **Load draw & electricity cost:** whole-system wall power under inference and the
+> resulting $/month (via the smart power plug) to be added after measurement.
+
 ## Layout
 
 | Path | Tracked | Contents |
