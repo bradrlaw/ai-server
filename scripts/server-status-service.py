@@ -21,6 +21,12 @@ Bind address/port and upstreams are configurable via environment variables:
   LLAMASWAP_URL (default http://127.0.0.1:9090)
   COMFYUI_URLS  (default "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189")
   STATUS_CACHE_SECS (default 2)
+
+Optional background workers:
+  OWUI_API_KEY         set to enable pushing a live status banner into Open WebUI
+  FAST_KEEPER_ENABLED  (default true) re-warm `fast` whenever the P100 slot is empty
+  FAST_KEEP_MODEL      (default fast)   FAST_KEEP_ALT (default fast-uncensored)
+  FAST_KEEPER_INTERVAL (default 60s)
 """
 
 from __future__ import annotations
@@ -64,6 +70,22 @@ OWUI_BANNER_DISMISSIBLE = os.environ.get("OWUI_BANNER_DISMISSIBLE", "false").low
     "true",
     "yes",
 )
+
+# --- Optional: keep the P100 `fast` model always resident ---------------------
+# The P100 (idx0) slot is `(fast | fast-uncensored)` — mutually exclusive. A
+# llama-swap restart, or `fast-uncensored`'s ttl expiring after use, can leave the
+# card empty until something requests `fast`. This keeper re-warms `fast` whenever
+# the P100 slot is empty. It never evicts `fast-uncensored` (if that is loaded the
+# user is actively using it), so it only fires when NEITHER model is resident.
+FAST_KEEPER_ENABLED = os.environ.get("FAST_KEEPER_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+FAST_KEEP_MODEL = os.environ.get("FAST_KEEP_MODEL", "fast")
+FAST_KEEP_ALT = os.environ.get("FAST_KEEP_ALT", "fast-uncensored")
+FAST_KEEPER_INTERVAL = float(os.environ.get("FAST_KEEPER_INTERVAL", "60"))
+FAST_KEEPER_TIMEOUT = float(os.environ.get("FAST_KEEPER_TIMEOUT", "120"))
 
 
 def _get_json(url: str):
@@ -331,6 +353,55 @@ def _banner_loop():
         time.sleep(OWUI_BANNER_INTERVAL)
 
 
+def _warm_model(model: str) -> bool:
+    """Send a tiny request so llama-swap loads `model`. Returns True on success."""
+    body = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+        }
+    ).encode()
+    req = urllib.request.Request(
+        f"{LLAMASWAP_URL}/v1/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=FAST_KEEPER_TIMEOUT) as resp:
+            resp.read()
+        return True
+    except Exception as exc:  # noqa: BLE001 - best-effort warmup
+        print(f"[keeper] warmup of {model!r} failed: {exc}")
+        return False
+
+
+def _fast_keeper_loop():
+    print(
+        f"[keeper] keeping {FAST_KEEP_MODEL!r} resident on the P100 "
+        f"(checked every {FAST_KEEPER_INTERVAL:.0f}s; yields to {FAST_KEEP_ALT!r})"
+    )
+    while True:
+        try:
+            running = _get_json(f"{LLAMASWAP_URL}/running")
+            if running is not None:
+                loaded = {
+                    m.get("model")
+                    for m in (running.get("running") or [])
+                    if isinstance(m, dict)
+                }
+                # Only warm when the P100 slot is empty (neither variant loaded),
+                # so we never evict fast-uncensored while it is in use.
+                if FAST_KEEP_MODEL not in loaded and FAST_KEEP_ALT not in loaded:
+                    print(f"[keeper] P100 slot empty — warming {FAST_KEEP_MODEL!r}")
+                    _warm_model(FAST_KEEP_MODEL)
+        except Exception as exc:  # noqa: BLE001 - keeper must never crash the service
+            print(f"[keeper] loop error: {exc}")
+        time.sleep(FAST_KEEPER_INTERVAL)
+
+
+
 _HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -433,6 +504,10 @@ def main():
         threading.Thread(target=_banner_loop, daemon=True).start()
     else:
         print("[banner] OWUI_API_KEY not set — OWUI banner push disabled")
+    if FAST_KEEPER_ENABLED:
+        threading.Thread(target=_fast_keeper_loop, daemon=True).start()
+    else:
+        print("[keeper] FAST_KEEPER_ENABLED=false — fast keeper disabled")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"ai-server status service listening on http://{HOST}:{PORT}")
     try:
