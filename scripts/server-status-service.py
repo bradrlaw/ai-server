@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -42,6 +43,27 @@ COMFYUI_URLS = os.environ.get(
 )
 CACHE_SECS = float(os.environ.get("STATUS_CACHE_SECS", "2"))
 HTTP_TIMEOUT = float(os.environ.get("STATUS_HTTP_TIMEOUT", "2.5"))
+
+# --- Optional: push a live status banner into Open WebUI ---------------------
+# When OWUI_API_KEY is set, a background thread periodically writes a top-of-UI
+# banner (visible on the blank new-chat screen, before the user types). Requires
+# an Open WebUI admin API key (Settings > Account > API Keys). The key is read
+# from the environment only — never store it in git.
+OWUI_BANNER_URL = os.environ.get(
+    "OWUI_BANNER_URL", "http://127.0.0.1:3000/api/v1/configs/banners"
+).rstrip("/")
+OWUI_CONFIG_EXPORT_URL = os.environ.get(
+    "OWUI_CONFIG_EXPORT_URL", "http://127.0.0.1:3000/api/v1/configs/export"
+).rstrip("/")
+OWUI_API_KEY = os.environ.get("OWUI_API_KEY", "").strip()
+OWUI_BANNER_INTERVAL = float(os.environ.get("OWUI_BANNER_INTERVAL", "30"))
+OWUI_BANNER_ID = os.environ.get("OWUI_BANNER_ID", "server-status")
+OWUI_BANNER_TYPE = os.environ.get("OWUI_BANNER_TYPE", "info")
+OWUI_BANNER_DISMISSIBLE = os.environ.get("OWUI_BANNER_DISMISSIBLE", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 def _get_json(url: str):
@@ -209,6 +231,106 @@ def cached_status() -> dict:
     return _cache["data"]
 
 
+# --- Open WebUI banner pusher -----------------------------------------------
+
+def banner_text(status: dict) -> str:
+    """One-line banner string for the OWUI top bar."""
+    models = status.get("models") or {}
+    if not models.get("reachable", True):
+        mtxt = "Models: llama-swap unreachable"
+    else:
+        loaded = models.get("loaded") or []
+        if loaded:
+            mtxt = "Models: " + ", ".join(m.get("model", "?") for m in loaded)
+            if models.get("available"):
+                mtxt += f" ({models['available']} avail)"
+        else:
+            mtxt = "Models: idle"
+    parts = [mtxt]
+
+    gpus = status.get("gpus") or []
+    if gpus:
+        g = []
+        for gpu in gpus:
+            used = gpu.get("mem_used")
+            total = gpu.get("mem_total")
+            mem = ""
+            if used is not None and total:
+                mem = f" {used/1024:.0f}/{total/1024:.0f}GB"
+            util = gpu.get("util")
+            u = f"{util}%" if util is not None else "–"
+            g.append(f"GPU{gpu.get('index', '?')} {u}{mem}")
+        parts.append("  ".join(g))
+
+    comfy = status.get("comfyui") or []
+    busy = [c["label"] for c in comfy if c.get("state") == "busy"]
+    if busy:
+        parts.append("ComfyUI busy: " + ", ".join(busy))
+
+    return "🖥️  " + "  |  ".join(parts)
+
+
+def _owui_get(url: str):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {OWUI_API_KEY}"})
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            if 200 <= r.status < 300:
+                return json.loads(r.read().decode("utf-8"))
+    except Exception:
+        pass
+    return None
+
+
+def _owui_existing_banners() -> list:
+    """Fetch current banners so we preserve any not owned by this service."""
+    data = _owui_get(OWUI_CONFIG_EXPORT_URL)
+    if not isinstance(data, dict):
+        return []
+    ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+    banners = ui.get("banners") if isinstance(ui, dict) else None
+    if banners is None:
+        banners = data.get("banners")
+    if not isinstance(banners, list):
+        return []
+    return [b for b in banners if isinstance(b, dict) and b.get("id") != OWUI_BANNER_ID]
+
+
+def _owui_push_banner() -> bool:
+    status = cached_status()
+    banner = {
+        "id": OWUI_BANNER_ID,
+        "type": OWUI_BANNER_TYPE,
+        "title": "",
+        "content": banner_text(status),
+        "dismissible": OWUI_BANNER_DISMISSIBLE,
+        "timestamp": int(time.time()),
+    }
+    payload = {"banners": _owui_existing_banners() + [banner]}
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        OWUI_BANNER_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {OWUI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            return 200 <= r.status < 300
+    except Exception as e:
+        print(f"[banner] push failed: {e}")
+        return False
+
+
+def _banner_loop():
+    print(f"[banner] pushing OWUI status banner every {OWUI_BANNER_INTERVAL:.0f}s")
+    while True:
+        _owui_push_banner()
+        time.sleep(OWUI_BANNER_INTERVAL)
+
+
 _HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -307,6 +429,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if OWUI_API_KEY:
+        threading.Thread(target=_banner_loop, daemon=True).start()
+    else:
+        print("[banner] OWUI_API_KEY not set — OWUI banner push disabled")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"ai-server status service listening on http://{HOST}:{PORT}")
     try:

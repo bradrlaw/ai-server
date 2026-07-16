@@ -14,6 +14,10 @@ Environment=STATUS_PORT=9095
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
 Environment=COMFYUI_URLS=open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Optional OWUI banner push: put OWUI_API_KEY (+ any overrides) in this local file.
+# The '-' prefix makes it optional; the file is gitignored (*.env). See the
+# server-status.env.example template.
+EnvironmentFile=-/srv/ai/scripts/server-status.env
 ExecStart=/usr/bin/python3 /srv/ai/scripts/server-status-service.py
 Restart=on-failure
 RestartSec=3
