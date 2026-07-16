@@ -46,8 +46,12 @@ class Filter:
             ),
         )
         inject_mode: str = Field(
-            default="both",
-            description="How to surface status: 'system' (context block), 'banner' (event chip), or 'both'.",
+            default="banner",
+            description=(
+                "How to surface status: 'banner' (event chip, no model message — "
+                "default), 'system' (inject a context block so the model opens with it), "
+                "or 'both'."
+            ),
         )
         request_timeout: float = Field(
             default=2.5, description="Per-request HTTP timeout in seconds."
@@ -71,7 +75,9 @@ class Filter:
         base = (self.valves.llama_swap_url or "").rstrip("/")
         if not base:
             return None
-        running = self._get_json(f"{base}/running") or {}
+        running = self._get_json(f"{base}/running")
+        if running is None:
+            return "**Loaded models:** llama-swap unreachable"
         rows = running.get("running") or []
         loaded = [
             f"{m.get('model', '?')} ({m.get('state', '?')})"
@@ -199,15 +205,18 @@ class Filter:
         if not status:
             return body
 
-        mode = (self.valves.inject_mode or "both").lower()
+        mode = (self.valves.inject_mode or "banner").lower()
 
         if mode in ("banner", "both") and __event_emitter__:
-            first_line = status.splitlines()[0].replace("**", "")
+            # Compact the multi-line markdown into one banner line (no model message).
+            banner = "  ·  ".join(
+                ln.replace("**", "").strip() for ln in status.splitlines() if ln.strip()
+            )
             try:
                 await __event_emitter__(
                     {
                         "type": "status",
-                        "data": {"description": f"Server status — {first_line}", "done": True},
+                        "data": {"description": f"Server status — {banner}", "done": True},
                     }
                 )
             except Exception:
