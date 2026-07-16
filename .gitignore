@@ -25,3 +25,9 @@ __pycache__/
 *.pem
 *_token
 *.secret
+
+# --- local-only ComfyUI MCP workflows (kept on the box, never tracked) ---
+/config/comfyui-mcp/workflows/krea2_turbo.json
+/config/comfyui-mcp/workflows/krea2_turbo.meta.json
+/config/comfyui-mcp/workflows/krea2_turbo_bf16.json
+/config/comfyui-mcp/workflows/krea2_turbo_bf16.meta.json
