@@ -39,3 +39,7 @@ single OpenAI-compatible API.
   by adding a new ADR.
 - Privileged setup is delivered as scripts run with `sudo`; the fan/power daemon runs
   as a systemd service.
+
+## License
+
+Released under the [MIT License](LICENSE).
