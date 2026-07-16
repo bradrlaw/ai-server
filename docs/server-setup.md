@@ -691,7 +691,7 @@ config.json**. `big` planning can take several minutes (deep reasoning) plus GPU
 `POST /plan-build/implement_spec` → code from `coder-next` in ~60s (incl. GPU swap).
 
 To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
-Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://192.168.4.57:8000/time`; the IP
+Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://<host-ip>:8000/time`; the IP
 **must match the address your browser uses to reach Open WebUI** — LAN vs Tailscale),
 Auth = Bearer `MCPO_API_KEY`. Gotchas: the Integrations row may not show a tool **count**
 even when working (cosmetic); external tool servers do **not** appear in the `+` menu —
@@ -829,7 +829,7 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   Function** — `docker/open-webui/functions/comfyui_inline_images.py` — whose `outlet` (a) rewrites
   any ComfyUI `/view?...filename=…` link or bare URL into `![](…)`, and (b) normalizes
   placeholder/loopback hosts (`host`, `localhost`, `127.0.0.1`, `host.docker.internal`) to the real
-  browser-reachable address (Valve `comfyui_base_url`, default `http://192.168.4.57:8188`).
+  browser-reachable address (Valve `comfyui_base_url`, default `http://<host-ip>:8188`).
   Model-independent. Install once: OWUI **Admin Panel → Functions → `+` (New Function)** → paste
   the file contents → Save → toggle it **on** (global). If your browser reaches the box via
   Tailscale, set the `comfyui_base_url` Valve accordingly.
@@ -855,7 +855,7 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | SearXNG | 8888 | none |
 | llama-swap mgmt | 127.0.0.1:9090 | localhost-only (safe) |
 
-The box sits behind home-router NAT (`eno1 = 192.168.4.57/22`), so nothing is
+The box sits behind home-router NAT (`eno1 = <host-ip>/22`), so nothing is
 WAN-reachable unless the router forwards a port. `ufw` (installed) adds
 defense-in-depth: allow only LAN + Tailscale, deny everything else. Run with sudo
 (agents cannot):
@@ -865,7 +865,7 @@ defense-in-depth: allow only LAN + Tailscale, deny everything else. Run with sud
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow in on tailscale0            # trust the Tailscale mesh
-sudo ufw allow from 192.168.4.0/22         # trust the local LAN (all ports)
+sudo ufw allow from <lan-subnet>            # trust the local LAN (all ports)
 # (LAN rule already covers SSH; if you tighten it, keep: sudo ufw allow 22/tcp)
 sudo ufw enable
 sudo ufw status verbose
