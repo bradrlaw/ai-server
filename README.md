@@ -91,6 +91,8 @@ separately by their respective creators and are not redistributed here.)
 | NVIDIA Container Toolkit | https://github.com/NVIDIA/nvidia-container-toolkit | GPU access for the containerized app tier. |
 | Tailscale | https://github.com/tailscale/tailscale | Private mesh network for remote access to the headless box. |
 | GitHub Copilot CLI | https://github.com/github/copilot-cli | AI pair-programmer used throughout to build, debug, and document this server. |
+| iTerm2 | https://github.com/gnachman/iTerm2 | macOS terminal emulator used to drive SSH sessions and the Copilot CLI against the server. |
+| P100 FAST_FP16 carveout (apollo-mg / llama-cpp-turboquant PR #212) | [docs/adr/0014](docs/adr/0014-p100-fast-fp16-carveout.md) | 3-line llama.cpp patch disabling `FAST_FP16` on the P100 (sm_60) to stop fp16 accuracy drift; sourced from apollo-mg's write-up (llama-cpp-turboquant PR #212). |
 
 ## License
 
