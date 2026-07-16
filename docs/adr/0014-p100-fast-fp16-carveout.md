@@ -17,6 +17,12 @@ An external write-up (gist by apollo-mg; merged in llama-cpp-turboquant PR #212)
 measured it against an fp32-arithmetic truth base (Qwen3.6-27B Q6_K, wikitext-2,
 2048 ctx, 32 chunks, KLD over full logit distributions):
 
+Sources:
+- apollo-mg gist: https://gist.github.com/apollo-mg/9218d50a209d70a85f033bf182657818
+- llama-cpp-turboquant PR #212: https://github.com/TheTom/llama-cpp-turboquant/pull/212
+- TurboQuant+ tqp-v0.3.0 release: https://github.com/TheTom/llama-cpp-turboquant/releases/tag/tqp-v0.3.0
+
+
 | build                     | median KLD vs fp32 truth | top-token agreement |
 | ------------------------- | ------------------------ | ------------------- |
 | stock llama.cpp on P100   | 0.002298                 | 96.53%              |
