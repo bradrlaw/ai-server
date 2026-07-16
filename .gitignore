@@ -26,8 +26,16 @@ __pycache__/
 *_token
 *.secret
 
-# --- local-only ComfyUI MCP workflows (kept on the box, never tracked) ---
-/config/comfyui-mcp/workflows/krea2_turbo.json
-/config/comfyui-mcp/workflows/krea2_turbo.meta.json
-/config/comfyui-mcp/workflows/krea2_turbo_bf16.json
-/config/comfyui-mcp/workflows/krea2_turbo_bf16.meta.json
+# --- ComfyUI MCP workflows: opt-in tracking only (per @bradrlaw) ---
+# New workflow files may contain private prompts/paths, so ignore this directory's
+# contents by default and re-include ONLY the workflows explicitly meant to be
+# shared. To publish a new workflow, add a matching '!' line below.
+/config/comfyui-mcp/workflows/*
+!/config/comfyui-mcp/workflows/flux1_krea.json
+!/config/comfyui-mcp/workflows/flux1_krea.meta.json
+!/config/comfyui-mcp/workflows/flux2_klein.json
+!/config/comfyui-mcp/workflows/flux2_klein.meta.json
+!/config/comfyui-mcp/workflows/generate_image.json
+!/config/comfyui-mcp/workflows/generate_song.json
+!/config/comfyui-mcp/workflows/z_image_turbo.json
+!/config/comfyui-mcp/workflows/z_image_turbo.meta.json
