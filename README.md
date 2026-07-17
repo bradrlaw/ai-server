@@ -15,6 +15,7 @@ single OpenAI-compatible API.
 - [Hardware](#hardware)
 - [Build cost](#build-cost)
 - [Power usage](#power-usage)
+- [Retrospective — what I'd do differently](#retrospective--what-id-do-differently)
 - [Layout](#layout)
 - [Notable components & scripts](#notable-components--scripts)
 - [Documentation](#documentation)
@@ -126,6 +127,35 @@ conversion losses. Running costs under sustained inference load will be higher.
 
 > **Load draw:** whole-system wall power and $/month under sustained inference to be
 > added after measurement.
+
+## Retrospective — what I'd do differently
+
+Things I'd change on a second build, learned the hard way:
+
+1. **Use SXM2 V100s with NVLink instead of PCIe cards.** Buy the SXM2 version of the
+   V100 and do the extra work to fit the PCIe-adapter carrier boards that enable NVLink
+   between the two cards. NVLink would give a significant performance boost on larger
+   models split across the pair (the current no-NVLink PCIe PHB link is the bottleneck
+   for tensor-split inference). It also unlocks much cheaper and easier-to-source water
+   cooling: SXM2 waterblocks are $35–45 versus the single PCIe V100 waterblock that
+   exists at $175–300, so the system could run cooler and quieter. If/when I grow total
+   VRAM to 128 GB I may sell the current cards and switch. I'm holding off because there
+   are very few attractive models that need that size — 64 GB already covers most models
+   useful today, and the larger open-weight models easily need 256 GB+ of VRAM to run
+   acceptably.
+
+2. **Better GPU cooling than one 40 mm fan per card.** The current 40 mm high-static-
+   pressure fans aren't optimal running just one per card. I have a dual-40 mm fan mount
+   to test whether two per card cool better — the goal is to raise the power limit
+   slightly while keeping noise down. I also have a blower-style fan and shroud to try
+   alongside the dual-40 mm shroud. The SXM2 cards (point 1) with water cooling would
+   sidestep this problem entirely.
+
+3. **A motherboard with more PCIe lanes and a newer PCIe revision.** The current X99A
+   board is stretched to its limit with only 40 PCIe lanes. Adding a PCIe SSD complicated
+   the lane budget considerably and hurt the already-slow inter-card communication. Next
+   time I'd pick a board with more lanes and a newer PCIe generation — even if these
+   cards can't use PCIe 4.0 speeds, it would be more future-proof.
 
 ## Layout
 
