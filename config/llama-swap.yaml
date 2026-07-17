@@ -146,7 +146,7 @@ models:
       --cache-type-k f16
       --cache-type-v f16
       --split-mode layer
-      --parallel 2               # two 131k slots: main agent + subagent don't evict each other
+      --parallel 2
       ${common}
 
   # --- fast: Gemma-4-12B (QAT UD-Q4_K_XL) on the P100 (idx0) --------------
