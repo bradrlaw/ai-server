@@ -20,26 +20,57 @@ Related ADRs: 0004 (llama.cpp primary), 0005 (GPU split), 0006 (hybrid deploy),
 
 ## 1. Topology
 
-```
-Access:  VS Code+Copilot · Copilot CLI · opencode/pi · chat channels · voice · autonomous agents
-              │                                   │                         │
-        ┌─────┴─────┐                       ┌─────┴─────┐             ┌─────┴─────┐
-     Open WebUI                          OpenClaw Gateway          coding harnesses
-   (browser chat/RAG)                 (multi-channel + voice,      (opencode/pi/OpenHands)
-                                       Node daemon, UI :18789)
-              └───────────────┬───────────────┴─────────────────────────┘
-                        Caddy/Traefik (TLS) ── Tailscale (remote)
-                              │
-                          LiteLLM  ── one OpenAI URL · model routing · virtual keys+budgets · logging→Langfuse
-        ┌─────────────────────┼───────────────────────┬──────────────────────┐
-   llama-swap (native)   P100 aux (native)        ComfyUI (native, burst)   vLLM (optional, native)
-   V100 #1: 27B coding   embeddings · STT ·       image/video on a V100      high-concurrency
-   V100 #2: 35B-A3B      VLM caption · rerank     when coding idle           single pinned model
-   both V100: big TP=2
-                              │
-   Data (containers):   Qdrant · Postgres · object/file store
-   Orchestration:       n8n (workflows) · Prefect (image ETL) · Immich (photo library)
-   Observability:       Langfuse · Prometheus · Grafana · DCGM exporter
+```mermaid
+flowchart TD
+    subgraph Access["Access"]
+        A1["VS Code + Copilot"]
+        A2["Copilot CLI"]
+        A3["opencode / pi"]
+        A4["Chat channels"]
+        A5["Voice"]
+        A6["Autonomous agents"]
+    end
+
+    subgraph Frontends["Frontends"]
+        OWUI["Open WebUI<br/>(browser chat / RAG)"]
+        OC["OpenClaw Gateway<br/>(multi-channel + voice,<br/>Node daemon, UI :18789)"]
+        CH["Coding harnesses<br/>(opencode / pi / OpenHands)"]
+    end
+
+    A1 --> CH
+    A2 --> CH
+    A3 --> CH
+    A6 --> CH
+    A4 --> OC
+    A5 --> OC
+
+    EDGE["Caddy / Traefik (TLS)<br/>· Tailscale (remote)"]
+    OWUI --> EDGE
+    OC --> EDGE
+    CH --> EDGE
+
+    LL["LiteLLM<br/>one OpenAI URL · model routing<br/>· virtual keys + budgets · logging → Langfuse"]
+    EDGE --> LL
+
+    subgraph Serving["GPU serving tier (native)"]
+        LS["llama-swap<br/>V100 #1: 27B coding · V100 #2: 35B-A3B<br/>· both V100: big (TP=2)"]
+        P100["P100 aux<br/>embeddings · STT · VLM caption · rerank"]
+        CF["ComfyUI (burst)<br/>image/video on a V100 when coding idle"]
+        VLLM["vLLM (optional)<br/>high-concurrency single pinned model"]
+    end
+    LL --> LS
+    LL --> P100
+    LL --> CF
+    LL --> VLLM
+
+    subgraph AppTier["App tier (containers)"]
+        DATA["Data: Qdrant · Postgres · object/file store"]
+        ORCH["Orchestration: n8n · Prefect · Immich"]
+        OBS["Observability: Langfuse · Prometheus · Grafana · DCGM"]
+    end
+    LS -.-> DATA
+    LL -.->|logs| OBS
+    ORCH -.-> LL
 ```
 
 ## 2. GPU allocation & VRAM budget
