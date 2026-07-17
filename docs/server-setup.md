@@ -330,6 +330,16 @@ for m in coding chat fast; do
 done
 ```
 
+Unload all router models (frees all VRAM). The `fast` keeper in `server-status` re-warms
+`fast` within ~60 s, so stop that service first if you need the GPUs to stay idle (e.g. to
+measure no-model power draw):
+```bash
+sudo systemctl stop server-status                          # pause the fast keeper
+curl -s -X POST 127.0.0.1:9090/api/models/unload -d '{}'   # unload every model
+CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put -c 15   # e.g. capture idle draw
+sudo systemctl start server-status                          # keeper re-warms fast
+```
+
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
 V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
