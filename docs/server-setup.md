@@ -369,8 +369,11 @@ sudo visudo -cf /etc/sudoers.d/server-status-comfyui        # syntax check
 
 # 2) turn it on in server-status.env (defaults: 02:00–09:00 local):
 echo 'QUIET_HOURS_ENABLED=true' >> scripts/server-status.env  # + optional QUIET_* overrides
+echo 'QUIET_TZ=America/New_York' >> scripts/server-status.env # if the machine clock is UTC
 sudo systemctl restart server-status
 ```
+> **Note:** the window is evaluated in `QUIET_TZ` (or system local time if unset). This box's
+> clock is `Etc/UTC`, so set `QUIET_TZ` to your wall-clock zone or the window will be hours off.
 The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) in
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.

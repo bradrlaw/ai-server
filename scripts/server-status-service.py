@@ -105,6 +105,9 @@ QUIET_HOURS_ENABLED = os.environ.get("QUIET_HOURS_ENABLED", "false").lower() in 
 )
 QUIET_HOURS_START = os.environ.get("QUIET_HOURS_START", "02:00")
 QUIET_HOURS_END = os.environ.get("QUIET_HOURS_END", "09:00")
+# Timezone the window is evaluated in (e.g. America/New_York). Empty = system local
+# time. Set this if the machine's clock runs in UTC but you want a wall-clock window.
+QUIET_TZ = os.environ.get("QUIET_TZ", "").strip()
 QUIET_CHECK_INTERVAL = float(os.environ.get("QUIET_CHECK_INTERVAL", "30"))
 QUIET_ACTIVITY_GRACE = float(os.environ.get("QUIET_ACTIVITY_GRACE", "600"))
 QUIET_UNLOAD_MODELS = os.environ.get("QUIET_UNLOAD_MODELS", "true").lower() in (
@@ -586,6 +589,18 @@ def _parse_hhmm(value: str) -> dt.time:
     return dt.time(int(hh), int(mm or 0))
 
 
+def _quiet_now() -> dt.time:
+    """Current wall-clock time in QUIET_TZ (falls back to system local time)."""
+    if QUIET_TZ:
+        try:
+            from zoneinfo import ZoneInfo
+
+            return dt.datetime.now(ZoneInfo(QUIET_TZ)).time()
+        except Exception as exc:  # noqa: BLE001 - bad tz name / missing tzdata
+            print(f"[quiet] invalid QUIET_TZ {QUIET_TZ!r} ({exc}); using system local")
+    return dt.datetime.now().time()
+
+
 def _in_window(now: dt.time, start: dt.time, end: dt.time) -> bool:
     """True if `now` is within [start, end). Handles windows that wrap midnight."""
     if start == end:
@@ -678,8 +693,8 @@ def _quiet_hours_loop():
     start = _parse_hhmm(QUIET_HOURS_START)
     end = _parse_hhmm(QUIET_HOURS_END)
     print(
-        f"[quiet] deep-idle window {QUIET_HOURS_START}–{QUIET_HOURS_END} local; "
-        f"activity grace {QUIET_ACTIVITY_GRACE:.0f}s"
+        f"[quiet] deep-idle window {QUIET_HOURS_START}–{QUIET_HOURS_END} "
+        f"({QUIET_TZ or 'system local'}); activity grace {QUIET_ACTIVITY_GRACE:.0f}s"
     )
     # phase: "active" (outside window) | "idle" (in window, deep idle)
     #        | "woken" (in window, ComfyUI up because a client is active)
@@ -687,7 +702,7 @@ def _quiet_hours_loop():
     last_activity = 0.0
     while True:
         try:
-            in_window = _in_window(dt.datetime.now().time(), start, end)
+            in_window = _in_window(_quiet_now(), start, end)
             models_loaded = bool(_loaded_models())
             # Real inference (LLM tokens or a ComfyUI render) spikes SM utilization;
             # a loaded-but-idle model sits near 0%%. Use that to time the re-idle so
