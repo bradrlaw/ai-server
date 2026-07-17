@@ -785,7 +785,7 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 | `coding`     | 204800 | yes | 131072 | 32768 | 163840 (~40k spare) |
 | `chat`       | 131072 | yes |  81920 | 24576 | 106496 (~24k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
-| `coder-next` | 262144 | **no** (agentic) | 196608 | 32768 | 229376 (~33k spare) |
+| `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
 | `fast`       | 131072 | **no** |  98304 |  8192 | 106496 (~24k spare) |
 | *(other)*    | — | — | 32768 | 8192 | conservative fallback |
 
@@ -796,6 +796,9 @@ Notes:
 - **`coder-next`** is the strongest agentic BYOK coder here: non-thinking (no wasted
   reasoning tokens), 256k native ctx with cheap KV, ~77 t/s decode — but it splits across
   **both** V100s and **preempts `coding`+`chat`** (like `big`), so it evicts the daily set.
+  It runs `--parallel 2` (so main agent + subagent don't thrash one KV slot), which makes each
+  slot **131072** ctx — hence the 98304+32768 budget fits a single slot. A prompt above ~131k
+  would exceed a slot and error/truncate.
 - Any value exported in the environment overrides the per-model default, e.g.
   `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
 

@@ -29,13 +29,15 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 #     coding     204800  reasoning
 #     chat       131072  reasoning
 #     big        262144  reasoning
-#     coder-next 262144  NON-thinking (agentic, cheap KV, ~77 t/s)
+#     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
 #     fast       131072  NON-thinking
 case "$COPILOT_MODEL" in
   coding)     def_prompt=131072; def_output=32768 ;;
   chat)       def_prompt=81920;  def_output=24576 ;;
   big)        def_prompt=163840; def_output=32768 ;;
-  coder-next) def_prompt=196608; def_output=32768 ;;
+  # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
+  # Keep prompt + output within one slot: 98304 + 32768 = 131072.
+  coder-next) def_prompt=98304;  def_output=32768 ;;
   fast)       def_prompt=98304;  def_output=8192  ;;
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
