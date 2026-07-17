@@ -12,6 +12,9 @@ containers (Open WebUI) and browsers can reach it:
 
 Sources (all read locally on the host):
   - llama-swap   : http://127.0.0.1:9090/running  and  /v1/models
+  - model activity: each loaded model's own llama-server /slots (live prefill/decode
+                    state + prompt size + cache reuse) and /metrics (prompt/decode t/s),
+                    polled on a background thread and cached
   - ComfyUI      : http://127.0.0.1:8188/queue     (open, no auth)
                    http://127.0.0.1:8189/queue     (secure, login-gated -> "locked")
   - GPUs         : `nvidia-smi --query-gpu=... --format=csv`
@@ -33,6 +36,7 @@ Optional background workers:
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import threading
@@ -154,14 +158,130 @@ def _set_power_state(mode: str, detail: str = "") -> None:
     _power_state["detail"] = detail
 
 
-def _get_json(url: str):
+def _get_json(url: str, timeout: float | None = None):
     try:
-        with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as r:
+        with urllib.request.urlopen(url, timeout=timeout or HTTP_TIMEOUT) as r:
             if 200 <= r.status < 300:
                 return json.loads(r.read().decode("utf-8"))
     except Exception:
         pass
     return None
+
+
+def _get_text(url: str, timeout: float | None = None):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout or HTTP_TIMEOUT) as r:
+            if 200 <= r.status < 300:
+                return r.read().decode("utf-8")
+    except Exception:
+        pass
+    return None
+
+
+def _parse_prom_metrics(txt: str) -> dict:
+    """Parse a llama.cpp Prometheus /metrics body into {metric: float}."""
+    out: dict[str, float] = {}
+    if not txt:
+        return out
+    for line in txt.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            try:
+                val = float(parts[1])
+            except ValueError:
+                continue
+            # llama.cpp can emit inf/nan gauges (e.g. before the first request);
+            # those are invalid JSON and would break the page's JSON.parse.
+            if math.isfinite(val):
+                out[parts[0]] = val
+    return out
+
+
+# Activity probes hit the model's own llama-server, whose /slots and /metrics are
+# served on its busy main loop — latency swings from ~0.2s to several seconds while
+# it is actively inferring. So we probe them on a BACKGROUND thread (generous
+# timeout) and cache the result; the status page reads the cache instantly and
+# never blocks on a slow model.
+ACT_TIMEOUT = max(HTTP_TIMEOUT, 4.0)
+ACT_POLL_SECS = float(os.environ.get("STATUS_ACT_POLL_SECS", "2"))
+ACT_STALE_SECS = float(os.environ.get("STATUS_ACT_STALE_SECS", "10"))
+_activity_cache: dict[str, dict] = {}
+_activity_lock = threading.Lock()
+
+
+def collect_model_activity(proxy_url: str) -> dict | None:
+    """Per-model live inference state from the model's own llama-server:
+    active slots (prefill/decode + progress) and prompt/decode throughput."""
+    base = proxy_url.rstrip("/")
+    slots = _get_json(f"{base}/slots", timeout=ACT_TIMEOUT)
+    metrics = _parse_prom_metrics(_get_text(f"{base}/metrics", timeout=ACT_TIMEOUT))
+    active = []
+    if isinstance(slots, list):
+        for s in slots:
+            if not isinstance(s, dict) or not s.get("is_processing"):
+                continue
+            n_prompt = int(s.get("n_prompt_tokens") or 0)
+            cache = int(s.get("n_prompt_tokens_cache") or 0)
+            processed = int(s.get("n_prompt_tokens_processed") or 0)
+            fresh = max(0, n_prompt - cache)
+            # Still working through fresh prompt tokens => prefill; else generating.
+            phase = "prefill" if processed < fresh else "decode"
+            active.append(
+                {
+                    "id": s.get("id"),
+                    "phase": phase,
+                    "n_prompt": n_prompt,
+                    "cache": cache,
+                    "processed": processed,
+                    "fresh": fresh,
+                    "n_ctx": int(s.get("n_ctx") or 0),
+                }
+            )
+    if slots is None and not metrics:
+        return None
+    return {
+        "active": active,
+        "prompt_tps": metrics.get("llamacpp:prompt_tokens_seconds"),
+        "decode_tps": metrics.get("llamacpp:predicted_tokens_seconds"),
+        "processing": int(metrics.get("llamacpp:requests_processing", 0)),
+        "deferred": int(metrics.get("llamacpp:requests_deferred", 0)),
+    }
+
+
+def _cached_activity(proxy: str) -> dict | None:
+    """Latest cached activity for a model proxy, or None if missing/stale."""
+    with _activity_lock:
+        c = _activity_cache.get(proxy)
+    if c and c.get("data") is not None and (time.time() - c["at"]) <= ACT_STALE_SECS:
+        return c["data"]
+    return None
+
+
+def _activity_loop() -> None:
+    """Poll each loaded model's llama-server for live slot/throughput activity and
+    cache it, so the (2s-cached) status page never blocks on a slow model probe."""
+    while True:
+        try:
+            running = _get_json(f"{LLAMASWAP_URL}/running")
+            proxies = set()
+            rows = running.get("running") if isinstance(running, dict) else None
+            for m in rows or []:
+                if isinstance(m, dict) and m.get("proxy"):
+                    proxies.add(m["proxy"])
+            for proxy in proxies:
+                data = collect_model_activity(proxy)
+                with _activity_lock:
+                    _activity_cache[proxy] = {"at": time.time(), "data": data}
+            with _activity_lock:
+                for k in list(_activity_cache):
+                    if k not in proxies and (time.time() - _activity_cache[k]["at"]) > ACT_STALE_SECS:
+                        del _activity_cache[k]
+        except Exception:
+            pass
+        time.sleep(ACT_POLL_SECS)
 
 
 def _http_status(url: str):
@@ -187,7 +307,13 @@ def collect_models() -> dict:
     loaded = []
     for m in rows:
         if isinstance(m, dict):
-            loaded.append({"model": m.get("model", "?"), "state": m.get("state", "?")})
+            entry = {"model": m.get("model", "?"), "state": m.get("state", "?")}
+            proxy = m.get("proxy")
+            if proxy:
+                act = _cached_activity(proxy)
+                if act is not None:
+                    entry["activity"] = act
+            loaded.append(entry)
     catalog = _get_json(f"{LLAMASWAP_URL}/v1/models") or {}
     available = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
     return {"reachable": True, "loaded": loaded, "available": available}
@@ -770,6 +896,25 @@ _HTML = """<!doctype html>
 <script>
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
 function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function fmtK(n){ if(n==null) return '–'; return n>=1000? (n/1000).toFixed(1)+'k' : String(n); }
+function activityHtml(a){
+  if(!a) return '<span class="sub">–</span>';
+  const active = a.active || [];
+  const lines = active.map(s=>{
+    if(s.phase==='prefill'){
+      const pct = s.fresh? Math.round(100*s.processed/s.fresh):0;
+      return `${pill('busy')} prefill <span class="bar"><i class="busy" style="width:${pct}%"></i></span> ${fmtK(s.processed)}/${fmtK(s.fresh)} tok (${pct}%)`;
+    }
+    return `${pill('busy')} decode <span class="sub">ctx ${fmtK(s.n_prompt)} tok</span>`;
+  });
+  const head = lines.length? lines.join('<br>') : pill('idle')+' idle';
+  const sub = [];
+  if(a.prompt_tps) sub.push(`prefill ${Math.round(a.prompt_tps)} t/s`);
+  if(a.decode_tps) sub.push(`decode ${Math.round(a.decode_tps)} t/s`);
+  active.forEach(s=>{ if(s.n_prompt) sub.push(`slot ${s.id}: ${Math.round(100*s.cache/s.n_prompt)}% cached`); });
+  if(a.deferred) sub.push(`${a.deferred} queued`);
+  return head + (sub.length? `<div class="sub" style="margin-top:4px">${sub.join(' · ')}</div>`:'');
+}
 function bar(label, pct, txt){
   const p = (pct!=null)? Math.max(0, Math.min(100, pct)) : 0;
   const cls = p>=90? 'bad' : (p>=70? 'busy' : '');
@@ -787,8 +932,8 @@ async function refresh(){
     else if(!m.loaded.length){ document.getElementById('models').innerHTML = pill('idle') + ` <span class="sub">${m.available} available</span>`; }
     else {
       document.getElementById('models').innerHTML =
-        '<table><tr><th>Model</th><th>State</th></tr>' +
-        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td></tr>`).join('') +
+        '<table><tr><th>Model</th><th>State</th><th>Activity</th></tr>' +
+        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td><td>${activityHtml(x.activity)}</td></tr>`).join('') +
         `</table><div class="sub" style="margin-top:8px">${m.available} available</div>`;
     }
     // gpus
@@ -856,6 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    threading.Thread(target=_activity_loop, daemon=True).start()
     if OWUI_API_KEY:
         threading.Thread(target=_banner_loop, daemon=True).start()
     else:
