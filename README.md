@@ -64,6 +64,10 @@ Capabilities:
   **banner into Open WebUI** — so the blank new-chat screen shows what's currently running
   on the box before you type a word.
 
+  | Open WebUI status banner | Host status page (`:9095`) |
+  |---|---|
+  | ![Live status banner on the Open WebUI new-chat screen](docs/images/owui-status-banner.png) | ![Host-side status dashboard served on port 9095](docs/images/server-status-page.png) |
+
 ## Hardware
 
 - **CPU/RAM:** Intel i7-6950X (MSI X99A), 128 GB RAM, 2 TB NVMe
