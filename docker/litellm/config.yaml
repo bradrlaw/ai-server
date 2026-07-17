@@ -61,6 +61,10 @@ litellm_settings:
   drop_params: true
   # Model loads can take ~30-70s (cold + BF16). Don't time out early.
   request_timeout: 600
+  # Pre-call hook: give content-less assistant messages an empty content so
+  # llama-server doesn't 400 the whole session on one poisoned transcript turn.
+  # (see custom_hooks.py)
+  callbacks: custom_hooks.proxy_handler_instance
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

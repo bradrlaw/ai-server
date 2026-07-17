@@ -15,6 +15,7 @@ services:
       - ./.env
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/custom_hooks.py:/app/custom_hooks.py:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness').status==200 else 1)"]

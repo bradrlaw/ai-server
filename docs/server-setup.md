@@ -742,6 +742,15 @@ Later phases add a reverse proxy + Tailscale-only binding; for now access over t
 network. `drop_params: true` and `request_timeout: 600` accommodate llama-server quirks and
 cold model loads (~30-70s).
 
+**Pre-call sanitizer (`docker/litellm/custom_hooks.py`):** llama.cpp's OpenAI endpoint
+rejects any assistant message with neither a `content` key nor `tool_calls`
+(`400 - Assistant message must contain either 'content' or 'tool_calls'!`). Agentic clients
+(e.g. Copilot CLI BYOK) can persist a content-less assistant turn into their transcript when a
+model errors mid-session — every later request then replays it and 400s the whole session. The
+`callbacks: custom_hooks.proxy_handler_instance` hook gives such messages an empty-string
+`content` (accepted by llama-server), so one bad turn no longer bricks a session and no context
+is lost. Mounted read-only into the container; restart `litellm` after editing.
+
 ## GitHub Copilot CLI via BYOK (2026-07-02)
 
 Copilot CLI supports OpenAI-compatible endpoints (BYOK). It points at the LiteLLM gateway.
