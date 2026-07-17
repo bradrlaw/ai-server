@@ -31,6 +31,11 @@ users (and their editors, chat apps, and agents) can point at instead of a paid 
 API. The design goal is to squeeze modern models onto older, cheap datacenter GPUs
 (Pascal/Volta, no NVLink) and keep them running cool, reliably, and unattended.
 
+> **Before you build one of these, read the whole guide first** — or at the very least the
+> [Retrospective — what I'd do differently](#retrospective--what-id-do-differently). This
+> build hit real hardware traps (GPU ordering, thermals, PCIe-lane limits, a bare-partition
+> disk layout) that are much cheaper to avoid up front than to fix after the fact.
+
 Capabilities:
 
 - **Local LLM serving with automatic model swapping.** [llama.cpp](https://github.com/ggml-org/llama.cpp)
