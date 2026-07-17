@@ -178,6 +178,30 @@ class Filter:
             if g:
                 lines.append("**GPUs:** " + "  ·  ".join(g))
 
+        host = data.get("host")
+        if isinstance(host, dict):
+            hp = []
+            if host.get("cpu_pct") is not None:
+                cpu = f"CPU {host['cpu_pct']:.0f}%"
+                load = host.get("load")
+                if isinstance(load, list) and load:
+                    cpu += f" (load {' / '.join(str(x) for x in load)})"
+                hp.append(cpu)
+            mem = host.get("mem")
+            if isinstance(mem, dict) and mem.get("total_mb"):
+                hp.append(
+                    f"RAM {mem.get('used_mb', 0) / 1024:.1f}/"
+                    f"{mem['total_mb'] / 1024:.1f}GB ({mem.get('used_pct', '?')}%)"
+                )
+            for dk in host.get("disk") or []:
+                if isinstance(dk, dict) and dk.get("total_gb"):
+                    hp.append(
+                        f"disk {dk.get('path', '?')} {dk.get('used_gb', 0):.0f}/"
+                        f"{dk['total_gb']:.0f}GB ({dk.get('used_pct', '?')}%)"
+                    )
+            if hp:
+                lines.append("**Host:** " + "  ·  ".join(hp))
+
         comfyui = data.get("comfyui")
         if isinstance(comfyui, list) and comfyui:
             parts = []

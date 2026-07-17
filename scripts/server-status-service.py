@@ -20,6 +20,7 @@ Bind address/port and upstreams are configurable via environment variables:
   STATUS_HOST (default 0.0.0.0)      STATUS_PORT (default 9095)
   LLAMASWAP_URL (default http://127.0.0.1:9090)
   COMFYUI_URLS  (default "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189")
+  STATUS_DISK_PATHS (default "/", comma-separated filesystems to report)
   STATUS_CACHE_SECS (default 2)
 
 Optional background workers:
@@ -43,6 +44,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STATUS_PORT", "9095"))
 LLAMASWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip("/")
+# Comma-separated filesystem paths to report disk usage for (one row each).
+STATUS_DISK_PATHS = [
+    p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
+]
 COMFYUI_URLS = os.environ.get(
     "COMFYUI_URLS",
     "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189",
@@ -213,7 +218,90 @@ def collect_gpus() -> list:
     return gpus
 
 
-def _summary(models: dict, comfyui: list, gpus: list) -> str:
+_cpu_prev = {"total": None, "idle": None}
+
+
+def _cpu_percent():
+    """Instantaneous CPU %% computed from /proc/stat deltas across calls."""
+    try:
+        with open("/proc/stat") as f:
+            for line in f:
+                if line.startswith("cpu "):
+                    vals = [int(x) for x in line.split()[1:]]
+                    break
+            else:
+                return None
+    except Exception:
+        return None
+    idle = vals[3] + (vals[4] if len(vals) > 4 else 0)  # idle + iowait
+    total = sum(vals)
+    prev_total, prev_idle = _cpu_prev["total"], _cpu_prev["idle"]
+    _cpu_prev["total"], _cpu_prev["idle"] = total, idle
+    if prev_total is None:
+        return None
+    dt = total - prev_total
+    if dt <= 0:
+        return None
+    return round(100.0 * (dt - (idle - prev_idle)) / dt, 1)
+
+
+def _mem_info():
+    info = {}
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                info[key] = int(rest.strip().split()[0])  # kB
+    except Exception:
+        return None
+    total = info.get("MemTotal")
+    avail = info.get("MemAvailable")
+    if total is None or avail is None:
+        return None
+    used = total - avail
+    return {
+        "total_mb": round(total / 1024),
+        "used_mb": round(used / 1024),
+        "used_pct": round(100.0 * used / total, 1) if total else None,
+    }
+
+
+def _disk_info(paths):
+    out = []
+    for p in paths:
+        try:
+            st = os.statvfs(p)
+        except Exception:
+            continue
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        used = total - free
+        out.append(
+            {
+                "path": p,
+                "total_gb": round(total / 1e9, 1),
+                "used_gb": round(used / 1e9, 1),
+                "used_pct": round(100.0 * used / total, 1) if total else None,
+            }
+        )
+    return out
+
+
+def collect_host() -> dict:
+    try:
+        load = [round(x, 2) for x in os.getloadavg()]
+    except Exception:
+        load = None
+    return {
+        "cpu_pct": _cpu_percent(),
+        "cpus": os.cpu_count(),
+        "load": load,
+        "mem": _mem_info(),
+        "disk": _disk_info(STATUS_DISK_PATHS),
+    }
+
+
+def _summary(models: dict, comfyui: list, gpus: list, host: dict | None = None) -> str:
     if not models.get("reachable"):
         mtxt = "llama-swap unreachable"
     elif models["loaded"]:
@@ -226,6 +314,18 @@ def _summary(models: dict, comfyui: list, gpus: list) -> str:
         parts.append("ComfyUI busy: " + ", ".join(busy))
     if gpus:
         parts.append(f"{len(gpus)} GPUs")
+    if host:
+        hp = []
+        if host.get("cpu_pct") is not None:
+            hp.append(f"CPU {host['cpu_pct']:.0f}%")
+        mem = host.get("mem")
+        if mem and mem.get("used_pct") is not None:
+            hp.append(f"RAM {mem['used_pct']:.0f}%")
+        disk = host.get("disk") or []
+        if disk and disk[0].get("used_pct") is not None:
+            hp.append(f"disk {disk[0]['used_pct']:.0f}%")
+        if hp:
+            parts.append(" ".join(hp))
     return "  ·  ".join(parts)
 
 
@@ -233,12 +333,14 @@ def build_status() -> dict:
     models = collect_models()
     comfyui = collect_comfyui()
     gpus = collect_gpus()
+    host = collect_host()
     return {
         "timestamp": int(time.time()),
-        "summary": _summary(models, comfyui, gpus),
+        "summary": _summary(models, comfyui, gpus, host),
         "models": models,
         "comfyui": comfyui,
         "gpus": gpus,
+        "host": host,
     }
 
 
@@ -288,6 +390,19 @@ def banner_text(status: dict) -> str:
     busy = [c["label"] for c in comfy if c.get("state") == "busy"]
     if busy:
         parts.append("ComfyUI busy: " + ", ".join(busy))
+
+    host = status.get("host") or {}
+    hp = []
+    if host.get("cpu_pct") is not None:
+        hp.append(f"CPU {host['cpu_pct']:.0f}%")
+    mem = host.get("mem")
+    if mem and mem.get("used_pct") is not None:
+        hp.append(f"RAM {mem['used_mb'] / 1024:.0f}/{mem['total_mb'] / 1024:.0f}GB")
+    disk = host.get("disk") or []
+    if disk and disk[0].get("used_pct") is not None:
+        hp.append(f"disk {disk[0]['used_pct']:.0f}%")
+    if hp:
+        parts.append(" ".join(hp))
 
     return "🖥️  " + "  |  ".join(parts)
 
@@ -424,17 +539,27 @@ _HTML = """<!doctype html>
   .bad  { background:#2a1616; color:#e07f7f; }
   .bar { background:#202634; border-radius:4px; height:8px; overflow:hidden; width:120px; display:inline-block; vertical-align:middle; }
   .bar > i { display:block; height:100%; background:#4b8ce0; }
+  .bar > i.busy { background:#e6c04b; }
+  .bar > i.bad { background:#e07f7f; }
 </style></head>
 <body>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
   <section><h2>Models (llama-swap)</h2><div id="models">…</div></section>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
+  <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
 </main>
 <script>
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
 function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function bar(label, pct, txt){
+  const p = (pct!=null)? Math.max(0, Math.min(100, pct)) : 0;
+  const cls = p>=90? 'bad' : (p>=70? 'busy' : '');
+  return `<tr><td>${label}</td>`+
+    `<td><span class="bar"><i class="${cls}" style="width:${p}%"></i></span> ${pct!=null?pct+'%':'–'}</td>`+
+    `<td class="sub">${txt||''}</td></tr>`;
+}
 async function refresh(){
   try{
     const r = await fetch('status.json', {cache:'no-store'}); const d = await r.json();
@@ -461,6 +586,20 @@ async function refresh(){
         `<td>${g.temp!=null?g.temp+'°C':'–'}</td></tr>`;
       }).join('') + '</table>'
       : pill('unavailable');
+    // host (cpu/ram/disk)
+    const h = d.host || {};
+    if(h && (h.cpu_pct!=null || h.mem || (h.disk&&h.disk.length))){
+      const rows = [];
+      const cpuTxt = (h.cpu_pct!=null? h.cpu_pct+'%':'–') +
+        (h.load? ` <span class="sub">load ${h.load.join(' / ')} · ${h.cpus} cores</span>`:'');
+      rows.push(bar('CPU', h.cpu_pct, cpuTxt));
+      if(h.mem){ rows.push(bar('RAM', h.mem.used_pct,
+        `${(h.mem.used_mb/1024).toFixed(1)} / ${(h.mem.total_mb/1024).toFixed(1)} GB`)); }
+      (h.disk||[]).forEach(dk=>{ rows.push(bar('Disk '+esc(dk.path), dk.used_pct,
+        `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`)); });
+      document.getElementById('host').innerHTML =
+        '<table><tr><th>Resource</th><th>Usage</th><th></th></tr>'+rows.join('')+'</table>';
+    } else { document.getElementById('host').innerHTML = pill('unavailable'); }
     // comfyui
     document.getElementById('comfyui').innerHTML = d.comfyui.length ?
       d.comfyui.map(c=>`<div style="margin:4px 0">${esc(c.label)}: ${pill(c.state)}` +
