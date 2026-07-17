@@ -152,6 +152,31 @@ conversion losses. Running costs under sustained inference load will be higher.
 > **Load draw:** whole-system wall power and $/month under sustained inference to be
 > added after measurement.
 
+### Why not full sleep / hibernate / Wake-on-LAN?
+
+A deeper power-down (suspend-to-RAM, hibernate, or powering off with Wake-on-LAN) was
+considered and **deliberately not pursued** — it trades a lot of reliability for a small
+saving on this hardware:
+
+- **Wake-on-LAN isn't "connect and wake."** WoL fires only on a **magic packet**, not on a
+  normal SSH/HTTP/Tailscale connection, and it doesn't traverse Tailscale/the internet (it's
+  an L2 broadcast). Clients would get connection-refused until some always-on LAN helper sent
+  the packet — so it can't be transparent.
+- **GPU resume is the real hazard.** Keeping models across suspend needs the NVIDIA driver's
+  `PreserveVideoMemoryAllocations=1`, which copies **all in-use VRAM (~76 GB) into system RAM**
+  on every suspend over PCIe gen 3 — slow, RAM-tight, and unproven on these older Teslas, where
+  resume can hang and require a hard reboot. Not acceptable for a headless always-available box.
+- **Hibernate needs a huge swap.** Swap is 8 GB vs 125 GB RAM; hibernate requires swap ≥ used
+  RAM, so it would fail without a 128 GB+ swap file and slow RAM→disk dumps.
+- **Modest payoff.** Suspend might save ~110 W over deep idle during the ~7 h window
+  (~$30/yr) — real, but small next to the added fragility (resume hangs, WoL misfires,
+  connection-refused UX).
+
+The quiet-hours deep-idle window above captures most of the practical saving (cards fall to
+~73 W, everything stays responsive and wakes instantly on the actual request) with none of the
+suspend/WoL fragility. If ever revisited, suspend must only be tested from the physical console
+or via `rtcwake` with a timed auto-wake — never over SSH, which the suspend would freeze.
+
 ## Retrospective — what I'd do differently
 
 Things I'd change on a second build, learned the hard way:
