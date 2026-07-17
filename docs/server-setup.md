@@ -213,6 +213,80 @@ llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (server/cli/bench/embedding)
 docker:  not installed yet (for NVIDIA Container Toolkit step)
 ```
 
+## Operator cheat-sheet — common commands
+
+Everyday commands the human operator runs from the box (SSH). Native services are
+systemd units and need `sudo`; the Docker app tier runs as `brad` (in the `docker`
+group) so it needs **no** sudo. Automation/agents cannot sudo — these are for you.
+
+### Restart native services (systemd)
+```bash
+sudo systemctl restart llama-swap                    # model router (YAML auto-reloads; see note)
+sudo systemctl restart gpu-fan-control               # fan curves + power caps
+sudo systemctl restart comfyui-open comfyui-secure   # both ComfyUI instances
+sudo systemctl restart comfyui-mcp                   # ComfyUI image/video MCP tools
+sudo systemctl restart server-status                 # status service / OWUI banner / fast keeper
+
+systemctl status llama-swap --no-pager               # is it up?
+journalctl -u llama-swap -e --no-pager               # recent logs
+journalctl -u gpu-fan-control -f                     # follow live
+```
+
+### Restart the app tier (Docker Compose)
+```bash
+cd /srv/ai/docker
+docker compose ps                                    # what's running
+docker compose restart litellm                       # after editing litellm/config.yaml
+docker compose restart open-webui
+docker compose restart mcpo                          # after editing mcpo/config.json
+docker compose up -d                                 # apply compose changes / start all
+docker compose logs -f litellm                       # follow logs
+```
+
+### Common edits (what to change → how to apply)
+| Change | Edit | Apply |
+|--------|------|-------|
+| Add/change a served model | `config/llama-swap.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | llama-swap auto-reloads the YAML (`-watch-config`); `docker compose restart litellm` |
+| Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.yaml` | `sudo systemctl restart llama-swap` (preload only runs at process start) |
+| GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
+| New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
+| Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
+| Enable the OWUI status banner | `cp scripts/server-status.env.example scripts/server-status.env`, set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
+
+### Check state / warm the daily models
+```bash
+curl -s 127.0.0.1:9090/running | python3 -m json.tool     # loaded models
+CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi                    # GPU util/VRAM/temp
+curl -s 127.0.0.1:9095/status.json | python3 -m json.tool  # aggregated host+GPU+model status
+
+# Warm the daily set after a restart (fast preloads itself; coding+chat load on first hit):
+for m in coding chat fast; do
+  curl -s 127.0.0.1:9090/v1/chat/completions -H 'content-type: application/json' \
+    -d "{\"model\":\"$m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" >/dev/null
+done
+```
+
+### Reboot into Windows (UEFI dual-boot)
+This box is UEFI dual-boot: `Boot0000` = **Windows Boot Manager**, `Boot0004` =
+**Ubuntu** (the default). Boot **once** into Windows, then it returns to Ubuntu on the
+next restart automatically — `BootNext` is consumed after a single boot, so there is
+nothing to undo:
+```bash
+efibootmgr | grep -i windows        # confirm the Windows entry number (Boot0000 here)
+sudo efibootmgr --bootnext 0000     # one-shot: applies to the NEXT boot only
+sudo systemctl reboot
+```
+To change the **permanent** boot order instead (e.g. Ubuntu first, Windows second):
+```bash
+sudo efibootmgr -o 0004,0000
+```
+
+### Reboot / shutdown the machine
+```bash
+sudo systemctl reboot
+sudo systemctl poweroff
+```
+
 ## llama.cpp usage notes (learned during bring-up)
 - **Build:** `scripts/build-llama.sh` — clean rebuild, arch `60;70`, curl+ccache on.
 - **GPU selection:** set `CUDA_DEVICE_ORDER=PCI_BUS_ID` so `CUDA_VISIBLE_DEVICES`

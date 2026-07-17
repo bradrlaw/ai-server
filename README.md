@@ -148,7 +148,8 @@ Things others running older multi-GPU boxes may find reusable:
 ## Documentation
 
 - **[docs/server-setup.md](docs/server-setup.md)** — central runbook: hardware,
-  CUDA/driver, llama.cpp build, benchmarks, fan/power control, GPU topology.
+  CUDA/driver, llama.cpp build, benchmarks, fan/power control, GPU topology. Includes
+  an **operator cheat-sheet** (restart services, common edits, reboot into Windows).
 - **[docs/architecture.md](docs/architecture.md)** — serving architecture: topology,
   VRAM budget, model→backend routing, component matrix, phased rollout.
 - **[docs/adr/](docs/adr/README.md)** — Architecture Decision Records (the *why*
