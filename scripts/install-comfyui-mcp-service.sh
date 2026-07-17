@@ -6,7 +6,8 @@
 # mcpo proxies it to Open WebUI + agents (docker/mcpo/config.json).
 #
 # Prereqs:
-#   - upstream clone at /srv/ai/src/comfyui-mcp-server (git clone, kept pristine)
+#   - upstream clone at /srv/ai/src/comfyui-mcp-server (git clone at e0101b2, then
+#     `git am /srv/ai/scripts/patches/comfyui-mcp-server-local.patch` for the local fixes)
 #   - venv at /srv/ai/venvs/comfyui-mcp with requirements.txt + mcp[cli] installed
 #   - style workflows in /srv/ai/config/comfyui-mcp/workflows/
 #

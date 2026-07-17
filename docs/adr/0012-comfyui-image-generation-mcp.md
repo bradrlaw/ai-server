@@ -23,8 +23,11 @@ Adopt the community **[joenorton/comfyui-mcp-server](https://github.com/joenorto
 (Python, FastMCP) as an image/media MCP tool, integrated as follows:
 
 - **Vendored clone** at `/srv/ai/src/comfyui-mcp-server` (gitignored) so it can be updated
-  with `git pull`. Kept **pristine** except one local commit (a genuine bug fix — see
-  Consequences) that is a candidate to upstream.
+  with `git pull`. Kept **pristine** except a few local commits (genuine bug/UX fixes — see
+  Consequences), candidates to upstream. Because the clone is gitignored, those commits are
+  exported to **`scripts/patches/comfyui-mcp-server-local.patch`** (a `git format-patch` mbox
+  over upstream `e0101b2`) so a re-clone is reproducible: `git clone … && git checkout e0101b2
+  && git am /srv/ai/scripts/patches/comfyui-mcp-server-local.patch`.
 - **Native systemd service** `comfyui-mcp.service` (CPU-only bridge, venv
   `/srv/ai/venvs/comfyui-mcp`), streamable-http on `0.0.0.0:9000`, talking to native
   ComfyUI at `127.0.0.1:8188`. A small tracked launcher
@@ -51,12 +54,14 @@ First style shipped: **Z-Image Turbo** (`z_image_turbo`), 4-step Lumina2/AuraFlo
 - Positive: styles are versioned in-repo; upstream stays updatable via `git pull`.
 - Negative / trade-offs: a community dependency (audited: deps = requests/mcp/Pillow, no
   exec/subprocess/external hosts; pinned at upstream `e0101b2`). Auth-less on the LAN like
-  ComfyUI. One local patch means `git pull` may need `--rebase`.
-- Local patches: (1) upstream `_load_workflows` did not skip `.meta.json` sidecars (unlike
-  `get_workflow_catalog`), crashing startup when a sidecar exists; (2) mcpo serializes MCP
-  `ImageContent` to an inert data-URI string OWUI won't render, so responses now carry a
-  browser-reachable `markdown` image link (env `COMFY_MCP_RETURN_MARKDOWN` / `COMFY_MCP_PUBLIC_URL`).
-  Both fixed locally in the clone — candidate PRs upstream.
+  ComfyUI. The local commits mean `git pull` may need `--rebase`.
+- Local patches (exported to `scripts/patches/comfyui-mcp-server-local.patch`): (1) upstream
+  `_load_workflows` did not skip `.meta.json` sidecars (unlike `get_workflow_catalog`),
+  crashing startup when a sidecar exists; (2) mcpo serializes MCP `ImageContent` to an inert
+  data-URI string OWUI won't render, so responses now carry a browser-reachable `markdown`
+  image link (env `COMFY_MCP_RETURN_MARKDOWN` / `COMFY_MCP_PUBLIC_URL`), plus tool-description
+  tweaks so models emit the exact reachable URL instead of a placeholder host.
+  All fixed locally in the clone — candidate PRs upstream.
 - Follow-ups: add more styles (Flux, SDXL, LoRA stacks) as workflow files; consider a thin
   OWUI Pipe later if native-picker UX is wanted. Inline display uses the `markdown` field
   (`![id](http://<server-LAN-ip>:8188/view?filename=…)`) which the model echoes; the LAN/Tailscale

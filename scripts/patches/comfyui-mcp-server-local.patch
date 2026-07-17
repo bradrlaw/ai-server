@@ -1,0 +1,214 @@
+From 4a708182bf7e65f6d2965caae48717fa9e95bded Mon Sep 17 00:00:00 2001
+From: brad <brad@localhost>
+Date: Sun, 5 Jul 2026 03:14:04 +0000
+Subject: [PATCH 1/4] fix(workflow_manager): skip .meta.json sidecars in
+ _load_workflows
+
+_load_workflows scanned *.json without excluding .meta.json sidecars
+(unlike get_workflow_catalog, which already skips them). A metadata
+sidecar's string values (e.g. "name") then hit node.get() in
+_extract_parameters -> AttributeError, crashing server startup.
+
+Add the same .endswith('.meta.json') guard for parity. Local patch on
+top of upstream e0101b2 (candidate to upstream as a PR).
+---
+ managers/workflow_manager.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/managers/workflow_manager.py b/managers/workflow_manager.py
+index ba195e5..f572484 100644
+--- a/managers/workflow_manager.py
++++ b/managers/workflow_manager.py
+@@ -289,6 +289,10 @@ class WorkflowManager:
+             return definitions
+ 
+         for workflow_path in sorted(self.workflows_dir.glob("*.json")):
++            # Skip metadata sidecars (parity with get_workflow_catalog); a
++            # ".meta.json" is not a workflow and would crash _extract_parameters.
++            if workflow_path.name.endswith(".meta.json"):
++                continue
+             try:
+                 with open(workflow_path, "r", encoding="utf-8") as handle:
+                     workflow = json.load(handle)
+-- 
+2.43.0
+
+
+From 148e3d989605950ecd83851a84624f3975cf1642 Mon Sep 17 00:00:00 2001
+From: brad <brad@localhost>
+Date: Sun, 5 Jul 2026 03:55:59 +0000
+Subject: [PATCH 2/4] Return browser-reachable markdown image links for
+ mcpo/OWUI
+
+mcpo serializes MCP ImageContent (FastMCPImage) to an inert data-URI string that
+Open WebUI feeds to the model as text and never renders. Add a ready-to-render
+'markdown' field to generation responses (built from the display asset_url), make
+view_image return that markdown when COMFY_MCP_RETURN_MARKDOWN is set, and nudge
+the model via the auto-registered workflow tool description to echo it.
+---
+ managers/workflow_manager.py |  6 +++++-
+ tools/asset.py               | 18 +++++++++++++++++-
+ tools/helpers.py             | 10 ++++++++++
+ 3 files changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/managers/workflow_manager.py b/managers/workflow_manager.py
+index f572484..e5559f3 100644
+--- a/managers/workflow_manager.py
++++ b/managers/workflow_manager.py
+@@ -451,7 +451,11 @@ class WorkflowManager:
+     def _derive_description(self, stem: str):
+         readable = stem.replace("_", " ").replace("-", " ").strip()
+         readable = readable if readable else stem
+-        return f"Execute the '{readable}' ComfyUI workflow."
++        return (
++            f"Execute the '{readable}' ComfyUI workflow. "
++            "To display the generated image to the user, output the value of the "
++            "'markdown' field from the result verbatim in your reply."
++        )
+ 
+     def _determine_namespace(self, workflow_id: str) -> str:
+         """Determine namespace based on workflow ID."""
+diff --git a/tools/asset.py b/tools/asset.py
+index bc3561d..f132835 100644
+--- a/tools/asset.py
++++ b/tools/asset.py
+@@ -1,6 +1,7 @@
+ """Asset viewing tools for ComfyUI MCP Server"""
+ 
+ import logging
++import os
+ from typing import Optional
+ 
+ from mcp.server.fastmcp import FastMCP, Image as FastMCPImage
+@@ -79,7 +80,7 @@ def register_asset_tools(
+             return {
+                 "error": f"Mode '{mode}' not supported in scoped version. Use 'thumb' or 'metadata'."
+             }
+-        
++
+         # Validate content type (only images supported for inline viewing)
+         supported_types = ("image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif")
+         if asset_record.mime_type not in supported_types:
+@@ -87,6 +88,21 @@ def register_asset_tools(
+                 "error": f"Asset type '{asset_record.mime_type}' not supported for inline viewing. "
+                          f"Supported types: {', '.join(supported_types)}"
+             }
++
++        # Non-native MCP clients (Open WebUI via mcpo) cannot render an MCP
++        # ImageContent/FastMCPImage — mcpo serializes it to a plain data-URI
++        # string that OWUI feeds to the model as text, so nothing displays. When
++        # COMFY_MCP_RETURN_MARKDOWN is set, return a browser-reachable markdown
++        # image link instead, which the model can echo to show the image inline.
++        if os.getenv("COMFY_MCP_RETURN_MARKDOWN", "").strip().lower() in ("1", "true", "yes", "on"):
++            return {
++                "markdown": f"![{asset_record.workflow_id or 'image'}]({asset_url})",
++                "asset_id": asset_record.asset_id,
++                "asset_url": asset_url,
++                "mime_type": asset_record.mime_type,
++                "width": asset_record.width,
++                "height": asset_record.height,
++            }
+         
+         # Set conservative defaults
+         if max_dim is None:
+diff --git a/tools/helpers.py b/tools/helpers.py
+index 7fab0fb..c124782 100644
+--- a/tools/helpers.py
++++ b/tools/helpers.py
+@@ -1,6 +1,7 @@
+ """Shared helper functions for tool implementations"""
+ 
+ import logging
++import os
+ from typing import Any, Dict, Optional
+ 
+ from asset_processor import encode_preview_for_mcp, fetch_asset_bytes, get_cache_key
+@@ -78,6 +79,15 @@ def register_and_build_response(
+     
+     if tool_name:
+         response_data["tool"] = tool_name
++
++    # Provide a ready-to-render markdown image link so non-native MCP clients
++    # (e.g. Open WebUI via mcpo) can display the result inline. These clients feed
++    # tool JSON back to the model as text and only render markdown the model emits;
++    # they do NOT render MCP ImageContent. The URL must be browser-reachable, so it
++    # is built from the (optionally public) asset_url. See COMFY_MCP_PUBLIC_URL.
++    if asset_url and (asset_record.mime_type or "").startswith("image/"):
++        alt = tool_name or workflow_id or "image"
++        response_data["markdown"] = f"![{alt}]({asset_url})"
+     
+     # Include inline preview if requested
+     if return_inline_preview:
+-- 
+2.43.0
+
+
+From 82bb4180909917baa4a43e680002d312984b2ef0 Mon Sep 17 00:00:00 2001
+From: brad <brad@localhost>
+Date: Sun, 5 Jul 2026 04:05:54 +0000
+Subject: [PATCH 3/4] Strengthen workflow tool description to require the
+ leading '!' for inline images
+
+---
+ managers/workflow_manager.py | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/managers/workflow_manager.py b/managers/workflow_manager.py
+index e5559f3..427995e 100644
+--- a/managers/workflow_manager.py
++++ b/managers/workflow_manager.py
+@@ -453,8 +453,12 @@ class WorkflowManager:
+         readable = readable if readable else stem
+         return (
+             f"Execute the '{readable}' ComfyUI workflow. "
+-            "To display the generated image to the user, output the value of the "
+-            "'markdown' field from the result verbatim in your reply."
++            "IMPORTANT — to show the image to the user, your reply MUST contain the "
++            "result's 'markdown' field copied EXACTLY as-is. It begins with '![' and "
++            "the leading exclamation mark is REQUIRED to embed the image inline. Do NOT "
++            "rewrite it as a plain '[link](...)', do NOT drop the '!', and do NOT replace "
++            "the URL. Example of a correct reply line: "
++            "![image](http://host:8188/view?filename=out.png&type=output)"
+         )
+ 
+     def _determine_namespace(self, workflow_id: str) -> str:
+-- 
+2.43.0
+
+
+From 2a15fde5a672aac0362e35d8e2055df7e05ebfb6 Mon Sep 17 00:00:00 2001
+From: brad <brad@localhost>
+Date: Sun, 5 Jul 2026 04:19:34 +0000
+Subject: [PATCH 4/4] Drop the placeholder-host example from tool description
+
+Models copied the literal 'host' from the example URL, producing unreachable
+http://host:8188/... image links. Instruct to use the exact URL from the 'markdown'
+field instead of showing a fake example URL.
+---
+ managers/workflow_manager.py | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/managers/workflow_manager.py b/managers/workflow_manager.py
+index 427995e..6ebdb17 100644
+--- a/managers/workflow_manager.py
++++ b/managers/workflow_manager.py
+@@ -454,11 +454,11 @@ class WorkflowManager:
+         return (
+             f"Execute the '{readable}' ComfyUI workflow. "
+             "IMPORTANT — to show the image to the user, your reply MUST contain the "
+-            "result's 'markdown' field copied EXACTLY as-is. It begins with '![' and "
+-            "the leading exclamation mark is REQUIRED to embed the image inline. Do NOT "
+-            "rewrite it as a plain '[link](...)', do NOT drop the '!', and do NOT replace "
+-            "the URL. Example of a correct reply line: "
+-            "![image](http://host:8188/view?filename=out.png&type=output)"
++            "result's 'markdown' field copied EXACTLY and VERBATIM. It begins with '![' "
++            "and the leading exclamation mark is REQUIRED to embed the image inline. Do "
++            "NOT rewrite it as a plain '[link](...)', do NOT drop the '!', and do NOT "
++            "change or invent the URL host/filename — use the exact URL from the "
++            "'markdown' field, which is already correct and reachable."
+         )
+ 
+     def _determine_namespace(self, workflow_id: str) -> str:
+-- 
+2.43.0
+

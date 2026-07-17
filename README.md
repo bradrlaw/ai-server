@@ -288,7 +288,7 @@ separately by their respective creators and are not redistributed here.)
 | llama.cpp | https://github.com/ggml-org/llama.cpp | GGUF LLM inference engine; built from source for the P100 (sm_60) and V100 (sm_70) GPUs. |
 | llama-swap | https://github.com/mostlygeek/llama-swap | Model router / on-demand loader in front of llama.cpp; the matrix router picks co-resident model sets per GPU. |
 | ComfyUI | https://github.com/comfyanonymous/ComfyUI | Node-based image/video generation server (run as two native instances: open + password-locked). |
-| comfyui-mcp-server | https://github.com/joenorton/comfyui-mcp-server | Exposes ComfyUI style workflows as MCP tools (vendored, lightly patched). |
+| comfyui-mcp-server | https://github.com/joenorton/comfyui-mcp-server | Exposes ComfyUI style workflows as MCP tools (vendored at upstream `e0101b2`; local fixes in `scripts/patches/comfyui-mcp-server-local.patch`). |
 
 ### Application tier (Docker Compose)
 
