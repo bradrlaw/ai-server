@@ -267,6 +267,26 @@ for m in coding chat fast; do
 done
 ```
 
+### Monitor GPU temps & fan speeds
+The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
+V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
+```bash
+# Easiest: follow the fan daemon's own log — it prints per-GPU temps and the fan
+# duty %% it applies each tick:
+journalctl -u gpu-fan-control -f
+
+# GPU power + core (gtemp) + HBM (mtemp) + clocks, refreshing:
+CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put
+
+# Combined view: GPU temps + actual shroud fan RPM (passive Teslas report no fan to
+# nvidia-smi, so RPM comes from lm-sensors)
+#   shroud map: fan5 = V100 idx1 (bus03), fan4 = V100 idx2 (bus04), fan1 = P100 idx0
+watch -n2 'CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi \
+  --query-gpu=index,name,temperature.gpu,temperature.memory,power.draw --format=csv,noheader; \
+  echo "-- shroud fans (fan5=V100-idx1, fan4=V100-idx2, fan1=P100-idx0) --"; \
+  sensors | grep -E "fan[145]:"'
+```
+
 ### Reboot into Windows (UEFI dual-boot)
 This box is UEFI dual-boot: `Boot0000` = **Windows Boot Manager**, `Boot0004` =
 **Ubuntu** (the default). Boot **once** into Windows, then it returns to Ubuntu on the
