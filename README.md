@@ -97,32 +97,51 @@ longer used.
 Measured with `nvidia-smi dmon`. These are **GPU-only** figures — whole-system draw at
 the wall is higher (CPU, motherboard, NVMe, fans, and PSU conversion losses on top).
 
-### Idle (models loaded, no active inference)
+### Idle — daily models loaded (warm)
 
-| GPU | Card | Power | Core temp | Mem temp |
-|-----|------|-------|-----------|----------|
-| 0 | Tesla P100-16GB | ~24 W | 38 °C | n/a¹ |
-| 1 | Tesla V100-32GB | ~36 W | 42 °C | 41 °C |
-| 2 | Tesla V100-32GB | ~38 W | 44 °C | 43 °C |
-| **Total** | | **~98 W** | | |
+Normal running state: the `fast` model resident on the P100 plus `coding` + `chat` on the
+V100s, no active inference.
+
+| GPU | Card | Power | Core temp | Mem temp | SM clock |
+|-----|------|-------|-----------|----------|----------|
+| 0 | Tesla P100-16GB | ~30 W | 39 °C | n/a¹ | 1189 MHz |
+| 1 | Tesla V100-32GB | ~36 W | 41 °C | 40 °C | 1230 MHz |
+| 2 | Tesla V100-32GB | ~37 W | 40 °C | 39 °C | 1230 MHz |
+| **Total** | | **~103 W** | | | |
+
+### Idle — nothing loaded (true cold idle)
+
+All LLMs unloaded **and both ComfyUI instances stopped**, so no CUDA context is resident on
+any card:
+
+| GPU | Card | Power | Core temp | Mem temp | SM clock |
+|-----|------|-------|-----------|----------|----------|
+| 0 | Tesla P100-16GB | ~24 W | 36 °C | n/a¹ | 405 MHz |
+| 1 | Tesla V100-32GB | ~24 W | 38 °C | 38 °C | 135 MHz |
+| 2 | Tesla V100-32GB | ~25 W | 38 °C | 37 °C | 135 MHz |
+| **Total** | | **~73 W** | | | |
 
 ¹ The P100 does not report an HBM memory-junction temperature.
 
-The V100s idle at their memory clock (877 MHz) while the P100 clocks down to 405 MHz
-core. Power caps applied at boot by the fan-control daemon keep the cards within thermal
-limits (P100 200 W, V100 175 W each).
+**Why the ~30 W gap?** These datacenter Teslas won't deep-idle while *any* CUDA context is
+resident. Whenever a model — LLM **or** a ComfyUI instance — is loaded, the V100 SM clock
+stays pinned at 1230 MHz (its memory clock sits at 877 MHz regardless); with everything
+unloaded the SM clock falls to 135 MHz and draw drops accordingly. Notably, keeping the two
+ComfyUI instances warm alone (LLMs unloaded) is enough to hold both V100s at ~36–37 W — the
+LLMs add only a few watts on top. Power caps applied at boot by the fan-control daemon cap
+the *ceiling* (P100 200 W, V100 175 W each), not this idle floor.
 
 ### Whole-system idle (at the wall)
 
 | Metric | Value |
 |--------|-------|
-| Whole-system draw (models loaded, idle) | **170 W** |
+| Whole-system draw (daily models loaded, idle) | **170 W** |
 | Electricity rate | $0.105 / kWh |
 | Cost per day (24 h) | ~$0.43 |
 | Cost per month (~730 h) | **~$13** (~124 kWh) |
 | Cost per year | ~$156 (~1,489 kWh) |
 
-The extra ~72 W over the ~98 W of GPUs is the CPU, motherboard, NVMe, fans, and PSU
+The extra ~67 W over the ~103 W of GPUs is the CPU, motherboard, NVMe, fans, and PSU
 conversion losses. Running costs under sustained inference load will be higher.
 
 > **Load draw:** whole-system wall power and $/month under sustained inference to be
