@@ -3,7 +3,9 @@
 Configuration, operational scripts, and design docs for a personal headless AI
 server (development + AI workloads for me and my family). The box serves local LLMs,
 speech-to-text, embeddings/RAG, image generation, and long-running agents behind a
-single OpenAI-compatible API.
+single OpenAI-compatible API. The same setup scales naturally to a **small office or
+workgroup** — a handful of people (and their editors, chat apps, and agents) can share
+one private endpoint instead of paying per-seat for a cloud API.
 
 > This repo tracks **docs** and **scripts** only. Large/local artifacts — models,
 > Python venvs, source checkouts, datasets, and per-service data — live on the box
