@@ -1,4 +1,4 @@
-# Headless AI Server
+# Headless AI Server (For home or small business)
 
 Configuration, operational scripts, and design docs for a personal headless AI
 server (development + AI workloads for me and my family). The box serves local LLMs,
