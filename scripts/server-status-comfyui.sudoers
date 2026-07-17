@@ -1,0 +1,18 @@
+# Scoped sudoers rule for the server-status quiet-hours (deep-idle) loop.
+#
+# The server-status service runs as `brad` and, during the quiet-hours window,
+# stops the two ComfyUI systemd units to release their CUDA contexts (so the
+# V100s drop out of P0 to true cold idle), then starts them again on activity /
+# at window end. That requires root, so this grants `brad` passwordless sudo for
+# EXACTLY those start/stop commands and nothing else.
+#
+# Install (run once, as root):
+#   sudo install -m 0440 -o root -g root \
+#     /srv/ai/scripts/server-status-comfyui.sudoers \
+#     /etc/sudoers.d/server-status-comfyui
+#   sudo visudo -cf /etc/sudoers.d/server-status-comfyui   # syntax check
+#
+# If you change QUIET_COMFYUI_UNITS in server-status.env, update the unit lists
+# below to match (order-sensitive — sudo matches the exact argument vector).
+
+brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open comfyui-secure, /usr/bin/systemctl stop comfyui-open comfyui-secure

@@ -39,6 +39,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
@@ -91,6 +92,59 @@ FAST_KEEP_MODEL = os.environ.get("FAST_KEEP_MODEL", "fast")
 FAST_KEEP_ALT = os.environ.get("FAST_KEEP_ALT", "fast-uncensored")
 FAST_KEEPER_INTERVAL = float(os.environ.get("FAST_KEEPER_INTERVAL", "60"))
 FAST_KEEPER_TIMEOUT = float(os.environ.get("FAST_KEEPER_TIMEOUT", "120"))
+
+# --- Quiet hours (deep-idle window) -----------------------------------------
+# During the window the daily models are unloaded and ComfyUI is stopped so the
+# V100s can drop out of P0 to true cold idle. Any client LLM request still wakes
+# llama-swap on demand; when that happens we restart ComfyUI so the box is fully
+# ready, then re-idle after it has been quiet for QUIET_ACTIVITY_GRACE seconds.
+QUIET_HOURS_ENABLED = os.environ.get("QUIET_HOURS_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+QUIET_HOURS_START = os.environ.get("QUIET_HOURS_START", "02:00")
+QUIET_HOURS_END = os.environ.get("QUIET_HOURS_END", "09:00")
+QUIET_CHECK_INTERVAL = float(os.environ.get("QUIET_CHECK_INTERVAL", "30"))
+QUIET_ACTIVITY_GRACE = float(os.environ.get("QUIET_ACTIVITY_GRACE", "600"))
+QUIET_UNLOAD_MODELS = os.environ.get("QUIET_UNLOAD_MODELS", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+QUIET_STOP_COMFYUI = os.environ.get("QUIET_STOP_COMFYUI", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+QUIET_COMFYUI_UNITS = [
+    u.strip()
+    for u in os.environ.get(
+        "QUIET_COMFYUI_UNITS", "comfyui-open,comfyui-secure"
+    ).split(",")
+    if u.strip()
+]
+# Command prefix used to control the ComfyUI units (needs a scoped sudoers rule).
+QUIET_SYSTEMCTL = os.environ.get("QUIET_SYSTEMCTL", "sudo systemctl").split()
+# Models re-warmed when the window ends (fast is handled by the keeper).
+QUIET_WARM_ON_EXIT = [
+    m.strip()
+    for m in os.environ.get("QUIET_WARM_ON_EXIT", "coding,chat").split(",")
+    if m.strip()
+]
+
+# Set while quiet hours has the box in deep idle — the fast keeper honours this
+# and stops re-warming so it doesn't fight the quiet-hours loop.
+_QUIET_SUPPRESS_KEEPER = threading.Event()
+# Reported in status.json so the dashboard/banner can show the current mode.
+_power_state = {"mode": "active", "since": time.time(), "detail": ""}
+
+
+def _set_power_state(mode: str, detail: str = "") -> None:
+    if _power_state["mode"] != mode:
+        _power_state["since"] = time.time()
+    _power_state["mode"] = mode
+    _power_state["detail"] = detail
 
 
 def _get_json(url: str):
@@ -341,6 +395,7 @@ def build_status() -> dict:
         "comfyui": comfyui,
         "gpus": gpus,
         "host": host,
+        "power_mode": _power_state["mode"],
     }
 
 
@@ -508,12 +563,130 @@ def _fast_keeper_loop():
                 }
                 # Only warm when the P100 slot is empty (neither variant loaded),
                 # so we never evict fast-uncensored while it is in use.
-                if FAST_KEEP_MODEL not in loaded and FAST_KEEP_ALT not in loaded:
+                if (
+                    not _QUIET_SUPPRESS_KEEPER.is_set()
+                    and FAST_KEEP_MODEL not in loaded
+                    and FAST_KEEP_ALT not in loaded
+                ):
                     print(f"[keeper] P100 slot empty — warming {FAST_KEEP_MODEL!r}")
                     _warm_model(FAST_KEEP_MODEL)
         except Exception as exc:  # noqa: BLE001 - keeper must never crash the service
             print(f"[keeper] loop error: {exc}")
         time.sleep(FAST_KEEPER_INTERVAL)
+
+
+# --- Quiet hours (deep-idle window) -----------------------------------------
+
+def _parse_hhmm(value: str) -> dt.time:
+    hh, _, mm = value.strip().partition(":")
+    return dt.time(int(hh), int(mm or 0))
+
+
+def _in_window(now: dt.time, start: dt.time, end: dt.time) -> bool:
+    """True if `now` is within [start, end). Handles windows that wrap midnight."""
+    if start == end:
+        return False
+    if start < end:
+        return start <= now < end
+    return now >= start or now < end  # wraps past midnight
+
+
+def _loaded_models() -> set:
+    running = _get_json(f"{LLAMASWAP_URL}/running")
+    if not running:
+        return set()
+    return {
+        m.get("model")
+        for m in (running.get("running") or [])
+        if isinstance(m, dict)
+    }
+
+
+def _unload_all_models() -> None:
+    try:
+        req = urllib.request.Request(
+            f"{LLAMASWAP_URL}/api/models/unload",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            resp.read()
+    except Exception as exc:  # noqa: BLE001 - best effort
+        print(f"[quiet] unload-all failed: {exc}")
+
+
+def _comfyui(action: str) -> None:
+    """Start or stop the ComfyUI units via the configured systemctl prefix."""
+    if not QUIET_STOP_COMFYUI or not QUIET_COMFYUI_UNITS:
+        return
+    cmd = [*QUIET_SYSTEMCTL, action, *QUIET_COMFYUI_UNITS]
+    try:
+        subprocess.run(cmd, check=False, timeout=60)
+    except Exception as exc:  # noqa: BLE001 - best effort
+        print(f"[quiet] '{' '.join(cmd)}' failed: {exc}")
+
+
+def _enter_deep_idle() -> None:
+    print("[quiet] entering deep idle — unloading models + stopping ComfyUI")
+    _QUIET_SUPPRESS_KEEPER.set()
+    if QUIET_UNLOAD_MODELS:
+        _unload_all_models()
+    _comfyui("stop")
+    _set_power_state("deep-idle", "quiet hours")
+
+
+def _wake_for_activity() -> None:
+    print("[quiet] client activity — restarting ComfyUI (staying in window)")
+    _comfyui("start")
+    _set_power_state("woken", "quiet hours (activity)")
+
+
+def _exit_window() -> None:
+    print("[quiet] window ended — restoring active state")
+    _QUIET_SUPPRESS_KEEPER.clear()
+    _comfyui("start")
+    for m in QUIET_WARM_ON_EXIT:
+        _warm_model(m)
+    _set_power_state("active", "")
+
+
+def _quiet_hours_loop():
+    start = _parse_hhmm(QUIET_HOURS_START)
+    end = _parse_hhmm(QUIET_HOURS_END)
+    print(
+        f"[quiet] deep-idle window {QUIET_HOURS_START}–{QUIET_HOURS_END} local; "
+        f"activity grace {QUIET_ACTIVITY_GRACE:.0f}s"
+    )
+    # phase: "active" (outside window) | "idle" (in window, deep idle)
+    #        | "woken" (in window, ComfyUI up because a client is active)
+    phase = "active"
+    last_activity = 0.0
+    while True:
+        try:
+            in_window = _in_window(dt.datetime.now().time(), start, end)
+            active_now = bool(_loaded_models())
+            if active_now:
+                last_activity = time.time()
+
+            if not in_window:
+                if phase != "active":
+                    _exit_window()
+                    phase = "active"
+            elif phase == "active":
+                _enter_deep_idle()
+                phase = "idle"
+            elif phase == "idle":
+                if active_now:
+                    _wake_for_activity()
+                    phase = "woken"
+            elif phase == "woken":
+                if (time.time() - last_activity) > QUIET_ACTIVITY_GRACE:
+                    _enter_deep_idle()
+                    phase = "idle"
+        except Exception as exc:  # noqa: BLE001 - loop must never crash the service
+            print(f"[quiet] loop error: {exc}")
+        time.sleep(QUIET_CHECK_INTERVAL)
 
 
 
@@ -647,6 +820,10 @@ def main():
         threading.Thread(target=_fast_keeper_loop, daemon=True).start()
     else:
         print("[keeper] FAST_KEEPER_ENABLED=false — fast keeper disabled")
+    if QUIET_HOURS_ENABLED:
+        threading.Thread(target=_quiet_hours_loop, daemon=True).start()
+    else:
+        print("[quiet] QUIET_HOURS_ENABLED=false — deep-idle window disabled")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"ai-server status service listening on http://{HOST}:{PORT}")
     try:

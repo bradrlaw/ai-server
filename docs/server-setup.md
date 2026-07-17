@@ -347,6 +347,30 @@ sudo systemctl start comfyui-open comfyui-secure server-status
 Leaving ComfyUI running is normal (image gen stays instant); just know the V100s won't
 deep-idle until their CUDA context is gone.
 
+### Quiet-hours deep-idle window
+The `server-status` service can run an optional overnight window that drops the box to the
+true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). On
+entering the window it **unloads the daily models and stops both ComfyUI units** so the
+V100s fall out of P0. LLM requests still auto-wake llama-swap on demand; when a client is
+active during the window the service **restarts ComfyUI** so the box is fully ready, then
+re-idles after `QUIET_ACTIVITY_GRACE` seconds (default 600) of quiet. At window end the
+daily set (`coding`, `chat`) is re-warmed and the `fast` keeper resumes.
+
+Disabled by default. To enable:
+```bash
+# 1) grant the service scoped rights to stop/start ComfyUI (runs as brad):
+sudo install -m 0440 -o root -g root \
+  scripts/server-status-comfyui.sudoers /etc/sudoers.d/server-status-comfyui
+sudo visudo -cf /etc/sudoers.d/server-status-comfyui        # syntax check
+
+# 2) turn it on in server-status.env (defaults: 02:00–09:00 local):
+echo 'QUIET_HOURS_ENABLED=true' >> scripts/server-status.env  # + optional QUIET_* overrides
+sudo systemctl restart server-status
+```
+The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) in
+`curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
+`scripts/server-status.env.example`.
+
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
 V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
