@@ -132,6 +132,10 @@ QUIET_WARM_ON_EXIT = [
     for m in os.environ.get("QUIET_WARM_ON_EXIT", "coding,chat").split(",")
     if m.strip()
 ]
+# While "woken", re-idle once GPU SM utilization stays below this %% for the grace
+# period. Loaded-but-idle models sit at ~0%%, so this distinguishes "in use" from
+# "just resident" (coding/chat have no ttl and never self-unload).
+QUIET_ACTIVE_SM_PCT = float(os.environ.get("QUIET_ACTIVE_SM_PCT", "5"))
 
 # Set while quiet hours has the box in deep idle — the fast keeper honours this
 # and stops re-warming so it doesn't fight the quiet-hours loop.
@@ -602,6 +606,25 @@ def _loaded_models() -> set:
     }
 
 
+def _max_gpu_util() -> int:
+    """Highest SM utilization %% across all GPUs (0 if unavailable). Used to detect
+    real inference activity — a loaded-but-idle model sits at ~0%%."""
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=HTTP_TIMEOUT,
+            env={**os.environ, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"},
+        )
+        if proc.returncode != 0:
+            return 0
+        vals = [int(x.strip()) for x in proc.stdout.split() if x.strip().isdigit()]
+        return max(vals) if vals else 0
+    except Exception:  # noqa: BLE001 - best effort
+        return 0
+
+
 def _unload_all_models() -> None:
     try:
         req = urllib.request.Request(
@@ -665,8 +688,12 @@ def _quiet_hours_loop():
     while True:
         try:
             in_window = _in_window(dt.datetime.now().time(), start, end)
-            active_now = bool(_loaded_models())
-            if active_now:
+            models_loaded = bool(_loaded_models())
+            # Real inference (LLM tokens or a ComfyUI render) spikes SM utilization;
+            # a loaded-but-idle model sits near 0%%. Use that to time the re-idle so
+            # the no-ttl models (coding/chat) don't pin the box "woken" all window.
+            busy = _max_gpu_util() >= QUIET_ACTIVE_SM_PCT
+            if busy:
                 last_activity = time.time()
 
             if not in_window:
@@ -677,8 +704,10 @@ def _quiet_hours_loop():
                 _enter_deep_idle()
                 phase = "idle"
             elif phase == "idle":
-                if active_now:
+                # A client loaded a model on demand → wake so the box is fully ready.
+                if models_loaded:
                     _wake_for_activity()
+                    last_activity = time.time()
                     phase = "woken"
             elif phase == "woken":
                 if (time.time() - last_activity) > QUIET_ACTIVITY_GRACE:

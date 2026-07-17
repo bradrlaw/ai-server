@@ -352,9 +352,13 @@ The `server-status` service can run an optional overnight window that drops the 
 true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). On
 entering the window it **unloads the daily models and stops both ComfyUI units** so the
 V100s fall out of P0. LLM requests still auto-wake llama-swap on demand; when a client is
-active during the window the service **restarts ComfyUI** so the box is fully ready, then
-re-idles after `QUIET_ACTIVITY_GRACE` seconds (default 600) of quiet. At window end the
-daily set (`coding`, `chat`) is re-warmed and the `fast` keeper resumes.
+active during the window the service **restarts ComfyUI** so the box is fully ready. It
+re-idles once **GPU SM utilization stays below `QUIET_ACTIVE_SM_PCT`% (default 5) for
+`QUIET_ACTIVITY_GRACE` seconds** (default 600) — utilization is used rather than "a model
+is loaded" because `coding`/`chat` have no ttl and would otherwise pin the box awake all
+window. On re-idle the models are unloaded and ComfyUI stopped again; the next client
+request reloads on demand. At window end the daily set (`coding`, `chat`) is re-warmed and
+the `fast` keeper resumes.
 
 Disabled by default. To enable:
 ```bash
