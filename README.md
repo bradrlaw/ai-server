@@ -206,6 +206,13 @@ Things I'd change on a second build, learned the hard way:
    time I'd pick a board with more lanes and a newer PCIe generation — even if these
    cards can't use PCIe 4.0 speeds, it would be more future-proof.
 
+4. **Put the OS/data on LVM instead of a bare ext4 partition.** Root is a plain ext4
+   partition on the NVMe, so the filesystem can't be transparently grown onto a second
+   disk — adding storage means a separate mount or a union filesystem rather than just
+   extending the volume. Had I set it up on LVM (or ZFS/btrfs) from the start, I could
+   add the spare drive to the volume group and expand in place. Something to fix on the
+   next rebuild.
+
 ## Layout
 
 | Path | Tracked | Contents |
