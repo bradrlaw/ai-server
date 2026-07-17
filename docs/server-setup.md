@@ -71,6 +71,43 @@ Last updated: 2026-06-30
   LM Studio model tests on V100 + P100). System confirmed **stable under Windows**.
 - Goal now: get the **Ubuntu** software stack correct.
 
+### Installing Ubuntu + the NVIDIA driver from scratch
+
+If you're reproducing this build on fresh hardware, start here before any of the
+GPU/inference steps below. This box runs **Ubuntu Server 24.04 LTS** (headless).
+
+1. **Install Ubuntu Server 24.04 LTS.** Download the ISO and follow Canonical's guide:
+   - Download: <https://ubuntu.com/download/server>
+   - Step-by-step tutorial (write USB → install → first boot):
+     <https://ubuntu.com/tutorials/install-ubuntu-server>
+   - During install, enable **OpenSSH server** for headless access; a minimal server
+     install is fine (no desktop needed).
+
+2. **Update the base system**, then reboot into the current kernel:
+   ```bash
+   sudo apt update && sudo apt full-upgrade -y
+   sudo reboot
+   ```
+
+3. **Install the NVIDIA driver.** Use the Ubuntu-packaged driver (DKMS, auto-rebuilds
+   on kernel updates). Full reference:
+   <https://ubuntu.com/server/docs/nvidia-drivers-installation>
+   ```bash
+   ubuntu-drivers devices            # list recommended drivers for the detected GPUs
+   sudo ubuntu-drivers install       # install the recommended driver, OR pin a version:
+   sudo apt install -y nvidia-driver-580-server   # what this box runs (datacenter/headless)
+   sudo reboot
+   nvidia-smi                        # verify: all GPUs listed, driver 580.x
+   ```
+   Notes for this hardware:
+   - Prefer the **`-server`** driver variant for headless Tesla cards (no desktop/X deps).
+   - The driver is **decoupled from the CUDA toolkit** — install the driver here; the
+     matching **CUDA 12.x** toolkit is handled separately in §4 (`scripts/install-cuda129.sh`).
+   - Official NVIDIA driver downloads (if you need a version newer than Ubuntu ships):
+     <https://www.nvidia.com/en-us/drivers/>
+
+Everything from §3 onward assumes `nvidia-smi` works and all GPUs are detected.
+
 ---
 
 ## 3. NVIDIA Driver — GOOD, keep it
