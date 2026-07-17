@@ -112,6 +112,14 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 | n8n / Prefect | container | — |
 | Langfuse / Prometheus / Grafana / DCGM | container | — |
 
+**Idle power management (quiet hours).** The always-on `server-status` service keeps the P100
+`fast` model warm and can run an optional overnight **deep-idle window**: it unloads the daily
+models and stops the ComfyUI units so the V100s fall out of P0 (~103 W → ~73 W), auto-waking on
+client activity and re-idling after a GPU-utilization lull. ⚠️ **The machine clock is `Etc/UTC`
+but the owner is US Eastern**, so the window is evaluated in `QUIET_TZ` (e.g. `America/New_York`),
+not the system clock — otherwise it fires ~5 h early. See
+[server-setup.md](server-setup.md#quiet-hours-deep-idle-window).
+
 ## 5. Tooling options (primary → alternatives)
 
 | Need | Primary | Alternatives |

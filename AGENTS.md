@@ -30,6 +30,9 @@ Read this first, then the detailed docs:
   FlashAttention-2 / SageAttention**; use `sdpa` attention and avoid `*_fast` fp8 paths in ComfyUI.
 - **Keep GPUs under thermal limits** via power caps applied at boot by the `gpu-fan-control`
   service (P100 200W, V100s 175W); V100 HBM throttles ~85 °C.
+- **Clock is UTC, owner is US Eastern.** The machine runs `Etc/UTC` but the owner thinks in
+  EST/EDT (~4–5 h offset). Any wall-clock scheduling (cron, timers, the quiet-hours window) must
+  be timezone-aware — e.g. quiet-hours reads `QUIET_TZ=America/New_York`, not the system clock.
 - **HF downloads:** use `/srv/ai/scripts/hf-dl download <repo> <path> --local-dir <dir>`
   (injects token from keyring, ~150 MB/s Xet). Don't use raw curl (throttled) or `HF_XET_HIGH_PERFORMANCE=1`.
 
