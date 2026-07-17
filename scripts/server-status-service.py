@@ -205,9 +205,9 @@ def _parse_prom_metrics(txt: str) -> dict:
 # it is actively inferring. So we probe them on a BACKGROUND thread (generous
 # timeout) and cache the result; the status page reads the cache instantly and
 # never blocks on a slow model.
-ACT_TIMEOUT = max(HTTP_TIMEOUT, 4.0)
+ACT_TIMEOUT = max(HTTP_TIMEOUT, 6.0)
 ACT_POLL_SECS = float(os.environ.get("STATUS_ACT_POLL_SECS", "2"))
-ACT_STALE_SECS = float(os.environ.get("STATUS_ACT_STALE_SECS", "10"))
+ACT_STALE_SECS = float(os.environ.get("STATUS_ACT_STALE_SECS", "12"))
 _activity_cache: dict[str, dict] = {}
 _activity_lock = threading.Lock()
 
@@ -217,9 +217,18 @@ def collect_model_activity(proxy_url: str) -> dict | None:
     active slots (prefill/decode + progress) and prompt/decode throughput."""
     base = proxy_url.rstrip("/")
     slots = _get_json(f"{base}/slots", timeout=ACT_TIMEOUT)
-    metrics = _parse_prom_metrics(_get_text(f"{base}/metrics", timeout=ACT_TIMEOUT))
+    metrics_txt = _get_text(f"{base}/metrics", timeout=ACT_TIMEOUT)
+    metrics = _parse_prom_metrics(metrics_txt)
+    slots_ok = isinstance(slots, list)
+    metrics_ok = metrics_txt is not None
+    # Both probes hit llama-server's busy main loop and can time out mid-inference.
+    # If neither responded we have nothing new — signal the caller to keep the last
+    # known sample rather than flip the page to a false "idle".
+    if not slots_ok and not metrics_ok:
+        return None
+
     active = []
-    if isinstance(slots, list):
+    if slots_ok:
         for s in slots:
             if not isinstance(s, dict) or not s.get("is_processing"):
                 continue
@@ -240,14 +249,24 @@ def collect_model_activity(proxy_url: str) -> dict | None:
                     "n_ctx": int(s.get("n_ctx") or 0),
                 }
             )
-    if slots is None and not metrics:
-        return None
+
+    processing = int(metrics.get("llamacpp:requests_processing", 0))
+    deferred = int(metrics.get("llamacpp:requests_deferred", 0))
+    # requests_processing (from /metrics) is the authoritative busy signal. If it
+    # says work is in flight but /slots timed out (common during heavy prefill),
+    # still report busy with a placeholder so the page doesn't show a false idle.
+    busy = processing > 0 or bool(active)
+    if busy and not active:
+        active = [{"id": None, "phase": "working"}]
+
     return {
         "active": active,
+        "busy": busy,
+        "slots_ok": slots_ok,
         "prompt_tps": metrics.get("llamacpp:prompt_tokens_seconds"),
         "decode_tps": metrics.get("llamacpp:predicted_tokens_seconds"),
-        "processing": int(metrics.get("llamacpp:requests_processing", 0)),
-        "deferred": int(metrics.get("llamacpp:requests_deferred", 0)),
+        "processing": processing,
+        "deferred": deferred,
     }
 
 
@@ -273,8 +292,11 @@ def _activity_loop() -> None:
                     proxies.add(m["proxy"])
             for proxy in proxies:
                 data = collect_model_activity(proxy)
-                with _activity_lock:
-                    _activity_cache[proxy] = {"at": time.time(), "data": data}
+                # Keep the last good sample when both probes time out (data is None)
+                # so a momentary stall doesn't flash the page to a false "idle".
+                if data is not None:
+                    with _activity_lock:
+                        _activity_cache[proxy] = {"at": time.time(), "data": data}
             with _activity_lock:
                 for k in list(_activity_cache):
                     if k not in proxies and (time.time() - _activity_cache[k]["at"]) > ACT_STALE_SECS:
@@ -905,7 +927,10 @@ function activityHtml(a){
       const pct = s.fresh? Math.round(100*s.processed/s.fresh):0;
       return `${pill('busy')} prefill <span class="bar"><i class="busy" style="width:${pct}%"></i></span> ${fmtK(s.processed)}/${fmtK(s.fresh)} tok (${pct}%)`;
     }
-    return `${pill('busy')} decode <span class="sub">ctx ${fmtK(s.n_prompt)} tok</span>`;
+    if(s.phase==='decode'){
+      return `${pill('busy')} decode <span class="sub">ctx ${fmtK(s.n_prompt)} tok</span>`;
+    }
+    return `${pill('busy')} working`;  // busy per /metrics but /slots detail unavailable
   });
   const head = lines.length? lines.join('<br>') : pill('idle')+' idle';
   const sub = [];
