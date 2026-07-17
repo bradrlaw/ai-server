@@ -747,18 +747,48 @@ cold model loads (~30-70s).
 Copilot CLI supports OpenAI-compatible endpoints (BYOK). It points at the LiteLLM gateway.
 Requirements (both verified through the full stack 2026-07-02): **tool calling** (Qwen3.6 +
 `--jinja` → `finish_reason: tool_calls`) and **streaming** (SSE). Docs recommend a ≥128k context
-window for best results; our `coding` model is currently 32768 (tunable).
+window for best results; all of the models below meet that.
 
 Env vars (see `scripts/copilot-byok.sh`, which sources the key from `docker/.env`):
 
     export COPILOT_PROVIDER_BASE_URL=http://<host>:4000/v1   # e.g. Tailscale <tailscale-ip>
     export COPILOT_PROVIDER_TYPE=openai
     export COPILOT_PROVIDER_API_KEY=$LITELLM_MASTER_KEY
-    export COPILOT_MODEL=coding        # or chat / big
+    export COPILOT_MODEL=coding        # or chat / big / coder-next / fast
     copilot
 
 On the server just run `/srv/ai/scripts/copilot-byok.sh`. If the endpoint 404s, try the base URL
 without the trailing `/v1`.
+
+### Per-model token budgets (`COPILOT_PROVIDER_MAX_*`)
+
+`copilot-byok.sh` auto-sets the prompt/output token budgets per model. The governing rule:
+llama.cpp's `--ctx-size` KV cache is **shared** between prompt and generation, so
+
+> **`MAX_PROMPT_TOKENS` + `MAX_OUTPUT_TOKENS` ≤ ctx-size**, keeping ~15–20% headroom
+
+for tokenizer drift (Copilot's count ≠ the model's) and the flash-attn compute buffer.
+**Reasoning** models get a bigger output budget because their hidden thinking phase spends
+output tokens; **non-thinking** models don't, so their output cap can be smaller.
+
+| `COPILOT_MODEL` | ctx-size | reasoning | `MAX_PROMPT_TOKENS` | `MAX_OUTPUT_TOKENS` | prompt+output |
+|-----------------|---------:|-----------|--------------------:|--------------------:|--------------:|
+| `coding`     | 204800 | yes | 131072 | 32768 | 163840 (~40k spare) |
+| `chat`       | 131072 | yes |  81920 | 24576 | 106496 (~24k spare) |
+| `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
+| `coder-next` | 262144 | **no** (agentic) | 196608 | 32768 | 229376 (~33k spare) |
+| `fast`       | 131072 | **no** |  98304 |  8192 | 106496 (~24k spare) |
+| *(other)*    | — | — | 32768 | 8192 | conservative fallback |
+
+Notes:
+- These are **ceilings for reliability, not "always use the max"** — long prompts prefill
+  slowly on a single V100 (~790 t/s ≈ 2–3 min for a 128k prefill) and quality degrades well
+  before the ctx limit. For snappier `coding` turns, drop the prompt cap (e.g. `65536`).
+- **`coder-next`** is the strongest agentic BYOK coder here: non-thinking (no wasted
+  reasoning tokens), 256k native ctx with cheap KV, ~77 t/s decode — but it splits across
+  **both** V100s and **preempts `coding`+`chat`** (like `big`), so it evicts the daily set.
+- Any value exported in the environment overrides the per-model default, e.g.
+  `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
 
 ### coding context-window sweep (2026-07-02)
 
