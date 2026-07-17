@@ -331,14 +331,21 @@ done
 ```
 
 Unload all router models (frees all VRAM). The `fast` keeper in `server-status` re-warms
-`fast` within ~60 s, so stop that service first if you need the GPUs to stay idle (e.g. to
-measure no-model power draw):
+`fast` within ~60 s, so stop that service first if you need the GPUs to stay idle. Note the
+LLMs are not the only thing holding the cards: the two **ComfyUI** instances keep a resident
+CUDA context on the V100s, which pins them to P0 (max clocks, ~36–37 W each) even with no
+inference. To reach the **true cold-idle baseline** (e.g. to measure no-load power draw), stop
+ComfyUI too:
 ```bash
 sudo systemctl stop server-status                          # pause the fast keeper
-curl -s -X POST 127.0.0.1:9090/api/models/unload -d '{}'   # unload every model
-CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put -c 15   # e.g. capture idle draw
-sudo systemctl start server-status                          # keeper re-warms fast
+curl -s -X POST 127.0.0.1:9090/api/models/unload -d '{}'   # unload every LLM
+sudo systemctl stop comfyui-open comfyui-secure            # release the V100 CUDA contexts
+CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put -c 15   # e.g. capture true idle draw
+# restore:
+sudo systemctl start comfyui-open comfyui-secure server-status
 ```
+Leaving ComfyUI running is normal (image gen stays instant); just know the V100s won't
+deep-idle until their CUDA context is gone.
 
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
