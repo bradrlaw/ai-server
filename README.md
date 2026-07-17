@@ -140,6 +140,7 @@ Things others running older multi-GPU boxes may find reusable:
 | `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), and keeps the **`fast` model warm on the P100** by re-loading it whenever its slot goes empty. |
 | `docker/open-webui/functions/server_status_inlet.py` | Open WebUI **new-chat status banner** — shows what's running at the start of each chat, sourced from the status service. |
 | `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_60/sm_70** with the P100 fp16-precision carveout applied. |
+| `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from `llama-swap.yaml` so it never drifts. |
 | `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
 | `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |
 | `scripts/bench-*.sh`, `power-cap-sweep.sh`, `verify-gpu-*.sh` | Benchmarking, power/thermal sweeps, and GPU/fan-mapping verification helpers. |

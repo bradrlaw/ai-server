@@ -287,6 +287,24 @@ watch -n2 'CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi \
   sensors | grep -E "fan[145]:"'
 ```
 
+### Re-run benchmarks
+`scripts/bench-models.sh` re-runs llama.cpp benchmarks for any subset of the served
+models. The model registry (gguf path, GPU pinning, split mode) is read straight from
+`config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
+```bash
+scripts/bench-models.sh --list                 # show model names + GPU pinning
+scripts/bench-models.sh                         # bench the daily set (coding chat fast)
+scripts/bench-models.sh coding chat gemma-31b   # bench specific models by name
+scripts/bench-models.sh --all                   # every model in the config
+scripts/bench-models.sh --free coding           # unload llama-swap models first (avoid OOM)
+
+# Tunables: -p prompt-toks  -n gen-toks  -r reps  -d "depths"  -o out-dir
+scripts/bench-models.sh -p 512 -n 128 -d "0 8192 32768" coding
+```
+Results are written as Markdown to `models/bench-<timestamp>/results.md`. `llama-bench`
+loads the model directly on its pinned GPU(s); if the router already has a model resident
+there, pass `--free` (unloads all router models via the API, no sudo) or run when idle.
+
 ### Reboot into Windows (UEFI dual-boot)
 This box is UEFI dual-boot: `Boot0000` = **Windows Boot Manager**, `Boot0004` =
 **Ubuntu** (the default). Boot **once** into Windows, then it returns to Ubuntu on the
