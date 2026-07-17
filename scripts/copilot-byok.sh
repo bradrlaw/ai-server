@@ -42,5 +42,30 @@ esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
 export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:-$def_output}"
 
+# Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.
+# It runs as a native HTTP service on the AI server (scripts/plan-build-mcp.service,
+# 0.0.0.0:9100), so the client needs no Python/uv — just `copilot mcp add`. The URL
+# is derived from COPILOT_PROVIDER_BASE_URL (same host, port 9100, path /mcp);
+# override with PLAN_BUILD_MCP_URL, or opt out with COPILOT_PLAN_BUILD_MCP=0.
+if [[ "${COPILOT_PLAN_BUILD_MCP:-1}" != "0" ]] && command -v copilot >/dev/null 2>&1; then
+  if [[ -n "${PLAN_BUILD_MCP_URL:-}" ]]; then
+    pb_url="$PLAN_BUILD_MCP_URL"
+  else
+    pb_proto="${COPILOT_PROVIDER_BASE_URL%%://*}"
+    pb_rest="${COPILOT_PROVIDER_BASE_URL#*://}"
+    pb_host="${pb_rest%%/*}"; pb_host="${pb_host%%:*}"
+    pb_url="${pb_proto}://${pb_host}:${PLAN_BUILD_MCP_PORT:-9100}/mcp"
+  fi
+  # Idempotent: only add if not already registered (never fail the launch on error).
+  if ! copilot mcp list 2>/dev/null | grep -q '\bplan-build\b'; then
+    if copilot mcp add --transport http plan-build "$pb_url" >/dev/null 2>&1; then
+      echo "Registered plan-build MCP -> ${pb_url}" >&2
+    else
+      echo "NOTE: could not register plan-build MCP (${pb_url}); add it manually:" >&2
+      echo "      copilot mcp add --transport http plan-build ${pb_url}" >&2
+    fi
+  fi
+fi
+
 echo "Copilot CLI -> ${COPILOT_PROVIDER_BASE_URL} (model: ${COPILOT_MODEL}, prompt<=${COPILOT_PROVIDER_MAX_PROMPT_TOKENS}, output<=${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS})" >&2
 exec copilot "$@"

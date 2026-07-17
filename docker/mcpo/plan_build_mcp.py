@@ -62,6 +62,14 @@ FAST_SAFE_GPUS = {
     for g in os.environ.get("PLAN_BUILD_FAST_SAFE_GPUS", "p100,v100").split(",")
     if g.strip()
 }
+# Service-wide fallback for `caller_gpu` when a client can't inject it per call.
+# The shared streamable-http service (Copilot BYOK over HTTP) is used by many
+# sessions and the server can't know each one's model, so it declares a single
+# assumed driver GPU here (set PLAN_BUILD_CALLER_GPU=p100 on that service: "drive
+# the P100 `fast` chat model, so big/coder-next swap onto the V100s without
+# evicting the caller"). Empty by default => the stdio/mcpo path is unchanged and
+# the guard still requires an explicit `caller_gpu`.
+DEFAULT_CALLER_GPU = os.environ.get("PLAN_BUILD_CALLER_GPU", "").strip()
 
 # Human-readable "who may call this" clauses, embedded in guard refusal messages.
 _STRICT_WHO = (
@@ -89,7 +97,7 @@ def _gpu_guard(
     evict the daily V100 models can pass a wider set (e.g. `FAST_SAFE_GPUS`).
     """
     allowed = SAFE_GPUS if allowed is None else allowed
-    val = (caller_gpu or "").strip().lower()
+    val = (caller_gpu or DEFAULT_CALLER_GPU or "").strip().lower()
     if not val:
         return (
             f"⚠️ Refused: this tool must be called from {who}. The caller did not report "
@@ -460,4 +468,27 @@ def reset_models(caller_gpu: str = "") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    # Default transport is stdio (unchanged): mcpo launches this inside its
+    # container over stdio. The AI server also runs it as a shared, unauthenticated
+    # streamable-http service (scripts/plan-build-mcp.service) so a dependency-free
+    # Copilot BYOK client can register it with `copilot mcp add --transport http`.
+    _transport = os.environ.get("PLAN_BUILD_TRANSPORT", "stdio").strip().lower()
+    if _transport in ("streamable-http", "streamable_http", "http"):
+        mcp.settings.host = os.environ.get("PLAN_BUILD_HOST", "0.0.0.0")
+        _port = os.environ.get("PLAN_BUILD_PORT", "").strip()
+        if _port:
+            mcp.settings.port = int(_port)
+        # Unauthenticated bridge on the private LAN/Tailscale. Clients connect by
+        # LAN/Tailscale IP or hostname (not localhost), so FastMCP's default
+        # DNS-rebinding protection (localhost-only Host allow-list) would reject
+        # them with 421 Misdirected Request. Disable it here — safe on a trusted
+        # private network, and this endpoint has no auth anyway (like comfyui-mcp).
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+            allowed_origins=["*"],
+        )
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run()

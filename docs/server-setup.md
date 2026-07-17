@@ -790,6 +790,31 @@ Notes:
 - Any value exported in the environment overrides the per-model default, e.g.
   `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
 
+### plan-build MCP over HTTP (for Copilot BYOK)
+
+The in-house **plan-build** planner→coder pipeline (`docker/mcpo/plan_build_mcp.py`, see the
+mcpo section below) is also exposed to the Copilot CLI as a **remote HTTP MCP server**, so a
+client — including a Mac with no Python/`uv` — can use its tools with zero local dependencies.
+
+- **Server:** native systemd service `scripts/plan-build-mcp.service` runs the *same* script
+  with `PLAN_BUILD_TRANSPORT=streamable-http` on **`0.0.0.0:9100`** (endpoint `/mcp`), reusing
+  the `comfyui-mcp` venv (it already has `mcp[cli]`). **No auth** (like `comfyui-mcp`) — LAN/
+  Tailscale only. It reads `LITELLM_MASTER_KEY` from `docker/.env` via `EnvironmentFile`. The
+  stdio path mcpo uses for Open WebUI is unchanged (transport defaults to stdio).
+  Install (needs sudo): `sudo /srv/ai/scripts/install-plan-build-mcp-service.sh`
+- **Client registration:** `copilot-byok.sh` auto-registers it (idempotent) via
+  `copilot mcp add --transport http plan-build <url>`, deriving the URL from
+  `COPILOT_PROVIDER_BASE_URL` (same host, port 9100, `/mcp`). Override with
+  `PLAN_BUILD_MCP_URL`/`PLAN_BUILD_MCP_PORT`, or opt out with `COPILOT_PLAN_BUILD_MCP=0`.
+  Manual: `copilot mcp add --transport http plan-build http://<host-or-tailscale>:9100/mcp`.
+- **`caller_gpu` over a shared endpoint:** the guard (see mcpo section) normally requires each
+  call to report `caller_gpu` so a driver model can't evict itself. A shared HTTP service can't
+  know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=p100`
+  — i.e. it assumes clients drive the P100 `fast` chat model, letting `big`/`coder-next` swap
+  onto the V100s without evicting the caller. **If a BYOK session instead drives a V100 model**
+  (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
+  V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
+
 ### coding context-window sweep (2026-07-02)
 
 Qwen3.6-27B Q6_K on one V100-32GB, `--parallel 1 --flash-attn on`, f16 KV. Model's trained
@@ -943,6 +968,8 @@ so `LITELLM_MASTER_KEY` reaches the tool via inherited env — **no secret in th
 config.json**. `big` planning can take several minutes (deep reasoning) plus GPU swaps;
 `PLAN_BUILD_TIMEOUT` (default 1800s) bounds the HTTP call. Verified live 2026-07-04:
 `POST /plan-build/implement_spec` → code from `coder-next` in ~60s (incl. GPU swap).
+The same script also serves these tools over **streamable-http on `:9100`** for the Copilot
+CLI (`PLAN_BUILD_TRANSPORT=streamable-http`) — see [plan-build MCP over HTTP](#plan-build-mcp-over-http-for-copilot-byok).
 
 To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
 Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://<host-ip>:8000/time`; the IP

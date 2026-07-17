@@ -1,0 +1,38 @@
+[Unit]
+Description=plan-build MCP server (HTTP) — planner->coder pipeline for Copilot BYOK / MCP clients
+Documentation=https://github.com/bradrlaw/ai-server
+# Talks to the LiteLLM gateway (Docker, published on host :4000). Order after docker
+# so LiteLLM is reachable at boot; it retries anyway (calls happen per tool-invoke).
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai
+# LiteLLM master key (LITELLM_MASTER_KEY) comes from the gitignored env file — never
+# from a tracked config or an arg. Same file docker/compose uses.
+EnvironmentFile=/srv/ai/docker/.env
+# LiteLLM gateway: this native service reaches the Docker-published port on the host.
+Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
+# Serve over streamable-http (default is stdio, used by mcpo inside its container).
+Environment=PLAN_BUILD_TRANSPORT=streamable-http
+# Bind on all interfaces so LAN/Tailscale Copilot BYOK clients can reach it.
+# NO auth (like comfyui-mcp) — acceptable on the private LAN/Tailscale only.
+Environment=PLAN_BUILD_HOST=0.0.0.0
+Environment=PLAN_BUILD_PORT=9100
+# Service-wide caller_gpu assumption: clients drive the P100 `fast` chat model, so
+# the tools swap `big`/`coder-next` onto the V100s WITHOUT evicting the caller. If a
+# BYOK session instead drives a V100 model (coding/chat/big/coder-next), it must use
+# only the fast_* tools (which never evict the daily V100 models).
+Environment=PLAN_BUILD_CALLER_GPU=p100
+Environment=HOME=/home/brad
+ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/docker/mcpo/plan_build_mcp.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
