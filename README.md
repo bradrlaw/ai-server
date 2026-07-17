@@ -69,22 +69,22 @@ Capabilities:
 A rough bill of materials for the build. The goal was capable multi-GPU inference on
 a tight budget by using previous-generation datacenter GPUs and a used base PC.
 
-| Item | Cost |
-|------|------|
-| Used PC (motherboard, RAM, Intel SSD, Titan X GPU†, Rosewill 1200W PSU†) | $650 |
-| Corsair HX1200i PSU (replaced the Rosewill) | $321 |
-| NVIDIA Tesla V100 PCIe 32GB | $1,612 |
-| NVIDIA Tesla P100 PCIe 16GB | $79 |
-| Additional GPU power cable | $14 |
-| Dual-GPU-to-single-connector power adapters | $30 |
-| Fan ARGB extension cables | $8 |
-| GPU fan shrouds | $54 |
-| Arctic S4028-15K fans | $25 |
-| Arctic S4028-6K fan | $9 |
-| Rolling tower stand | $45 |
-| GPU support bracket | $16 |
-| Smart power plug | $23 |
-| **Total** | **$2,886** |
+| Item | Qty | Cost |
+|------|----:|-----:|
+| Used PC (motherboard, RAM, Intel SSD, Titan X GPU†, Rosewill 1200W PSU†) | 1 | $650 |
+| Corsair HX1200i PSU (replaced the Rosewill) | 1 | $321 |
+| NVIDIA Tesla V100 PCIe 32GB | 2 | $1,612 |
+| NVIDIA Tesla P100 PCIe 16GB | 1 | $79 |
+| Additional GPU power cable | 1 | $14 |
+| Dual-GPU-to-single-connector power adapters | 4 | $30 |
+| Fan ARGB extension cables | 4 | $8 |
+| GPU fan shrouds | 1 | $54 |
+| Arctic S4028-15K fans | 2 | $25 |
+| Arctic S4028-6K fan | 1 | $9 |
+| Rolling tower stand | 1 | $45 |
+| GPU support bracket | 1 | $16 |
+| Smart power plug | 1 | $23 |
+| **Total** | | **$2,886** |
 
 † The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC and are no
 longer used.
