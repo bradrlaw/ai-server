@@ -11,6 +11,32 @@ Last updated: 2026-06-30
 
 ---
 
+## Contents
+
+- [1. Hardware](#1-hardware)
+- [2. OS / Boot](#2-os--boot)
+- [3. NVIDIA Driver — GOOD, keep it](#3-nvidia-driver--good-keep-it)
+- [4. THE CUDA PROBLEM (primary task)](#4-the-cuda-problem-primary-task)
+- [5. Per-GPU capability reality (drives model/engine choices)](#5-per-gpu-capability-reality-drives-modelengine-choices)
+- [6. Inference engines — assessment](#6-inference-engines--assessment)
+- [7. Strong recommendation: containerize the stack](#7-strong-recommendation-containerize-the-stack)
+- [8. Intended workload split (user's plan — sound)](#8-intended-workload-split-users-plan--sound)
+- [9. Additional considerations / things to verify](#9-additional-considerations--things-to-verify)
+- [10. Proposed task order](#10-proposed-task-order)
+- [Quick reference — current state (2026-06-30)](#quick-reference--current-state-2026-06-30)
+- [Operator cheat-sheet — common commands](#operator-cheat-sheet--common-commands)
+- [llama.cpp usage notes (learned during bring-up)](#llamacpp-usage-notes-learned-during-bring-up)
+- [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
+- [GPU fan control (shroud fans) — runbook (2026-07-01)](#gpu-fan-control-shroud-fans--runbook-2026-07-01)
+- [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
+- [Tensor-parallel / multi-GPU reality (measured 2026-07-01)](#tensor-parallel--multi-gpu-reality-measured-2026-07-01)
+- [Phase 2 — llama-swap model router (2026-07-02)](#phase-2--llama-swap-model-router-2026-07-02)
+- [Phase 2b — LiteLLM gateway (2026-07-02)](#phase-2b--litellm-gateway-2026-07-02)
+- [GitHub Copilot CLI via BYOK (2026-07-02)](#github-copilot-cli-via-byok-2026-07-02)
+- [Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)](#phase-3--open-webui--searxng--mcpo-2026-07-02)
+- [Phase 6 (partial) — ComfyUI generative media (2026-07-03)](#phase-6-partial--comfyui-generative-media-2026-07-03)
+- [Network exposure & firewall (2026-07-07)](#network-exposure--firewall-2026-07-07)
+
 ## 1. Hardware
 
 | Component    | Detail |

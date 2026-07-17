@@ -9,6 +9,19 @@ single OpenAI-compatible API.
 > Python venvs, source checkouts, datasets, and per-service data — live on the box
 > under `/srv/ai/` and are intentionally git-ignored.
 
+## Contents
+
+- [What it does](#what-it-does)
+- [Hardware](#hardware)
+- [Build cost](#build-cost)
+- [Power usage](#power-usage)
+- [Layout](#layout)
+- [Notable components & scripts](#notable-components--scripts)
+- [Documentation](#documentation)
+- [Conventions](#conventions)
+- [Attribution](#attribution)
+- [License](#license)
+
 ## What it does
 
 This is the full config + runbook for turning a single multi-GPU workstation into a

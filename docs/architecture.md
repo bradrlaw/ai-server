@@ -8,6 +8,16 @@ document — update as the build proceeds.
 Related ADRs: 0004 (llama.cpp primary), 0005 (GPU split), 0006 (hybrid deploy),
 0007 (LiteLLM gateway), 0008 (coding model), 0009 (fan/power), 0010 (this arch).
 
+## Contents
+
+- [1. Topology](#1-topology)
+- [2. GPU allocation & VRAM budget](#2-gpu-allocation--vram-budget)
+- [3. Model → backend routing (LiteLLM) — draft](#3-model--backend-routing-litellm--draft)
+- [4. Component run-as matrix (ADR-0006 hybrid)](#4-component-run-as-matrix-adr-0006-hybrid)
+- [5. Tooling options (primary → alternatives)](#5-tooling-options-primary--alternatives)
+- [6. Phased rollout](#6-phased-rollout)
+- [7. Open questions / to validate](#7-open-questions--to-validate)
+
 ## 1. Topology
 
 ```
