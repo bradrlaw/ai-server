@@ -934,10 +934,15 @@ function activityHtml(a){
   });
   const head = lines.length? lines.join('<br>') : pill('idle')+' idle';
   const sub = [];
-  if(a.prompt_tps) sub.push(`prefill ${Math.round(a.prompt_tps)} t/s`);
-  if(a.decode_tps) sub.push(`decode ${Math.round(a.decode_tps)} t/s`);
-  active.forEach(s=>{ if(s.n_prompt) sub.push(`slot ${s.id}: ${Math.round(100*s.cache/s.n_prompt)}% cached`); });
-  if(a.deferred) sub.push(`${a.deferred} queued`);
+  // Throughput gauges from /metrics linger at their last-request value after a
+  // request finishes, so only surface them while actually busy — otherwise an
+  // idle model looks like it's still prefilling/decoding.
+  if(a.busy){
+    if(a.prompt_tps) sub.push(`prefill ${Math.round(a.prompt_tps)} t/s`);
+    if(a.decode_tps) sub.push(`decode ${Math.round(a.decode_tps)} t/s`);
+    active.forEach(s=>{ if(s.n_prompt) sub.push(`slot ${s.id}: ${Math.round(100*s.cache/s.n_prompt)}% cached`); });
+    if(a.deferred) sub.push(`${a.deferred} queued`);
+  }
   return head + (sub.length? `<div class="sub" style="margin-top:4px">${sub.join(' · ')}</div>`:'');
 }
 function bar(label, pct, txt){
