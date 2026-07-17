@@ -125,6 +125,13 @@ models:
   # Verified 2026-07-04: ctx 262144 (256k native) + f16 KV peaks at 29.5GB(idx1)/
   # 27.4GB(idx2) -> ~3.0GB / ~5.0GB free per card; VRAM stays flat under a deep
   # prefill (flash-attn preallocates). Coding bench: Tarjan 5/5, LRU 4/4.
+  # --parallel 2: split the 256k ctx into TWO 131k slots so an agentic client and
+  # its subagent (e.g. Copilot CLI /fleet or a delegated task over BYOK) each get a
+  # dedicated KV slot instead of sharing one and evicting each other's prefix every
+  # turn (which forced a full ~30k-token re-prefill per step -> multi-minute stalls).
+  # DeltaNet linear attention keeps KV/compute buffers flat, so 2 concurrent
+  # sequences cost the SAME VRAM as 1. Verified 2026-07-17: two concurrent 26k-token
+  # prefills peak 28.7GB(idx1)/27.3GB(idx2) — identical to idle, no OOM.
   "coder-next":
     name: "Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) — agentic coding, 256k"
     description: "Hybrid-MoE coding model split across both V100s, 256k, non-thinking. Preempts coding+chat."
@@ -139,7 +146,7 @@ models:
       --cache-type-k f16
       --cache-type-v f16
       --split-mode layer
-      --parallel 1
+      --parallel 2               # two 131k slots: main agent + subagent don't evict each other
       ${common}
 
   # --- fast: Gemma-4-12B (QAT UD-Q4_K_XL) on the P100 (idx0) --------------
