@@ -325,6 +325,7 @@ separately by their respective creators and are not redistributed here.)
 | NVIDIA Container Toolkit | https://github.com/NVIDIA/nvidia-container-toolkit | GPU access for the containerized app tier. |
 | Tailscale | https://github.com/tailscale/tailscale | Private mesh network for remote access to the headless box. |
 | GitHub Copilot CLI | https://github.com/github/copilot-cli | AI pair-programmer used throughout to build, debug, and document this server. |
+| pi (pi.dev) | https://pi.dev | Coding-agent harness driven client-side against the LiteLLM endpoint; provider config in `config/pi/`. |
 | iTerm2 | https://github.com/gnachman/iTerm2 | macOS terminal emulator used to drive SSH sessions and the Copilot CLI against the server. |
 | iTerm2 `imgcat` | https://iterm2.com/documentation-images.html | Bundled in `scripts/imgcat` to preview generated images inline in the terminal over SSH. |
 | P100 FAST_FP16 carveout (apollo-mg) | https://gist.github.com/apollo-mg/9218d50a209d70a85f033bf182657818 | 3-line llama.cpp patch disabling `FAST_FP16` on the P100 (sm_60) to stop fp16 accuracy drift; sourced from apollo-mg's write-up, merged in [llama-cpp-turboquant PR #212](https://github.com/TheTom/llama-cpp-turboquant/pull/212) ([TurboQuant+ tqp-v0.3.0](https://github.com/TheTom/llama-cpp-turboquant/releases/tag/tqp-v0.3.0)). See [docs/adr/0014](docs/adr/0014-p100-fast-fp16-carveout.md). |
