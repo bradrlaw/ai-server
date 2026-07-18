@@ -23,6 +23,31 @@ Register all three as BYOK models in the app pointed at the LiteLLM gateway
 (`http://<host>:4000/v1`). **Use the exact lowercase ids** — LiteLLM is case-sensitive, so
 `Chat`/`Coding` return `400 Invalid model name` (call `/v1/models` for the canonical list).
 
+## Model strengths are complementary, not redundant (empirical, 2026-07-18)
+
+A live head-to-head bug scan of the same legacy repo — one agent on `coding`, one on `chat`,
+run in parallel — showed the two models have **different blind spots**, so running **both and
+merging** beats either alone:
+
+| | `coding` (dense 27B) | `chat` (MoE 35B-A3B) |
+| --- | --- | --- |
+| **Excels at** | Deep server-side **security** (command injection, reversible "encryption", multiple SQLi vectors), **business-logic** flaws (client-side price manipulation, auth/session mismatches), **concurrency** (race condition / overbooking) | **Breadth + frontend reliability**: systemic localStorage crashes, undefined vars / broken payment flows, placeholder API keys, regex bugs, typos |
+| **Missed** | localStorage crashes, undefined variables, regex bugs, placeholder credentials | command injection, reversible encryption, price manipulation, the race condition |
+| Unique critical/high found | **7** | **4** |
+
+Both independently caught the top-tier shared bugs (auth bypass, unauth endpoints, SQLi in
+search, plaintext password email). The divergence was in the long tail: `coding` goes **deep**
+on exploitable server-side/security/concurrency issues; `chat` goes **wide** on
+reliability/frontend/config issues that cause visible breakage.
+
+**Upshot for routing:**
+- **Security-review / deep audits → `coding`** (confirms the mapping below — don't trade this
+  depth for speed).
+- **Broad "find all the bugs" sweeps → run `coding` AND `chat` in parallel and merge** — the
+  union catches ~1.5–2× what either finds alone, at no extra wall-clock cost (separate GPUs).
+- `chat`'s speed makes it the better default for high-volume/first-pass review; escalate the
+  security-critical paths to `coding`.
+
 ## Two ways to get parallelism
 
 ### 1. One session, multiple subagents (in-session fan-out)
