@@ -53,14 +53,21 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 # reasoning while explores run in parallel with zero cold-start (fast keeper thread).
 # Override with SEARCH_SUBAGENT_MODEL=<id>; set it EMPTY to inherit the driver.
 #
-# CAVEATS (see docs/server-setup.md "Subagent model routing"):
-#  * The search subagent is gated by a server-side account feature flag
-#    (copilot_swe_agent_cli_search_subagent). If it's not enabled for your account
-#    this env has no effect — verify with a delegated explore on the status page.
-#  * Routing the task/general subagents to a THIRD model (e.g. 'chat' on V100 idx2)
-#    is NOT env-settable in single-provider BYOK mode; the /subagents picker only
-#    exposes the configured provider model. Assign it interactively via /subagents
-#    if/when the picker surfaces it; otherwise task/general inherit the driver.
+# CAVEATS (verified 2026-07-18; see docs/server-setup.md "Subagent model routing"):
+#  * SEARCH_SUBAGENT_MODEL is INERT via this env-var launcher: the search subagent
+#    is gated by the account feature flag copilot_swe_agent_cli_search_subagent,
+#    whose availability is "off" (server-only) — NOT reachable by env,
+#    COPILOT_CLI_ENABLED_FEATURE_FLAGS, or /experimental. Proven: a delegated explore
+#    kept `fast` at 0 tokens. Kept here so it auto-activates if GitHub enables the flag.
+#  * Per-subagent local models (e.g. task->chat on idx2, explorer->fast on P100) are
+#    NOT possible through single-provider env-var BYOK (the /agents picker only lists
+#    the one configured model). They ARE possible two ways:
+#      (a) @github/copilot-sdk host: CopilotClient({onListModels}) + createSession(
+#          {provider:LiteLLM, customAgents:[{model:"chat"}]}) — PROVEN live (explorer
+#          ran 81k tokens on chat/idx2 while driver stayed on coding/idx1).
+#      (b) GitHub Copilot desktop app: configure coding/chat/fast as BYOK models, then
+#          assign them per-agent in its Agents settings (surfaces multiple models like
+#          onListModels does).
 export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-fast}"
 
 # Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.

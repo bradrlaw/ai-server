@@ -809,32 +809,63 @@ Notes:
 
 ### Subagent model routing (GPU-tiered)
 
-`copilot-byok.sh` sets `SEARCH_SUBAGENT_MODEL=fast` by default so the token-heavy
-**explore/search** subagent runs on a *different* local model — and therefore a
-different GPU — than the driver:
+The goal: run each Copilot subagent on a *different* local model — and therefore a
+different GPU — so the driver keeps reasoning while subagents work **in parallel**:
 
 | GPU | Model | Role |
 | --- | --- | --- |
-| P100 idx0 | `fast` (Gemma-4-12B) | explore/search subagent (always warm) |
 | V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
-| V100 idx2 | `chat` | *intended* task/general subagent (see caveat) |
+| V100 idx2 | `chat` | task/general subagent |
+| P100 idx0 | `fast` (Gemma-4-12B) | explore/search subagent (always warm) |
 
-Because `fast` lives on the P100 — a separate card from every V100 driver — the
-driver keeps reasoning while explores run **in parallel** with no contention, no
-eviction, and zero cold-start (the status service's keeper keeps `fast` resident).
-Override with `SEARCH_SUBAGENT_MODEL=<id>`; set it empty to inherit the driver.
+Because `fast`/`chat` live on separate cards from the driver, subagents run with no
+contention, no eviction, and (for `fast`) zero cold-start (the status service's keeper
+keeps `fast` resident). All three route through LiteLLM `:4000` → llama-swap → the
+right GPU, so no server-side change is needed — only the client picks the per-agent model.
 
-**Two caveats found while wiring this (CLI 1.0.71):**
-1. The search subagent is gated behind a **server-side account feature flag**
-   (`copilot_swe_agent_cli_search_subagent`). If it isn't enabled for your account,
-   `SEARCH_SUBAGENT_MODEL` has no effect. Verify by delegating an explore and watching
-   the status page (or LiteLLM `:4000` log) for a hit on `fast`.
-2. Routing the **task/general** subagents to a *third* model (`chat` on idx2) is **not
-   env-settable** in single-provider BYOK mode — only `SEARCH_SUBAGENT_MODEL` exists as
-   a raw override. The interactive `/subagents` picker only lists the one configured
-   provider model, so `chat` won't appear as a selectable target. Until Copilot CLI
-   exposes a multi-model BYOK registry (or per-agent env overrides), task/general
-   subagents **inherit the driver** (`coding`, idx2 stays free for on-demand `chat`).
+**What works where (verified live 2026-07-18, CLI 1.0.71 / `@github/copilot-sdk@1.0.7`):**
+
+1. **Env-var BYOK (`copilot-byok.sh`) — single model only.** `copilot help providers`
+   confirms the env-var path (`COPILOT_PROVIDER_BASE_URL` + `COPILOT_MODEL`) registers
+   exactly one BYOK model, so the `/agents` picker can't offer `chat`/`fast` to subagents.
+   `SEARCH_SUBAGENT_MODEL=fast` is set in the launcher but is **inert**: the search
+   subagent is gated by the account flag `copilot_swe_agent_cli_search_subagent`, whose
+   availability is **`off`** (server-only) — not reachable via env,
+   `COPILOT_CLI_ENABLED_FEATURE_FLAGS`, or `/experimental`. Proven: a delegated explore
+   left `fast` at 0 tokens. Kept in the script so it auto-activates if GitHub flips the flag.
+
+2. **Copilot SDK host — full GPU tiering, PROVEN.** A small `@github/copilot-sdk` program
+   registers all local models via `onListModels` and pins per-agent models via
+   `customAgents[].model`, all pointed at the singular LiteLLM provider (no GitHub auth
+   needed). In a live PoC, an `explorer` subagent pinned to `chat` ran **81,778 tokens on
+   V100 idx2** (idx2 pegged 70–94%) while the driver `coding` stayed on idx1 — event trace
+   `subagent.started explorer chat` → `tool.execution_* chat` → `subagent.completed`. This
+   is the sanctioned path for GPU-distributed local subagents; it's a scripted/headless
+   surface, not the stock TUI. Minimal recipe:
+
+   ```js
+   import { CopilotClient, approveAll } from "@github/copilot-sdk";
+   const client = new CopilotClient({ onListModels: () => localModels /* coding, chat, fast */ });
+   await client.start();
+   const session = await client.createSession({
+     model: "coding",
+     provider: { type: "openai", baseUrl: "http://127.0.0.1:4000/v1", apiKey: LITELLM_MASTER_KEY },
+     onPermissionRequest: approveAll,
+     customAgents: [{ name: "explorer", description: "read-only code explorer",
+                      tools: ["read_file","grep_search","file_search","shell"], model: "chat" }],
+   });
+   ```
+   (The SDK also exposes an experimental multi-provider registry — `providers[]` +
+   `models[]` with per-model `wireModel` — for mixing CAPI + several BYOK providers.)
+
+3. **GitHub Copilot desktop app — likely, via its Agents settings.** The app is built on
+   the CLI and supports configuring **multiple** BYOK models per session (equivalent to
+   `onListModels`). Configure `coding`/`chat`/`fast` as BYOK models, then assign them
+   per-agent in the app's Agents/subagent settings — because multiple models are already
+   in the list, the per-agent picker can surface them (unlike the CLI's single-model env BYOK).
+
+**Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
+alone; use the SDK host (proven) or the desktop app's multi-model BYOK + per-agent assignment.
 
 ### plan-build MCP over HTTP (for Copilot BYOK)
 
