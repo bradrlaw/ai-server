@@ -191,6 +191,25 @@ Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** wit
 - Alternatives worth evaluating: **SGLang**, **TGI**, **ExLlamaV2** (verify it still
   supports sm_70), or sticking with llama.cpp if throughput is adequate.
 
+#### Verified V100 spike (2026-07-18) — it *does* run, on a pinned old release
+Confirmed vLLM loads + generates on a V100 (sm_70) with the **XFormers** backend at
+~90 tok/s (opt-125m smoke test). Reproducible venv (`/srv/ai/venvs/vllm-spike`):
+```bash
+python3 -m venv --without-pip /srv/ai/venvs/vllm-spike   # ensurepip absent on host
+/srv/ai/venvs/vllm-spike/bin/python /tmp/get-pip.py       # bootstrap pip
+/srv/ai/venvs/vllm-spike/bin/pip install "vllm==0.6.6.post1" "transformers==4.47.1"
+# run:
+export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 VLLM_ATTENTION_BACKEND=XFORMERS
+# LLM(model=..., dtype="float16", ...)
+```
+- Pin set: `vllm==0.6.6.post1` (torch 2.5.1+cu124, xformers 0.0.28.post3),
+  **`transformers==4.47.1`** — transformers 5.x removes `all_special_tokens_extended`
+  and breaks this vLLM's tokenizer; keep `huggingface-hub` <1.0.
+- **Do not `pip install -U`.** Newer vLLM's default **V1 engine needs sm_80 attention**
+  and won't load on a V100 — `0.6.6.post1` is the practical ceiling on this hardware.
+- Next step to promote it: benchmark vs llama.cpp under concurrency + test TP=2 across
+  the two V100s (no NVLink → PCIe-bound). See ADR-0004 update.
+
 ---
 
 ## 7. Strong recommendation: containerize the stack
