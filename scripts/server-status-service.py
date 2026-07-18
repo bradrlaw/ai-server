@@ -44,6 +44,7 @@ import time
 import urllib.error
 import urllib.request
 import datetime as dt
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
@@ -143,6 +144,19 @@ QUIET_WARM_ON_EXIT = [
 # period. Loaded-but-idle models sit at ~0%%, so this distinguishes "in use" from
 # "just resident" (coding/chat have no ttl and never self-unload).
 QUIET_ACTIVE_SM_PCT = float(os.environ.get("QUIET_ACTIVE_SM_PCT", "5"))
+
+# --- History (in-memory time series for the dashboard sparklines) -------------
+# A background thread snapshots per-GPU util/power/temp/VRAM and host CPU/RAM %
+# into a fixed-size ring buffer, served at /history.json for inline-SVG graphs.
+# Purely in-memory (no deps, no disk) — cleared on restart. Defaults: sample
+# every 15s, keep 240 points => ~1h of history.
+HISTORY_ENABLED = os.environ.get("HISTORY_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+HISTORY_INTERVAL = float(os.environ.get("HISTORY_INTERVAL", "15"))
+HISTORY_POINTS = int(os.environ.get("HISTORY_POINTS", "240"))
 
 # Set while quiet hours has the box in deep idle — the fast keeper honours this
 # and stops re-warming so it doesn't fight the quiet-hours loop.
@@ -565,6 +579,83 @@ def cached_status() -> dict:
     return _cache["data"]
 
 
+# --- History ring buffer -----------------------------------------------------
+# Compact per-sample record: {"t", "cpu", "mem", "g":[{"i","n","u","p","tC","m"}]}.
+# Reads cached_status() so it shares the single CPU%-delta state (no double
+# counting) and one nvidia-smi cadence with the page.
+_history: "deque[dict]" = deque(maxlen=HISTORY_POINTS)
+_history_lock = threading.Lock()
+
+
+def _compact_sample(s: dict) -> dict:
+    host = s.get("host") or {}
+    mem = host.get("mem") or {}
+    g = []
+    for gpu in s.get("gpus") or []:
+        mu, mt = gpu.get("mem_used"), gpu.get("mem_total")
+        g.append(
+            {
+                "i": gpu.get("index"),
+                "n": gpu.get("name"),
+                "u": gpu.get("util"),
+                "p": gpu.get("power"),
+                "tC": gpu.get("temp"),
+                "m": round(100.0 * mu / mt) if (mu is not None and mt) else None,
+            }
+        )
+    return {
+        "t": s.get("timestamp"),
+        "cpu": host.get("cpu_pct"),
+        "mem": mem.get("used_pct"),
+        "g": g,
+    }
+
+
+def _history_loop() -> None:
+    while True:
+        try:
+            rec = _compact_sample(cached_status())
+            with _history_lock:
+                _history.append(rec)
+        except Exception:
+            pass
+        time.sleep(HISTORY_INTERVAL)
+
+
+def build_history() -> dict:
+    with _history_lock:
+        snap = list(_history)
+    names: dict = {}
+    for rec in snap:
+        for gpu in rec.get("g", []):
+            i = gpu.get("i")
+            if i is not None and i not in names:
+                names[i] = gpu.get("n")
+    idxs = sorted(names)
+    gpus = []
+    for i in idxs:
+        util, power, temp, memp = [], [], [], []
+        for rec in snap:
+            gg = next((x for x in rec.get("g", []) if x.get("i") == i), None)
+            util.append(gg.get("u") if gg else None)
+            power.append(gg.get("p") if gg else None)
+            temp.append(gg.get("tC") if gg else None)
+            memp.append(gg.get("m") if gg else None)
+        gpus.append(
+            {"index": i, "name": names[i], "util": util, "power": power,
+             "temp": temp, "mem": memp}
+        )
+    return {
+        "interval": HISTORY_INTERVAL,
+        "points": HISTORY_POINTS,
+        "count": len(snap),
+        "t": [rec.get("t") for rec in snap],
+        "cpu": [rec.get("cpu") for rec in snap],
+        "mem": [rec.get("mem") for rec in snap],
+        "gpus": gpus,
+    }
+
+
 # --- Open WebUI banner pusher -----------------------------------------------
 
 def banner_text(status: dict) -> str:
@@ -906,12 +997,18 @@ _HTML = """<!doctype html>
   .bar > i { display:block; height:100%; background:#4b8ce0; }
   .bar > i.busy { background:#e6c04b; }
   .bar > i.bad { background:#e07f7f; }
+  .spark { display:inline-block; vertical-align:middle; background:#0f1115; border:1px solid #202634; border-radius:3px; }
+  .spark path { vector-effect: non-scaling-stroke; }
+  .cur { display:inline-block; min-width:52px; text-align:right; font-variant-numeric:tabular-nums; margin-left:6px; color:#cdd6e4; }
+  td.g { white-space:nowrap; }
+  .hsub { color:#8b95a7; font-size:11px; }
 </style></head>
 <body>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
   <section><h2>Models (llama-swap)</h2><div id="models">…</div></section>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
+  <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
 </main>
@@ -952,8 +1049,51 @@ function bar(label, pct, txt){
     `<td><span class="bar"><i class="${cls}" style="width:${p}%"></i></span> ${pct!=null?pct+'%':'–'}</td>`+
     `<td class="sub">${txt||''}</td></tr>`;
 }
-async function refresh(){
+function lastVal(a){ for(let i=a.length-1;i>=0;i--){ if(a[i]!=null) return a[i]; } return null; }
+function spark(vals, opts){
+  opts = opts || {};
+  const w = 150, h = 30, pad = 2;
+  const nums = vals.filter(v=>v!=null);
+  if(!nums.length) return '<svg class="spark" width="'+w+'" height="'+h+'"></svg>';
+  let mn = (opts.min!=null)? opts.min : Math.min(...nums);
+  let mx = (opts.max!=null)? opts.max : Math.max(...nums);
+  if(mx<=mn) mx = mn + 1;
+  const n = vals.length;
+  const step = n>1? (w-2*pad)/(n-1) : 0;
+  const y = v => (h-pad) - ((v-mn)/(mx-mn))*(h-2*pad);
+  let d='';
+  vals.forEach((v,i)=>{ if(v==null) return; const x=pad+i*step; d += (d? 'L':'M') + x.toFixed(1) + ' ' + y(v).toFixed(1); });
+  const col = opts.color || '#4b8ce0';
+  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" preserveAspectRatio="none">'+
+         '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5"/></svg>';
+}
+function cell(vals, unit, opts){
+  const cur = lastVal(vals);
+  return '<td class="g">'+spark(vals, opts)+'<span class="cur">'+(cur!=null? cur+unit : '–')+'</span></td>';
+}
+async function refreshHistory(){
   try{
+    const r = await fetch('history.json', {cache:'no-store'}); const d = await r.json();
+    if(!d.count){ document.getElementById('history').innerHTML = '<span class="sub">collecting… (first sample within '+Math.round(d.interval)+'s)</span>'; return; }
+    const mins = Math.round(d.count*d.interval/60);
+    document.getElementById('histspan').textContent = '· last '+(mins>=1? mins+' min':d.count*d.interval+'s')+' ('+d.count+' pts @ '+Math.round(d.interval)+'s)';
+    let html = '<table><tr><th>GPU</th><th>Util</th><th>Power</th><th>Temp</th><th>VRAM</th></tr>';
+    d.gpus.forEach(g=>{
+      html += '<tr><td>'+g.index+' '+esc(g.name||'')+'</td>'+
+        cell(g.util,'%',{min:0,max:100,color:'#4b8ce0'})+
+        cell(g.power,' W',{color:'#e6c04b'})+
+        cell(g.temp,'°C',{color:'#e07f7f'})+
+        cell(g.mem,'%',{min:0,max:100,color:'#7fce7f'})+'</tr>';
+    });
+    html += '</table>';
+    html += '<table style="margin-top:10px"><tr><th>Host</th><th>CPU</th><th>RAM</th></tr>'+
+      '<tr><td>system</td>'+
+      cell(d.cpu,'%',{min:0,max:100,color:'#4b8ce0'})+
+      cell(d.mem,'%',{min:0,max:100,color:'#b58ce0'})+'</tr></table>';
+    document.getElementById('history').innerHTML = html;
+  }catch(e){ document.getElementById('history').innerHTML = '<span class="sub">history error: '+esc(String(e))+'</span>'; }
+}
+async function refresh(){  try{
     const r = await fetch('status.json', {cache:'no-store'}); const d = await r.json();
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
     // models
@@ -1000,6 +1140,7 @@ async function refresh(){
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 refresh(); setInterval(refresh, 5000);
+refreshHistory(); setInterval(refreshHistory, 15000);
 </script>
 </body></html>
 """
@@ -1019,6 +1160,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/status.json", "/status"):
             body = json.dumps(cached_status()).encode("utf-8")
             self._send(200, body, "application/json")
+        elif path in ("/history.json", "/history"):
+            body = json.dumps(build_history()).encode("utf-8")
+            self._send(200, body, "application/json")
         elif path == "/healthz":
             self._send(200, b"ok", "text/plain")
         elif path == "/":
@@ -1032,6 +1176,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=_activity_loop, daemon=True).start()
+    if HISTORY_ENABLED:
+        threading.Thread(target=_history_loop, daemon=True).start()
+    else:
+        print("[history] HISTORY_ENABLED=false — time-series disabled")
     if OWUI_API_KEY:
         threading.Thread(target=_banner_loop, daemon=True).start()
     else:

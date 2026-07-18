@@ -327,6 +327,7 @@ docker compose logs -f litellm                       # follow logs
 curl -s 127.0.0.1:9090/running | python3 -m json.tool     # loaded models
 CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi                    # GPU util/VRAM/temp
 curl -s 127.0.0.1:9095/status.json | python3 -m json.tool  # aggregated host+GPU+model status
+curl -s 127.0.0.1:9095/history.json | python3 -m json.tool # time series behind the dashboard sparklines
 
 # Warm the daily set after a restart (fast preloads itself; coding+chat load on first hit):
 for m in coding chat fast; do
