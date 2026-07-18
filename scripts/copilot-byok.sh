@@ -65,9 +65,10 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 #      (a) @github/copilot-sdk host: CopilotClient({onListModels}) + createSession(
 #          {provider:LiteLLM, customAgents:[{model:"chat"}]}) — PROVEN live (explorer
 #          ran 81k tokens on chat/idx2 while driver stayed on coding/idx1).
-#      (b) GitHub Copilot desktop app: configure coding/chat/fast as BYOK models, then
-#          assign them per-agent in its Agents settings (surfaces multiple models like
-#          onListModels does).
+#      (b) GitHub Copilot desktop app: can list coding/chat/fast as BYOK models, but its
+#          per-session model is a single dropdown and multi-model subagent fan-out is gated
+#          by server-only flag copilot_cli_subagent_parallelism_prompts (off) — verified NOT
+#          a workaround on this account (2026-07-18). SDK host (a) is the only working path.
 export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-fast}"
 
 # Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.

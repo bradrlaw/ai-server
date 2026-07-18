@@ -858,11 +858,18 @@ right GPU, so no server-side change is needed — only the client picks the per-
    (The SDK also exposes an experimental multi-provider registry — `providers[]` +
    `models[]` with per-model `wireModel` — for mixing CAPI + several BYOK providers.)
 
-3. **GitHub Copilot desktop app — likely, via its Agents settings.** The app is built on
-   the CLI and supports configuring **multiple** BYOK models per session (equivalent to
-   `onListModels`). Configure `coding`/`chat`/`fast` as BYOK models, then assign them
-   per-agent in the app's Agents/subagent settings — because multiple models are already
-   in the list, the per-agent picker can surface them (unlike the CLI's single-model env BYOK).
+3. **GitHub Copilot desktop app — same server-gated block.** The app is built on the CLI
+   and lets you configure `coding`/`chat`/`fast` as BYOK models, but its per-session model
+   is a **single dropdown** (one active model per session) — there is no per-subagent model
+   UI. Binding different local models to different subagents (e.g. `/review pr using coding
+   and chat`) rides on the CLI multi-model fan-out, which is gated by the server-only flag
+   `copilot_cli_subagent_parallelism_prompts` (availability **`off`**, same un-toggleable
+   class as the search flag). Verified 2026-07-18: naming two models did **not** fan out.
+   So the app is **not** a workaround on this account until GitHub enables that flag.
+
+   (`RUBBER_DUCK_AGENT` is `on` and auto-invokes a second-opinion reviewer, but
+   `rubberDuckSelectModel` picks a **cross-family** reviewer — all-local BYOK models are one
+   family, so it likely won't pair. Worth a quick `/experimental` test but not relied upon.)
 
 **Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
 alone; use the SDK host (proven) or the desktop app's multi-model BYOK + per-agent assignment.
