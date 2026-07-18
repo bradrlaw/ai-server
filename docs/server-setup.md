@@ -858,21 +858,36 @@ right GPU, so no server-side change is needed — only the client picks the per-
    (The SDK also exposes an experimental multi-provider registry — `providers[]` +
    `models[]` with per-model `wireModel` — for mixing CAPI + several BYOK providers.)
 
-3. **GitHub Copilot desktop app — same server-gated block.** The app is built on the CLI
-   and lets you configure `coding`/`chat`/`fast` as BYOK models, but its per-session model
-   is a **single dropdown** (one active model per session) — there is no per-subagent model
-   UI. Binding different local models to different subagents (e.g. `/review pr using coding
-   and chat`) rides on the CLI multi-model fan-out, which is gated by the server-only flag
-   `copilot_cli_subagent_parallelism_prompts` (availability **`off`**, same un-toggleable
-   class as the search flag). Verified 2026-07-18: naming two models did **not** fan out.
-   So the app is **not** a workaround on this account until GitHub enables that flag.
+3. **GitHub Copilot desktop app — WORKS for multi-model reviews (verified 2026-07-18).**
+   Configure `coding`/`chat`/`fast` as separate BYOK models in the app, then ask for a
+   multi-model review (e.g. *"review the codebase using the `coding` model and the `chat`
+   model"*). The app **does** fan out into parallel per-model review subagents — observed
+   live: a `coding` reviewer ran on V100 idx1 and a `chat` reviewer on V100 idx2
+   concurrently, then the driver compared both. (This contradicts an earlier assumption that
+   the `copilot_cli_subagent_parallelism_prompts` flag blocks it — the app fanned out anyway.)
+
+   **Two gotchas that will break it:**
+
+   - **Exact lowercase model ids.** LiteLLM is case-sensitive: the driver once passed
+     `model=Chat` and got `400 Invalid model name` (call `/v1/models` for the canonical ids:
+     `coding`, `chat`, `fast`, …). Name the BYOK models exactly as registered — all lowercase.
+   - **Do NOT expose the `plan-build` MCP to a review/parallel session.** Its tools are
+     **serial** (blocking `_chat` calls) and the heavy ones swap `big`/`coder-next` onto
+     **both V100s**, evicting the `coding`/`chat` models the review subagents are running on
+     (the P100-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=p100`
+     fallback). Symptom seen live: one reviewer stalled at ~2k generated tokens while its
+     model was evicted mid-flight. Disable the plan-build MCP for review sessions
+     (`COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher, or turn it off in the app's MCP/tools
+     settings) — it's a plan→build code-gen tool, not a review tool.
 
    (`RUBBER_DUCK_AGENT` is `on` and auto-invokes a second-opinion reviewer, but
    `rubberDuckSelectModel` picks a **cross-family** reviewer — all-local BYOK models are one
    family, so it likely won't pair. Worth a quick `/experimental` test but not relied upon.)
 
 **Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
-alone; use the SDK host (proven) or the desktop app's multi-model BYOK + per-agent assignment.
+env-var BYOK alone (single model). Use either the **SDK host** (proven, deterministic
+per-agent pinning) or the **desktop app's multi-model BYOK** (proven for parallel reviews —
+mind the two gotchas above).
 
 ### plan-build MCP over HTTP (for Copilot BYOK)
 
