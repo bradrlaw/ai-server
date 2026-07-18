@@ -44,6 +44,25 @@ esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
 export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:-$def_output}"
 
+# --- Subagent model routing (GPU-tiered) -----------------------------------
+# Run the token-heavy explore/search subagent on a DIFFERENT local model than the
+# driver so it executes on a SEPARATE GPU in parallel (no contention/eviction):
+#     driver (COPILOT_MODEL, default 'coding') -> V100 idx1
+#     explore/search subagent  -> 'fast' (Gemma-4-12B) on the P100 (idx0), always warm
+# The P100 is on a different card from every V100 driver, so the driver keeps
+# reasoning while explores run in parallel with zero cold-start (fast keeper thread).
+# Override with SEARCH_SUBAGENT_MODEL=<id>; set it EMPTY to inherit the driver.
+#
+# CAVEATS (see docs/server-setup.md "Subagent model routing"):
+#  * The search subagent is gated by a server-side account feature flag
+#    (copilot_swe_agent_cli_search_subagent). If it's not enabled for your account
+#    this env has no effect — verify with a delegated explore on the status page.
+#  * Routing the task/general subagents to a THIRD model (e.g. 'chat' on V100 idx2)
+#    is NOT env-settable in single-provider BYOK mode; the /subagents picker only
+#    exposes the configured provider model. Assign it interactively via /subagents
+#    if/when the picker surfaces it; otherwise task/general inherit the driver.
+export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-fast}"
+
 # Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.
 # It runs as a native HTTP service on the AI server (scripts/plan-build-mcp.service,
 # 0.0.0.0:9100), so the client needs no Python/uv — just `copilot mcp add`. The URL
@@ -69,5 +88,5 @@ if [[ "${COPILOT_PLAN_BUILD_MCP:-1}" != "0" ]] && command -v copilot >/dev/null 
   fi
 fi
 
-echo "Copilot CLI -> ${COPILOT_PROVIDER_BASE_URL} (model: ${COPILOT_MODEL}, prompt<=${COPILOT_PROVIDER_MAX_PROMPT_TOKENS}, output<=${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS})" >&2
+echo "Copilot CLI -> ${COPILOT_PROVIDER_BASE_URL} (model: ${COPILOT_MODEL}, prompt<=${COPILOT_PROVIDER_MAX_PROMPT_TOKENS}, output<=${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS}${SEARCH_SUBAGENT_MODEL:+, search-subagent: ${SEARCH_SUBAGENT_MODEL}})" >&2
 exec copilot "$@"

@@ -807,6 +807,35 @@ Notes:
 - Any value exported in the environment overrides the per-model default, e.g.
   `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
 
+### Subagent model routing (GPU-tiered)
+
+`copilot-byok.sh` sets `SEARCH_SUBAGENT_MODEL=fast` by default so the token-heavy
+**explore/search** subagent runs on a *different* local model — and therefore a
+different GPU — than the driver:
+
+| GPU | Model | Role |
+| --- | --- | --- |
+| P100 idx0 | `fast` (Gemma-4-12B) | explore/search subagent (always warm) |
+| V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
+| V100 idx2 | `chat` | *intended* task/general subagent (see caveat) |
+
+Because `fast` lives on the P100 — a separate card from every V100 driver — the
+driver keeps reasoning while explores run **in parallel** with no contention, no
+eviction, and zero cold-start (the status service's keeper keeps `fast` resident).
+Override with `SEARCH_SUBAGENT_MODEL=<id>`; set it empty to inherit the driver.
+
+**Two caveats found while wiring this (CLI 1.0.71):**
+1. The search subagent is gated behind a **server-side account feature flag**
+   (`copilot_swe_agent_cli_search_subagent`). If it isn't enabled for your account,
+   `SEARCH_SUBAGENT_MODEL` has no effect. Verify by delegating an explore and watching
+   the status page (or LiteLLM `:4000` log) for a hit on `fast`.
+2. Routing the **task/general** subagents to a *third* model (`chat` on idx2) is **not
+   env-settable** in single-provider BYOK mode — only `SEARCH_SUBAGENT_MODEL` exists as
+   a raw override. The interactive `/subagents` picker only lists the one configured
+   provider model, so `chat` won't appear as a selectable target. Until Copilot CLI
+   exposes a multi-model BYOK registry (or per-agent env overrides), task/general
+   subagents **inherit the driver** (`coding`, idx2 stays free for on-demand `chat`).
+
 ### plan-build MCP over HTTP (for Copilot BYOK)
 
 The in-house **plan-build** planner→coder pipeline (`docker/mcpo/plan_build_mcp.py`, see the
