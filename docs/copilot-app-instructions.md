@@ -9,9 +9,15 @@ desktop app so subagents and parallel work land on **different GPUs**. Verified 
 
 | BYOK id | Model | GPU | Character |
 | --- | --- | --- | --- |
-| `coding` | Qwen3.6-27B (dense, Q6_K) | V100 idx1 | Best overall output — the driver + heavy reasoning |
-| `chat` | Qwen3.6-35B-A3B (MoE) | V100 idx2 | Almost as good, higher throughput — parallel review/second-opinion |
+| `coding` | Qwen3.6-27B (dense, Q6_K) | V100 idx1 | Best overall output, but **slowest** (dense 27B) — reserve for the driver + quality-critical reasoning |
+| `chat` | Qwen3.6-35B-A3B (MoE) | V100 idx2 | Near-`coding` quality but **much faster** (MoE, ~3B active params) — ideal for high-volume/parallel review + second-opinion |
 | `fast` | Gemma-4-12B | P100 idx0 | Cheapest card, always warm — noisy explore + command-running |
+
+> **Throughput note (measured live 2026-07-18):** in a two-agent parallel run, the `chat`
+> agent was spawned *after* the `coding` agent yet completed most of its work first — the
+> MoE's ~3B active params make it generate markedly faster than the dense 27B `coding`.
+> Practical upshot: route latency-sensitive / high-volume subagents to `chat`, and keep
+> `coding` for work where output quality matters more than speed.
 
 Register all three as BYOK models in the app pointed at the LiteLLM gateway
 (`http://<host>:4000/v1`). **Use the exact lowercase ids** — LiteLLM is case-sensitive, so
