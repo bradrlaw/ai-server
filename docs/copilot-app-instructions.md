@@ -67,6 +67,14 @@ separate GPUs concurrently. Never route two heavy subagents to the same model at
 Do NOT use the plan-build MCP tools during a review or multi-subagent session.
 ```
 
+## Power draw (dual-GPU parallel work)
+
+Measured live 2026-07-18 with two models running concurrently (`coding` on V100 idx1 +
+`chat` on V100 idx2, both generating): **whole-server draw ~400–485 W total, ~4–4.5 A max**
+at the wall. Keep this in mind for UPS sizing/limits — running three heavy sessions (both
+V100s + P100) will push it higher. (The earlier dual-card vLLM benchmark that overloaded the
+UPS is why the server was moved off it.)
+
 ## Gotchas (learned live 2026-07-18)
 
 - **Exact lowercase model ids** — LiteLLM is case-sensitive; `Chat` → `400 Invalid model name`.
