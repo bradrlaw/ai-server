@@ -183,32 +183,18 @@ Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** wit
 - Good first validation target. Likely the **primary** engine for V100 coding models
   too (Q4/Q5/Q6 GGUF lets a ~70B model fit across 2×V100=64GB).
 
-### vLLM  (likely needed later — set expectations)
-- Higher throughput + better continuous batching, **but Volta support is second-class
-  and shrinking**: no prebuilt Volta-optimized path, no FlashAttn2/FP8/Marlin on sm_70,
-  fp16-only. May require **building from source** against a matching torch/CUDA 12.x.
-- **P100 (sm_60) is effectively unsupported** by current vLLM — keep vLLM to the V100s.
-- Alternatives worth evaluating: **SGLang**, **TGI**, **ExLlamaV2** (verify it still
-  supports sm_70), or sticking with llama.cpp if throughput is adequate.
+### vLLM — evaluated and ABANDONED (2026-07-18)
 
-#### Verified V100 spike (2026-07-18) — it *does* run, on a pinned old release
-Confirmed vLLM loads + generates on a V100 (sm_70) with the **XFormers** backend at
-~90 tok/s (opt-125m smoke test). Reproducible venv (`/srv/ai/venvs/vllm-spike`):
-```bash
-python3 -m venv --without-pip /srv/ai/venvs/vllm-spike   # ensurepip absent on host
-/srv/ai/venvs/vllm-spike/bin/python /tmp/get-pip.py       # bootstrap pip
-/srv/ai/venvs/vllm-spike/bin/pip install "vllm==0.6.6.post1" "transformers==4.47.1"
-# run:
-export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 VLLM_ATTENTION_BACKEND=XFORMERS
-# LLM(model=..., dtype="float16", ...)
-```
-- Pin set: `vllm==0.6.6.post1` (torch 2.5.1+cu124, xformers 0.0.28.post3),
-  **`transformers==4.47.1`** — transformers 5.x removes `all_special_tokens_extended`
-  and breaks this vLLM's tokenizer; keep `huggingface-hub` <1.0.
-- **Do not `pip install -U`.** Newer vLLM's default **V1 engine needs sm_80 attention**
-  and won't load on a V100 — `0.6.6.post1` is the practical ceiling on this hardware.
-- Next step to promote it: benchmark vs llama.cpp under concurrency + test TP=2 across
-  the two V100s (no NVLink → PCIe-bound). See ADR-0004 update.
+**Do not pursue vLLM on this hardware.** A spike confirmed vLLM *can* run on a V100
+(sm_70) with a pinned old release (`vllm==0.6.6.post1` + `transformers==4.47.1`,
+XFormers backend, fp16, ~90 tok/s smoke; TP=2 ~+12–35% over TP=1 on Qwen2.5-7B) — but
+that release predates every model in the roster (`qwen35`, `qwen3next`, `qwen35moe`,
+new gemma), and the newer vLLM that supports them needs the sm_80-only V1 attention
+backend. Volta also has no int8/FP8 quant kernels, so vLLM is fp16-only here (a 27B
+can't fit one card and "Q8" isn't a real path). Net: vLLM can't serve a single one of
+our daily models. **llama.cpp + llama-swap is the sole serving engine** until an
+sm_80+ GPU is added. Full rationale + benchmark evidence: ADR-0004. Spike venv and the
+Qwen2.5-7B test model were removed.
 
 ---
 

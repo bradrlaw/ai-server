@@ -1,7 +1,7 @@
 # ADR-0004: llama.cpp as primary engine, vLLM secondary
 
-- **Status:** Accepted
-- **Date:** 2026-07-01
+- **Status:** Accepted — **vLLM secondary track ABANDONED 2026-07-18** (see final update)
+- **Date:** 2026-07-01 (superseding decision 2026-07-18)
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
 ## Context
@@ -54,6 +54,55 @@ This validates the "vLLM as V100-only secondary" decision. Verified recipe:
 - **Still TODO before promoting vLLM to a real service:** benchmark throughput vs
   llama.cpp under batched load, and test `--tensor-parallel-size 2` across the two
   V100s (no NVLink → PCIe-bound).
+
+## Update 2026-07-18 — TP=1 vs TP=2 benchmark (Qwen2.5-7B-Instruct, fp16)
+
+Ran `scripts/vllm-bench.py` (fixed synthetic batched workload, `ignore_eos`) on
+Qwen2.5-7B-Instruct fp16, XFormers backend, V100s capped at 175 W, no NVLink:
+
+| Workload | TP=1 (1×V100) out tok/s | TP=2 (2×V100) out tok/s | TP=2 gain |
+| --- | --- | --- | --- |
+| Light (256×512in×128out) | 744.5 | 836.3 | +12% |
+| Heavy (512×1024in×256out) | 587.9 | 794.3 | +35% |
+
+- KV headroom: TP=1 = 14,934 blocks (58× concurrency); TP=2 = 46,307 blocks (181×).
+- **TP=2 is sublinear** — no NVLink means the per-token attention all-reduce crosses
+  PCIe and eats most of the second card's compute. The gain grows with load (+12% →
+  +35%) because TP=2's real benefit is **~3× more KV cache** (deeper batching under
+  concurrency), not raw single-stream speed.
+- **Decision guidance:** for a model that fits one V100, run **two independent TP=1
+  instances** (~1,490 tok/s aggregate) rather than one TP=2 instance (836). Reserve
+  **TP=2 for models >32 GB or very high concurrency** needing the KV headroom —
+  consistent with ADR-0005.
+- ⚠️ **Power note:** a concurrent full-load dual-V100 run tripped the owner's UPS
+  (combined draw). Server has since been moved off the UPS; keep the 175 W caps.
+
+## Update 2026-07-18 — DECISION: abandon the vLLM secondary track
+
+While setting up a vLLM-vs-llama.cpp comparison on the actual daily models, we found
+that **the only vLLM release that runs on Volta (`0.6.6.post1`) is older than every
+model in the roster** — it recognizes only `Qwen2ForCausalLM` / `Qwen2MoeForCausalLM`:
+
+| Daily model | HF/GGUF arch | vLLM 0.6.6 support |
+| --- | --- | --- |
+| coding / big — Qwen3.6-27B | `qwen35` | ❌ unknown arch |
+| coder-next — Qwen3-Coder-Next 80B-A3B | `qwen3next` (Gated-DeltaNet linear-attn MoE) | ❌❌ arch + linear-attn kernels are sm_80+ only |
+| chat — Qwen3.6-35B-A3B | `qwen35moe` | ❌ |
+| fast — Gemma-4-12B | newer gemma | ❌ |
+
+Compounding constraints on Volta:
+- **No working quant path** — Volta has no int8/FP8 tensor-core kernels; vLLM's Marlin /
+  CUTLASS W8A8 / FP8 backends are all sm_80+. vLLM on V100 is effectively **fp16-only**,
+  so a 27B needs TP=2 (≈50 GB) and cannot fit one card, and "Q8 in vLLM" is not a real
+  test. llama.cpp GGUF quants are the *only* way a 27B fits a single V100.
+- Getting Qwen3.x arch support requires vLLM ≥0.8.x, whose default **V1 engine needs
+  sm_80 attention** (FlashAttention/FlashInfer) → won't load on the V100.
+
+**Decision:** stop all vLLM work. **llama.cpp + llama-swap is the sole serving engine**
+on this hardware for the foreseeable future. vLLM would only become viable with an
+Ampere-or-newer GPU (sm_80+), at which point this ADR should be revisited. The Volta
+feasibility findings above are retained as evidence; the `vllm-spike` venv and the
+`Qwen2.5-7B` test model were removed to reclaim disk.
 
 ## Alternatives considered
 - **vLLM as primary** - rejected for now; weak Volta support, no P100 support.
