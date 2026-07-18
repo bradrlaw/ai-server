@@ -887,7 +887,8 @@ right GPU, so no server-side change is needed — only the client picks the per-
 **Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
 env-var BYOK alone (single model). Use either the **SDK host** (proven, deterministic
 per-agent pinning) or the **desktop app's multi-model BYOK** (proven for parallel reviews —
-mind the two gotchas above).
+mind the two gotchas above). For the desktop app, see the paste-ready global-instructions
+mapping and multi-session parallelism recipe in **`docs/copilot-app-instructions.md`**.
 
 ### plan-build MCP over HTTP (for Copilot BYOK)
 
