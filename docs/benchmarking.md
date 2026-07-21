@@ -75,8 +75,9 @@ llama.cpp/LM Studio. Throughput does **not** improve with concurrency on a
 
 ## `--parallel` throughput sweep (2026-07-21)
 
-`scratch/parallel_sweep.py` sweeps `--parallel` per model (editing `llama-swap.yaml`
-+ `concurrencyLimit`, benchmarking `:9090` directly, restoring on exit), 160 max
+`scripts/parallel-sweep.py` sweeps `--parallel` per model (editing the active
+`llama-swap.yaml` + `concurrencyLimit` from a pristine snapshot, benchmarking
+`:9090` directly, restoring on exit), 160 max
 tokens, concurrency 1–16. **Raising `--parallel` splits `--ctx-size` across slots,
 so KV VRAM stays ~flat** — the GPU batch-decodes N sequences for real aggregate
 speedup (the *compute* buffers grow, which is what OOMs the VRAM-tight models).
