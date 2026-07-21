@@ -38,17 +38,29 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import subprocess
 import threading
 import time
 import urllib.error
 import urllib.request
 import datetime as dt
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STATUS_PORT", "9095"))
 LLAMASWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip("/")
+# Active llama-swap config the mode switcher (scripts/llama-swap-mode.py) renders;
+# read for the current mode marker + per-model --parallel / --ctx-size.
+LLAMASWAP_CONFIG = os.environ.get("LLAMASWAP_CONFIG", "/srv/ai/config/llama-swap.yaml")
+# Committed benchmark chart (docs/img/…) served at /parallel-sweep.png and shown
+# in the dashboard's Benchmarks section. Empty/missing → section hidden.
+BENCH_CHART = os.environ.get(
+    "BENCH_CHART", "/srv/ai/docs/img/parallel-sweep-20260721.png")
+BENCH_DOC_URL = os.environ.get(
+    "BENCH_DOC_URL",
+    "https://github.com/bradrlaw/ai-server/blob/dev/docs/benchmarking.md")
 # Comma-separated filesystem paths to report disk usage for (one row each).
 STATUS_DISK_PATHS = [
     p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
@@ -143,6 +155,19 @@ QUIET_WARM_ON_EXIT = [
 # period. Loaded-but-idle models sit at ~0%%, so this distinguishes "in use" from
 # "just resident" (coding/chat have no ttl and never self-unload).
 QUIET_ACTIVE_SM_PCT = float(os.environ.get("QUIET_ACTIVE_SM_PCT", "5"))
+
+# --- History (in-memory time series for the dashboard sparklines) -------------
+# A background thread snapshots per-GPU util/power/temp/VRAM and host CPU/RAM %
+# into a fixed-size ring buffer, served at /history.json for inline-SVG graphs.
+# Purely in-memory (no deps, no disk) — cleared on restart. Defaults: sample
+# every 15s, keep 240 points => ~1h of history.
+HISTORY_ENABLED = os.environ.get("HISTORY_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+HISTORY_INTERVAL = float(os.environ.get("HISTORY_INTERVAL", "15"))
+HISTORY_POINTS = int(os.environ.get("HISTORY_POINTS", "240"))
 
 # Set while quiet hours has the box in deep idle — the fast keeper honours this
 # and stops re-warming so it doesn't fight the quiet-hours loop.
@@ -321,15 +346,70 @@ def _http_status(url: str):
         return None, None
 
 
+def collect_mode() -> dict:
+    """Read the active llama-swap mode marker + per-model --parallel / --ctx-size.
+
+    Parses the rendered active config (config/llama-swap.yaml) written by the mode
+    switcher. Returns {"mode": <name>, "models": {name: {parallel, ctx,
+    ctx_per_slot}}}. Best-effort — returns a mostly-empty dict on any error.
+    """
+    out = {"mode": "unknown", "models": {}}
+    try:
+        with open(LLAMASWAP_CONFIG) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return out
+    key_re = re.compile(r'^  "([a-z0-9-]+)":\s*$')
+    for line in lines:
+        mm = re.match(r"^#\s*ACTIVE-MODE:\s*([A-Za-z0-9_-]+)", line)
+        if mm:
+            out["mode"] = mm.group(1)
+            break
+        if line.strip() and not line.startswith("#"):
+            break
+    i, n = 0, len(lines)
+    while i < n:
+        m = key_re.match(lines[i])
+        if m:
+            name = m.group(1)
+            j = i + 1
+            block = []
+            while j < n and not key_re.match(lines[j]):
+                block.append(lines[j])
+                j += 1
+            text = "\n".join(block)
+            info = {}
+            if (pm := re.search(r"--parallel\s+(\d+)", text)):
+                info["parallel"] = int(pm.group(1))
+            if (cm := re.search(r"--ctx-size\s+(\d+)", text)):
+                info["ctx"] = int(cm.group(1))
+            if info.get("ctx"):
+                info["ctx_per_slot"] = info["ctx"] // (info.get("parallel", 1) or 1)
+            if info:
+                out["models"][name] = info
+            i = j
+        else:
+            i += 1
+    return out
+
+
 def collect_models() -> dict:
     running = _get_json(f"{LLAMASWAP_URL}/running")
+    cfg = collect_mode()
     if running is None:
-        return {"reachable": False, "loaded": [], "available": 0}
+        return {"reachable": False, "loaded": [], "available": 0,
+                "mode": cfg["mode"], "config": cfg["models"]}
     rows = running.get("running") or []
     loaded = []
     for m in rows:
         if isinstance(m, dict):
-            entry = {"model": m.get("model", "?"), "state": m.get("state", "?")}
+            name = m.get("model", "?")
+            entry = {"model": name, "state": m.get("state", "?")}
+            mc = cfg["models"].get(name)
+            if mc:
+                entry["parallel"] = mc.get("parallel")
+                entry["ctx"] = mc.get("ctx")
+                entry["ctx_per_slot"] = mc.get("ctx_per_slot")
             proxy = m.get("proxy")
             if proxy:
                 act = _cached_activity(proxy)
@@ -338,7 +418,8 @@ def collect_models() -> dict:
             loaded.append(entry)
     catalog = _get_json(f"{LLAMASWAP_URL}/v1/models") or {}
     available = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
-    return {"reachable": True, "loaded": loaded, "available": available}
+    return {"reachable": True, "loaded": loaded, "available": available,
+            "mode": cfg["mode"], "config": cfg["models"]}
 
 
 def collect_comfyui() -> list:
@@ -563,6 +644,83 @@ def cached_status() -> dict:
         _cache["data"] = build_status()
         _cache["at"] = now
     return _cache["data"]
+
+
+# --- History ring buffer -----------------------------------------------------
+# Compact per-sample record: {"t", "cpu", "mem", "g":[{"i","n","u","p","tC","m"}]}.
+# Reads cached_status() so it shares the single CPU%-delta state (no double
+# counting) and one nvidia-smi cadence with the page.
+_history: "deque[dict]" = deque(maxlen=HISTORY_POINTS)
+_history_lock = threading.Lock()
+
+
+def _compact_sample(s: dict) -> dict:
+    host = s.get("host") or {}
+    mem = host.get("mem") or {}
+    g = []
+    for gpu in s.get("gpus") or []:
+        mu, mt = gpu.get("mem_used"), gpu.get("mem_total")
+        g.append(
+            {
+                "i": gpu.get("index"),
+                "n": gpu.get("name"),
+                "u": gpu.get("util"),
+                "p": gpu.get("power"),
+                "tC": gpu.get("temp"),
+                "m": round(100.0 * mu / mt) if (mu is not None and mt) else None,
+            }
+        )
+    return {
+        "t": s.get("timestamp"),
+        "cpu": host.get("cpu_pct"),
+        "mem": mem.get("used_pct"),
+        "g": g,
+    }
+
+
+def _history_loop() -> None:
+    while True:
+        try:
+            rec = _compact_sample(cached_status())
+            with _history_lock:
+                _history.append(rec)
+        except Exception:
+            pass
+        time.sleep(HISTORY_INTERVAL)
+
+
+def build_history() -> dict:
+    with _history_lock:
+        snap = list(_history)
+    names: dict = {}
+    for rec in snap:
+        for gpu in rec.get("g", []):
+            i = gpu.get("i")
+            if i is not None and i not in names:
+                names[i] = gpu.get("n")
+    idxs = sorted(names)
+    gpus = []
+    for i in idxs:
+        util, power, temp, memp = [], [], [], []
+        for rec in snap:
+            gg = next((x for x in rec.get("g", []) if x.get("i") == i), None)
+            util.append(gg.get("u") if gg else None)
+            power.append(gg.get("p") if gg else None)
+            temp.append(gg.get("tC") if gg else None)
+            memp.append(gg.get("m") if gg else None)
+        gpus.append(
+            {"index": i, "name": names[i], "util": util, "power": power,
+             "temp": temp, "mem": memp}
+        )
+    return {
+        "interval": HISTORY_INTERVAL,
+        "points": HISTORY_POINTS,
+        "count": len(snap),
+        "t": [rec.get("t") for rec in snap],
+        "cpu": [rec.get("cpu") for rec in snap],
+        "mem": [rec.get("mem") for rec in snap],
+        "gpus": gpus,
+    }
 
 
 # --- Open WebUI banner pusher -----------------------------------------------
@@ -906,14 +1064,24 @@ _HTML = """<!doctype html>
   .bar > i { display:block; height:100%; background:#4b8ce0; }
   .bar > i.busy { background:#e6c04b; }
   .bar > i.bad { background:#e07f7f; }
+  .spark { display:inline-block; vertical-align:middle; background:#0f1115; border:1px solid #202634; border-radius:3px; }
+  .spark path { vector-effect: non-scaling-stroke; }
+  .cur { display:inline-block; min-width:52px; text-align:right; font-variant-numeric:tabular-nums; margin-left:6px; color:#cdd6e4; }
+  td.g { white-space:nowrap; }
+  .hsub { color:#8b95a7; font-size:11px; }
 </style></head>
 <body>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
-  <section><h2>Models (llama-swap)</h2><div id="models">…</div></section>
+  <section><h2>Models (llama-swap) <span class="hsub" id="modebadge"></span></h2><div id="models">…</div></section>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
+  <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
+  <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
+    <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
+    <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
+  </section>
 </main>
 <script>
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
@@ -952,18 +1120,70 @@ function bar(label, pct, txt){
     `<td><span class="bar"><i class="${cls}" style="width:${p}%"></i></span> ${pct!=null?pct+'%':'–'}</td>`+
     `<td class="sub">${txt||''}</td></tr>`;
 }
-async function refresh(){
+function lastVal(a){ for(let i=a.length-1;i>=0;i--){ if(a[i]!=null) return a[i]; } return null; }
+function spark(vals, opts){
+  opts = opts || {};
+  const w = 150, h = 30, pad = 2;
+  const nums = vals.filter(v=>v!=null);
+  if(!nums.length) return '<svg class="spark" width="'+w+'" height="'+h+'"></svg>';
+  let mn = (opts.min!=null)? opts.min : Math.min(...nums);
+  let mx = (opts.max!=null)? opts.max : Math.max(...nums);
+  if(mx<=mn) mx = mn + 1;
+  const n = vals.length;
+  const step = n>1? (w-2*pad)/(n-1) : 0;
+  const y = v => (h-pad) - ((v-mn)/(mx-mn))*(h-2*pad);
+  let d='';
+  vals.forEach((v,i)=>{ if(v==null) return; const x=pad+i*step; d += (d? 'L':'M') + x.toFixed(1) + ' ' + y(v).toFixed(1); });
+  const col = opts.color || '#4b8ce0';
+  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" preserveAspectRatio="none">'+
+         '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5"/></svg>';
+}
+function cell(vals, unit, opts){
+  const cur = lastVal(vals);
+  return '<td class="g">'+spark(vals, opts)+'<span class="cur">'+(cur!=null? cur+unit : '–')+'</span></td>';
+}
+async function refreshHistory(){
   try{
+    const r = await fetch('history.json', {cache:'no-store'}); const d = await r.json();
+    if(!d.count){ document.getElementById('history').innerHTML = '<span class="sub">collecting… (first sample within '+Math.round(d.interval)+'s)</span>'; return; }
+    const mins = Math.round(d.count*d.interval/60);
+    document.getElementById('histspan').textContent = '· last '+(mins>=1? mins+' min':d.count*d.interval+'s')+' ('+d.count+' pts @ '+Math.round(d.interval)+'s)';
+    let html = '<table><tr><th>GPU</th><th>Util</th><th>Power</th><th>Temp</th><th>VRAM</th></tr>';
+    d.gpus.forEach(g=>{
+      html += '<tr><td>'+g.index+' '+esc(g.name||'')+'</td>'+
+        cell(g.util,'%',{min:0,max:100,color:'#4b8ce0'})+
+        cell(g.power,' W',{color:'#e6c04b'})+
+        cell(g.temp,'°C',{color:'#e07f7f'})+
+        cell(g.mem,'%',{min:0,max:100,color:'#7fce7f'})+'</tr>';
+    });
+    html += '</table>';
+    html += '<table style="margin-top:10px"><tr><th>Host</th><th>CPU</th><th>RAM</th></tr>'+
+      '<tr><td>system</td>'+
+      cell(d.cpu,'%',{min:0,max:100,color:'#4b8ce0'})+
+      cell(d.mem,'%',{min:0,max:100,color:'#b58ce0'})+'</tr></table>';
+    document.getElementById('history').innerHTML = html;
+  }catch(e){ document.getElementById('history').innerHTML = '<span class="sub">history error: '+esc(String(e))+'</span>'; }
+}
+async function refresh(){  try{
     const r = await fetch('status.json', {cache:'no-store'}); const d = await r.json();
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
     // models
     let m = d.models;
+    const mode = m.mode && m.mode!=='unknown' ? m.mode : null;
+    document.getElementById('modebadge').textContent = mode ? '· mode: '+mode : '';
+    function cfgCols(x){
+      const p = x.parallel!=null ? x.parallel : (m.config&&m.config[x.model]? m.config[x.model].parallel : null);
+      const cps = x.ctx_per_slot!=null ? x.ctx_per_slot : (m.config&&m.config[x.model]? m.config[x.model].ctx_per_slot : null);
+      const ctx = x.ctx!=null ? x.ctx : (m.config&&m.config[x.model]? m.config[x.model].ctx : null);
+      const ctxTxt = cps!=null ? (fmtK(cps) + (p>1? ' ×'+p : '')) : '–';
+      return `<td>${p!=null? p : '–'}</td><td title="${ctx!=null? ctx+' total':''}">${ctxTxt}</td>`;
+    }
     if(!m.reachable){ document.getElementById('models').innerHTML = pill('unreachable'); }
     else if(!m.loaded.length){ document.getElementById('models').innerHTML = pill('idle') + ` <span class="sub">${m.available} available</span>`; }
     else {
       document.getElementById('models').innerHTML =
-        '<table><tr><th>Model</th><th>State</th><th>Activity</th></tr>' +
-        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td><td>${activityHtml(x.activity)}</td></tr>`).join('') +
+        '<table><tr><th>Model</th><th>State</th><th>Par</th><th>Ctx/slot</th><th>Activity</th></tr>' +
+        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td>${cfgCols(x)}<td>${activityHtml(x.activity)}</td></tr>`).join('') +
         `</table><div class="sub" style="margin-top:8px">${m.available} available</div>`;
     }
     // gpus
@@ -1000,6 +1220,7 @@ async function refresh(){
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 refresh(); setInterval(refresh, 5000);
+refreshHistory(); setInterval(refreshHistory, 15000);
 </script>
 </body></html>
 """
@@ -1019,10 +1240,20 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/status.json", "/status"):
             body = json.dumps(cached_status()).encode("utf-8")
             self._send(200, body, "application/json")
+        elif path in ("/history.json", "/history"):
+            body = json.dumps(build_history()).encode("utf-8")
+            self._send(200, body, "application/json")
         elif path == "/healthz":
             self._send(200, b"ok", "text/plain")
+        elif path in ("/parallel-sweep.png", "/bench-chart.png"):
+            try:
+                with open(BENCH_CHART, "rb") as f:
+                    self._send(200, f.read(), "image/png")
+            except OSError:
+                self._send(404, b"chart not found", "text/plain")
         elif path == "/":
-            self._send(200, _HTML.encode("utf-8"), "text/html; charset=utf-8")
+            html = _HTML.replace("__BENCH_DOC_URL__", BENCH_DOC_URL)
+            self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")
 
@@ -1032,6 +1263,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=_activity_loop, daemon=True).start()
+    if HISTORY_ENABLED:
+        threading.Thread(target=_history_loop, daemon=True).start()
+    else:
+        print("[history] HISTORY_ENABLED=false — time-series disabled")
     if OWUI_API_KEY:
         threading.Thread(target=_banner_loop, daemon=True).start()
     else:

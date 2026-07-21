@@ -18,6 +18,12 @@ __pycache__/
 *.pyc
 *.pyo
 
+# --- llama-swap active config is GENERATED from the base + a mode overlay ---
+# (scripts/llama-swap-mode.py). The canonical source is config/llama-swap.base.yaml
+# (tracked); the rendered active file the service reads is runtime state, so ignore
+# it to avoid churn on every mode switch. Regenerate with: llama-swap-mode.py set <mode>
+/config/llama-swap.yaml
+
 # --- never commit secrets/local env ---
 *.env
 .env

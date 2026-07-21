@@ -36,6 +36,11 @@
       "//": "Image/media generation via the (vendored) joenorton/comfyui-mcp-server, run natively as a streamable-http service (scripts/comfyui-mcp.service) on the host at :9000, talking to native ComfyUI at :8188. mcpo proxies it to Open WebUI + agents. Style workflows live in config/comfyui-mcp/workflows/. Tools: z_image_turbo (+ any style file), generate_image, run_workflow, get_job, view_image, list_assets, regenerate, cancel_job, etc.",
       "type": "streamable-http",
       "url": "http://host.docker.internal:9000/mcp"
+    },
+    "llama-swap-mode": {
+      "//": "Switch the llama-swap SERVING MODE (daily / heavy-coding / ...) from a client. Runs NATIVELY on the host (scripts/llama-swap-mode-mcp.service, docker/mcpo/llama_swap_mode_mcp.py) at :9120 because it edits config/llama-swap.yaml + calls llama-swap :9090; mcpo proxies it here. Tools: list_modes, current_mode, show_mode, set_mode. Modes are overlays in config/modes/ applied over config/llama-swap.base.yaml by scripts/llama-swap-mode.py.",
+      "type": "streamable-http",
+      "url": "http://host.docker.internal:9120/mcp"
     }
   }
 }

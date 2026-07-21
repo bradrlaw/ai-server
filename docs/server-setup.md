@@ -26,10 +26,8 @@ Last updated: 2026-06-30
 - [Quick reference — current state (2026-06-30)](#quick-reference--current-state-2026-06-30)
 - [Operator cheat-sheet — common commands](#operator-cheat-sheet--common-commands)
 - [llama.cpp usage notes (learned during bring-up)](#llamacpp-usage-notes-learned-during-bring-up)
-- [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
+- [Benchmarks → see benchmarking.md](#benchmarks--see-benchmarkingmd)
 - [GPU fan control (shroud fans) — runbook (2026-07-01)](#gpu-fan-control-shroud-fans--runbook-2026-07-01)
-- [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
-- [Tensor-parallel / multi-GPU reality (measured 2026-07-01)](#tensor-parallel--multi-gpu-reality-measured-2026-07-01)
 - [Phase 2 — llama-swap model router (2026-07-02)](#phase-2--llama-swap-model-router-2026-07-02)
 - [Phase 2b — LiteLLM gateway (2026-07-02)](#phase-2b--litellm-gateway-2026-07-02)
 - [GitHub Copilot CLI via BYOK (2026-07-02)](#github-copilot-cli-via-byok-2026-07-02)
@@ -183,13 +181,18 @@ Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** wit
 - Good first validation target. Likely the **primary** engine for V100 coding models
   too (Q4/Q5/Q6 GGUF lets a ~70B model fit across 2×V100=64GB).
 
-### vLLM  (likely needed later — set expectations)
-- Higher throughput + better continuous batching, **but Volta support is second-class
-  and shrinking**: no prebuilt Volta-optimized path, no FlashAttn2/FP8/Marlin on sm_70,
-  fp16-only. May require **building from source** against a matching torch/CUDA 12.x.
-- **P100 (sm_60) is effectively unsupported** by current vLLM — keep vLLM to the V100s.
-- Alternatives worth evaluating: **SGLang**, **TGI**, **ExLlamaV2** (verify it still
-  supports sm_70), or sticking with llama.cpp if throughput is adequate.
+### vLLM — evaluated and ABANDONED (2026-07-18)
+
+**Do not pursue vLLM on this hardware.** A spike confirmed vLLM *can* run on a V100
+(sm_70) with a pinned old release (`vllm==0.6.6.post1` + `transformers==4.47.1`,
+XFormers backend, fp16, ~90 tok/s smoke; TP=2 ~+12–35% over TP=1 on Qwen2.5-7B) — but
+that release predates every model in the roster (`qwen35`, `qwen3next`, `qwen35moe`,
+new gemma), and the newer vLLM that supports them needs the sm_80-only V1 attention
+backend. Volta also has no int8/FP8 quant kernels, so vLLM is fp16-only here (a 27B
+can't fit one card and "Q8" isn't a real path). Net: vLLM can't serve a single one of
+our daily models. **llama.cpp + llama-swap is the sole serving engine** until an
+sm_80+ GPU is added. Full rationale + benchmark evidence: ADR-0004. Spike venv and the
+Qwen2.5-7B test model were removed.
 
 ---
 
@@ -309,8 +312,10 @@ docker compose logs -f litellm                       # follow logs
 ### Common edits (what to change → how to apply)
 | Change | Edit | Apply |
 |--------|------|-------|
-| Add/change a served model | `config/llama-swap.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | llama-swap auto-reloads the YAML (`-watch-config`); `docker compose restart litellm` |
-| Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.yaml` | `sudo systemctl restart llama-swap` (preload only runs at process start) |
+| Add/change a served model | `config/llama-swap.base.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | `scripts/llama-swap-mode.py set <current-mode>` to re-render the active `config/llama-swap.yaml` (llama-swap auto-reloads it); `docker compose restart litellm` |
+| Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.base.yaml` (or a mode's `preload:`) | re-render (`llama-swap-mode.py set <mode>`) then `sudo systemctl restart llama-swap` (boot preload only runs at process start) |
+| Switch serving mode (daily / heavy-coding / agentic) | — | `scripts/llama-swap-mode.py set agentic` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the [`llama-swap-mode` MCP](#llama-swap-mode-mcp-switch-serving-modes-from-a-client) (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
+| Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
 | GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
@@ -322,6 +327,7 @@ docker compose logs -f litellm                       # follow logs
 curl -s 127.0.0.1:9090/running | python3 -m json.tool     # loaded models
 CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi                    # GPU util/VRAM/temp
 curl -s 127.0.0.1:9095/status.json | python3 -m json.tool  # aggregated host+GPU+model status
+curl -s 127.0.0.1:9095/history.json | python3 -m json.tool # time series behind the dashboard sparklines
 
 # Warm the daily set after a restart (fast preloads itself; coding+chat load on first hit):
 for m in coding chat fast; do
@@ -449,36 +455,12 @@ sudo systemctl poweroff
   runs use **`llama-bench`** or **`llama-server`**; those exit cleanly.
 - **Test model:** `/srv/ai/models/qwen2.5-0.5b-q4km.gguf` (0.5B, for smoke tests).
 
-## Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)
-Model: `Qwen3.6-27B` (dense, hybrid linear+full attention, `qwen35` arch — see
-ADR-0008). GGUFs from `unsloth/Qwen3.6-27B-GGUF` in `/srv/ai/models/qwen3.6-27b/`.
-Bench: `scripts/bench-qwen3.6-27b.sh` (llama-bench, -p512 -n128 -r3, depths 0/8192).
-Raw: `/srv/ai/models/qwen3.6-27b/bench-*/results.md`.
+## Benchmarks → see [benchmarking.md](benchmarking.md)
 
-**tg128 = token-gen t/s (interactive speed); pp512 = prompt-processing t/s.**
-
-| Quant / config          | pp512 | tg128 | pp @8k | tg @8k |
-|-------------------------|------:|------:|-------:|-------:|
-| Q6_K  single V100       |  870  | 25.6  |  748   | 22.7   |
-| Q6_K  dual — layer      |  873  | 25.6  |  754   | 24.6   |
-| Q6_K  dual — row        |  203  | 21.4  |  195   | 20.4   |
-| BF16  dual — layer      |  183  | 12.1  |  163   |  9.6   |
-| BF16  dual — row        |  193  | 12.2  |  162   |  9.7   |
-
-**Findings (answers the ADR-0005 TP question):**
-- **Splitting a model that fits one card gives ~no throughput benefit.** Q6_K
-  single vs dual-layer is a tie (~25.6 tg). Dual's value is *capacity*, not speed.
-- **`-sm row` is bad on this box:** ~4× slower prompt processing (203 vs 872 pp)
-  from per-layer PCIe sync (no NVLink). **Use `-sm layer` (default), never `row`.**
-- **BF16 needs both cards and runs ~2× slower than Q6_K** (12 vs 25.6 tg) for a
-  marginal quality gain → not worth it for serving.
-- **Dual-layer helps slightly at depth** (24.6 vs 22.7 tg @8k): KV cache spread
-  over 2 cards eases the memory-bandwidth hit as context grows.
-
-**Serving recommendation:** run **Q6_K on a single V100** (`-sm none`,
-`CUDA_VISIBLE_DEVICES=1`), leaving V100 #2 free for a second model (e.g. the
-35B-A3B MoE or a 2nd instance). Only tensor-split (layer) when a model/context
-genuinely won't fit on one card.
+All model performance benchmarks (single-stream `llama-bench` runs, the MoE and
+coding-model comparisons, the tensor-parallel/multi-GPU reality check, the
+context-window and `--ubatch-size` tuning, the Gemma-4 numbers) and the concurrency
+/ `--parallel` throughput sweep now live in **[docs/benchmarking.md](benchmarking.md)**.
 
 ## GPU fan control (shroud fans) — runbook (2026-07-01)
 Passive Tesla cards throttle under load (seen via `nvidia-smi dmon`). Shroud fans
@@ -498,79 +480,6 @@ are on the board's **4-pin PWM headers** (Nuvoton nct6775). Control = GPU temp
 
 Daemon = `gpu-fan-control.py` (stdlib only). Fail-safe: forces fans to **100%** on
 any error/`nvidia-smi` failure; hands back to BIOS auto on clean stop.
-
-## MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)
-Model: `Qwen3.6-35B-A3B` (MoE, 34.66B total / ~3B active, `qwen35moe` arch).
-GGUF `unsloth/...UD-Q6_K` in `/srv/ai/models/qwen3.6-35b-a3b/`.
-Bench: `scripts/bench-qwen3.6-35b-a3b.sh`. Raw: `.../bench-*/results.md`.
-
-| Quant / config          | pp512 | tg128 | pp @8k | tg @8k |
-|-------------------------|------:|------:|-------:|-------:|
-| Q6_K  single V100       |  773  | 97.6  |  697   | 95.2   |
-| Q6_K  dual — layer      |  755  | 97.1  |  704   | 95.0   |
-| Q6_K  dual — row        |  467  | 42.1  |  438   | 41.4   |
-| BF16  dual (layer/row)  |  — DID NOT FIT (weights ~69 GB > 64 GB VRAM) — |
-
-**Findings:**
-- **MoE is ~3.8× faster than the dense 27B** (97.6 vs 25.6 tg t/s) — only ~3B of
-  35B params active per token. Big win for latency/interactive use.
-- Single vs dual-layer = tie again (~97 tg): confirms splitting a model that fits
-  one card yields no throughput gain (dual = capacity, not speed).
-- **`-sm row` is even worse for MoE**: tg halves (42 vs 97) — expert routing +
-  per-layer PCIe sync. Never use row on this box.
-- **BF16 MoE won't run**: 69 GB weights > 64 GB (2×V100). Q6_K (27 GB) fits ONE
-  card and is the practical max-quality config; Q8_0 (37 GB) would need both cards
-  if higher precision is ever wanted.
-
-**Serving rec:** run **35B-A3B Q6_K on a single V100** for a fast, low-latency
-model — pairs well with the dense 27B Q6_K on the other V100 (one card each).
-
-### Uncensored fine-tune smoke test — Qwen3.6-35B-A3B-Uncensored (HauhauCS-Aggressive, 2026-07-01)
-Model: `HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive` (same `qwen35moe`
-arch, uncensored fine-tune, **reasoning model** with a vision mmproj available).
-GGUFs in `/srv/ai/models/qwen3.6-35b-a3b/`. Live `llama-server` smoke test (not
-llama-bench), single short request, cards under the **175 W cap**.
-
-| Quant       | Size    | Layout                | VRAM        | pp t/s  | tg t/s | result |
-|-------------|--------:|-----------------------|-------------|--------:|-------:|--------|
-| Q4_K_M      | 21.2 GB | 1× V100 (idx1)        | 20.7 GB     | 147-196 | ~102   | ✓ correct |
-| Q6_K_P      | 30.6 GB | 2× V100 (`-sm layer`) | 14.7+15.5 GB| ~107    | ~93    | ✓ correct |
-
-**Findings:**
-- **Q4_K_M on a single V100 is the practical default** — ~102 tg t/s, leaves the 2nd
-  V100 free and ~11 GB headroom for context. Matches the ~97 tg of the unsloth Q6_K
-  above (MoE speed is active-param-bound, not quant-bound).
-- **Q6_K_P (30.6 GB) does NOT fit one V100 with usable context** → needs both cards
-  via `-sm layer` (14.7+15.5 GB, well balanced). Costs the 2nd card + ~10% tg (93 vs
-  102) for the higher-quality quant; the drop is PCIe cross-GPU traffic (PHB, no
-  NVLink). Use only when Q6 quality is specifically wanted.
-- **Reasoning model**: emits a thinking block first. Final answer is in the response
-  `content`; chain-of-thought is in `reasoning_content`. Even a 3-word reply burns
-  ~100-200 completion tokens on reasoning — budget `max_tokens` generously (≥256), or
-  disable thinking (`/no_think` in the prompt, or `enable_thinking:false` template flag).
-- Downloaded via the keyring-backed wrapper `scripts/hf-dl` (Xet backend, byte-exact).
-- Temps stayed ~41 °C — a single short request doesn't stress the cards; sustained
-  load would behave like the other 35B-A3B results above.
-
-## Tensor-parallel / multi-GPU reality (measured 2026-07-01)
-`nvidia-smi topo -m`: all GPU pairs = **PHB** (PCIe via CPU host bridge), **no NVLink**.
-P2P test (`/tmp/p2ptest.cu`, cudaMemcpyPeer, 256MB) between the two V100s:
-- **P2P peer access: ENABLED** both directions.
-- **Inter-GPU bandwidth: ~5.2 GB/s** (vs NVLink 25-300 GB/s) — routed over PCIe
-  gen3 through the CPU. This is the ceiling for any all-reduce.
-
-**What "tensor parallelism" means in our tests:**
-- llama.cpp **`-sm row` = tensor split** (splits each weight matrix + per-layer
-  all-reduce). Tested: 4x slower prefill (dense), ~2x slower tg (MoE). This is the
-  no-NVLink penalty hitting the 5.2 GB/s link every layer.
-- llama.cpp **`-sm layer` = pipeline** (layers split across cards, tiny traffic).
-  Tested: matches single-card speed.
-
-**Conclusion:** TP *works* on the 2xV100 (P2P on, same sm_70) but is
-**communication-bound**. Use it for **capacity** (models >32GB), not speed. For
-single-stream latency, prefer **one model per card**. vLLM's NCCL TP=2 is more
-optimized than llama.cpp row-split and *may* help under **batched/concurrent**
-serving — retest when vLLM is brought up. P100 cannot join TP (arch/mem mismatch).
 
 ### Fan wiring + curves (confirmed from Windows FanControl, 2026-07-01)
 Fans: 40x28mm high-static-pressure. V100 fans 15k rpm max; P100 fan 6k rpm max
@@ -802,6 +711,89 @@ Notes:
 - Any value exported in the environment overrides the per-model default, e.g.
   `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
 
+### Subagent model routing (GPU-tiered)
+
+The goal: run each Copilot subagent on a *different* local model — and therefore a
+different GPU — so the driver keeps reasoning while subagents work **in parallel**:
+
+| GPU | Model | Role |
+| --- | --- | --- |
+| V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
+| V100 idx2 | `chat` | task/general subagent |
+| P100 idx0 | `fast` (Gemma-4-12B) | explore/search subagent (always warm) |
+
+Because `fast`/`chat` live on separate cards from the driver, subagents run with no
+contention, no eviction, and (for `fast`) zero cold-start (the status service's keeper
+keeps `fast` resident). All three route through LiteLLM `:4000` → llama-swap → the
+right GPU, so no server-side change is needed — only the client picks the per-agent model.
+
+**What works where (verified live 2026-07-18, CLI 1.0.71 / `@github/copilot-sdk@1.0.7`):**
+
+1. **Env-var BYOK (`copilot-byok.sh`) — single model only.** `copilot help providers`
+   confirms the env-var path (`COPILOT_PROVIDER_BASE_URL` + `COPILOT_MODEL`) registers
+   exactly one BYOK model, so the `/agents` picker can't offer `chat`/`fast` to subagents.
+   `SEARCH_SUBAGENT_MODEL=fast` is set in the launcher but is **inert**: the search
+   subagent is gated by the account flag `copilot_swe_agent_cli_search_subagent`, whose
+   availability is **`off`** (server-only) — not reachable via env,
+   `COPILOT_CLI_ENABLED_FEATURE_FLAGS`, or `/experimental`. Proven: a delegated explore
+   left `fast` at 0 tokens. Kept in the script so it auto-activates if GitHub flips the flag.
+
+2. **Copilot SDK host — full GPU tiering, PROVEN.** A small `@github/copilot-sdk` program
+   registers all local models via `onListModels` and pins per-agent models via
+   `customAgents[].model`, all pointed at the singular LiteLLM provider (no GitHub auth
+   needed). In a live PoC, an `explorer` subagent pinned to `chat` ran **81,778 tokens on
+   V100 idx2** (idx2 pegged 70–94%) while the driver `coding` stayed on idx1 — event trace
+   `subagent.started explorer chat` → `tool.execution_* chat` → `subagent.completed`. This
+   is the sanctioned path for GPU-distributed local subagents; it's a scripted/headless
+   surface, not the stock TUI. Minimal recipe:
+
+   ```js
+   import { CopilotClient, approveAll } from "@github/copilot-sdk";
+   const client = new CopilotClient({ onListModels: () => localModels /* coding, chat, fast */ });
+   await client.start();
+   const session = await client.createSession({
+     model: "coding",
+     provider: { type: "openai", baseUrl: "http://127.0.0.1:4000/v1", apiKey: LITELLM_MASTER_KEY },
+     onPermissionRequest: approveAll,
+     customAgents: [{ name: "explorer", description: "read-only code explorer",
+                      tools: ["read_file","grep_search","file_search","shell"], model: "chat" }],
+   });
+   ```
+   (The SDK also exposes an experimental multi-provider registry — `providers[]` +
+   `models[]` with per-model `wireModel` — for mixing CAPI + several BYOK providers.)
+
+3. **GitHub Copilot desktop app — WORKS for multi-model reviews (verified 2026-07-18).**
+   Configure `coding`/`chat`/`fast` as separate BYOK models in the app, then ask for a
+   multi-model review (e.g. *"review the codebase using the `coding` model and the `chat`
+   model"*). The app **does** fan out into parallel per-model review subagents — observed
+   live: a `coding` reviewer ran on V100 idx1 and a `chat` reviewer on V100 idx2
+   concurrently, then the driver compared both. (This contradicts an earlier assumption that
+   the `copilot_cli_subagent_parallelism_prompts` flag blocks it — the app fanned out anyway.)
+
+   **Two gotchas that will break it:**
+
+   - **Exact lowercase model ids.** LiteLLM is case-sensitive: the driver once passed
+     `model=Chat` and got `400 Invalid model name` (call `/v1/models` for the canonical ids:
+     `coding`, `chat`, `fast`, …). Name the BYOK models exactly as registered — all lowercase.
+   - **Do NOT expose the `plan-build` MCP to a review/parallel session.** Its tools are
+     **serial** (blocking `_chat` calls) and the heavy ones swap `big`/`coder-next` onto
+     **both V100s**, evicting the `coding`/`chat` models the review subagents are running on
+     (the P100-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=p100`
+     fallback). Symptom seen live: one reviewer stalled at ~2k generated tokens while its
+     model was evicted mid-flight. Disable the plan-build MCP for review sessions
+     (`COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher, or turn it off in the app's MCP/tools
+     settings) — it's a plan→build code-gen tool, not a review tool.
+
+   (`RUBBER_DUCK_AGENT` is `on` and auto-invokes a second-opinion reviewer, but
+   `rubberDuckSelectModel` picks a **cross-family** reviewer — all-local BYOK models are one
+   family, so it likely won't pair. Worth a quick `/experimental` test but not relied upon.)
+
+**Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
+env-var BYOK alone (single model). Use either the **SDK host** (proven, deterministic
+per-agent pinning) or the **desktop app's multi-model BYOK** (proven for parallel reviews —
+mind the two gotchas above). For the desktop app, see the paste-ready global-instructions
+mapping and multi-session parallelism recipe in **`docs/copilot-app-instructions.md`**.
+
 ### plan-build MCP over HTTP (for Copilot BYOK)
 
 The in-house **plan-build** planner→coder pipeline (`docker/mcpo/plan_build_mcp.py`, see the
@@ -827,81 +819,58 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
 
-### coding context-window sweep (2026-07-02)
+### llama-swap-mode MCP (switch serving modes from a client)
 
-Qwen3.6-27B Q6_K on one V100-32GB, `--parallel 1 --flash-attn on`, f16 KV. Model's trained
-context is 262144 (256k), so VRAM is the limit. KV grows ~65 MB per 1k tokens; the flash-attn
-compute buffer is fixed (scales with u-batch, not prompt length), so load-time VRAM ≈ peak.
+The serving-mode switcher (`scripts/llama-swap-mode.py`, see ADR-0015) is also
+exposed as an **HTTP MCP server** so a client — Open WebUI (via mcpo) or a Copilot
+BYOK/CLI session — can list, inspect, and switch the active llama-swap mode
+(`daily` / `heavy-coding` / …) without shelling into the box. Switching only
+rewrites a few `--parallel` / `concurrencyLimit` knobs + the preload list in the
+generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
+**no restart or sudo** is needed.
 
-| ctx     | VRAM used | free    | notes                                   |
-|---------|-----------|---------|-----------------------------------------|
-| 32768   | ~23.3 GB  | ~9.4 GB | previous default                        |
-| 131072  | 29.4 GB   | 3.3 GB  | meets Copilot BYOK ≥128k recommendation |
-| 163840  | 31.5 GB   | 1.25 GB | earlier f16-KV pick — too tight (see below) |
-| ≥172032 | —         | —       | exceeds 32 GB with f16 KV (would OOM)   |
+- **Tools** (source `docker/mcpo/llama_swap_mode_mcp.py`):
+  - `list_modes` — available modes + which one is active.
+  - `current_mode` — active mode + effective per-model config (parallel / ctx / ctx-per-slot / concurrencyLimit / gpus).
+  - `show_mode <mode>` — preview the config a mode *would* produce (no change).
+  - `set_mode <mode>` — render + activate a mode and warm its models (a large (re)load can take a few minutes; `MODE_SWITCH_TIMEOUT` default 900 s).
+- **Server:** native systemd service `scripts/llama-swap-mode-mcp.service` runs the
+  script with `MODE_MCP_TRANSPORT=streamable-http` on **`0.0.0.0:9120`** (endpoint
+  `/mcp`), reusing the `comfyui-mcp` venv (it has `mcp`). It runs on the **host**
+  (not in the mcpo container) because it edits `config/llama-swap.yaml` and calls
+  llama-swap on `127.0.0.1:9090`. It invokes the switcher with the system Python
+  (`MODE_SWITCH_PY=/usr/bin/python3`, which has PyYAML). **No auth** (like
+  `comfyui-mcp` / `plan-build`) — LAN/Tailscale only. Ordered `After=llama-swap.service`
+  so boot-time warms succeed. Install (needs sudo):
+  `sudo /srv/ai/scripts/install-llama-swap-mode-mcp-service.sh`
+- **Open WebUI** talks to it through **mcpo (OpenAPI), not the raw MCP port.** It is
+  registered in `docker/mcpo/config.json` as a `streamable-http` server pointing at
+  `http://host.docker.internal:9120/mcp`; mcpo re-exposes it as an OpenAPI tool.
+  Add it in **Settings → Integrations → External Tool Servers → Add**:
+  - **URL:** `http://<host-or-tailscale>:8000/llama-swap-mode` — the **mcpo proxy on
+    `:8000`**, *not* `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak).
+    Use the same address your browser reaches Open WebUI by (LAN IP vs Tailscale).
+  - **Auth:** API key = `MCPO_API_KEY` from `docker/.env`.
 
-Originally chose **163840 (160k)** with f16 KV, but that left only ~1.25 GB free — and a
-large prompt's `-ub 1024` prefill compute buffer then couldn't allocate, so `coding` hit a
-**CUDA OOM and crashed** on any prompt beyond a couple thousand tokens (`cuMemCreate ... out of
-memory` during `graph_compute`). Fixed 2026-07-04 by switching coding to **q8_0 KV**
-(`--cache-type-k q8_0 --cache-type-v q8_0`, near-lossless 8-bit): it halves KV, which both cures
-the OOM and frees enough room to **raise context to 200k (204800)**. At 200k q8_0 the card sits
-~29.8/32 GB (~3 GB headroom) and an 11k-token prompt prefills at ~790 t/s with no OOM. Coding
-runs `--parallel 1` so the full window serves one agent (concurrent requests serialize — fine
-for personal use).
+  **Two gotchas:** (1) the host `:9120` service must be **running before mcpo (re)mounts
+  the route** — mcpo only connects to an HTTP MCP backend at load and gives up if it's
+  down (logs `Failed to create server 'llama-swap-mode'`), so after installing the
+  service run `cd /srv/ai/docker && docker compose restart mcpo`. Verify with
+  `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/llama-swap-mode/docs`
+  (expect `200`). (2) `--hot-reload` picks up config.json *edits*, but reviving a
+  previously-failed HTTP backend needs the restart.
+- **Copilot CLI / BYOK:** register the **raw MCP** endpoint (`:9120/mcp`) directly — it
+  is **not** auto-added by `copilot-byok.sh`:
+  `copilot mcp add --transport http llama-swap-mode http://<host-or-tailscale>:9120/mcp`
+  (use the LAN IP or Tailscale name the client reaches the server by). Any other
+  MCP-over-HTTP client connects to the same `:9120/mcp` endpoint.
 
-### Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)
+### Model context-window / ubatch tuning → see [benchmarking.md](benchmarking.md)
 
-Raising `--ubatch-size` (`-ub`, default 512) speeds **prefill / time-to-first-token** (helps
-large prompts, e.g. tool results injected into context). It does **not** change generation
-speed. Cost = a larger CUDA compute buffer (VRAM). `llama-bench` on a V100:
-
-| model              | -ub 512 | -ub 1024 | -ub 2048 | applied |
-|--------------------|---------|----------|----------|---------|
-| coding (27B Q6_K, 1×V100) | 746 t/s | **858 (+15%)** | 892 (+20%) | **`-ub 1024`** — with q8_0 KV @200k (~3 GB free) 1024 fits; 2048 risks OOM |
-| chat (35B-A3B UD-Q6_K, 1×V100) | — | — | +~20% | **`-ub 2048`** — has ~4 GB headroom |
-| big (27B BF16, 2×V100 layer-split) | **232 t/s** | 205 | 167 | **default 512** — larger *hurts* (inter-GPU sync) |
-
-Key lesson: bigger `-ub` helps single-GPU models but **hurts layer-split multi-GPU** models.
-`coding` at `-ub 1024` uses ≈ the same VRAM as 512 (free +15%). Verified both load without OOM.
-
-### Gemma-4 benchmarks + context/ubatch tuning (2026-07-02)
-
-`llama-bench` (`-p 2048 -n 128`, flash-attn on, `CUDA_DEVICE_ORDER=PCI_BUS_ID`). **Note:** without
-`CUDA_DEVICE_ORDER=PCI_BUS_ID`, CUDA orders devices by *speed* (V100s first, P100 last) — the
-opposite of nvidia-smi/llama-swap — so always export it when pinning a card for benchmarks.
-
-**Throughput** (t/s):
-
-| model | card | pp2048 ub512 | ub1024 | ub2048 | tg128 |
-|-------|------|--------------|--------|--------|-------|
-| Gemma-4-12B (dense) | **P100** | 368 | 324 | 458 | **30** |
-| Gemma-4-12B (dense) | **V100** | 1526 | 1814 | **1987** | **71** |
-| Gemma-4-31B (dense) | V100 | 583 | 697 | **760** | 34 |
-| Gemma-4-26B-A4B (MoE) | V100 | 1486 | 1887 | **2269** | **110** |
-
-- **P100 vs V100 (12B):** the V100 is ~4.3× faster prefill and ~2.35× faster generation. `fast`
-  stays on the P100 anyway (frees both V100s for the big Qwen/Gemma models); 30 t/s is fine for
-  chat, and the P100 is otherwise idle.
-- **26B-A4B MoE is the fastest model on the box** — 110 t/s gen (only ~3.8B active params),
-  beating even the dense 12B. Best quality/speed Gemma for daily use.
-- **ubatch:** `-ub 2048` is optimal prefill for *all* single-GPU Gemmas (dense +28-30%, MoE +53%).
-  Applied `-ub 2048` to `fast`, `gemma-31b`, `gemma-26b`.
-
-**Context / VRAM.** All three Gemma-4 models are **256K-native** (`context_length 262144`) and use
-**sliding-window attention** (1024 window, 5 SWA : 1 global layer), so KV cache grows very slowly —
-only the 1-in-6 global layers hold full-length KV. Measured resident VRAM (f16 KV, `-ub` default):
-
-| model | ctx 32k | 65k | 131k | 262k (full) | applied ctx |
-|-------|---------|-----|------|-------------|-------------|
-| 12B / P100 16GB | 8.8 | 9.3 | 10.4 | 12.6 GB | **131072** (10.8GB @ub2048; leaves P100 aux room) |
-| 31B / V100 32GB | 23.2 | 25.8 | 31.0 | OOM | **131072** (q8_0 KV → 26.7GB @ub2048; f16 OOMs at 131k) |
-| 26B-A4B / V100 32GB | 15.6 | 16.3 | 17.6 | 20.3 | **131072** (18.0GB @ub2048; full 256k also fits) |
-
-Full 256K only costs +2-4 GB over 16K thanks to SWA. **31B needs `--cache-type-k/v q8_0`** (halves
-KV, needs flash-attn) to reach 128k — f16 KV at 131k hits 31GB + compute buffer and OOMs; q8_0
-brings it to ~26.7GB. The 12B and 26B-A4B have room to spare with f16 KV. Verified all three
-co-resident after tuning: P100 10.8GB / V100#1 26GB (31B@131k) / V100#2 18.0GB, all answering.
+The `coding` context-window sweep, the `--ubatch-size` prefill tuning, and the
+Gemma-4 throughput + context/VRAM tables that set the current per-model
+`--ctx-size` / `-ub` / KV-quant args now live in
+**[docs/benchmarking.md](benchmarking.md)** (Single-stream engine benchmarks).
 
 ## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
 

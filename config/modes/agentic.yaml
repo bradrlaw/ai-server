@@ -1,0 +1,46 @@
+# Mode overlay: agentic
+# ---------------------------------------------------------------------------
+# Pure autonomous / agentic workloads: many unattended agents and their tool
+# calls fanning out at once, favouring THROUGHPUT over a single huge context.
+#
+# Residency = matrix set `qg` (coding idx1 + gemma-26b idx2 + fast P100 idx0),
+# so this mode loads `gemma-26b` on idx2 INSTEAD of `chat` (they share idx2 and
+# evict each other). All three sit on separate cards → co-resident, no conflict.
+#
+#   * `coding` (Qwen3.6-27B Q6_K, idx1)  -> P=2. Two slots for concurrent
+#     automated coding tasks while each still gets a decently large window
+#     (204800 / 2 = ~100k per slot). The sweep ran coding to P=8 on one card
+#     (30.2/32GB) so P=2 is comfortably safe.
+#   * `gemma-26b` (Gemma-4-26B-A4B MoE, idx2) -> P=8. The throughput champ
+#     (~281 tok/s aggregate @ P=8, ~19/32GB) blitzes through many focused,
+#     small-context agent tasks (131072 / 8 = ~16k per slot).
+#   * `fast` (Gemma-4-12B, P100 idx0) -> P=2. A couple of slots with a safe
+#     window (131072 / 2 = ~64k per slot); P100 caps at P=4 (OOM at P=8) so
+#     P=2 leaves headroom.
+#
+# concurrencyLimit is raised above --parallel on each so bursts of agent
+# requests queue instead of hitting llama-swap's default limit of 10 (HTTP 429).
+# Sub-agent -> model binding is a CLIENT concern (e.g. Copilot SDK customAgents
+# / harness config); this mode just makes the server ready to serve the fan-out.
+name: agentic
+label: "Agentic (autonomous multi-agent throughput)"
+description: >
+  Autonomous agent workloads: coding P=2 (~100k/slot) for concurrent automated
+  coding, gemma-26b P=8 (~16k/slot, ~281 tok/s) for fast focused agent tasks,
+  and fast P=2 (~64k/slot) on the P100. Loads gemma-26b in place of chat.
+overrides:
+  coding:
+    parallel: 2
+    concurrencyLimit: 8
+  gemma-26b:
+    parallel: 8
+    concurrencyLimit: 16
+  fast:
+    parallel: 2
+    concurrencyLimit: 8
+# Warm all three so the whole agent worker set is ready immediately. gemma-26b
+# is warmed here (not chat) — requesting it evicts chat from idx2.
+preload:
+  - coding
+  - gemma-26b
+  - fast
