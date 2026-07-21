@@ -70,18 +70,23 @@ COMFYUI_URLS = os.environ.get(
     "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189",
 )
 # App-tier "Services" panel: health-check a list of endpoints and show up/down +
-# a click-through link. Format: "name=health_url=link_port" items, comma-separated
-# (link_port optional; blank = no link). Health is checked from the host
-# (127.0.0.1); the link is built client-side from the browser's own hostname, so
-# LAN and Tailscale addresses both resolve. Any HTTP response (incl. 401/403 for
-# auth-gated UIs) counts as "up"; only a connection failure is "down".
+# a click-through link. Format: "name=health_url=link" items, comma-separated.
+# The 3rd field is optional and may be either:
+#   - a port number (e.g. 3000): link is built client-side from the browser's own
+#     hostname (http://<browser-host>:<port>) so LAN and Tailscale both resolve; or
+#   - a full URL (e.g. http://localhost:18789): used verbatim (for services that
+#     require a specific origin, e.g. OpenClaw's Control UI needs a secure context
+#     and is reached over an SSH tunnel to localhost).
+#   - blank: no link.
+# Health is always checked from the host (127.0.0.1). Any HTTP response (incl.
+# 401/403 for auth-gated UIs) counts as "up"; only a connection failure is "down".
 SERVICES = os.environ.get(
     "STATUS_SERVICES",
     "Open WebUI=http://127.0.0.1:3000/health=3000,"
     "LiteLLM=http://127.0.0.1:4000/health/liveliness=,"
     "mcpo=http://127.0.0.1:8000/docs=8000,"
     "Filebrowser=http://127.0.0.1:8083/health=8083,"
-    "OpenClaw=http://127.0.0.1:18789/healthz=18789,"
+    "OpenClaw=http://127.0.0.1:18789/healthz=http://localhost:18789,"
     "Hermes dashboard=http://127.0.0.1:9119/=9119,"
     "Hermes API=http://127.0.0.1:8642/health=8642",
 )
@@ -469,26 +474,31 @@ def collect_comfyui() -> list:
 
 def collect_services() -> list:
     """Health-check the configured app-tier services (SERVICES env). Each entry:
-    {name, up, code, port}. up=True for any HTTP response (auth-gated UIs return
-    401/403 but are still 'up'); up=False only on connection failure."""
+    {name, up, code, port, link}. up=True for any HTTP response (auth-gated UIs
+    return 401/403 but are still 'up'); up=False only on connection failure. The
+    3rd config field is either a port (client builds http://<browser-host>:<port>),
+    a full URL (used verbatim, e.g. an SSH-tunnel localhost link), or blank."""
     out = []
     for item in SERVICES.split(","):
         item = item.strip()
         if not item or "=" not in item:
             continue
-        parts = item.split("=")
+        parts = item.split("=", 2)
         name = parts[0].strip()
         health = parts[1].strip() if len(parts) > 1 else ""
-        port = parts[2].strip() if len(parts) > 2 else ""
+        link_spec = parts[2].strip() if len(parts) > 2 else ""
         if not name or not health:
             continue
         code, _ = _http_status(health)
+        port = int(link_spec) if link_spec.isdigit() else None
+        link = link_spec if link_spec.startswith(("http://", "https://")) else None
         out.append(
             {
                 "name": name,
                 "up": code is not None,
                 "code": code,
-                "port": int(port) if port.isdigit() else None,
+                "port": port,
+                "link": link,
             }
         )
     return out
@@ -1269,7 +1279,9 @@ async function refresh(){  try{
       svc.map(s=>{
         const p = s.up ? `<span class="pill idle">up</span>` : `<span class="pill bad">down</span>`;
         const code = s.code!=null ? ` <span class="sub">${s.code}</span>` : '';
-        const link = s.port!=null ? `<a href="http://${location.hostname}:${s.port}" target="_blank" style="color:#4b8ce0">:${s.port}</a>` : '<span class="sub">–</span>';
+        const link = s.link ? `<a href="${esc(s.link)}" target="_blank" style="color:#4b8ce0">${esc(s.link.replace('https://','').replace('http://',''))}</a>`
+          : s.port!=null ? `<a href="http://${location.hostname}:${s.port}" target="_blank" style="color:#4b8ce0">:${s.port}</a>`
+          : '<span class="sub">–</span>';
         return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${link}</td></tr>`;
       }).join('') + '</table>'
       : pill('none');
