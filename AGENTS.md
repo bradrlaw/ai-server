@@ -40,7 +40,8 @@ Read this first, then the detailed docs:
 - **GPU/low-level tiers run NATIVE** (systemd/venv): llama.cpp + **llama-swap** router,
   ComfyUI, (future) vLLM/whisper.
 - **CPU app tier runs in Docker Compose** (`docker/`): **LiteLLM** (client-facing gateway
-  `:4000`), Open WebUI, Qdrant, Postgres, MCPO, SearXNG, etc.
+  `:4000`), Open WebUI, Qdrant, Postgres, MCPO, SearXNG, the **OpenClaw** (`:18789`) +
+  **Hermes** (`:9119`/`:8642`) assistant gateways (ADR-0016), etc.
 - **Model router:** `config/llama-swap.base.yaml` is the **canonical** source (matrix router,
   mgmt `127.0.0.1:9090`); the active `config/llama-swap.yaml` the service reads is **generated**
   from the base + a mode overlay (`config/modes/*.yaml`) by `scripts/llama-swap-mode.py` and is

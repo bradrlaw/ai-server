@@ -1,0 +1,17 @@
+# Hermes personal-assistant config.
+#
+# Tracked TEMPLATE — the live copy is seeded to /srv/ai/hermes/config.yaml
+# (gitignored) by scripts/assistants-seed.sh, which also injects the real
+# LiteLLM key in place of the placeholder below. Hermes writes its own state
+# (sessions/skills/memory) alongside this file under /opt/data, so the live
+# copy must be writable.
+#
+# Models are served by the native llama-swap router behind the LiteLLM gateway
+# on the host at :4000, reached from the container via host.docker.internal.
+# `custom` is Hermes' self-hosted OpenAI-compatible provider (base_url + api_key
+# live in config.yaml; OPENAI_BASE_URL is NOT honored for this provider).
+model:
+  provider: custom
+  default: chat
+  base_url: http://host.docker.internal:4000/v1
+  api_key: REPLACE_WITH_LITELLM_MASTER_KEY
