@@ -68,5 +68,57 @@ cache grows ~linearly per slot — watch VRAM with `nvidia-smi`) and re-run.
 single-slot serialisation, exactly the behaviour Ziskind reports for stock
 llama.cpp/LM Studio. Throughput does **not** improve with concurrency on a
 `--parallel 1` model; past the queue depth the gateway/engine sheds load with 429s.
-The interesting follow-up experiment is a `--parallel` sweep (2/4/8) per GPU tier to
-find where added slots stop helping (VRAM- or compute-bound).
+
+> The `429` is **llama-swap's** per-model `concurrencyLimit` (default **10**),
+> *not* the engine — raise it per model in `config/llama-swap.yaml` if you want the
+> router to admit more simultaneous requests.
+
+## `--parallel` throughput sweep (2026-07-21)
+
+`scratch/parallel_sweep.py` sweeps `--parallel` per model (editing `llama-swap.yaml`
++ `concurrencyLimit`, benchmarking `:9090` directly, restoring on exit), 160 max
+tokens, concurrency 1–16. **Raising `--parallel` splits `--ctx-size` across slots,
+so KV VRAM stays ~flat** — the GPU batch-decodes N sequences for real aggregate
+speedup (the *compute* buffers grow, which is what OOMs the VRAM-tight models).
+
+Peak aggregate tokens/sec per `--parallel`, and VRAM at the best setting:
+
+| Model | GPU / kind | ctx | P=1 | P=2 | P=4 | P=8 | Best | VRAM@best |
+|-------|-----------|----:|----:|----:|----:|----:|------|-----------|
+| coding      | V100 idx1, dense 27B    | 204800 | 22 | 37 | 47 | **60**  | P=8 | 30.2/32 GB |
+| chat        | V100 idx2, MoE 35B-A3B  | 131072 | 84 | 127 | 156 | **194** | P=8 | 30.5/32 GB |
+| fast        | P100 idx0, Gemma 12B    | 131072 | 27 | 49 | **53** | OOM  | P=4 | 13.4/16 GB |
+| big         | dual-V100, dense 27B Q6 | 262144 | 23 | 38 | 47 | **59**  | P=8 | ~21/32 GB/card |
+| coder-next  | dual-V100, MoE 80B-A3B  | 262144 | 73 | 107 | 139 | **182** | P=8 | ~28.5/32 GB/card |
+| gemma-31b   | V100 idx1, dense 31B    | 131072 | 30 | 53 | **67** | OOM  | P=4 | 29.2/32 GB |
+| gemma-26b   | V100 idx2, MoE 25B-A4B  | 131072 | 100 | 171 | 221 | **281** | P=8 | ~19/32 GB |
+
+Patterns:
+- **Gains are sublinear but big** (~2.6–2.9× at the ceiling): batched decode shares
+  GPU compute across sequences.
+- **MoE models scale best** (chat, coder-next, gemma-26b) — few active params leave
+  compute headroom; `gemma-26b` is the throughput champ at **281 tok/s**.
+- **VRAM-tight dense models OOM before P=8**: `fast` (P100 16 GB) and `gemma-31b`
+  (already 29 GB at P=4) cap at **P=4**; the batch *compute* buffers, not KV, grow.
+- **Dual-card models** (`big`, `coder-next`) have per-card headroom and reach P=8;
+  `coder-next`'s DeltaNet keeps KV flat, so it's especially cheap to parallelise.
+
+### The catch: `--parallel N` divides per-request context
+
+`--ctx-size` is the **total** KV, split evenly across slots, so more slots = less
+context **per request**:
+
+| Model | ctx | P=2 /slot | P=4 /slot | P=8 /slot |
+|-------|----:|----------:|----------:|----------:|
+| coding     | 204800 | 102400 | 51200 | 25600 |
+| chat       | 131072 |  65536 | 32768 | 16384 |
+| big        | 262144 | 131072 | 65536 | 32768 |
+| coder-next | 262144 | 131072 | 65536 | 32768 |
+| gemma-31b  | 131072 |  65536 | 32768 | 16384 |
+| gemma-26b  | 131072 |  65536 | 32768 | 16384 |
+
+So the max-throughput setting is **not** automatically the right daily setting: an
+agentic coding client that needs 100k+ context can't use `--parallel 8`
+(25 k/slot on `coding`). Pick `--parallel` per model by weighing **multi-user
+throughput vs per-request context** for that model's real workload — e.g. single-user
+agentic coding wants few slots/large context; multi-user family chat wants many slots.
