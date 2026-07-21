@@ -142,7 +142,7 @@ services:
   # /srv/ai/openclaw (gitignored) are 1000-owned by `scripts/assistants-seed.sh`.
   # Seed configs + dirs once: `scripts/assistants-seed.sh` before first `up`.
   openclaw:
-    image: ghcr.io/openclaw/openclaw:2026.6.33
+    image: ghcr.io/openclaw/openclaw:2026.7.1
     container_name: openclaw
     restart: unless-stopped
     init: true

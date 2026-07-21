@@ -1114,7 +1114,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | ghcr.io/openclaw/openclaw:2026.6.33    | `http://<host>:18789` | Multi-channel assistant gateway + Control UI |
+| openclaw  | ghcr.io/openclaw/openclaw:2026.7.1     | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -1152,6 +1152,16 @@ and injects the LiteLLM key into Hermes' live config.
   openclaw.mjs doctor`. Three persistent dirs: `state`, `workspace`, `auth-secrets`.
 - Verified live 2026-07-21: `openclaw agent --agent main -m "…"` →
   `winnerProvider: litellm, winnerModel: chat, result: success`.
+- **Control UI needs a secure browser context** (WebCrypto device identity):
+  reach it over an SSH tunnel to `http://localhost:18789`, not the LAN hostname.
+  `gateway.controlUi.allowInsecureAuth` only helps an on-host (loopback) browser;
+  a remote LAN browser additionally fails the `isLocalClient` check.
+- **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
+  never the in-app self-updater (ephemeral container layer). The auto-updater is
+  off by default. The "Update available" startup banner checks the **npm** registry
+  (`2026.7.1-2`), whose `-N` patch suffix is **not** published as a GHCR image tag,
+  so it's a cross-channel false positive for the container — silenced with
+  `update.checkOnStart: false`. GHCR ships the base `2026.7.1` release image.
 
 **Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
 - **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web

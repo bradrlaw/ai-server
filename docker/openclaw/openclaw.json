@@ -45,6 +45,9 @@
   "session": {
     "dmScope": "per-channel-peer"
   },
+  "update": {
+    "checkOnStart": false
+  },
   "tools": {
     "profile": "coding"
   },
