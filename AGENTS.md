@@ -47,9 +47,10 @@ Read this first, then the detailed docs:
   **gitignored**. Edit the **base**, then re-render with `llama-swap-mode.py set <mode>`.
   **LiteLLM (`docker/litellm/config.yaml`) must have a matching `model_list` entry for every model
   you want clients to see;** restart the `litellm` container after edits.
-- **Serving modes (ADR-0015):** `daily` (balanced, all single-slot) and `heavy-coding` (interactive
-  `coding` at full ctx + `chat`/`fast` sub-agent pools at `--parallel 4`). Switch with
-  `scripts/llama-swap-mode.py set <mode>` (no restart — `-watch-config` reloads) or the
+- **Serving modes (ADR-0015):** `daily` (balanced, all single-slot), `heavy-coding` (interactive
+  `coding` at full ctx + `chat`/`fast` sub-agent pools at `--parallel 4`), and `agentic`
+  (autonomous throughput: `coding` P=2, `gemma-26b` P=8 in place of `chat` on idx2, `fast` P=2).
+  Switch with `scripts/llama-swap-mode.py set <mode>` (no restart — `-watch-config` reloads) or the
   `llama-swap-mode` MCP (`set_mode`). `list` / `current` / `show <mode>` to inspect.
 - **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.6-27B Q6_K,
   160k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE, idx2), `big` (27B BF16, dual-V100), `fast`

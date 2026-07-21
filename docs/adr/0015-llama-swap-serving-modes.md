@@ -63,6 +63,14 @@ Modes shipped initially:
   residency as daily, so no eviction conflicts. Verified live: chat + fast each
   came up with 4 KV slots @ 32k, coding 29.5 GB / chat 30.3 GB / P100 13.2 GB —
   no OOM.
+- **agentic** — autonomous multi-agent throughput. Loads `gemma-26b` on idx2
+  **instead of `chat`** (they share idx2; matrix set `qg` = `coding & gemma-26b &
+  fast`). `coding` (idx1) `--parallel 2` (~100k ctx/slot) for concurrent automated
+  coding; `gemma-26b` (idx2) `--parallel 8` (~16k ctx/slot, ~281 tok/s aggregate)
+  to blitz many small-context agent tasks; `fast` (P100 idx0) `--parallel 2`
+  (~64k ctx/slot). `concurrencyLimit` raised above `--parallel` (8/16/8) so bursts
+  queue instead of 429ing. Verified live 2026-07-21: coding 28.7 GB / gemma-26b
+  21.5 GB / P100 fast 11.1 GB — all co-resident, no OOM.
 
 ## Consequences
 
@@ -78,9 +86,10 @@ Modes shipped initially:
   the active file (a hand-edit to the active file is overwritten on the next
   switch). The MCP endpoint is unauthenticated (LAN/Tailscale only), like
   plan-build / comfyui-mcp.
-- Follow-ups: add the **autonomous** mode once its throughput/context target is
-  set; consider a matching LiteLLM view if a mode ever exposes new model names
-  (heavy-coding does not — same names, more slots, so no LiteLLM change).
+- Follow-ups: the **agentic** mode (autonomous multi-agent throughput) has been
+  added (see Modes above). Consider a matching LiteLLM view if a mode ever exposes
+  new model names (none so far do — `agentic` swaps `chat`→`gemma-26b`, both
+  already in `docker/litellm/config.yaml`, and heavy-coding just adds slots).
 
 ## Alternatives considered
 
