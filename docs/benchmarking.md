@@ -84,6 +84,13 @@ speedup (the *compute* buffers grow, which is what OOMs the VRAM-tight models).
 
 Peak aggregate tokens/sec per `--parallel`, and VRAM at the best setting:
 
+![--parallel throughput sweep — peak aggregate tok/s per model](img/parallel-sweep-20260721.png)
+
+*Raw data: [`data/parallel-sweep-20260721.csv`](data/parallel-sweep-20260721.csv)
+(regenerate the chart with `benchmarks/llm-scaling-bench/.venv/bin/python
+scripts/plot-parallel-sweep.py docs/data/parallel-sweep-20260721.csv -o
+docs/img/parallel-sweep-20260721.png`).*
+
 | Model | GPU / kind | ctx | P=1 | P=2 | P=4 | P=8 | Best | VRAM@best |
 |-------|-----------|----:|----:|----:|----:|----:|------|-----------|
 | coding      | V100 idx1, dense 27B    | 204800 | 22 | 37 | 47 | **60**  | P=8 | 30.2/32 GB |

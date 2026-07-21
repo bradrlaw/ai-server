@@ -54,6 +54,13 @@ LLAMASWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip(
 # Active llama-swap config the mode switcher (scripts/llama-swap-mode.py) renders;
 # read for the current mode marker + per-model --parallel / --ctx-size.
 LLAMASWAP_CONFIG = os.environ.get("LLAMASWAP_CONFIG", "/srv/ai/config/llama-swap.yaml")
+# Committed benchmark chart (docs/img/…) served at /parallel-sweep.png and shown
+# in the dashboard's Benchmarks section. Empty/missing → section hidden.
+BENCH_CHART = os.environ.get(
+    "BENCH_CHART", "/srv/ai/docs/img/parallel-sweep-20260721.png")
+BENCH_DOC_URL = os.environ.get(
+    "BENCH_DOC_URL",
+    "https://github.com/bradrlaw/ai-server/blob/dev/docs/benchmarking.md")
 # Comma-separated filesystem paths to report disk usage for (one row each).
 STATUS_DISK_PATHS = [
     p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
@@ -1071,6 +1078,10 @@ _HTML = """<!doctype html>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
+  <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
+    <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
+    <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
+  </section>
 </main>
 <script>
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
@@ -1234,8 +1245,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, body, "application/json")
         elif path == "/healthz":
             self._send(200, b"ok", "text/plain")
+        elif path in ("/parallel-sweep.png", "/bench-chart.png"):
+            try:
+                with open(BENCH_CHART, "rb") as f:
+                    self._send(200, f.read(), "image/png")
+            except OSError:
+                self._send(404, b"chart not found", "text/plain")
         elif path == "/":
-            self._send(200, _HTML.encode("utf-8"), "text/html; charset=utf-8")
+            html = _HTML.replace("__BENCH_DOC_URL__", BENCH_DOC_URL)
+            self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")
 
