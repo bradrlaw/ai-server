@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import subprocess
 import threading
 import time
@@ -50,6 +51,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STATUS_PORT", "9095"))
 LLAMASWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip("/")
+# Active llama-swap config the mode switcher (scripts/llama-swap-mode.py) renders;
+# read for the current mode marker + per-model --parallel / --ctx-size.
+LLAMASWAP_CONFIG = os.environ.get("LLAMASWAP_CONFIG", "/srv/ai/config/llama-swap.yaml")
 # Comma-separated filesystem paths to report disk usage for (one row each).
 STATUS_DISK_PATHS = [
     p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
@@ -335,15 +339,70 @@ def _http_status(url: str):
         return None, None
 
 
+def collect_mode() -> dict:
+    """Read the active llama-swap mode marker + per-model --parallel / --ctx-size.
+
+    Parses the rendered active config (config/llama-swap.yaml) written by the mode
+    switcher. Returns {"mode": <name>, "models": {name: {parallel, ctx,
+    ctx_per_slot}}}. Best-effort — returns a mostly-empty dict on any error.
+    """
+    out = {"mode": "unknown", "models": {}}
+    try:
+        with open(LLAMASWAP_CONFIG) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return out
+    key_re = re.compile(r'^  "([a-z0-9-]+)":\s*$')
+    for line in lines:
+        mm = re.match(r"^#\s*ACTIVE-MODE:\s*([A-Za-z0-9_-]+)", line)
+        if mm:
+            out["mode"] = mm.group(1)
+            break
+        if line.strip() and not line.startswith("#"):
+            break
+    i, n = 0, len(lines)
+    while i < n:
+        m = key_re.match(lines[i])
+        if m:
+            name = m.group(1)
+            j = i + 1
+            block = []
+            while j < n and not key_re.match(lines[j]):
+                block.append(lines[j])
+                j += 1
+            text = "\n".join(block)
+            info = {}
+            if (pm := re.search(r"--parallel\s+(\d+)", text)):
+                info["parallel"] = int(pm.group(1))
+            if (cm := re.search(r"--ctx-size\s+(\d+)", text)):
+                info["ctx"] = int(cm.group(1))
+            if info.get("ctx"):
+                info["ctx_per_slot"] = info["ctx"] // (info.get("parallel", 1) or 1)
+            if info:
+                out["models"][name] = info
+            i = j
+        else:
+            i += 1
+    return out
+
+
 def collect_models() -> dict:
     running = _get_json(f"{LLAMASWAP_URL}/running")
+    cfg = collect_mode()
     if running is None:
-        return {"reachable": False, "loaded": [], "available": 0}
+        return {"reachable": False, "loaded": [], "available": 0,
+                "mode": cfg["mode"], "config": cfg["models"]}
     rows = running.get("running") or []
     loaded = []
     for m in rows:
         if isinstance(m, dict):
-            entry = {"model": m.get("model", "?"), "state": m.get("state", "?")}
+            name = m.get("model", "?")
+            entry = {"model": name, "state": m.get("state", "?")}
+            mc = cfg["models"].get(name)
+            if mc:
+                entry["parallel"] = mc.get("parallel")
+                entry["ctx"] = mc.get("ctx")
+                entry["ctx_per_slot"] = mc.get("ctx_per_slot")
             proxy = m.get("proxy")
             if proxy:
                 act = _cached_activity(proxy)
@@ -352,7 +411,8 @@ def collect_models() -> dict:
             loaded.append(entry)
     catalog = _get_json(f"{LLAMASWAP_URL}/v1/models") or {}
     available = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
-    return {"reachable": True, "loaded": loaded, "available": available}
+    return {"reachable": True, "loaded": loaded, "available": available,
+            "mode": cfg["mode"], "config": cfg["models"]}
 
 
 def collect_comfyui() -> list:
@@ -1006,7 +1066,7 @@ _HTML = """<!doctype html>
 <body>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
-  <section><h2>Models (llama-swap)</h2><div id="models">…</div></section>
+  <section><h2>Models (llama-swap) <span class="hsub" id="modebadge"></span></h2><div id="models">…</div></section>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
@@ -1098,12 +1158,21 @@ async function refresh(){  try{
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
     // models
     let m = d.models;
+    const mode = m.mode && m.mode!=='unknown' ? m.mode : null;
+    document.getElementById('modebadge').textContent = mode ? '· mode: '+mode : '';
+    function cfgCols(x){
+      const p = x.parallel!=null ? x.parallel : (m.config&&m.config[x.model]? m.config[x.model].parallel : null);
+      const cps = x.ctx_per_slot!=null ? x.ctx_per_slot : (m.config&&m.config[x.model]? m.config[x.model].ctx_per_slot : null);
+      const ctx = x.ctx!=null ? x.ctx : (m.config&&m.config[x.model]? m.config[x.model].ctx : null);
+      const ctxTxt = cps!=null ? (fmtK(cps) + (p>1? ' ×'+p : '')) : '–';
+      return `<td>${p!=null? p : '–'}</td><td title="${ctx!=null? ctx+' total':''}">${ctxTxt}</td>`;
+    }
     if(!m.reachable){ document.getElementById('models').innerHTML = pill('unreachable'); }
     else if(!m.loaded.length){ document.getElementById('models').innerHTML = pill('idle') + ` <span class="sub">${m.available} available</span>`; }
     else {
       document.getElementById('models').innerHTML =
-        '<table><tr><th>Model</th><th>State</th><th>Activity</th></tr>' +
-        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td><td>${activityHtml(x.activity)}</td></tr>`).join('') +
+        '<table><tr><th>Model</th><th>State</th><th>Par</th><th>Ctx/slot</th><th>Activity</th></tr>' +
+        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td>${cfgCols(x)}<td>${activityHtml(x.activity)}</td></tr>`).join('') +
         `</table><div class="sub" style="margin-top:8px">${m.available} available</div>`;
     }
     // gpus

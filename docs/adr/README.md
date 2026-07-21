@@ -29,6 +29,9 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0010](0010-overall-serving-architecture.md) | Overall serving architecture (gateway + on-demand router + aux) | Accepted |
 | [0011](0011-mcp-hosting-inventory.md) | MCP server hosting & inventory (mcpo) | Accepted |
 | [0012](0012-comfyui-image-generation-mcp.md) | ComfyUI image-generation MCP tool (vendored comfyui-mcp-server) | Accepted |
+| [0013](0013-dual-comfyui-instances.md) | Dual ComfyUI instances (open + password-locked), one per V100 | Accepted |
+| [0014](0014-p100-fast-fp16-carveout.md) | Patch llama.cpp to disable FAST_FP16 on the Tesla P100 (sm_60) | Accepted |
+| [0015](0015-llama-swap-serving-modes.md) | llama-swap serving modes (base + overlay) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

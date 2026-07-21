@@ -1,0 +1,27 @@
+# Mode overlay: daily (default)
+# ---------------------------------------------------------------------------
+# The normal, general-purpose state. Every model keeps its base --parallel (1,
+# or 2 for coder-next) so single-request context is maximal and VRAM headroom
+# stays comfortable. This is the base config as-is: no argument overrides, the
+# base preload (fast on the P100) is kept.
+#
+# Residency (unchanged from base): coding(idx1) + chat(idx2) + fast(idx0)
+# co-resident; the heavier comparison/uncensored/dual-card models swap in on
+# demand via the matrix router.
+name: daily
+label: "Daily (normal use)"
+description: >
+  Balanced everyday state. All models single-slot (coder-next 2) for maximum
+  per-request context and VRAM headroom. Interactive chat + coding + occasional
+  heavy models on demand.
+# No per-model overrides — render the base verbatim.
+overrides: {}
+# Keep the base startup preload (fast on the P100) so a reboot doesn't pin both
+# V100s. `warm` is what the switcher makes ready NOW — restore the daily working
+# set (coding + chat + fast) when switching back to daily.
+preload:
+  - fast
+warm:
+  - coding
+  - chat
+  - fast

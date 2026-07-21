@@ -41,16 +41,25 @@ Read this first, then the detailed docs:
   ComfyUI, (future) vLLM/whisper.
 - **CPU app tier runs in Docker Compose** (`docker/`): **LiteLLM** (client-facing gateway
   `:4000`), Open WebUI, Qdrant, Postgres, MCPO, SearXNG, etc.
-- **Model router:** `config/llama-swap.yaml` (mgmt `127.0.0.1:9090`) — matrix router picks
-  co-resident model sets. **LiteLLM (`docker/litellm/config.yaml`) must have a matching
-  `model_list` entry for every model you want clients to see;** restart the `litellm` container after edits.
-- **Model roster** (see `config/llama-swap.yaml` for exact args): `coding` (Qwen3.6-27B Q6_K,
+- **Model router:** `config/llama-swap.base.yaml` is the **canonical** source (matrix router,
+  mgmt `127.0.0.1:9090`); the active `config/llama-swap.yaml` the service reads is **generated**
+  from the base + a mode overlay (`config/modes/*.yaml`) by `scripts/llama-swap-mode.py` and is
+  **gitignored**. Edit the **base**, then re-render with `llama-swap-mode.py set <mode>`.
+  **LiteLLM (`docker/litellm/config.yaml`) must have a matching `model_list` entry for every model
+  you want clients to see;** restart the `litellm` container after edits.
+- **Serving modes (ADR-0015):** `daily` (balanced, all single-slot) and `heavy-coding` (interactive
+  `coding` at full ctx + `chat`/`fast` sub-agent pools at `--parallel 4`). Switch with
+  `scripts/llama-swap-mode.py set <mode>` (no restart — `-watch-config` reloads) or the
+  `llama-swap-mode` MCP (`set_mode`). `list` / `current` / `show <mode>` to inspect.
+- **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.6-27B Q6_K,
   160k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE, idx2), `big` (27B BF16, dual-V100), `fast`
   (Gemma-4-12B, P100, non-reasoning), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
   Most Qwen3.6 models are **reasoning** models (thinking phase) — give generous `max_tokens`.
 
 ## Testing a config change
-- llama-swap runs with `-watch-config` (auto-reloads YAML). Validate with
-  `python3 -c "import yaml; yaml.safe_load(open('config/llama-swap.yaml'))"`, then load a model
-  via `curl 127.0.0.1:9090/v1/chat/completions` and check fit with `nvidia-smi`.
-- After testing, **restore the daily models** (`coding` + `chat` + `fast`) by sending each a tiny request.
+- llama-swap runs with `-watch-config` (auto-reloads YAML). Edit `config/llama-swap.base.yaml`,
+  validate with `python3 -c "import yaml; yaml.safe_load(open('config/llama-swap.base.yaml'))"`,
+  re-render with `python3 scripts/llama-swap-mode.py set <current-mode>`, then load a model via
+  `curl 127.0.0.1:9090/v1/chat/completions` and check fit with `nvidia-smi`.
+- After testing, **restore the daily models** (`coding` + `chat` + `fast`) with
+  `scripts/llama-swap-mode.py set daily` (warms the trio).

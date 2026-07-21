@@ -1,0 +1,40 @@
+# Mode overlay: heavy-coding
+# ---------------------------------------------------------------------------
+# Interactive coding session that spawns multiple sub-agents.
+#
+#   * PRIMARY (interactive)  -> `coding` (Qwen3.6-27B, idx1). Stays single-slot
+#     so it keeps its FULL 200k context for the human-driven, long-context
+#     agentic session. NOT overridden here (base --parallel 1).
+#   * SUB-AGENT WORKER POOLS -> `chat` (35B-A3B MoE, idx2) and `fast`
+#     (Gemma-12B, P100 idx0) get several parallel slots so many delegated
+#     sub-agents run concurrently instead of serializing behind one slot.
+#
+# Why chat P=4 (not 8): the sweep showed chat scales to 194 tok/s @ P=8, but
+# --parallel splits the 131k ctx across slots, so P=8 = 16.4k/slot (too tight
+# for a sub-agent that must read code) vs P=4 = 32.8k/slot @ 156 tok/s — the
+# better balance. `fast` caps at P=4 on the 16GB P100 (OOM at P=8).
+# concurrencyLimit is raised so many sub-agents don't hit llama-swap's default
+# limit of 10 (which returns HTTP 429).
+#
+# Residency is identical to daily (coding idx1 + chat idx2 + fast idx0), so
+# there are no eviction conflicts — only the worker slot counts change.
+# Sub-agent -> model binding is a CLIENT concern (e.g. Copilot SDK customAgents
+# pinning sub-agents to `chat`/`fast`); this mode just makes the server ready
+# to serve that fan-out.
+name: heavy-coding
+label: "Heavy coding (interactive + sub-agent pools)"
+description: >
+  Primary interactive coding on `coding` (full 200k ctx, single slot) with
+  parallel sub-agent worker pools on `chat` (P=4) and `fast` (P=4).
+overrides:
+  chat:
+    parallel: 4
+    concurrencyLimit: 12
+  fast:
+    parallel: 4
+    concurrencyLimit: 12
+# Warm all three so the primary + both worker pools are ready immediately.
+preload:
+  - coding
+  - chat
+  - fast

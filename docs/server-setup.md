@@ -314,8 +314,10 @@ docker compose logs -f litellm                       # follow logs
 ### Common edits (what to change → how to apply)
 | Change | Edit | Apply |
 |--------|------|-------|
-| Add/change a served model | `config/llama-swap.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | llama-swap auto-reloads the YAML (`-watch-config`); `docker compose restart litellm` |
-| Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.yaml` | `sudo systemctl restart llama-swap` (preload only runs at process start) |
+| Add/change a served model | `config/llama-swap.base.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | `scripts/llama-swap-mode.py set <current-mode>` to re-render the active `config/llama-swap.yaml` (llama-swap auto-reloads it); `docker compose restart litellm` |
+| Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.base.yaml` (or a mode's `preload:`) | re-render (`llama-swap-mode.py set <mode>`) then `sudo systemctl restart llama-swap` (boot preload only runs at process start) |
+| Switch serving mode (daily / heavy-coding) | — | `scripts/llama-swap-mode.py set heavy-coding` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the `llama-swap-mode` MCP (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
+| Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
 | GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
