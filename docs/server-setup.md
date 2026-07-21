@@ -314,7 +314,7 @@ docker compose logs -f litellm                       # follow logs
 |--------|------|-------|
 | Add/change a served model | `config/llama-swap.base.yaml` (model block **+** `matrix` set) **and** `docker/litellm/config.yaml` (matching `model_list` entry) | `scripts/llama-swap-mode.py set <current-mode>` to re-render the active `config/llama-swap.yaml` (llama-swap auto-reloads it); `docker compose restart litellm` |
 | Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.base.yaml` (or a mode's `preload:`) | re-render (`llama-swap-mode.py set <mode>`) then `sudo systemctl restart llama-swap` (boot preload only runs at process start) |
-| Switch serving mode (daily / heavy-coding) | — | `scripts/llama-swap-mode.py set heavy-coding` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the `llama-swap-mode` MCP (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
+| Switch serving mode (daily / heavy-coding) | — | `scripts/llama-swap-mode.py set heavy-coding` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the [`llama-swap-mode` MCP](#llama-swap-mode-mcp-switch-serving-modes-from-a-client) (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
 | Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
 | GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
@@ -818,6 +818,39 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   onto the V100s without evicting the caller. **If a BYOK session instead drives a V100 model**
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
+
+### llama-swap-mode MCP (switch serving modes from a client)
+
+The serving-mode switcher (`scripts/llama-swap-mode.py`, see ADR-0015) is also
+exposed as an **HTTP MCP server** so a client — Open WebUI (via mcpo) or a Copilot
+BYOK/CLI session — can list, inspect, and switch the active llama-swap mode
+(`daily` / `heavy-coding` / …) without shelling into the box. Switching only
+rewrites a few `--parallel` / `concurrencyLimit` knobs + the preload list in the
+generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
+**no restart or sudo** is needed.
+
+- **Tools** (source `docker/mcpo/llama_swap_mode_mcp.py`):
+  - `list_modes` — available modes + which one is active.
+  - `current_mode` — active mode + effective per-model config (parallel / ctx / ctx-per-slot / concurrencyLimit / gpus).
+  - `show_mode <mode>` — preview the config a mode *would* produce (no change).
+  - `set_mode <mode>` — render + activate a mode and warm its models (a large (re)load can take a few minutes; `MODE_SWITCH_TIMEOUT` default 900 s).
+- **Server:** native systemd service `scripts/llama-swap-mode-mcp.service` runs the
+  script with `MODE_MCP_TRANSPORT=streamable-http` on **`0.0.0.0:9120`** (endpoint
+  `/mcp`), reusing the `comfyui-mcp` venv (it has `mcp`). It runs on the **host**
+  (not in the mcpo container) because it edits `config/llama-swap.yaml` and calls
+  llama-swap on `127.0.0.1:9090`. It invokes the switcher with the system Python
+  (`MODE_SWITCH_PY=/usr/bin/python3`, which has PyYAML). **No auth** (like
+  `comfyui-mcp` / `plan-build`) — LAN/Tailscale only. Ordered `After=llama-swap.service`
+  so boot-time warms succeed. Install (needs sudo):
+  `sudo /srv/ai/scripts/install-llama-swap-mode-mcp-service.sh`
+- **Open WebUI:** registered in `docker/mcpo/config.json` as a `streamable-http`
+  server at `http://host.docker.internal:9120/mcp`; mcpo proxies it. Hot-reload picks
+  up the config.json entry — no container recreate needed.
+- **Copilot CLI / BYOK:** register the remote MCP manually (it is **not**
+  auto-added by `copilot-byok.sh`):
+  `copilot mcp add --transport http llama-swap-mode http://<host-or-tailscale>:9120/mcp`
+  (use the LAN IP or Tailscale name the client reaches the server by). Any other
+  MCP-over-HTTP client connects to the same `/mcp` endpoint.
 
 ### Model context-window / ubatch tuning → see [benchmarking.md](benchmarking.md)
 
