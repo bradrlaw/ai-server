@@ -69,6 +69,22 @@ COMFYUI_URLS = os.environ.get(
     "COMFYUI_URLS",
     "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189",
 )
+# App-tier "Services" panel: health-check a list of endpoints and show up/down +
+# a click-through link. Format: "name=health_url=link_port" items, comma-separated
+# (link_port optional; blank = no link). Health is checked from the host
+# (127.0.0.1); the link is built client-side from the browser's own hostname, so
+# LAN and Tailscale addresses both resolve. Any HTTP response (incl. 401/403 for
+# auth-gated UIs) counts as "up"; only a connection failure is "down".
+SERVICES = os.environ.get(
+    "STATUS_SERVICES",
+    "Open WebUI=http://127.0.0.1:3000/health=3000,"
+    "LiteLLM=http://127.0.0.1:4000/health/liveliness=,"
+    "mcpo=http://127.0.0.1:8000/docs=8000,"
+    "Filebrowser=http://127.0.0.1:8083/health=8083,"
+    "OpenClaw=http://127.0.0.1:18789/healthz=18789,"
+    "Hermes dashboard=http://127.0.0.1:9119/=9119,"
+    "Hermes API=http://127.0.0.1:8642/health=8642",
+)
 CACHE_SECS = float(os.environ.get("STATUS_CACHE_SECS", "2"))
 HTTP_TIMEOUT = float(os.environ.get("STATUS_HTTP_TIMEOUT", "2.5"))
 
@@ -451,6 +467,33 @@ def collect_comfyui() -> list:
     return out
 
 
+def collect_services() -> list:
+    """Health-check the configured app-tier services (SERVICES env). Each entry:
+    {name, up, code, port}. up=True for any HTTP response (auth-gated UIs return
+    401/403 but are still 'up'); up=False only on connection failure."""
+    out = []
+    for item in SERVICES.split(","):
+        item = item.strip()
+        if not item or "=" not in item:
+            continue
+        parts = item.split("=")
+        name = parts[0].strip()
+        health = parts[1].strip() if len(parts) > 1 else ""
+        port = parts[2].strip() if len(parts) > 2 else ""
+        if not name or not health:
+            continue
+        code, _ = _http_status(health)
+        out.append(
+            {
+                "name": name,
+                "up": code is not None,
+                "code": code,
+                "port": int(port) if port.isdigit() else None,
+            }
+        )
+    return out
+
+
 _GPU_FIELDS = [
     "index",
     "name",
@@ -629,6 +672,7 @@ def build_status() -> dict:
         "summary": _summary(models, comfyui, gpus, host),
         "models": models,
         "comfyui": comfyui,
+        "services": collect_services(),
         "gpus": gpus,
         "host": host,
         "power_mode": _power_state["mode"],
@@ -1078,6 +1122,7 @@ _HTML = """<!doctype html>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
+  <section><h2>Services</h2><div id="services">…</div></section>
   <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
     <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
     <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
@@ -1216,6 +1261,17 @@ async function refresh(){  try{
     document.getElementById('comfyui').innerHTML = d.comfyui.length ?
       d.comfyui.map(c=>`<div style="margin:4px 0">${esc(c.label)}: ${pill(c.state)}` +
         (c.state==='busy'?` <span class="sub">${c.running} running, ${c.pending} queued</span>`:'') + `</div>`).join('')
+      : pill('none');
+    // services (app-tier health + click-through links built from browser host)
+    const svc = d.services || [];
+    document.getElementById('services').innerHTML = svc.length ?
+      '<table><tr><th>Service</th><th>State</th><th>Link</th></tr>' +
+      svc.map(s=>{
+        const p = s.up ? `<span class="pill idle">up</span>` : `<span class="pill bad">down</span>`;
+        const code = s.code!=null ? ` <span class="sub">${s.code}</span>` : '';
+        const link = s.port!=null ? `<a href="http://${location.hostname}:${s.port}" target="_blank" style="color:#4b8ce0">:${s.port}</a>` : '<span class="sub">–</span>';
+        return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${link}</td></tr>`;
+      }).join('') + '</table>'
       : pill('none');
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
