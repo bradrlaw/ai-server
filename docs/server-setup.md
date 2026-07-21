@@ -26,10 +26,8 @@ Last updated: 2026-06-30
 - [Quick reference — current state (2026-06-30)](#quick-reference--current-state-2026-06-30)
 - [Operator cheat-sheet — common commands](#operator-cheat-sheet--common-commands)
 - [llama.cpp usage notes (learned during bring-up)](#llamacpp-usage-notes-learned-during-bring-up)
-- [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
+- [Benchmarks → see benchmarking.md](#benchmarks--see-benchmarkingmd)
 - [GPU fan control (shroud fans) — runbook (2026-07-01)](#gpu-fan-control-shroud-fans--runbook-2026-07-01)
-- [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
-- [Tensor-parallel / multi-GPU reality (measured 2026-07-01)](#tensor-parallel--multi-gpu-reality-measured-2026-07-01)
 - [Phase 2 — llama-swap model router (2026-07-02)](#phase-2--llama-swap-model-router-2026-07-02)
 - [Phase 2b — LiteLLM gateway (2026-07-02)](#phase-2b--litellm-gateway-2026-07-02)
 - [GitHub Copilot CLI via BYOK (2026-07-02)](#github-copilot-cli-via-byok-2026-07-02)
@@ -457,36 +455,12 @@ sudo systemctl poweroff
   runs use **`llama-bench`** or **`llama-server`**; those exit cleanly.
 - **Test model:** `/srv/ai/models/qwen2.5-0.5b-q4km.gguf` (0.5B, for smoke tests).
 
-## Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)
-Model: `Qwen3.6-27B` (dense, hybrid linear+full attention, `qwen35` arch — see
-ADR-0008). GGUFs from `unsloth/Qwen3.6-27B-GGUF` in `/srv/ai/models/qwen3.6-27b/`.
-Bench: `scripts/bench-qwen3.6-27b.sh` (llama-bench, -p512 -n128 -r3, depths 0/8192).
-Raw: `/srv/ai/models/qwen3.6-27b/bench-*/results.md`.
+## Benchmarks → see [benchmarking.md](benchmarking.md)
 
-**tg128 = token-gen t/s (interactive speed); pp512 = prompt-processing t/s.**
-
-| Quant / config          | pp512 | tg128 | pp @8k | tg @8k |
-|-------------------------|------:|------:|-------:|-------:|
-| Q6_K  single V100       |  870  | 25.6  |  748   | 22.7   |
-| Q6_K  dual — layer      |  873  | 25.6  |  754   | 24.6   |
-| Q6_K  dual — row        |  203  | 21.4  |  195   | 20.4   |
-| BF16  dual — layer      |  183  | 12.1  |  163   |  9.6   |
-| BF16  dual — row        |  193  | 12.2  |  162   |  9.7   |
-
-**Findings (answers the ADR-0005 TP question):**
-- **Splitting a model that fits one card gives ~no throughput benefit.** Q6_K
-  single vs dual-layer is a tie (~25.6 tg). Dual's value is *capacity*, not speed.
-- **`-sm row` is bad on this box:** ~4× slower prompt processing (203 vs 872 pp)
-  from per-layer PCIe sync (no NVLink). **Use `-sm layer` (default), never `row`.**
-- **BF16 needs both cards and runs ~2× slower than Q6_K** (12 vs 25.6 tg) for a
-  marginal quality gain → not worth it for serving.
-- **Dual-layer helps slightly at depth** (24.6 vs 22.7 tg @8k): KV cache spread
-  over 2 cards eases the memory-bandwidth hit as context grows.
-
-**Serving recommendation:** run **Q6_K on a single V100** (`-sm none`,
-`CUDA_VISIBLE_DEVICES=1`), leaving V100 #2 free for a second model (e.g. the
-35B-A3B MoE or a 2nd instance). Only tensor-split (layer) when a model/context
-genuinely won't fit on one card.
+All model performance benchmarks (single-stream `llama-bench` runs, the MoE and
+coding-model comparisons, the tensor-parallel/multi-GPU reality check, the
+context-window and `--ubatch-size` tuning, the Gemma-4 numbers) and the concurrency
+/ `--parallel` throughput sweep now live in **[docs/benchmarking.md](benchmarking.md)**.
 
 ## GPU fan control (shroud fans) — runbook (2026-07-01)
 Passive Tesla cards throttle under load (seen via `nvidia-smi dmon`). Shroud fans
@@ -506,79 +480,6 @@ are on the board's **4-pin PWM headers** (Nuvoton nct6775). Control = GPU temp
 
 Daemon = `gpu-fan-control.py` (stdlib only). Fail-safe: forces fans to **100%** on
 any error/`nvidia-smi` failure; hands back to BIOS auto on clean stop.
-
-## MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)
-Model: `Qwen3.6-35B-A3B` (MoE, 34.66B total / ~3B active, `qwen35moe` arch).
-GGUF `unsloth/...UD-Q6_K` in `/srv/ai/models/qwen3.6-35b-a3b/`.
-Bench: `scripts/bench-qwen3.6-35b-a3b.sh`. Raw: `.../bench-*/results.md`.
-
-| Quant / config          | pp512 | tg128 | pp @8k | tg @8k |
-|-------------------------|------:|------:|-------:|-------:|
-| Q6_K  single V100       |  773  | 97.6  |  697   | 95.2   |
-| Q6_K  dual — layer      |  755  | 97.1  |  704   | 95.0   |
-| Q6_K  dual — row        |  467  | 42.1  |  438   | 41.4   |
-| BF16  dual (layer/row)  |  — DID NOT FIT (weights ~69 GB > 64 GB VRAM) — |
-
-**Findings:**
-- **MoE is ~3.8× faster than the dense 27B** (97.6 vs 25.6 tg t/s) — only ~3B of
-  35B params active per token. Big win for latency/interactive use.
-- Single vs dual-layer = tie again (~97 tg): confirms splitting a model that fits
-  one card yields no throughput gain (dual = capacity, not speed).
-- **`-sm row` is even worse for MoE**: tg halves (42 vs 97) — expert routing +
-  per-layer PCIe sync. Never use row on this box.
-- **BF16 MoE won't run**: 69 GB weights > 64 GB (2×V100). Q6_K (27 GB) fits ONE
-  card and is the practical max-quality config; Q8_0 (37 GB) would need both cards
-  if higher precision is ever wanted.
-
-**Serving rec:** run **35B-A3B Q6_K on a single V100** for a fast, low-latency
-model — pairs well with the dense 27B Q6_K on the other V100 (one card each).
-
-### Uncensored fine-tune smoke test — Qwen3.6-35B-A3B-Uncensored (HauhauCS-Aggressive, 2026-07-01)
-Model: `HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive` (same `qwen35moe`
-arch, uncensored fine-tune, **reasoning model** with a vision mmproj available).
-GGUFs in `/srv/ai/models/qwen3.6-35b-a3b/`. Live `llama-server` smoke test (not
-llama-bench), single short request, cards under the **175 W cap**.
-
-| Quant       | Size    | Layout                | VRAM        | pp t/s  | tg t/s | result |
-|-------------|--------:|-----------------------|-------------|--------:|-------:|--------|
-| Q4_K_M      | 21.2 GB | 1× V100 (idx1)        | 20.7 GB     | 147-196 | ~102   | ✓ correct |
-| Q6_K_P      | 30.6 GB | 2× V100 (`-sm layer`) | 14.7+15.5 GB| ~107    | ~93    | ✓ correct |
-
-**Findings:**
-- **Q4_K_M on a single V100 is the practical default** — ~102 tg t/s, leaves the 2nd
-  V100 free and ~11 GB headroom for context. Matches the ~97 tg of the unsloth Q6_K
-  above (MoE speed is active-param-bound, not quant-bound).
-- **Q6_K_P (30.6 GB) does NOT fit one V100 with usable context** → needs both cards
-  via `-sm layer` (14.7+15.5 GB, well balanced). Costs the 2nd card + ~10% tg (93 vs
-  102) for the higher-quality quant; the drop is PCIe cross-GPU traffic (PHB, no
-  NVLink). Use only when Q6 quality is specifically wanted.
-- **Reasoning model**: emits a thinking block first. Final answer is in the response
-  `content`; chain-of-thought is in `reasoning_content`. Even a 3-word reply burns
-  ~100-200 completion tokens on reasoning — budget `max_tokens` generously (≥256), or
-  disable thinking (`/no_think` in the prompt, or `enable_thinking:false` template flag).
-- Downloaded via the keyring-backed wrapper `scripts/hf-dl` (Xet backend, byte-exact).
-- Temps stayed ~41 °C — a single short request doesn't stress the cards; sustained
-  load would behave like the other 35B-A3B results above.
-
-## Tensor-parallel / multi-GPU reality (measured 2026-07-01)
-`nvidia-smi topo -m`: all GPU pairs = **PHB** (PCIe via CPU host bridge), **no NVLink**.
-P2P test (`/tmp/p2ptest.cu`, cudaMemcpyPeer, 256MB) between the two V100s:
-- **P2P peer access: ENABLED** both directions.
-- **Inter-GPU bandwidth: ~5.2 GB/s** (vs NVLink 25-300 GB/s) — routed over PCIe
-  gen3 through the CPU. This is the ceiling for any all-reduce.
-
-**What "tensor parallelism" means in our tests:**
-- llama.cpp **`-sm row` = tensor split** (splits each weight matrix + per-layer
-  all-reduce). Tested: 4x slower prefill (dense), ~2x slower tg (MoE). This is the
-  no-NVLink penalty hitting the 5.2 GB/s link every layer.
-- llama.cpp **`-sm layer` = pipeline** (layers split across cards, tiny traffic).
-  Tested: matches single-card speed.
-
-**Conclusion:** TP *works* on the 2xV100 (P2P on, same sm_70) but is
-**communication-bound**. Use it for **capacity** (models >32GB), not speed. For
-single-stream latency, prefer **one model per card**. vLLM's NCCL TP=2 is more
-optimized than llama.cpp row-split and *may* help under **batched/concurrent**
-serving — retest when vLLM is brought up. P100 cannot join TP (arch/mem mismatch).
 
 ### Fan wiring + curves (confirmed from Windows FanControl, 2026-07-01)
 Fans: 40x28mm high-static-pressure. V100 fans 15k rpm max; P100 fan 6k rpm max
@@ -918,81 +819,12 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
 
-### coding context-window sweep (2026-07-02)
+### Model context-window / ubatch tuning → see [benchmarking.md](benchmarking.md)
 
-Qwen3.6-27B Q6_K on one V100-32GB, `--parallel 1 --flash-attn on`, f16 KV. Model's trained
-context is 262144 (256k), so VRAM is the limit. KV grows ~65 MB per 1k tokens; the flash-attn
-compute buffer is fixed (scales with u-batch, not prompt length), so load-time VRAM ≈ peak.
-
-| ctx     | VRAM used | free    | notes                                   |
-|---------|-----------|---------|-----------------------------------------|
-| 32768   | ~23.3 GB  | ~9.4 GB | previous default                        |
-| 131072  | 29.4 GB   | 3.3 GB  | meets Copilot BYOK ≥128k recommendation |
-| 163840  | 31.5 GB   | 1.25 GB | earlier f16-KV pick — too tight (see below) |
-| ≥172032 | —         | —       | exceeds 32 GB with f16 KV (would OOM)   |
-
-Originally chose **163840 (160k)** with f16 KV, but that left only ~1.25 GB free — and a
-large prompt's `-ub 1024` prefill compute buffer then couldn't allocate, so `coding` hit a
-**CUDA OOM and crashed** on any prompt beyond a couple thousand tokens (`cuMemCreate ... out of
-memory` during `graph_compute`). Fixed 2026-07-04 by switching coding to **q8_0 KV**
-(`--cache-type-k q8_0 --cache-type-v q8_0`, near-lossless 8-bit): it halves KV, which both cures
-the OOM and frees enough room to **raise context to 200k (204800)**. At 200k q8_0 the card sits
-~29.8/32 GB (~3 GB headroom) and an 11k-token prompt prefills at ~790 t/s with no OOM. Coding
-runs `--parallel 1` so the full window serves one agent (concurrent requests serialize — fine
-for personal use).
-
-### Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)
-
-Raising `--ubatch-size` (`-ub`, default 512) speeds **prefill / time-to-first-token** (helps
-large prompts, e.g. tool results injected into context). It does **not** change generation
-speed. Cost = a larger CUDA compute buffer (VRAM). `llama-bench` on a V100:
-
-| model              | -ub 512 | -ub 1024 | -ub 2048 | applied |
-|--------------------|---------|----------|----------|---------|
-| coding (27B Q6_K, 1×V100) | 746 t/s | **858 (+15%)** | 892 (+20%) | **`-ub 1024`** — with q8_0 KV @200k (~3 GB free) 1024 fits; 2048 risks OOM |
-| chat (35B-A3B UD-Q6_K, 1×V100) | — | — | +~20% | **`-ub 2048`** — has ~4 GB headroom |
-| big (27B BF16, 2×V100 layer-split) | **232 t/s** | 205 | 167 | **default 512** — larger *hurts* (inter-GPU sync) |
-
-Key lesson: bigger `-ub` helps single-GPU models but **hurts layer-split multi-GPU** models.
-`coding` at `-ub 1024` uses ≈ the same VRAM as 512 (free +15%). Verified both load without OOM.
-
-### Gemma-4 benchmarks + context/ubatch tuning (2026-07-02)
-
-`llama-bench` (`-p 2048 -n 128`, flash-attn on, `CUDA_DEVICE_ORDER=PCI_BUS_ID`). **Note:** without
-`CUDA_DEVICE_ORDER=PCI_BUS_ID`, CUDA orders devices by *speed* (V100s first, P100 last) — the
-opposite of nvidia-smi/llama-swap — so always export it when pinning a card for benchmarks.
-
-**Throughput** (t/s):
-
-| model | card | pp2048 ub512 | ub1024 | ub2048 | tg128 |
-|-------|------|--------------|--------|--------|-------|
-| Gemma-4-12B (dense) | **P100** | 368 | 324 | 458 | **30** |
-| Gemma-4-12B (dense) | **V100** | 1526 | 1814 | **1987** | **71** |
-| Gemma-4-31B (dense) | V100 | 583 | 697 | **760** | 34 |
-| Gemma-4-26B-A4B (MoE) | V100 | 1486 | 1887 | **2269** | **110** |
-
-- **P100 vs V100 (12B):** the V100 is ~4.3× faster prefill and ~2.35× faster generation. `fast`
-  stays on the P100 anyway (frees both V100s for the big Qwen/Gemma models); 30 t/s is fine for
-  chat, and the P100 is otherwise idle.
-- **26B-A4B MoE is the fastest model on the box** — 110 t/s gen (only ~3.8B active params),
-  beating even the dense 12B. Best quality/speed Gemma for daily use.
-- **ubatch:** `-ub 2048` is optimal prefill for *all* single-GPU Gemmas (dense +28-30%, MoE +53%).
-  Applied `-ub 2048` to `fast`, `gemma-31b`, `gemma-26b`.
-
-**Context / VRAM.** All three Gemma-4 models are **256K-native** (`context_length 262144`) and use
-**sliding-window attention** (1024 window, 5 SWA : 1 global layer), so KV cache grows very slowly —
-only the 1-in-6 global layers hold full-length KV. Measured resident VRAM (f16 KV, `-ub` default):
-
-| model | ctx 32k | 65k | 131k | 262k (full) | applied ctx |
-|-------|---------|-----|------|-------------|-------------|
-| 12B / P100 16GB | 8.8 | 9.3 | 10.4 | 12.6 GB | **131072** (10.8GB @ub2048; leaves P100 aux room) |
-| 31B / V100 32GB | 23.2 | 25.8 | 31.0 | OOM | **131072** (q8_0 KV → 26.7GB @ub2048; f16 OOMs at 131k) |
-| 26B-A4B / V100 32GB | 15.6 | 16.3 | 17.6 | 20.3 | **131072** (18.0GB @ub2048; full 256k also fits) |
-
-Full 256K only costs +2-4 GB over 16K thanks to SWA. **31B needs `--cache-type-k/v q8_0`** (halves
-KV, needs flash-attn) to reach 128k — f16 KV at 131k hits 31GB + compute buffer and OOMs; q8_0
-brings it to ~26.7GB. The 12B and 26B-A4B have room to spare with f16 KV. Verified all three
-co-resident after tuning: P100 10.8GB / V100#1 26GB (31B@131k) / V100#2 18.0GB, all answering.
+The `coding` context-window sweep, the `--ubatch-size` prefill tuning, and the
+Gemma-4 throughput + context/VRAM tables that set the current per-model
+`--ctx-size` / `-ub` / KV-quant args now live in
+**[docs/benchmarking.md](benchmarking.md)** (Single-stream engine benchmarks).
 
 ## Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)
 
