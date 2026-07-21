@@ -34,6 +34,9 @@
     },
     "port": 18789,
     "bind": "lan",
+    "controlUi": {
+      "allowInsecureAuth": true
+    },
     "tailscale": {
       "mode": "off",
       "resetOnExit": false
