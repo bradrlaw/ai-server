@@ -843,14 +843,27 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
   `comfyui-mcp` / `plan-build`) — LAN/Tailscale only. Ordered `After=llama-swap.service`
   so boot-time warms succeed. Install (needs sudo):
   `sudo /srv/ai/scripts/install-llama-swap-mode-mcp-service.sh`
-- **Open WebUI:** registered in `docker/mcpo/config.json` as a `streamable-http`
-  server at `http://host.docker.internal:9120/mcp`; mcpo proxies it. Hot-reload picks
-  up the config.json entry — no container recreate needed.
-- **Copilot CLI / BYOK:** register the remote MCP manually (it is **not**
-  auto-added by `copilot-byok.sh`):
+- **Open WebUI** talks to it through **mcpo (OpenAPI), not the raw MCP port.** It is
+  registered in `docker/mcpo/config.json` as a `streamable-http` server pointing at
+  `http://host.docker.internal:9120/mcp`; mcpo re-exposes it as an OpenAPI tool.
+  Add it in **Settings → Integrations → External Tool Servers → Add**:
+  - **URL:** `http://<host-or-tailscale>:8000/llama-swap-mode` — the **mcpo proxy on
+    `:8000`**, *not* `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak).
+    Use the same address your browser reaches Open WebUI by (LAN IP vs Tailscale).
+  - **Auth:** API key = `MCPO_API_KEY` from `docker/.env`.
+
+  **Two gotchas:** (1) the host `:9120` service must be **running before mcpo (re)mounts
+  the route** — mcpo only connects to an HTTP MCP backend at load and gives up if it's
+  down (logs `Failed to create server 'llama-swap-mode'`), so after installing the
+  service run `cd /srv/ai/docker && docker compose restart mcpo`. Verify with
+  `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/llama-swap-mode/docs`
+  (expect `200`). (2) `--hot-reload` picks up config.json *edits*, but reviving a
+  previously-failed HTTP backend needs the restart.
+- **Copilot CLI / BYOK:** register the **raw MCP** endpoint (`:9120/mcp`) directly — it
+  is **not** auto-added by `copilot-byok.sh`:
   `copilot mcp add --transport http llama-swap-mode http://<host-or-tailscale>:9120/mcp`
   (use the LAN IP or Tailscale name the client reaches the server by). Any other
-  MCP-over-HTTP client connects to the same `/mcp` endpoint.
+  MCP-over-HTTP client connects to the same `:9120/mcp` endpoint.
 
 ### Model context-window / ubatch tuning → see [benchmarking.md](benchmarking.md)
 
