@@ -142,7 +142,15 @@ services:
   # /srv/ai/openclaw (gitignored) are 1000-owned by `scripts/assistants-seed.sh`.
   # Seed configs + dirs once: `scripts/assistants-seed.sh` before first `up`.
   openclaw:
-    image: ghcr.io/openclaw/openclaw:2026.7.1
+    # Locally-extended image: upstream OpenClaw + a few skill-dependency binaries
+    # (ffmpeg, jq, ripgrep, gh). See docker/openclaw/Dockerfile. Bump the base tag
+    # there (BASE_IMAGE) when updating OpenClaw, then `docker compose build openclaw`.
+    build:
+      context: ./openclaw
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ghcr.io/openclaw/openclaw:2026.7.1
+    image: ai-server/openclaw:2026.7.1
     container_name: openclaw
     restart: unless-stopped
     init: true

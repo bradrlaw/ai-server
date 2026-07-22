@@ -1114,7 +1114,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | ghcr.io/openclaw/openclaw:2026.7.1     | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
+| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -1162,6 +1162,23 @@ and injects the LiteLLM key into Hermes' live config.
   (`2026.7.1-2`), whose `-N` patch suffix is **not** published as a GHCR image tag,
   so it's a cross-channel false positive for the container — silenced with
   `update.checkOnStart: false`. GHCR ships the base `2026.7.1` release image.
+- **Skills are allowlisted** to cut error-state noise. The image bundles ~53 skills;
+  most sit in "needs setup" because they need macOS APIs (apple-notes, things-mac,
+  peekaboo, sonos…) or personal cloud-account CLIs (1password, trello, xurl…) that
+  can't work on this headless Linux box. `skills.allowBundled` is an **allowlist**
+  (managed/workspace skills unaffected) pinned to the 19 that work here — the 15
+  dependency-free ready ones plus `video-frames`, `session-logs`, `github`,
+  `gh-issues`. Result: **skills Errors: 0**.
+- **A few skill deps are baked into a local image extension** rather than installed
+  at runtime (the in-app "install dependency" button targets `/usr/local` in the
+  ephemeral layer and even suggests `brew`, so it won't persist and the container is
+  non-root). `docker/openclaw/Dockerfile` extends the pinned upstream image with
+  `ffmpeg` (video-frames), `jq` + `ripgrep` (session-logs needs both) and `gh`
+  (github/gh-issues); compose builds it as `ai-server/openclaw:<tag>`. **User-installed
+  skill *content*** (ClawHub/git) already persists under the mounted `state` dir
+  (`~/.openclaw/plugin-skills`, `skill-workshop`) — no extra volume needed; only
+  dependency *binaries* need the image extension. Bump `BASE_IMAGE` in the Dockerfile
+  in lockstep with the compose tag when updating, then `docker compose build openclaw`.
 
 **Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
 - **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web

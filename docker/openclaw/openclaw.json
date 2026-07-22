@@ -96,6 +96,27 @@
   "skills": {
     "install": {
       "nodeManager": "npm"
-    }
+    },
+    "allowBundled": [
+      "browser-automation",
+      "canvas",
+      "clawhub",
+      "diagram-maker",
+      "gh-issues",
+      "github",
+      "healthcheck",
+      "meme-maker",
+      "node-connect",
+      "node-inspect-debugger",
+      "notion",
+      "python-debugpy",
+      "session-logs",
+      "skill-creator",
+      "spike",
+      "taskflow",
+      "taskflow-inbox-triage",
+      "video-frames",
+      "weather"
+    ]
   }
 }
