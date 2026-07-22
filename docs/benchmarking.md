@@ -213,6 +213,41 @@ a few concurrent chat users → `--parallel 4 --ctx 65536`.
 
 
 
+## ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)
+
+How much does the aux **P100 (sm_60)** lose to a **V100 (sm_70)** on diffusion
+image generation? Unlike LLM decode (memory-bandwidth bound, where the P100's HBM2
+keeps it within ~1.5× of a V100), image sampling is **fp16-compute bound** — and the
+V100 has Volta **fp16 tensor cores** while the P100 has none. That gap shows.
+
+Method: two *dedicated* temporary ComfyUI instances from the shared venv/checkpoints,
+one pinned to the P100 (idx0), one to a V100 (idx1), each with its own port + temp/
+output/user dirs + sqlite db; all llama-swap models unloaded (and kept unloaded) so
+each card is clean. Identical core-node txt2img graph (euler/normal, cfg 7, 30 steps),
+one discarded priming run then 3 timed runs. Driver:
+[`scripts/comfyui-gpu-bench.py`](../scripts/comfyui-gpu-bench.py).
+
+| Workflow | GPU | cold (load) | warm avg | sampler | VRAM | speedup |
+|---|---|---:|---:|---:|---:|---:|
+| **SD 1.5** 512×512, 30 steps | P100 | 10.3 s | 8.72 s | 3.7 it/s | 3.2 GB | — |
+| (DreamShaper_8, fp16)        | V100 |  3.7 s | **2.23 s** | **17.0 it/s** | 3.8 GB | **3.9× / 4.6× it/s** |
+| **SDXL** 1024×1024, 30 steps | P100 | 69.6 s | 78.7 s | 0.38 it/s | 5.6 GB | — |
+| (sd_xl_base_1.0, fp16)       | V100 | 13.8 s | **10.6 s** | **3.22 it/s** | 7.5 GB | **7.4× / 8.5× it/s** |
+
+**Takeaways:**
+- The V100 is **~4× faster on SD 1.5 and ~7–8× faster on SDXL** — a *much* wider gap
+  than the ~1.5× we see on LLM decode. Image sampling saturates fp16 matmul, which is
+  exactly where Volta tensor cores (V100) beat the tensor-core-less P100 (Pascal).
+- The gap **widens with resolution/model size**: SDXL's larger UNet is more
+  compute-bound, so the P100 falls further behind (0.38 it/s → ~2.6 s per step).
+- Both models fit the P100 comfortably (SDXL peak only 5.6 GB — no fp8 needed at
+  fp16; recall sm_60/70 have no fp8 anyway). **The P100 is a fine *offload* card for
+  batch/low-priority image jobs, but keep interactive ComfyUI on a V100.**
+
+*Raw data: [`data/comfyui-p100-v100-txt2img-20260722.csv`](data/comfyui-p100-v100-txt2img-20260722.csv).*
+
+
+
 ## Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)
 
 These are the **single-stream** per-model / per-GPU numbers gathered during
