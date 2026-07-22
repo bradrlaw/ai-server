@@ -131,6 +131,123 @@ agentic coding client that needs 100k+ context can't use `--parallel 8`
 throughput vs per-request context** for that model's real workload — e.g. single-user
 agentic coding wants few slots/large context; multi-user family chat wants many slots.
 
+## MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)
+
+Which MoE model fits on the **Tesla P100-16GB** (idx0, sm_60)? An MoE's *total*
+params (all experts) must be resident, so weight size — not active params — sets
+the floor. Of the Qwen 3.6 / Gemma 4 roster, only **Gemma-4-26B-A4B** (25B total /
+~3.8B active, QAT `UD-Q4_K_XL`, 14 GB file) fits: its weight buffer is **13.6 GB**,
+leaving ~2.8 GB for KV + compute. `Qwen3.6-35B-A3B` does **not** fit at any local
+quant (smallest is `Q4_K_M`, 20 GB > 16 GB) — it would need a `Q2_K`/`IQ3` (~13–15 GB).
+The dense Gemma 4 12B/31B and the huge `Qwen3-Coder-Next` MoE are out of scope here.
+
+Standalone sweep (`scripts/p100-moe-sweep.py`, pins the model to idx0 on a private
+port so llama-swap can't re-warm `fast` mid-run; total ctx 8192, `q8_0` KV, 256 max
+tokens, concurrency 1–16, restores daily on exit):
+
+| `--parallel` | conc 1 | 2 | 4 | 8 | 12 | 16 | Peak | VRAM@peak |
+|----:|----:|----:|----:|----:|----:|----:|----:|----:|
+| 1 | 51.9 | 51.7 | 51.6 | 51.7 | 51.6 | 51.6 | **51.9** | 14.3 GB |
+| 2 | 52.0 | 86.3 | 86.8 | 86.8 | 86.8 | 85.5 | **86.8** | 14.5 GB |
+| 4 | 52.0 | 85.7 | 105.2 | 104.9 | 102.6 | 100.6 | **105.2** | 14.8 GB |
+| 8 | 51.7 | 86.4 | 105.6 | 99.3 | 100.5 | 99.1 | **105.6** | 15.0 GB |
+
+*(aggregate tokens/sec; 100 % success at every point.)*
+
+*Raw data: [`data/p100-moe-sweep-gemma26b-20260722.csv`](data/p100-moe-sweep-gemma26b-20260722.csv).*
+
+Findings:
+- **Single-stream ~52 tok/s** — snappy for a 25B-class model, thanks to only ~3.8B
+  active params (behaves like a small dense model on decode).
+- **Best aggregate ~105 tok/s at `--parallel 4` (conc ≥4)**; `--parallel 8` doesn't
+  improve on 4 (2 slots per active pass already saturate the P100's compute), so
+  **P=4 is the sweet spot** — fewer slots means more context per request too.
+- **Never OOMs**: 14.3 → 15.0 GB across P=1→8 (KV is cheap: `q8_0` + few KV heads
+  add only ~few-hundred MB even at 32k ctx). The P100 has ~1.4 GB to spare at P=8.
+- Context scales cheaply too — verified **32k ctx also fits** (14.6 GB @ P=1).
+
+So the P100 can host a genuinely useful ~105 tok/s multi-user MoE (`gemma-26b`),
+not just the 12B `fast` — a viable alternative tenant for the aux card.
+
+### Context ceiling + parallel scaling at large context (2026-07-22)
+
+How big a context fits, and can we still parallelise it? (`gemma-26b`, `q8_0` KV,
+standalone on idx0.) Gemma-4's **interleaved sliding-window attention** (5 of every
+6 layers are windowed) keeps KV remarkably cheap — ~15.5 MiB per 1k tokens — so a
+huge context fits before the 16 GB wall.
+
+**Single-user context ceiling** (`--parallel 1`, total = per-request context):
+
+| total ctx | loads? | VRAM | single-stream tok/s |
+|----:|:--:|----:|----:|
+| 8 k    | ✅ | 14.3 GB | 52 |
+| 64 k   | ✅ | 15.2 GB | 50 |
+| **128 k** | ✅ | **16.18 GB** (~0.2 GB free) | 50 |
+| 192 k  | ❌ OOM | — | — |
+| 256 k (native) | ❌ OOM | — | — |
+
+**128 k is the practical single-user ceiling** — it fills the card, and decode holds
+~50 tok/s. 192 k+ OOMs (KV alone would exceed the free budget).
+
+**Parallel scaling at large context** — `--ctx-size` is the *total* KV split across
+slots, so `--parallel P` gives `total/P` context **per request**. Aggregate tok/s
+at **64 k total**:
+
+| `--parallel` | per-req ctx | VRAM | peak agg tok/s |
+|----:|----:|----:|----:|
+| 1 | 64 k | 15.2 GB | 50 |
+| 2 | 32 k | 15.3 GB | 82 |
+| 4 | 16 k | 15.6 GB | **100** |
+| 8 |  8 k | 16.2 GB | 97 |
+
+At **64 k total the model still scales to ~100 tok/s at `--parallel 4`** (16 k/slot)
+and even P=8 fits (16.2 GB). But at **128 k total only `--parallel 1` fits** — P≥2
+OOMs (no VRAM left for a second slot's compute buffers).
+
+**The tradeoff (VRAM-bound):** on the P100 `gemma-26b` can do *either* ~128 k
+single-user context *or* ~100 tok/s multi-user throughput (64 k total, 16 k/slot) —
+not both. Pick per workload: one long-context agent → `--parallel 1 --ctx 131072`;
+a few concurrent chat users → `--parallel 4 --ctx 65536`.
+
+*Raw data: [`data/p100-moe-ctx-sweep-gemma26b-20260722.csv`](data/p100-moe-ctx-sweep-gemma26b-20260722.csv).*
+
+
+
+## ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)
+
+How much does the aux **P100 (sm_60)** lose to a **V100 (sm_70)** on diffusion
+image generation? Unlike LLM decode (memory-bandwidth bound, where the P100's HBM2
+keeps it within ~1.5× of a V100), image sampling is **fp16-compute bound** — and the
+V100 has Volta **fp16 tensor cores** while the P100 has none. That gap shows.
+
+Method: two *dedicated* temporary ComfyUI instances from the shared venv/checkpoints,
+one pinned to the P100 (idx0), one to a V100 (idx1), each with its own port + temp/
+output/user dirs + sqlite db; all llama-swap models unloaded (and kept unloaded) so
+each card is clean. Identical core-node txt2img graph (euler/normal, cfg 7, 30 steps),
+one discarded priming run then 3 timed runs. Driver:
+[`scripts/comfyui-gpu-bench.py`](../scripts/comfyui-gpu-bench.py).
+
+| Workflow | GPU | cold (load) | warm avg | sampler | VRAM | speedup |
+|---|---|---:|---:|---:|---:|---:|
+| **SD 1.5** 512×512, 30 steps | P100 | 10.3 s | 8.72 s | 3.7 it/s | 3.2 GB | — |
+| (DreamShaper_8, fp16)        | V100 |  3.7 s | **2.23 s** | **17.0 it/s** | 3.8 GB | **3.9× / 4.6× it/s** |
+| **SDXL** 1024×1024, 30 steps | P100 | 69.6 s | 78.7 s | 0.38 it/s | 5.6 GB | — |
+| (sd_xl_base_1.0, fp16)       | V100 | 13.8 s | **10.6 s** | **3.22 it/s** | 7.5 GB | **7.4× / 8.5× it/s** |
+
+**Takeaways:**
+- The V100 is **~4× faster on SD 1.5 and ~7–8× faster on SDXL** — a *much* wider gap
+  than the ~1.5× we see on LLM decode. Image sampling saturates fp16 matmul, which is
+  exactly where Volta tensor cores (V100) beat the tensor-core-less P100 (Pascal).
+- The gap **widens with resolution/model size**: SDXL's larger UNet is more
+  compute-bound, so the P100 falls further behind (0.38 it/s → ~2.6 s per step).
+- Both models fit the P100 comfortably (SDXL peak only 5.6 GB — no fp8 needed at
+  fp16; recall sm_60/70 have no fp8 anyway). **The P100 is a fine *offload* card for
+  batch/low-priority image jobs, but keep interactive ComfyUI on a V100.**
+
+*Raw data: [`data/comfyui-p100-v100-txt2img-20260722.csv`](data/comfyui-p100-v100-txt2img-20260722.csv).*
+
+
+
 ## Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)
 
 These are the **single-stream** per-model / per-GPU numbers gathered during

@@ -135,6 +135,95 @@ services:
     networks:
       - ai
 
+  # OpenClaw — self-hosted multi-channel personal-assistant gateway (Node daemon).
+  # Talks to the native models through the LiteLLM gateway (host :4000) via its
+  # dedicated `litellm` provider (config in the state dir). Control UI + API on
+  # :18789. Runs as the image's `node` user (uid 1000) — the host data dirs under
+  # /srv/ai/openclaw (gitignored) are 1000-owned by `scripts/assistants-seed.sh`.
+  # Seed configs + dirs once: `scripts/assistants-seed.sh` before first `up`.
+  openclaw:
+    # Locally-extended image: upstream OpenClaw + a few skill-dependency binaries
+    # (ffmpeg, jq, ripgrep, gh). See docker/openclaw/Dockerfile. Bump the base tag
+    # there (BASE_IMAGE) when updating OpenClaw, then `docker compose build openclaw`.
+    build:
+      context: ./openclaw
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ghcr.io/openclaw/openclaw:2026.7.1
+    image: ai-server/openclaw:2026.7.1
+    container_name: openclaw
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - litellm
+    ports:
+      - "18789:18789"   # Control UI + API + WebChat
+      - "18790:18790"   # bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      # Must be "lan" (0.0.0.0) or published ports are unreachable; token-gated.
+      OPENCLAW_GATEWAY_BIND: lan
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN}"
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      OPENCLAW_SKIP_ONBOARDING: "1"
+      # LiteLLM key (reused master key); referenced as ${LITELLM_API_KEY} in config.
+      LITELLM_API_KEY: "${LITELLM_MASTER_KEY}"
+      TZ: America/New_York
+    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--port", "18789"]
+    volumes:
+      - /srv/ai/openclaw/state:/home/node/.openclaw
+      - /srv/ai/openclaw/workspace:/home/node/.openclaw/workspace
+      - /srv/ai/openclaw/auth-secrets:/home/node/.config/openclaw
+    networks:
+      - ai
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Hermes (Nous Research) — self-hosted agentic assistant. TUI-first, but runs
+  # here as a headless gateway (`gateway run`) with the web dashboard (:9119) and
+  # OpenAI-compatible API server (:8642) enabled. Talks to LiteLLM (host :4000)
+  # via its `custom` provider (config in /opt/data). The self-improving skill loop
+  # executes code INSIDE this container — isolation is the reason we containerize.
+  # Do NOT set `user:` — Hermes remaps its internal user via HERMES_UID/HERMES_GID.
+  # All state persists under /srv/ai/hermes (gitignored) == /opt/data.
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    depends_on:
+      - litellm
+    ports:
+      - "9119:9119"   # web dashboard (basic-auth protected)
+      - "8642:8642"   # OpenAI-compatible API server (key-gated)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Remap the internal hermes user to the host owner (brad, uid/gid 1000).
+      HERMES_UID: "1000"
+      HERMES_GID: "1000"
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: "${HERMES_DASHBOARD_USER:-admin}"
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: "${HERMES_DASHBOARD_PASSWORD}"
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: "0.0.0.0"
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: "${HERMES_API_SERVER_KEY}"
+      TZ: America/New_York
+    command: ["gateway", "run"]
+    volumes:
+      - /srv/ai/hermes:/opt/data
+    networks:
+      - ai
+
 networks:
   ai:
     name: ai

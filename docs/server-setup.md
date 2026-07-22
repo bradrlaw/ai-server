@@ -33,6 +33,7 @@ Last updated: 2026-06-30
 - [GitHub Copilot CLI via BYOK (2026-07-02)](#github-copilot-cli-via-byok-2026-07-02)
 - [Phase 3 — Open WebUI + SearXNG + mcpo (2026-07-02)](#phase-3--open-webui--searxng--mcpo-2026-07-02)
 - [Phase 6 (partial) — ComfyUI generative media (2026-07-03)](#phase-6-partial--comfyui-generative-media-2026-07-03)
+- [Personal-assistant gateways — OpenClaw + Hermes (2026-07-21)](#personal-assistant-gateways--openclaw--hermes-2026-07-21)
 - [Network exposure & firewall (2026-07-07)](#network-exposure--firewall-2026-07-07)
 
 ## 1. Hardware
@@ -1101,6 +1102,109 @@ Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through m
 `http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
 (Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).
 
+## Personal-assistant gateways — OpenClaw + Hermes (2026-07-21)
+
+Two self-hosted **always-on assistant gateways** run as app-tier containers
+(compose `/srv/ai/docker/`), both talking to the native models through the
+LiteLLM gateway (`host.docker.internal:4000`). They are the front door of the
+"assistant" layer; heavier work is delegated to the existing tiers (n8n
+automations, Copilot CLI / coding models, ComfyUI + plan-build + llama-swap-mode
+MCPs). See **ADR-0016** for the layered decision and framework comparison
+(OpenClaw vs Hermes vs pi.dev).
+
+| Service   | Image                                  | Access                | Purpose |
+|-----------|----------------------------------------|-----------------------|---------|
+| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
+| hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
+
+**Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
+utility/small tasks `fast` — i.e. the daily-mode trio, so no GPU swap on normal
+use. All authenticate to LiteLLM with `LITELLM_MASTER_KEY`.
+
+**One-time setup (host, non-privileged):**
+```bash
+cd /srv/ai/docker
+cp .env.example .env   # if not already; fill in the assistant secrets (below)
+../scripts/assistants-seed.sh          # seeds gitignored /srv/ai/{openclaw,hermes}
+docker compose up -d openclaw hermes
+```
+`assistants-seed.sh` is idempotent: it creates the runtime dirs (uid/gid 1000,
+matching `brad`) and seeds each config **only if missing** (so agent-written
+state, schema migrations, and learning-loop skills survive). It copies the
+tracked templates `docker/openclaw/openclaw.json` + `docker/hermes/config.yaml`
+and injects the LiteLLM key into Hermes' live config.
+
+**OpenClaw** (`ghcr.io/openclaw/openclaw`, Node daemon, runs as `node`/uid 1000):
+- Config = JSON5 at `/srv/ai/openclaw/state/openclaw.json` (writable; OpenClaw runs
+  schema migrations). A dedicated `litellm` provider (`api: openai-completions`,
+  `baseUrl: http://host.docker.internal:4000`, `apiKey: "${LITELLM_API_KEY}"`,
+  `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`fast`;
+  `agents.defaults.model.primary = litellm/chat`, `fallbacks = [litellm/coding]`.
+- **Must** set `gateway.mode: "local"`, `gateway.bind: "lan"` and an
+  `OPENCLAW_GATEWAY_TOKEN` (env SecretRef) — a loopback bind makes the published
+  port unreachable; a LAN bind without a token is refused.
+- The canonical config was generated with
+  `openclaw onboard --non-interactive --accept-risk --auth-choice custom-api-key
+  --custom-provider-id litellm --custom-base-url http://host.docker.internal:4000/v1
+  --gateway-bind lan --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN` then patched
+  with the 3-model roster. `OPENCLAW_SKIP_ONBOARDING=1` keeps the container
+  declarative. Diagnose config issues with `docker compose exec openclaw node
+  openclaw.mjs doctor`. Three persistent dirs: `state`, `workspace`, `auth-secrets`.
+- Verified live 2026-07-21: `openclaw agent --agent main -m "…"` →
+  `winnerProvider: litellm, winnerModel: chat, result: success`.
+- **Control UI needs a secure browser context** (WebCrypto device identity):
+  reach it over an SSH tunnel to `http://localhost:18789`, not the LAN hostname.
+  `gateway.controlUi.allowInsecureAuth` only helps an on-host (loopback) browser;
+  a remote LAN browser additionally fails the `isLocalClient` check.
+- **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
+  never the in-app self-updater (ephemeral container layer). The auto-updater is
+  off by default. The "Update available" startup banner checks the **npm** registry
+  (`2026.7.1-2`), whose `-N` patch suffix is **not** published as a GHCR image tag,
+  so it's a cross-channel false positive for the container — silenced with
+  `update.checkOnStart: false`. GHCR ships the base `2026.7.1` release image.
+- **Skills are allowlisted** to cut error-state noise. The image bundles ~53 skills;
+  most sit in "needs setup" because they need macOS APIs (apple-notes, things-mac,
+  peekaboo, sonos…) or personal cloud-account CLIs (1password, trello, xurl…) that
+  can't work on this headless Linux box. `skills.allowBundled` is an **allowlist**
+  (managed/workspace skills unaffected) pinned to the 19 that work here — the 15
+  dependency-free ready ones plus `video-frames`, `session-logs`, `github`,
+  `gh-issues`. `allowBundled` blocks the rest from the agent but does **not** flip
+  the Control-UI enabled toggle, so the 34 unwanted skills are *also* set
+  `skills.entries.<key>.enabled: false` (what the UI reads → they show disabled).
+  Result: **skills Errors: 0**.
+- **A few skill deps are baked into a local image extension** rather than installed
+  at runtime (the in-app "install dependency" button targets `/usr/local` in the
+  ephemeral layer and even suggests `brew`, so it won't persist and the container is
+  non-root). `docker/openclaw/Dockerfile` extends the pinned upstream image with
+  `ffmpeg` (video-frames), `jq` + `ripgrep` (session-logs needs both) and `gh`
+  (github/gh-issues); compose builds it as `ai-server/openclaw:<tag>`. **User-installed
+  skill *content*** (ClawHub/git) already persists under the mounted `state` dir
+  (`~/.openclaw/plugin-skills`, `skill-workshop`) — no extra volume needed; only
+  dependency *binaries* need the image extension. Bump `BASE_IMAGE` in the Dockerfile
+  in lockstep with the compose tag when updating, then `docker compose build openclaw`.
+
+**Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
+- **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web
+  dashboard (`:9119`, basic-auth) and OpenAI-compatible API server (`:8642`,
+  key-gated) are enabled by env. Single state volume `/srv/ai/hermes` → `/opt/data`
+  (config, `.env`, sessions + FTS5 DB, memory, **agent-written skills**).
+- Config = `/opt/data/config.yaml`: `model.provider: custom`,
+  `base_url: http://host.docker.internal:4000/v1`, `default: chat`, `api_key` =
+  the LiteLLM master key (injected by the seed script; the tracked template holds
+  a placeholder). `OPENAI_BASE_URL` is **not** honored for the `custom` provider.
+- Do **not** pass `user:` — Hermes remaps its internal user via
+  `HERMES_UID`/`HERMES_GID` (both `1000`); `--user` breaks the s6 tree.
+- The self-improving skill loop **executes code inside the container** (isolation
+  is why we containerize). The `:8642` API + `terminal.backend: local` means keyed
+  callers run agent work as the container user — keep it LAN/firewalled.
+- Verified live 2026-07-21: `POST :8642/v1/chat/completions {model:"hermes-agent"}`
+  → `"pong"` (drove `chat` via LiteLLM).
+
+**Secrets** (in `docker/.env`, gitignored; template `.env.example`):
+`OPENCLAW_GATEWAY_TOKEN`, `HERMES_DASHBOARD_USER`/`HERMES_DASHBOARD_PASSWORD`,
+`HERMES_API_SERVER_KEY` (generate the tokens with `openssl rand -hex 32`). Both
+reuse `LITELLM_MASTER_KEY` for the model backend.
+
 ## Network exposure & firewall (2026-07-07)
 
 The AI services bind `0.0.0.0` and are meant for the **trusted LAN + Tailscale
@@ -1114,6 +1218,9 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | Filebrowser (ComfyUI media) | 8083 | own login (change admin/admin on first visit) |
 | LiteLLM gateway | 4000 | `LITELLM_MASTER_KEY` |
 | mcpo | 8000 | `MCPO_API_KEY` |
+| OpenClaw gateway | 18789 | `OPENCLAW_GATEWAY_TOKEN` (+ bridge 18790) |
+| Hermes dashboard | 9119 | basic auth (`HERMES_DASHBOARD_*`) |
+| Hermes API server | 8642 | `HERMES_API_SERVER_KEY` |
 | SearXNG | 8888 | none |
 | llama-swap mgmt | 127.0.0.1:9090 | localhost-only (safe) |
 
