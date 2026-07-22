@@ -1168,7 +1168,10 @@ and injects the LiteLLM key into Hermes' live config.
   can't work on this headless Linux box. `skills.allowBundled` is an **allowlist**
   (managed/workspace skills unaffected) pinned to the 19 that work here — the 15
   dependency-free ready ones plus `video-frames`, `session-logs`, `github`,
-  `gh-issues`. Result: **skills Errors: 0**.
+  `gh-issues`. `allowBundled` blocks the rest from the agent but does **not** flip
+  the Control-UI enabled toggle, so the 34 unwanted skills are *also* set
+  `skills.entries.<key>.enabled: false` (what the UI reads → they show disabled).
+  Result: **skills Errors: 0**.
 - **A few skill deps are baked into a local image extension** rather than installed
   at runtime (the in-app "install dependency" button targets `/usr/local` in the
   ephemeral layer and even suggests `brew`, so it won't persist and the container is

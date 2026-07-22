@@ -117,6 +117,42 @@
       "taskflow-inbox-triage",
       "video-frames",
       "weather"
-    ]
+    ],
+    "entries": {
+      "1password": { "enabled": false },
+      "apple-notes": { "enabled": false },
+      "apple-reminders": { "enabled": false },
+      "bear-notes": { "enabled": false },
+      "blogwatcher": { "enabled": false },
+      "blucli": { "enabled": false },
+      "camsnap": { "enabled": false },
+      "coding-agent": { "enabled": false },
+      "eightctl": { "enabled": false },
+      "gemini": { "enabled": false },
+      "gifgrep": { "enabled": false },
+      "gog": { "enabled": false },
+      "goplaces": { "enabled": false },
+      "himalaya": { "enabled": false },
+      "mcporter": { "enabled": false },
+      "model-usage": { "enabled": false },
+      "nano-pdf": { "enabled": false },
+      "obsidian": { "enabled": false },
+      "openai-whisper": { "enabled": false },
+      "openai-whisper-api": { "enabled": false },
+      "openhue": { "enabled": false },
+      "oracle": { "enabled": false },
+      "ordercli": { "enabled": false },
+      "peekaboo": { "enabled": false },
+      "sag": { "enabled": false },
+      "sherpa-onnx-tts": { "enabled": false },
+      "songsee": { "enabled": false },
+      "sonoscli": { "enabled": false },
+      "spotify-player": { "enabled": false },
+      "summarize": { "enabled": false },
+      "things-mac": { "enabled": false },
+      "tmux": { "enabled": false },
+      "trello": { "enabled": false },
+      "xurl": { "enabled": false }
+    }
   }
 }
