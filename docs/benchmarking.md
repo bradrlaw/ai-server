@@ -14,6 +14,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)](#moe-on-the-p100-16-gb--gemma-4-26b-a4b-2026-07-22)
   - [Context ceiling + parallel scaling at large context (2026-07-22)](#context-ceiling--parallel-scaling-at-large-context-2026-07-22)
 - [ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)](#comfyui-image-generation--p100-vs-v100-txt2img-2026-07-22)
+- [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -265,6 +266,44 @@ one discarded priming run then 3 timed runs. Driver:
   batch/low-priority image jobs, but keep interactive ComfyUI on a V100.**
 
 *Raw data: [`data/comfyui-p100-v100-txt2img-20260722.csv`](data/comfyui-p100-v100-txt2img-20260722.csv).*
+
+
+
+## P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)
+
+Should the always-on P100 `fast` slot serve the dense **Gemma-4-12B** or the
+**Gemma-4-26B-A4B MoE** (25B total / ~3.8B active)? Focus: time-to-first-token
+(TTFT) and prompt-processing (prefill) speed. Both pinned to the P100 (idx0),
+flash-attn on, ub2048, greedy; TTFT measured client-side over a streamed
+`/completion`, prefill/decode from the server's own `timings`. Driver:
+[`scripts/p100-ttft-fast-vs-moe.py`](../scripts/p100-ttft-fast-vs-moe.py).
+
+| Prompt | TTFT (12B → MoE) | Prefill tok/s (12B → MoE) | Decode tok/s (12B → MoE) |
+|---|---|---|---|
+| 123 tok  | 1.02 s → **0.62 s** | 121 → **200** | 30.0 → **61.3** |
+| 501 tok  | 2.12 s → **1.41 s** | 247 → **372** | 29.8 → **63.7** |
+| 2 040 tok | 7.14 s → **3.61 s** | 286 → **568** | 27.4 → **60.5** |
+| 6 144 tok | 23.25 s → **11.38 s** | 265 → **542** | 28.0 → **58.9** |
+| VRAM | ~8.5 GB | | ~15.3 GB |
+
+**The MoE wins every latency metric** — it fires only ~3.8B params/token, so both
+prefill and decode are cheaper *despite* 25B total weights:
+- **TTFT 1.6–2× faster** (gap widens with prompt length — matters for RAG/long ctx).
+- **Prefill 1.5–2× faster** (568 vs 286 tok/s at 2k).
+- **Decode ~2× faster** (~60 vs ~29 tok/s), plus higher quality (25B knowledge).
+
+**The one cost is VRAM headroom.** The MoE keeps all experts resident (~15.3 GB of
+16 GB) vs the 12B's ~8.5 GB, so it's VRAM-bound on the P100 — it can't do both large
+ctx *and* high parallelism (measured fit envelope: ctx 32768 ub1024 P=1 → 1.2 GB
+free; ctx 24576 P=2 → 1.0 GB free; **P=4 or 48k+ ctx OOMs**).
+
+**Decision (2026-07-22): swapped `fast` → the MoE.** Deployed daily as ctx **32768**,
+ub1024, `--parallel 1`, `--reasoning-budget 0` (~15.3 GB). The parallel overlays cap
+`fast` at **P=2 / ctx 24576** (agentic, heavy-coding). The dense 12B stays available
+as **`fast-12b`** (128k ctx, ~8.5 GB) for when you need max single-user context or
+P100 headroom (e.g. a co-resident image-gen offload job).
+
+*Raw data: [`data/p100-ttft-fast-vs-moe-20260722.csv`](data/p100-ttft-fast-vs-moe-20260722.csv).*
 
 
 

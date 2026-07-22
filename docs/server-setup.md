@@ -589,7 +589,8 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 204800 | ~29.8 GB (q8_0 KV) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
-| `fast`   | **Gemma-4-12B** QAT UD-Q4_K_XL     | idx0 (P100) | 131072 | ~10.8 GB, always-on, `--reasoning-budget 0`, ub2048 |
+| `fast`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
+| `fast-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `fast` |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
@@ -605,7 +606,8 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 | `chat`             | `chat (Qwen3.6-35B-A3B MoE)` |
 | `big`              | `big (Qwen3.6-27B BF16)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
-| `fast`             | `fast (Gemma-4-12B)` |
+| `fast`             | `fast (Gemma-4-26B-A4B MoE)` |
+| `fast-12b`         | `fast-12b (Gemma-4-12B dense)` |
 
 (The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
 `MODEL_LABELS` map — keep the two in sync if a model is swapped.)
@@ -614,7 +616,7 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
 `gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
 (big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+fast(P100) all
-co-resident (31.8/28.4/7.7 GB); `fast` answers immediately (Gemma reasoning disabled).
+co-resident; after the 2026-07-22 swap `fast` (MoE) uses ~15.3 GB on the P100 (was ~7.7 GB as the 12B). `fast` answers immediately (Gemma reasoning disabled).
 
 **Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
 `fast` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
@@ -696,7 +698,8 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 | `chat`       | 131072 | yes |  81920 | 24576 | 106496 (~24k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
 | `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
-| `fast`       | 131072 | **no** |  98304 |  8192 | 106496 (~24k spare) |
+| `fast`       | 32768 | **no** |  24576 |  8192 | 32768 (fits) |
+| `fast-12b`   | 131072 | **no** |  98304 |  8192 | 106496 (~24k spare) |
 | *(other)*    | — | — | 32768 | 8192 | conservative fallback |
 
 Notes:
@@ -721,7 +724,7 @@ different GPU — so the driver keeps reasoning while subagents work **in parall
 | --- | --- | --- |
 | V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
 | V100 idx2 | `chat` | task/general subagent |
-| P100 idx0 | `fast` (Gemma-4-12B) | explore/search subagent (always warm) |
+| P100 idx0 | `fast` (Gemma-4-26B-A4B MoE) | explore/search subagent (always warm) |
 
 Because `fast`/`chat` live on separate cards from the driver, subagents run with no
 contention, no eviction, and (for `fast`) zero cold-start (the status service's keeper

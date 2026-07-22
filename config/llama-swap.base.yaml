@@ -149,18 +149,45 @@ models:
       --parallel 2
       ${common}
 
-  # --- fast: Gemma-4-12B (QAT UD-Q4_K_XL) on the P100 (idx0) --------------
-  # Always-on, non-reasoning chat. Runs CONCURRENTLY with coding+chat (own
-  # card). ~6.3GB weights on 16GB -> comfortable. Gemma is not a reasoning
-  # model, so replies are immediate (no thinking phase).
-  # Verified 2026-07-03: ctx 131072 (128k) with a 103k-token prefill peaks at
-  # 10.9GB/16GB (~5.5GB headroom) — Gemma's sliding-window attention makes KV
-  # nearly free (only +0.2GB vs idle). CAVEAT: the P100 is slow at extreme
-  # depth (103k prefill took ~9.5 min, ~180 t/s); 128k is available but deep
-  # fills are slow. Short/medium chats stay snappy as intended.
+  # --- fast: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on the P100 (idx0) -------
+  # SWAPPED 2026-07-22 from the dense Gemma-4-12B to this MoE (25B total / ~3.8B
+  # active). On the P100 the MoE is strictly faster AND higher quality than the
+  # 12B: ~2x decode (~60 vs ~29 tok/s), 1.5-2x prefill (568 vs 286 tok/s @2k),
+  # 1.6-2x lower TTFT — because only ~3.8B params fire per token. Cost is VRAM:
+  # ~15.3GB of 16GB resident (all experts) vs 8.5GB for the 12B, so it is VRAM-
+  # bound on the P100: it can't do both large ctx AND high parallelism. Daily uses
+  # ctx 32768 + ub1024 @ P=1 -> 15.2GB (~1.2GB free, safe for always-on). The
+  # parallel overlays override ctx DOWN and cap at P=2 (agentic/heavy-coding: ctx
+  # 24576 @ P=2 -> ~15.4GB); P=4 OOMs, and 48k+ OOMs at P=1. Need >32k single-user
+  # context? Use the `fast-12b` fallback (128k, dense).
+  # --reasoning-budget 0 keeps replies immediate (no thinking phase), matching the
+  # old `fast` persona. Runs CONCURRENTLY with coding+chat (own card).
   "fast":
-    name: "Gemma-4-12B — fast non-reasoning chat"
-    description: "Snappy general chat on the P100; no reasoning phase. Always available."
+    name: "Gemma-4-26B-A4B (MoE) — fast non-reasoning chat"
+    description: "Snappy general chat on the P100 (MoE, ~3.8B active); no reasoning phase. Always available."
+    env:
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "CUDA_VISIBLE_DEVICES=0"
+    cmd: |
+      ${llama-server}
+      --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+      --ctx-size 32768
+      --parallel 1
+      --batch-size 2048 --ubatch-size 1024
+      --reasoning-budget 0
+      ${common}
+
+  # --- fast-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
+  # FALLBACK for the old always-on `fast`. Dense 12B, ~6.3GB weights -> ~8.5GB
+  # with ctx, leaving ~7.5GB headroom on the 16GB P100. Slower than the MoE
+  # (~29 tok/s decode, ~286 tok/s prefill @2k) but far more VRAM headroom: does
+  # 128k single-user comfortably and leaves room to co-host a P100 offload job.
+  # Shares idx0 with `fast`/`fast-uncensored` (mutually exclusive). Request it to
+  # swap the MoE out; ttl unloads it so `fast` reclaims the card.
+  "fast-12b":
+    name: "Gemma-4-12B dense — fast fallback (headroom)"
+    description: "Dense 12B fallback on the P100; more VRAM headroom (128k ctx) than the MoE `fast`. Shares idx0 (mutually exclusive)."
+    ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=0"
@@ -297,7 +324,7 @@ routing:
     use: matrix
     settings:
       matrix:
-        # Card map: idx0(P100)=fast|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q4|chat-uncensored-q6|big ;
+        # Card map: idx0(P100)=fast(MoE)|fast-12b|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q4|chat-uncensored-q6|big ;
         #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `fast`
         #           and `fast-uncensored` are mutually exclusive on idx0 (they
         #           evict each other); one of them coexists with all V100 activity.
