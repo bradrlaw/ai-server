@@ -169,6 +169,49 @@ Findings:
 So the P100 can host a genuinely useful ~105 tok/s multi-user MoE (`gemma-26b`),
 not just the 12B `fast` — a viable alternative tenant for the aux card.
 
+### Context ceiling + parallel scaling at large context (2026-07-22)
+
+How big a context fits, and can we still parallelise it? (`gemma-26b`, `q8_0` KV,
+standalone on idx0.) Gemma-4's **interleaved sliding-window attention** (5 of every
+6 layers are windowed) keeps KV remarkably cheap — ~15.5 MiB per 1k tokens — so a
+huge context fits before the 16 GB wall.
+
+**Single-user context ceiling** (`--parallel 1`, total = per-request context):
+
+| total ctx | loads? | VRAM | single-stream tok/s |
+|----:|:--:|----:|----:|
+| 8 k    | ✅ | 14.3 GB | 52 |
+| 64 k   | ✅ | 15.2 GB | 50 |
+| **128 k** | ✅ | **16.18 GB** (~0.2 GB free) | 50 |
+| 192 k  | ❌ OOM | — | — |
+| 256 k (native) | ❌ OOM | — | — |
+
+**128 k is the practical single-user ceiling** — it fills the card, and decode holds
+~50 tok/s. 192 k+ OOMs (KV alone would exceed the free budget).
+
+**Parallel scaling at large context** — `--ctx-size` is the *total* KV split across
+slots, so `--parallel P` gives `total/P` context **per request**. Aggregate tok/s
+at **64 k total**:
+
+| `--parallel` | per-req ctx | VRAM | peak agg tok/s |
+|----:|----:|----:|----:|
+| 1 | 64 k | 15.2 GB | 50 |
+| 2 | 32 k | 15.3 GB | 82 |
+| 4 | 16 k | 15.6 GB | **100** |
+| 8 |  8 k | 16.2 GB | 97 |
+
+At **64 k total the model still scales to ~100 tok/s at `--parallel 4`** (16 k/slot)
+and even P=8 fits (16.2 GB). But at **128 k total only `--parallel 1` fits** — P≥2
+OOMs (no VRAM left for a second slot's compute buffers).
+
+**The tradeoff (VRAM-bound):** on the P100 `gemma-26b` can do *either* ~128 k
+single-user context *or* ~100 tok/s multi-user throughput (64 k total, 16 k/slot) —
+not both. Pick per workload: one long-context agent → `--parallel 1 --ctx 131072`;
+a few concurrent chat users → `--parallel 4 --ctx 65536`.
+
+*Raw data: [`data/p100-moe-ctx-sweep-gemma26b-20260722.csv`](data/p100-moe-ctx-sweep-gemma26b-20260722.csv).*
+
+
 
 ## Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)
 
