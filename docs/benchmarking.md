@@ -131,6 +131,45 @@ agentic coding client that needs 100k+ context can't use `--parallel 8`
 throughput vs per-request context** for that model's real workload — e.g. single-user
 agentic coding wants few slots/large context; multi-user family chat wants many slots.
 
+## MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)
+
+Which MoE model fits on the **Tesla P100-16GB** (idx0, sm_60)? An MoE's *total*
+params (all experts) must be resident, so weight size — not active params — sets
+the floor. Of the Qwen 3.6 / Gemma 4 roster, only **Gemma-4-26B-A4B** (25B total /
+~3.8B active, QAT `UD-Q4_K_XL`, 14 GB file) fits: its weight buffer is **13.6 GB**,
+leaving ~2.8 GB for KV + compute. `Qwen3.6-35B-A3B` does **not** fit at any local
+quant (smallest is `Q4_K_M`, 20 GB > 16 GB) — it would need a `Q2_K`/`IQ3` (~13–15 GB).
+The dense Gemma 4 12B/31B and the huge `Qwen3-Coder-Next` MoE are out of scope here.
+
+Standalone sweep (`scripts/p100-moe-sweep.py`, pins the model to idx0 on a private
+port so llama-swap can't re-warm `fast` mid-run; total ctx 8192, `q8_0` KV, 256 max
+tokens, concurrency 1–16, restores daily on exit):
+
+| `--parallel` | conc 1 | 2 | 4 | 8 | 12 | 16 | Peak | VRAM@peak |
+|----:|----:|----:|----:|----:|----:|----:|----:|----:|
+| 1 | 51.9 | 51.7 | 51.6 | 51.7 | 51.6 | 51.6 | **51.9** | 14.3 GB |
+| 2 | 52.0 | 86.3 | 86.8 | 86.8 | 86.8 | 85.5 | **86.8** | 14.5 GB |
+| 4 | 52.0 | 85.7 | 105.2 | 104.9 | 102.6 | 100.6 | **105.2** | 14.8 GB |
+| 8 | 51.7 | 86.4 | 105.6 | 99.3 | 100.5 | 99.1 | **105.6** | 15.0 GB |
+
+*(aggregate tokens/sec; 100 % success at every point.)*
+
+*Raw data: [`data/p100-moe-sweep-gemma26b-20260722.csv`](data/p100-moe-sweep-gemma26b-20260722.csv).*
+
+Findings:
+- **Single-stream ~52 tok/s** — snappy for a 25B-class model, thanks to only ~3.8B
+  active params (behaves like a small dense model on decode).
+- **Best aggregate ~105 tok/s at `--parallel 4` (conc ≥4)**; `--parallel 8` doesn't
+  improve on 4 (2 slots per active pass already saturate the P100's compute), so
+  **P=4 is the sweet spot** — fewer slots means more context per request too.
+- **Never OOMs**: 14.3 → 15.0 GB across P=1→8 (KV is cheap: `q8_0` + few KV heads
+  add only ~few-hundred MB even at 32k ctx). The P100 has ~1.4 GB to spare at P=8.
+- Context scales cheaply too — verified **32k ctx also fits** (14.6 GB @ P=1).
+
+So the P100 can host a genuinely useful ~105 tok/s multi-user MoE (`gemma-26b`),
+not just the 12B `fast` — a viable alternative tenant for the aux card.
+
+
 ## Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)
 
 These are the **single-stream** per-model / per-GPU numbers gathered during
