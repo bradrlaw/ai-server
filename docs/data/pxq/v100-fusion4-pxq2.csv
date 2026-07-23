@@ -1,0 +1,9 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+fork2,v100-fusion4-pxq2,,2048,122,0.217,688.3,110.8,12606
+fork2,v100-fusion4-pxq2,,2048,500,0.299,1706.6,105.8,12612
+fork2,v100-fusion4-pxq2,,2048,2039,0.805,2564.3,104.6,12714
+fork2,v100-fusion4-pxq2,,2048,4091,1.61,2564.9,102.1,12842
+fork2,v100-fusion4-pxq2,mtp:n_max=1,2048,122,0.28,519.4,127.9,14184
+fork2,v100-fusion4-pxq2,mtp:n_max=1,2048,500,0.42,1211.3,126.8,14366
+fork2,v100-fusion4-pxq2,mtp:n_max=1,2048,2039,1.293,1589.1,123.6,15100
+fork2,v100-fusion4-pxq2,mtp:n_max=1,2048,4091,2.62,1575.1,120.6,15106

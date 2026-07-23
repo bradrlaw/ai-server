@@ -1,0 +1,5 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+fork2,p100-fusion4-pxqu16,,1024,122,0.372,381.2,65.1,14761
+fork2,p100-fusion4-pxqu16,,1024,500,0.576,895.1,63.3,14767
+fork2,p100-fusion4-pxqu16,,1024,2039,1.721,1197.2,61.5,14799
+fork2,p100-fusion4-pxqu16,,1024,4091,3.454,1190.6,60.2,14861

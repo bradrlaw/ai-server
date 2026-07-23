@@ -38,6 +38,7 @@ and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate fr
 - [11. Reproduction](#11-reproduction)
 - [12. Verdict](#12-verdict)
 - [13. Round 2 — newer build v2026.07.23 + author feedback](#13-round-2--newer-build-v20260723--author-feedback)
+- [14. Round 3 — the author's own model (PXA-Fusion4-35B) + the "+30%" claim](#14-round-3--the-authors-own-model-pxa-fusion4-35b--the-30-claim)
 
 ---
 
@@ -401,3 +402,95 @@ stock llama.cpp on the same two-card layer split** and ~97 t/s single-card fork.
 cross-GPU sync in the fused router/graph-split path at batch=1 — prefill scaling is excellent
 (2.4 k t/s), only decode is affected.
 
+
+## 14. Round 3 — the author's own model (PXA-Fusion4-35B) + the "+30%" claim
+
+The fork's author published the exact model behind the README numbers:
+[`poisonxa/PXA-Fusion4-35B-GGUF`](https://huggingface.co/poisonxa/PXA-Fusion4-35B-GGUF) — a
+fused/abliterated **Qwen3.5-35B-A3B** MoE. Two reasons to re-run on it: (1) it lets us
+**reproduce the author's table on the same weights** instead of our own Qwen3.6 build, and (2)
+**every quant ships MTP speculative-decode heads**, so we can finally measure MTP (our own
+Qwen3.6-35B-A3B had none — see §9). We pulled PXQ2 (2.27 bpw, 11.24 GB), PXQU12 (2.65 bpw,
+12.18 GB) and PXQU16 (3.20 bpw, 14.60 GB) and ran the same fork2 (`v2026.07.23`,
+`PXA_ENHANCE=1`) sweep.
+
+The user's headline question: **is the README's "+30% decode" a true engine win, or a smaller
+quant?**
+
+### 14.1 We reproduce the author's P100 headline
+
+The author lists PXQ2 on one P100 at ~1161 prefill / 58.4 decode. We measure essentially the
+same on our P100 (idx0):
+
+| P100 · Fusion4 PXQ2 (fork2) | TTFT | Prefill | Decode | VRAM |
+|---:|---:|---:|---:|---:|
+| 128 | 0.37 s | 386 t/s | 67.3 t/s | 11.3 GB |
+| 2039 | 1.71 s | **1201 t/s** | 63.1 t/s | 11.3 GB |
+| 4091 | 3.44 s | 1197 t/s | **61.9 t/s** | 11.4 GB |
+
+Prefill ~1200 t/s and decode ~62 t/s bracket the author's 1161 / 58.4 — the model and engine
+behave exactly as advertised on our hardware.
+
+### 14.2 Within one engine, bitrate barely moves decode (so the +30% isn't quant-size *here*)
+
+![Round 3 — bitrate is flat, MTP is the real win](img/pxq-round3-fusion4.png)
+
+Running all three quant tiers on the **same P100 + same engine**, steady-state (4k) decode is
+essentially flat while VRAM climbs:
+
+| P100 · fork2 · quant | bpw | Prefill @4k | Decode @4k | VRAM |
+|---|---:|---:|---:|---:|
+| PXQ2 | 2.27 | 1197 t/s | **61.9 t/s** | 11.4 GB |
+| PXQU12 | 2.65 | 1193 t/s | **61.0 t/s** | 12.3 GB |
+| PXQU16 | 3.20 | 1191 t/s | **60.2 t/s** | 14.5 GB |
+
+Decode moves **<3%** across a 40% bitrate range. That's expected for a 35B **A3B MoE**: only
+~3 B params are active per token, so the per-token bandwidth (and thus decode) is nearly
+constant across quant tiers — the tier mostly buys you VRAM, not decode. **Conclusion: on a
+single card and a single engine, you cannot manufacture a +30% decode swing by changing the PXQ
+tier.**
+
+### 14.3 So where does the README's +30% come from?
+
+It is a **cross-engine, cross-quant-class** comparison, not an apples-to-apples one. The engine
+README states the +30% P100 decode (and +59% prefill) is a "best config for both sides" number:
+**pxq_llama on its PXQ quant vs upstream ik_llama.cpp on its best IQ_K quant** — different
+engine *and* different quant family. The author's own **same-quant control** (identical weights,
+engine-only) admits **decode +2.7–3.3%, V100 output bit-identical**. That lines up exactly with
+our independent apples-to-apples in §5 (fork Q6_K decode 86.6 vs stock 93.0 t/s on identical
+weights — the fork engine is a decode no-op, even slightly negative). So:
+
+> **The engine contributes ≤ ~3% to decode at fixed weights. The rest of the "+30%" is the
+> smaller/different PXQ quant class vs the baseline it's measured against — plus MTP (below).**
+> The fork's genuine, reproducible engine win is on **prefill** (§5–§6), not decode.
+
+### 14.4 MTP is the real, orthogonal decode win
+
+MTP (multi-token-prediction speculative decode) is the one lever that *does* move decode without
+changing weights. Turning it on (`--spec-type mtp:n_max=1`) on the very same PXQ2 model:
+
+| Fusion4 PXQ2 · fork2 | Decode (no MTP) | Decode (+MTP n_max=1) | Δ | Prefill cost | VRAM cost |
+|---|---:|---:|---:|---:|---:|
+| **P100** (idx0) | 61.9 t/s | **68.8 t/s** | **+11%** | 1197→741 t/s | +1.9 GB |
+| **V100** (idx1) | 102.1 t/s | **120.6 t/s** | **+18%** | 2565→1575 t/s | +2.3 GB |
+
+MTP stacks on top of everything else and is quant-independent. Two caveats we measured:
+- **It taxes prefill** (extra draft forward pass) and costs ~2 GB VRAM for the draft path — a
+  decode-latency-for-prefill-throughput trade, best for interactive single-user chat.
+- **`n_max=3,p_min=0.5` did *not* help** this workload (P100 decode 62–68 t/s, no better than
+  baseline and below `n_max=1`). Deeper speculation only pays off when acceptance is high; for
+  general text `n_max=1` was the sweet spot on both cards.
+
+### 14.5 Answer to the question, and takeaways
+
+- **Is the +30% a true engine gain or a smaller quant?** Overwhelmingly the latter (quant class
+  + measurement baseline). At identical weights the fork's engine is a decode no-op (≤3%); its
+  real engine gain is **prefill** (~1.2–1.3× P100, ~1.25× V100). Bitrate within the PXQ family
+  barely touches decode on this MoE.
+- **The one reproducible decode win is MTP**, +11% (P100) / +18% (V100), and it's orthogonal to
+  the quant — but it costs prefill and ~2 GB. Our own daily Qwen3.6-35B-A3B can't use it (no MTP
+  head), so it isn't a lever for our current `chat` slot; it *would* be if we adopted a
+  MTP-equipped MoE.
+- Nothing here changes the §12 verdict: **keep stock llama.cpp for daily serving** (decode
+  parity, no PXQ requantize, no MTP dependency); pxq_llama remains a compelling **prefill /
+  prompt-processing** engine and a way to squeeze a 35B onto the 16 GB P100.
