@@ -177,9 +177,66 @@ def fig_round2_dual():
     print("wrote", p)
 
 
+def steady_spec(target, spec):
+    """Steady-state (prefill, decode, vram_gb) for a given spec value (fork2)."""
+    path = os.path.join(DATA, f"{target}.csv")
+    best = None
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            if r["spec"] == spec:
+                pt = int(r["prompt_tokens"])
+                if best is None or pt > best[0]:
+                    best = (pt, r)
+    r = best[1]
+    return (float(r["prefill_tok_s"]), float(r["decode_tok_s"]),
+            int(r["vram_mib"]) / 1024.0)
+
+
+def fig_round3_fusion4():
+    # Round 3: the author's own PXA-Fusion4-35B model. Two stories in one figure:
+    #  (left)  bitrate barely moves decode within one engine (quant-size ≠ the +30%)
+    #  (right) MTP spec-decode is the real, orthogonal decode win, on both cards.
+    C_MTP = "#31a354"
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.6))
+
+    # left: P100 decode across the three quant tiers (all fork2, no spec)
+    q = [("PXQ2\n2.27 bpw", "p100-fusion4-pxq2", C_FORK_PXQ2),
+         ("PXQU12\n2.65 bpw", "p100-fusion4-pxqu12", C_FORK_PXQ4),
+         ("PXQU16\n3.20 bpw", "p100-fusion4-pxqu16", C_FORK_PXQ6)]
+    dec = [steady_spec(t, "")[1] for _, t, _ in q]
+    bars(axes[0], [s[0] for s in q], dec, [s[2] for s in q],
+         "P100 decode vs quant bitrate (same engine)\n→ quant size barely moves decode",
+         "tokens / s", "{:.1f}")
+
+    # right: MTP off vs on, P100 & V100 PXQ2
+    labels = ["P100\nPXQ2", "P100\nPXQ2\n+MTP", "V100\nPXQ2", "V100\nPXQ2\n+MTP"]
+    dec2 = [steady_spec("p100-fusion4-pxq2", "")[1],
+            steady_spec("p100-fusion4-pxq2", "mtp:n_max=1")[1],
+            steady_spec("v100-fusion4-pxq2", "")[1],
+            steady_spec("v100-fusion4-pxq2", "mtp:n_max=1")[1]]
+    colors2 = [C_FORK_PXQ2, C_MTP, C_FORK_Q6, C_MTP]
+    bars(axes[1], labels, dec2, colors2,
+         "MTP spec-decode is the real decode win\n(n_max=1, orthogonal to quant)",
+         "tokens / s", "{:.1f}")
+    axes[1].annotate(f"+{dec2[1]/dec2[0]-1:+.0%}".replace("++", "+"), xy=(1, dec2[1]),
+                     xytext=(1, dec2[1] * 0.5), ha="center", fontsize=9,
+                     color="white", fontweight="bold")
+    axes[1].annotate(f"{dec2[3]/dec2[2]-1:+.0%}", xy=(3, dec2[3]),
+                     xytext=(3, dec2[3] * 0.5), ha="center", fontsize=9,
+                     color="white", fontweight="bold")
+
+    fig.suptitle("Round 3 — author's PXA-Fusion4-35B: the +30% decode is quant-class, "
+                 "MTP is the real engine-side win", fontsize=11.5, fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    p = os.path.join(OUT, "pxq-round3-fusion4.png")
+    fig.savefig(p, dpi=130); plt.close(fig)
+    print("wrote", p)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     fig_apples()
     fig_v100_all()
     fig_p100()
     fig_round2_dual()
+    fig_round3_fusion4()

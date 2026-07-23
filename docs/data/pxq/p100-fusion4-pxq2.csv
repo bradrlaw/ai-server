@@ -1,0 +1,13 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+fork2,p100-fusion4-pxq2,,1024,122,0.365,385.5,67.3,11561
+fork2,p100-fusion4-pxq2,,1024,500,0.574,896.1,65.1,11567
+fork2,p100-fusion4-pxq2,,1024,2039,1.712,1201.4,63.1,11597
+fork2,p100-fusion4-pxq2,,1024,4091,3.437,1196.7,61.9,11661
+fork2,p100-fusion4-pxq2,mtp:n_max=1,1024,122,0.477,293.8,76.3,13125
+fork2,p100-fusion4-pxq2,mtp:n_max=1,1024,500,0.815,622.2,72.8,13307
+fork2,p100-fusion4-pxq2,mtp:n_max=1,1024,2039,2.724,753.3,71.5,13559
+fork2,p100-fusion4-pxq2,mtp:n_max=1,1024,4091,5.551,741.3,68.8,13559
+fork2,p100-fusion4-pxq2,"mtp:n_max=3,p_min=0.5",1024,122,0.483,291.1,67.8,13251
+fork2,p100-fusion4-pxq2,"mtp:n_max=3,p_min=0.5",1024,500,0.822,621.0,64.1,13433
+fork2,p100-fusion4-pxq2,"mtp:n_max=3,p_min=0.5",1024,2039,2.733,751.3,65.0,13685
+fork2,p100-fusion4-pxq2,"mtp:n_max=3,p_min=0.5",1024,4091,5.547,740.6,62.0,13685

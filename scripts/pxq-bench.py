@@ -80,6 +80,7 @@ ENGINES = {
 # SAME base model (Qwen3.6-35B-A3B, a 256-expert hybrid SSM+MoE) on the fork.
 Q35 = f"{MODELS_DIR}/qwen3.6-35b-a3b"
 PXQ = f"{MODELS_DIR}/pxq"
+F4 = f"{MODELS_DIR}/pxa-fusion4-35b"
 TARGETS = {
     # --- current P100 MoE (Gemma-4-26B-A4B Q4_K_XL, our `fast` slot) for reference ---
     "p100-gemma26b": {  # matches the pxq P100 settings for a like-for-like compare
@@ -119,6 +120,21 @@ TARGETS = {
         "gpus": [1, 2], "ctx": 8192, "batch": 2048, "ubatch": 2048, "split": "layer"},
     "dualv100-qwen35-pxq6": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ6.gguf",
         "gpus": [1, 2], "ctx": 8192, "batch": 2048, "ubatch": 2048, "split": "layer"},
+
+    # --- Round 3: the fork author's own test model (PXA-Fusion4-35B, Qwen3.5-35B-A3B
+    #     fused/abliterated). Every quant ships MTP spec-decode heads (run with --spec). ---
+    "p100-fusion4-pxq2": {"model": f"{F4}/PXA-Fusion4-35B-PXQ2.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    "p100-fusion4-pxqu12": {"model": f"{F4}/PXA-Fusion4-35B-PXQU12.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    "p100-fusion4-pxqu16": {"model": f"{F4}/PXA-Fusion4-35B-PXQU16.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    "v100-fusion4-pxq2": {"model": f"{F4}/PXA-Fusion4-35B-PXQ2.gguf",
+        "gpus": [1], "ctx": 8192, "batch": 2048, "ubatch": 2048},
+    "v100-fusion4-pxqu12": {"model": f"{F4}/PXA-Fusion4-35B-PXQU12.gguf",
+        "gpus": [1], "ctx": 8192, "batch": 2048, "ubatch": 2048},
+    "v100-fusion4-pxqu16": {"model": f"{F4}/PXA-Fusion4-35B-PXQU16.gguf",
+        "gpus": [1], "ctx": 8192, "batch": 2048, "ubatch": 2048},
 }
 
 PROMPT_SIZES = [128, 512, 2048, 4096]
