@@ -111,6 +111,8 @@ lower rows add the fork's smaller PXQ quants on top.
 
 **Decomposition of the prefill speedup:**
 
+![Apples-to-apples: engine vs quant on one V100](img/pxq-apples-to-apples.png)
+
 - **Engine only** (row 1→2, *identical weights*): **1.73×**. This is pure fork engine/kernels
   + `PXA_ENHANCE` — no quant change.
 - **Quant on top** (row 2→4): a further **1.26×** (2053 → 2582 t/s) from PXQ4's smaller weights.
@@ -142,6 +144,8 @@ Full sweep (prefill shown 2k→4k steady state; VRAM is peak resident).
 | fork **PXQ3** | 0.23 s | 2501 → 2513 t/s | ~93–109 t/s | 16.8 GB |
 | fork **PXQ2** | 0.22 s | 2550 → 2557 t/s | ~96–113 t/s | 12.9 GB |
 
+![V100 prefill and decode across all engines/quants](img/pxq-v100-all.png)
+
 ## 7. Results — P100 (idx0)
 
 There is **no stock baseline** here by construction: no standard 35B quant fits 16 GB. The
@@ -151,6 +155,8 @@ result *is* that the fork runs a 35B-class MoE on a P100 at usable speed.
 |---|---:|---:|---:|---:|
 | fork **PXQ3** | 0.38 s | 1193 → 1178 t/s | ~57–65 t/s | 15.4 GB |
 | fork **PXQ2** | 0.37 s | 1195 → 1190 t/s | ~61–69 t/s | 11.5 GB |
+
+![P100 — a 35B MoE where no standard quant fits](img/pxq-p100.png)
 
 **Takeaway:** ~60 t/s decode and ~1.2k t/s prefill for a 35B MoE on a 16 GB Pascal card that
 otherwise **cannot load the model in any standard quant**. PXQ2 leaves ~4.5 GB headroom;
@@ -210,6 +216,12 @@ python3 scripts/pxq-bench.py --engine fork  --target v100-qwen35-pxq6 --no-resto
 python3 scripts/pxq-bench.py --engine fork  --target v100-qwen35-pxq4 --no-restore
 # 4. Restore the daily serving trio when done:
 python3 scripts/llama-swap-mode.py set daily
+```
+
+Charts (`docs/img/pxq-*.png`) are regenerated from the CSVs with:
+
+```bash
+benchmarks/llm-scaling-bench/.venv/bin/python scripts/pxq-plot.py
 ```
 
 Full matrix: [`scripts/pxq-run-matrix.sh`](../scripts/pxq-run-matrix.sh). Fork run env
