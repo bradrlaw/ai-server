@@ -14,7 +14,7 @@
 #   * `gemma-26b` (Gemma-4-26B-A4B MoE, idx2) -> P=8. The throughput champ
 #     (~281 tok/s aggregate @ P=8, ~19/32GB) blitzes through many focused,
 #     small-context agent tasks (131072 / 8 = ~16k per slot).
-#   * `fast` (Gemma-4-12B, P100 idx0) -> P=2. A couple of slots with a safe
+#   * `fast` (Gemma-4-26B-A4B MoE, P100 idx0) -> P=2. A couple of slots with a safe
 #     window (131072 / 2 = ~64k per slot); P100 caps at P=4 (OOM at P=8) so
 #     P=2 leaves headroom.
 #
@@ -27,7 +27,7 @@ label: "Agentic (autonomous multi-agent throughput)"
 description: >
   Autonomous agent workloads: coding P=2 (~100k/slot) for concurrent automated
   coding, gemma-26b P=8 (~16k/slot, ~281 tok/s) for fast focused agent tasks,
-  and fast P=2 (~64k/slot) on the P100. Loads gemma-26b in place of chat.
+  and fast P=2 (~32k/slot, MoE) on the P100. Loads gemma-26b in place of chat.
 overrides:
   coding:
     parallel: 2
@@ -37,6 +37,7 @@ overrides:
     concurrencyLimit: 16
   fast:
     parallel: 2
+    ctx_size: 24576
     concurrencyLimit: 8
 # Warm all three so the whole agent worker set is ready immediately. gemma-26b
 # is warmed here (not chat) — requesting it evicts chat from idx2.

@@ -327,6 +327,7 @@ separately by their respective creators and are not redistributed here.)
 | GitHub Copilot CLI | https://github.com/github/copilot-cli | AI pair-programmer used throughout to build, debug, and document this server. |
 | pi (pi.dev) | https://pi.dev | Coding-agent harness driven client-side against the LiteLLM endpoint; provider config in `config/pi/`. |
 | `llm-scaling-bench` (Alex Ziskind) | https://github.com/alexziskind1/llm-scaling-bench | Concurrency/throughput benchmarking against the OpenAI-compatible endpoint (aggregate tok/s, req/s, success rate as concurrency sweeps); wrapped by `scripts/bench-concurrency.sh`. See [docs/benchmarking.md](docs/benchmarking.md). |
+| `pxq_llama` (poisonxa16 / PXA) | https://github.com/poisonxa16/pxq_llama | Fork of `ik_llama.cpp` with custom PXQ quant tiers + `PXA_ENHANCE` auto-tuning; benchmarked standalone (self-quantized PXQ tiers of Qwen3.6-35B-A3B) vs stock llama.cpp. See [docs/benchmark_pxq_llama.md](docs/benchmark_pxq_llama.md). |
 | Plotly + Kaleido | https://github.com/plotly/plotly.py | Renders the benchmark result charts (via `llm-scaling-bench`); Kaleido exports static PNGs headlessly. |
 | iTerm2 | https://github.com/gnachman/iTerm2 | macOS terminal emulator used to drive SSH sessions and the Copilot CLI against the server. |
 | iTerm2 `imgcat` | https://iterm2.com/documentation-images.html | Bundled in `scripts/imgcat` to preview generated images inline in the terminal over SSH. |

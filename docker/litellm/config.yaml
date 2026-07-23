@@ -30,6 +30,11 @@ model_list:
       model: openai/fast
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
+  - model_name: fast-12b
+    litellm_params:
+      model: openai/fast-12b
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
   - model_name: gemma-31b
     litellm_params:
       model: openai/gemma-31b

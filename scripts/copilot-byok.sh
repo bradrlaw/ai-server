@@ -30,7 +30,7 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 #     chat       131072  reasoning
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
-#     fast       131072  NON-thinking
+#     fast       32768   NON-thinking (Gemma-4-26B-A4B MoE; fast-12b fallback=131072)
 case "$COPILOT_MODEL" in
   coding)     def_prompt=131072; def_output=32768 ;;
   chat)       def_prompt=81920;  def_output=24576 ;;
@@ -38,7 +38,8 @@ case "$COPILOT_MODEL" in
   # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
   # Keep prompt + output within one slot: 98304 + 32768 = 131072.
   coder-next) def_prompt=98304;  def_output=32768 ;;
-  fast)       def_prompt=98304;  def_output=8192  ;;
+  fast)       def_prompt=24576;  def_output=8192  ;;   # MoE, ctx 32768 (24576+8192)
+  fast-12b)   def_prompt=98304;  def_output=8192  ;;   # dense 12B fallback, ctx 131072
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
@@ -48,7 +49,7 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 # Run the token-heavy explore/search subagent on a DIFFERENT local model than the
 # driver so it executes on a SEPARATE GPU in parallel (no contention/eviction):
 #     driver (COPILOT_MODEL, default 'coding') -> V100 idx1
-#     explore/search subagent  -> 'fast' (Gemma-4-12B) on the P100 (idx0), always warm
+#     explore/search subagent  -> 'fast' (Gemma-4-26B-A4B MoE) on the P100 (idx0), always warm
 # The P100 is on a different card from every V100 driver, so the driver keeps
 # reasoning while explores run in parallel with zero cold-start (fast keeper thread).
 # Override with SEARCH_SUBAGENT_MODEL=<id>; set it EMPTY to inherit the driver.
