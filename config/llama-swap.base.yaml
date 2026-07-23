@@ -220,9 +220,16 @@ models:
   # 128k single-user comfortably and leaves room to co-host a P100 offload job.
   # Shares idx0 with `fast`/`fast-uncensored` (mutually exclusive). Request it to
   # swap the MoE out; ttl unloads it so `fast` reclaims the card.
+  # MTP (2026-07-23): dense 12B is bandwidth-bound with very high draft acceptance
+  # (~92-98%), so the separate gemma4-assistant draft head (Q8_0, 465MB) is a BIG
+  # win — measured +67% decode (28.1 -> 47.0 t/s @4k steady, n_max=1). n_max=1
+  # beats n=2/3 at steady-state (deeper drafts decay acceptance past ~2k). Draft
+  # costs ~0.8GB (~9.8GB/16GB at 32k) so 128k headroom is unaffected. See
+  # docs/benchmarking.md "MTP on the `fast-12b` model". Always --parallel 1 (no
+  # overlay overrides it), so MTP applies in every mode.
   "fast-12b":
-    name: "Gemma-4-12B dense — fast fallback (headroom)"
-    description: "Dense 12B fallback on the P100; more VRAM headroom (128k ctx) than the MoE `fast`. Shares idx0 (mutually exclusive)."
+    name: "Gemma-4-12B dense (MTP) — fast fallback (headroom)"
+    description: "Dense 12B fallback on the P100; more VRAM headroom (128k ctx) than the MoE `fast`, MTP self-spec decode. Shares idx0 (mutually exclusive)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -234,6 +241,10 @@ models:
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       --reasoning-budget 0
+      --model-draft ${models_dir}/gemma-4-12b/mtp-draft/gemma-4-12B-it-qat-assistant-MTP-Q8_0.gguf
+      --spec-type draft-mtp
+      --spec-draft-n-max 1
+      --n-gpu-layers-draft 99
       ${common}
 
   # --- fast-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -

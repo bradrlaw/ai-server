@@ -698,3 +698,46 @@ CUDA_VISIBLE_DEVICES=0 llama-server \
 > MTP is single-stream only, so the `agentic`/`heavy-coding` overlays (which run `fast` as a
 > P=2 worker pool) strip the draft via `spec: none` — the mode renderer now also removes the
 > separate `--model-draft` / `--n-gpu-layers-draft` flags, not just `--spec-type`.
+
+### MTP on the `fast-12b` model — Gemma-4-12B dense, separate draft head (2026-07-23)
+
+The dense 12B fallback. Same separate-`gemma4-assistant`-draft mechanism as `fast`, but
+because it is a **dense** model it is bandwidth-bound (~28 t/s baseline) with very high draft
+acceptance — so MTP wins big, like the dense `coding` slot. Draft:
+`Janvitos/gemma-4-12B-it-qat-assistant-MTP-Q8_0-GGUF` (465 MB, vocab-matched). P100 (idx0),
+ctx 32768, f16 KV, ub2048, `--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![fast-12b MTP off vs on — decode and draft acceptance](img/mtp-gemma12-fast12b.png)
+
+Decode throughput (steady-state at a ~4k-token prompt):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **28.1 t/s** | — | — | 9.0 GB |
+| **`n_max=1`** | **47.0 t/s** | **+67%** | 92% | 9.8 GB (~6.5 GB free) |
+| `n_max=2` | 44.1 t/s | +57% | 87% | 9.8 GB |
+| `n_max=3` | 42.4 t/s | +51% | 85% | 9.8 GB |
+
+Takeaways:
+
+- **~+67% decode** (28 → 47 t/s), lossless — far bigger than the MoE `fast` (+41%) because the
+  dense 12B fires all its params per token (bandwidth-bound) and the assistant head lands ~92–98%.
+- **`n_max=1` is the steady-state winner.** Shorter prompts peak higher at n=2/3 (~55–56 t/s), but
+  acceptance decays past ~2k tokens, so at the 4k steady-state n=1 pulls ahead and holds the highest
+  sustained acceptance. We ship **n_max=1**.
+- **VRAM is a non-issue.** The 465 MB Q8 draft costs ~0.8 GB (~9.8 GB / 16 GB at 32k); the full
+  128k context and P100 co-hosting headroom are unaffected.
+
+**How to enable** (this is the shipped `fast-12b` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 llama-server \
+  --model models/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 131072 --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --reasoning-budget 0 --flash-attn on \
+  --model-draft models/gemma-4-12b/mtp-draft/gemma-4-12B-it-qat-assistant-MTP-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 1 --n-gpu-layers-draft 99
+```
+
+> `fast-12b` is a `--parallel 1` fallback with no mode overlay override, so MTP applies in every
+> serving mode.

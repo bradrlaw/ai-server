@@ -1,0 +1,17 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,gemma12-fast12b,0,123,1.017,121.2,29.8,,9009
+stock,gemma12-fast12b,0,501,2.135,248.7,29.6,,9009
+stock,gemma12-fast12b,0,2040,7.122,287.0,28.6,,9009
+stock,gemma12-fast12b,0,4092,15.132,271.2,28.1,,9009
+stock,gemma12-fast12b,1,123,1.027,120.0,51.1,95.4,9839
+stock,gemma12-fast12b,1,501,2.215,239.1,51.3,97.7,9839
+stock,gemma12-fast12b,1,2040,7.382,276.8,49.2,98.4,9839
+stock,gemma12-fast12b,1,4092,15.42,265.8,47.0,92.4,9839
+stock,gemma12-fast12b,2,123,1.028,119.9,55.6,92.2,9839
+stock,gemma12-fast12b,2,501,2.221,238.1,56.1,96.0,9839
+stock,gemma12-fast12b,2,2040,7.409,275.8,52.2,94.3,9839
+stock,gemma12-fast12b,2,4092,16.68,245.6,44.1,86.6,9839
+stock,gemma12-fast12b,3,123,1.031,119.6,55.3,88.5,9839
+stock,gemma12-fast12b,3,501,2.252,236.0,54.7,94.5,9839
+stock,gemma12-fast12b,3,2040,8.043,254.0,47.1,89.4,9839
+stock,gemma12-fast12b,3,4092,17.554,233.4,42.4,85.1,9839
