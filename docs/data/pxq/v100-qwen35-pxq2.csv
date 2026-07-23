@@ -1,0 +1,5 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+fork,v100-qwen35-pxq2,,2048,122,0.219,680.2,113.2,12914
+fork,v100-qwen35-pxq2,,2048,500,0.3,1706.1,97.6,12920
+fork,v100-qwen35-pxq2,,2048,2039,0.809,2550.5,95.7,13022
+fork,v100-qwen35-pxq2,,2048,4091,1.615,2557.2,102.3,13150

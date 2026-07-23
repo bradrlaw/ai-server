@@ -1,0 +1,5 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+stock,dualv100-qwen35-q6k,,2048,122,0.369,331.5,94.6,30116
+stock,dualv100-qwen35-q6k,,2048,500,0.812,618.0,93.6,30136
+stock,dualv100-qwen35-q6k,,2048,2039,1.793,1142.0,93.0,30386
+stock,dualv100-qwen35-q6k,,2048,4091,3.47,1182.3,92.2,30386
