@@ -156,11 +156,35 @@ result *is* that the fork runs a 35B-class MoE on a P100 at usable speed.
 | fork **PXQ3** | 0.38 s | 1193 → 1178 t/s | ~57–65 t/s | 15.4 GB |
 | fork **PXQ2** | 0.37 s | 1195 → 1190 t/s | ~61–69 t/s | 11.5 GB |
 
-![P100 — a 35B MoE where no standard quant fits](img/pxq-p100.png)
+![P100 — fork's 35B MoE vs our current Gemma-26B-A4B](img/pxq-p100.png)
 
 **Takeaway:** ~60 t/s decode and ~1.2k t/s prefill for a 35B MoE on a 16 GB Pascal card that
 otherwise **cannot load the model in any standard quant**. PXQ2 leaves ~4.5 GB headroom;
 PXQ3 leaves ~0.6 GB (8k ctx). PXQ6/PXQ4 (21.3/17.6 GiB) do not fit the P100.
+
+### 7.1 vs our current P100 MoE (Gemma-4-26B-A4B)
+
+The P100's daily `fast` slot is **Gemma-4-26B-A4B** (QAT `UD-Q4_K_XL`, ~4.5 bpw, ~3.8 B active).
+Run through the *same* harness/settings (ctx 8192, ubatch 1024, 4k prompt) the fork's 35B PXQ
+tiers compare as:
+
+| Model (P100) | bpw | Prefill @4k | Decode @4k | Peak VRAM | TTFT @128 |
+|---|---:|---:|---:|---:|---:|
+| **Gemma-4-26B-A4B** Q4_K_XL (current `fast`) | ~4.5 | 488 t/s | 58.6 t/s | 14.7 GB | 0.62 s |
+| fork **Qwen3.6-35B PXQ2** | ~2.27 | **1190 t/s** | **61.9 t/s** | **11.4 GB** | **0.37 s** |
+| fork **Qwen3.6-35B PXQ3** | ~3.27 | 1178 t/s | 57.0 t/s | 15.1 GB | 0.38 s |
+
+**On raw throughput the fork's 35B PXQ2 beats our current Gemma-26B on every axis** — **~2.4×
+prefill**, slightly faster decode, **~3 GB less VRAM**, and lower TTFT — despite being a
+*larger* model (35B / 256 experts vs 26B / A4B). PXQ3 matches Gemma's footprint (~15 GB) at the
+same ~2.4× prefill and comparable decode.
+
+**Caveat — quality is not equal.** Gemma-4-26B-A4B is **QAT** (quantization-aware trained), so
+its ~4.5 bpw Q4_K_XL is unusually high-quality for its size; PXQ2 at **2.27 bpw** is a very
+aggressive post-hoc quant and will almost certainly trade away accuracy (unmeasured here — no
+perplexity run). So PXQ2 is the *speed/footprint* winner, but **not** a proven quality
+replacement for the `fast` slot. PXQ3 (3.27 bpw, same VRAM) is the more like-for-like candidate
+if we ever wanted to A/B a 35B `fast` on the P100 — it would need a quality check first.
 
 ## 8. Results — dual V100 (idx1+idx2)
 

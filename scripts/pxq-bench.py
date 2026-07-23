@@ -71,6 +71,11 @@ ENGINES = {
 Q35 = f"{MODELS_DIR}/qwen3.6-35b-a3b"
 PXQ = f"{MODELS_DIR}/pxq"
 TARGETS = {
+    # --- current P100 MoE (Gemma-4-26B-A4B Q4_K_XL, our `fast` slot) for reference ---
+    "p100-gemma26b": {  # matches the pxq P100 settings for a like-for-like compare
+        "model": f"{MODELS_DIR}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+
     # --- stock llama.cpp on the standard quant (baseline) ---
     "v100-qwen35-q6k": {  # Q6_K ~29GB fits a single V100
         "model": f"{Q35}/Qwen3.6-35B-A3B-UD-Q6_K.gguf",

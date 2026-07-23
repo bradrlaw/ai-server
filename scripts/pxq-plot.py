@@ -49,7 +49,8 @@ def load(target):
 
 
 def steady(target, engine):
-    r = load(target)[engine][STEADY_PROMPT]
+    rows = load(target)[engine]
+    r = rows[max(rows)]  # largest prompt-size row = steady state
     return (float(r["prefill_tok_s"]), float(r["decode_tok_s"]),
             int(r["vram_mib"]) / 1024.0)
 
@@ -129,22 +130,23 @@ def fig_v100_all():
 
 
 def fig_p100():
-    specs = [("fork PXQ2\n(11.5 GB)", "p100-qwen35-pxq2", C_FORK_PXQ2),
-             ("fork PXQ3\n(15.4 GB)", "p100-qwen35-pxq3", C_FORK_PXQ3)]
+    specs = [("current fast:\nGemma-26B-A4B\nQ4_K_XL", "p100-gemma26b", C_STOCK),
+             ("fork 35B\nPXQ2\n(11.5 GB)", "p100-qwen35-pxq2", C_FORK_PXQ2),
+             ("fork 35B\nPXQ3\n(15.4 GB)", "p100-qwen35-pxq3", C_FORK_PXQ3)]
     labels = [s[0] for s in specs]
     colors = [s[2] for s in specs]
     pre, dec, vram = [], [], []
     for _, tgt, _ in specs:
-        p, d, v = steady(tgt, "fork")
+        p, d, v = steady(tgt, "stock" if tgt == "p100-gemma26b" else "fork")
         pre.append(p); dec.append(d); vram.append(v)
-    fig, axes = plt.subplots(1, 3, figsize=(11, 4.2))
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 4.4))
     bars(axes[0], labels, pre, colors, "Prefill @4k prompt", "tokens / s")
     bars(axes[1], labels, dec, colors, "Decode @4k prompt", "tokens / s", "{:.1f}")
     bars(axes[2], labels, vram, colors, "Peak VRAM (of 16 GB)", "GB", "{:.1f}")
     axes[2].axhline(16, color="#cc0000", ls="--", lw=1)
     axes[2].text(len(labels) - 1, 16.1, "P100 16 GB", color="#cc0000",
                  ha="right", va="bottom", fontsize=8)
-    fig.suptitle("P100 (idx0, 16 GB) — runs a 35B MoE that no standard quant fits",
+    fig.suptitle("P100 (idx0, 16 GB) — fork's 35B MoE vs our current Gemma-26B-A4B",
                  fontsize=12, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     p = os.path.join(OUT, "pxq-p100.png")
