@@ -18,6 +18,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
   - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
+  - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -791,3 +792,50 @@ CUDA_VISIBLE_DEVICES=1 llama-server \
 
 > The uncensored slot is `--parallel 1` with no mode overlay override, so MTP applies in every
 > serving mode.
+
+### MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)
+
+The max-quality dense Gemma comparison slot. Same separate-`gemma4-assistant`-draft mechanism as
+`fast`/`fast-12b`, and as a **dense** 31B it is heavily bandwidth-bound — so MTP delivers the
+**biggest win of the whole rollout**. Draft: `NotMe404/gemma-4-31b-it-assistant-mtp-gguf` (Q8_0,
+491 MB, vocab-matched at 262144 tokens). Single V100 (idx1), ctx 32768 test, q8_0 KV, ub2048,
+`--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![gemma-31b MTP off vs on — decode and draft acceptance](img/mtp-gemma31.png)
+
+Decode throughput, MTP off vs on, across prompt lengths (t/s), with steady-state at ~4k:
+
+| n_max | @512 | @2048 | **@4k (steady)** | Δ steady | Accept @4k |
+| --- | --- | --- | --- | --- | --- |
+| **off** (baseline) | 30.9 | 29.2 | **28.1** | — | — |
+| 1 | 45.0 | 44.4 | 41.9 | +49% | 100% |
+| 2 | 43.4 | 49.9 | 48.5 | +73% | 100% |
+| **3** | **53.8** | 56.6 | **56.5** | **+101%** | 100% |
+| 4 | 45.3 | 59.5 | 64.2 | +128% | 99.5% |
+| 5 | 44.5 | 59.7 | 68.9 | +145% | 99.1% |
+| 6 | 39.7 | 62.2 | 71.6 | +155% | 98.6% |
+
+Takeaways:
+
+- **~+101% decode** (28 → 56.5 t/s) at **n_max=3** — the assistant head lands ~90–100% acceptance
+  because the dense 31B is highly predictable, so each verify step commits several tokens.
+- **n=3 is the robust production pick.** Higher n_max posts bigger *steady-state* numbers (up to
+  +155% at n=6) but **craters on shorter / less-predictable prompts** — acceptance at a 512-token
+  prompt falls to ~50% (n=4) → ~39% (n=6), dragging real decode *below* n=3. n=3 is the only setting
+  that is at or near the top across **every** prompt length (it is the outright best at 512 tokens).
+- **VRAM is a non-issue.** The 491 MB Q8 draft costs ~1.2 GB; full 128k production context loads at
+  **28.1 GB / 32 GB** (measured live via the router, ~4.6 GB headroom).
+
+**How to enable** (this is the shipped `gemma-31b` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1 llama-server \
+  --model models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 131072 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --model-draft models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99
+```
+
+> `gemma-31b` is a `--parallel 1` comparison slot with no mode overlay override, so MTP applies in
+> every serving mode.

@@ -279,9 +279,15 @@ models:
   # Comparison model vs Qwen coding/big. ~16GB weights; ctx 131072 with q8_0 KV
   # -> ~26.7GB on 32GB (SWA). f16 KV at 131k OOMs (31GB+compute buf); q8_0 halves
   # KV to reach 128k. ub2048 = best prefill (760 t/s). Evicts coding when used.
+  # 2026-07-23: MTP self-spec via a separate ~490MB gemma4-assistant draft head
+  # (NotMe404/gemma-4-31b-it-assistant-mtp, Q8_0), same mechanism as fast/fast-12b.
+  # Dense 31B is bandwidth-bound so MTP wins big: steady-state decode 28.1 -> 56.5
+  # t/s (+101%, accept ~100% @4k) at n_max=3, ~+1.2GB VRAM. n=3 is the robust pick
+  # (best across all prompt lengths incl. short); n>=4 chases higher steady-state
+  # but craters short-prompt acceptance (~50% @512).
   "gemma-31b":
-    name: "Gemma-4-31B — max-quality Gemma"
-    description: "Dense 31B for quality comparison. Single V100; evicts coding."
+    name: "Gemma-4-31B — max-quality Gemma (MTP)"
+    description: "Dense 31B for quality comparison, MTP speculative decode. Single V100; evicts coding."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -293,6 +299,8 @@ models:
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
+      --model-draft ${models_dir}/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf
+      --spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99
       ${common}
 
   # --- gemma-26b: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on a V100 (idx2) --
