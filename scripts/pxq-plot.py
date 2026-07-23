@@ -154,8 +154,32 @@ def fig_p100():
     print("wrote", p)
 
 
+def fig_round2_dual():
+    # Dual-V100 layer split: stock Q6_K (R1) vs fork2 PXQ4/PXQ6, plus single-card ref.
+    specs = [("stock Q6_K\ndual-V100", "dualv100-qwen35-q6k", "stock", C_STOCK),
+             ("fork PXQ4\ndual-V100", "dualv100-qwen35-pxq4", "fork2", C_FORK_PXQ4),
+             ("fork PXQ6\ndual-V100", "dualv100-qwen35-pxq6", "fork2", C_FORK_PXQ6),
+             ("fork PXQ4\nsingle-V100", "v100-qwen35-pxq4", "fork2", C_FORK_Q6)]
+    labels = [s[0] for s in specs]
+    colors = [s[3] for s in specs]
+    pre, dec = [], []
+    for _, tgt, eng, _ in specs:
+        p, d, _ = steady(tgt, eng)
+        pre.append(p); dec.append(d)
+    fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.4))
+    bars(axes[0], labels, pre, colors, "Prefill @4k prompt", "tokens / s")
+    bars(axes[1], labels, dec, colors, "Decode @4k prompt", "tokens / s", "{:.1f}")
+    fig.suptitle("Round 2 — dual-V100 (v2026.07.23): fork fixes the crash, wins prefill, "
+                 "loses decode", fontsize=11.5, fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    p = os.path.join(OUT, "pxq-round2-dual.png")
+    fig.savefig(p, dpi=130); plt.close(fig)
+    print("wrote", p)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     fig_apples()
     fig_v100_all()
     fig_p100()
+    fig_round2_dual()

@@ -37,6 +37,7 @@ and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate fr
 - [10. Caveats & limitations](#10-caveats--limitations)
 - [11. Reproduction](#11-reproduction)
 - [12. Verdict](#12-verdict)
+- [13. Round 2 — newer build v2026.07.23 + author feedback](#13-round-2--newer-build-v20260723--author-feedback)
 
 ---
 
@@ -231,7 +232,8 @@ Stock Q6_K splits cleanly across both V100s (`--split-mode layer`):
 | stock **Q6_K** (layer split) | 0.37 s | 1142 → 1182 t/s | ~92–95 t/s | 30.1 GB |
 | fork **PXQ4** (layer split) | — | — | — | **crashes** |
 
-**The fork does not run our PXQ4 split across the two no-NVLink V100s.** With
+**The fork does not run our PXQ4 split across the two no-NVLink V100s** *(on the Round 1
+`v2026.07.22` build — this was **fixed in Round 2** on `v2026.07.23`; see §13)*. With
 `GGML_CUDA_NO_VMM=1` (needed to get past a `cuMemSetAccess "unknown error"` in the CUDA
 VMM peer path) it allocates all layers (~19 GB planned) but then **segfaults before serving**
 — reproduced twice, including with `--no-warmup`. Single-card is the fork's happy path here;
@@ -308,3 +310,94 @@ Gemma-4-26B-A4B converts to PXQ but decodes at ~8 t/s and heap-corrupts (§7.2)*
 crash can poison the GPU driver until a privileged reset. Worth keeping for **single-card
 P100/V100 MoE** experiments (on Qwen-family models) and prefill-heavy workloads; **not** a
 drop-in for our multi-GPU daily stack today.
+
+> **Update:** the dual-V100 crash was **fixed in Round 2** on the newer `v2026.07.23` build
+> (see §13). The dual-split now runs, but its *decode* throughput is ~5× lower than stock's
+> dual-split, so the single-card verdict above still stands for our 32 GB cards.
+
+## 13. Round 2 — newer build `v2026.07.23` + author feedback
+
+The fork's author reviewed Round 1 and pointed out three things: (1) the dual-V100 segfault is
+a fixed bug on the **latest** build with a **layer split** (`-sm layer -ts 1,1`), (2)
+`PXA_ENHANCE=1` alone now auto-wires the per-arch kernels (no `PXA_MODE` block needed), and (3)
+**PXQ6** (~5.27 bpw) is the bit-class-matched opponent worth splitting across two cards. We
+re-ran on **`v2026.07.23`** (version 50, `92e2814`; new `engine=fork2` in the harness/CSVs;
+all Round 1 rows preserved).
+
+**Build/flags:** `PXA_ENHANCE=1` only, plus the author's launch flags
+`-sm layer -ts 1,1 -ctk f16 -ctv f16 -b 2048 -ub 2048 --jinja`. ENHANCE prints its wiring at
+startup:
+
+```
+PXA level=ENHANCE | dev0 Tesla V100-PCIE-32GB(sm_70): CUBLAS64 ON [+9.4% pf]
+ROUTER_FUSE ON [+5-7% dec, sm_70] | dev1 … | FA_PREFILL_SPLIT ne11>=64
+[prefill rides fa-off chain] | mode=balance | spec: SPEC_RELAXED ON
+```
+
+We also rebuilt the PXQ4/PXQ6 quants with the 07-23 `llama-quantize` (its `gguf-py` **PXQ
+row-meta fix** prevents silent scrub corruption of PXQ tensors).
+
+### 13.1 Dual-V100 PXQ4 crash → **fixed**
+
+The Round 1 segfault is gone. With `-sm layer -ts 1,1` on the new build the PXQ4 model runs
+clean across both no-NVLink V100s:
+
+| Prompt | TTFT | Prefill | Decode | VRAM |
+|---:|---:|---:|---:|---:|
+| 128 | 0.29 s | 488 t/s | 17.2 t/s | 22.3 GB |
+| 2039 | 0.87 s | 2372 t/s | 17.1 t/s | 22.5 GB |
+| 4091 | 1.67 s | **2486 t/s** | 17.0 t/s | 22.8 GB |
+
+The author's diagnosis was right — it was a build/split-path bug, not a hardware limit.
+
+### 13.2 Dual-V100 PXQ6 — first-ever numbers
+
+PXQ6 (5.27 bpw) split layer-wise across both V100s (the bit-class-matched fight vs stock Q6_K):
+
+| Prompt | TTFT | Prefill | Decode | VRAM |
+|---:|---:|---:|---:|---:|
+| 128 | 0.30 s | 475 t/s | 17.0 t/s | 26.1 GB |
+| 2039 | 0.88 s | 2359 t/s | 17.0 t/s | 26.4 GB |
+| 4091 | 1.76 s | **2377 t/s** | 16.9 t/s | 26.6 GB |
+
+### 13.3 The dual-split **decode** penalty (the real story)
+
+![Round 2 dual-V100 — fork fixes the crash, wins prefill, loses decode](img/pxq-round2-dual.png)
+
+Splitting fixes the crash but decode collapses. On the *identical* two-card layer split:
+
+| Engine / quant (dual-V100) | Prefill @4k | **Decode** | VRAM |
+|---|---:|---:|---:|
+| stock **Q6_K** (Round 1) | 1182 t/s | **92 t/s** | 30.1 GB |
+| fork2 **PXQ4** | 2486 t/s | **17 t/s** | 22.8 GB |
+| fork2 **PXQ6** | 2377 t/s | **17 t/s** | 26.6 GB |
+| fork2 **PXQ4 — single card** (ref) | 2572 t/s | **97 t/s** | 20.5 GB |
+
+The fork wins prefill ~2.1× but its **dual-split decode is ~5× *slower* than stock's dual-split
+and ~5.7× slower than its own single-card decode** — a flat ~17 t/s regardless of quant. The
+no-NVLink per-token cross-GPU sync dominates at batch=1, and the fork's `ROUTER_FUSE` /
+graph-split path (`graph splits = 3`) appears to pay it on every token where stock's simpler
+layer split only crosses the PCIe boundary once. **Takeaway for our 32 GB cards:** since PXQ4
+*and* PXQ6 fit a single V100, always run single-card — dual-split only makes sense for
+capacity you can't otherwise fit (or purely prefill-bound work).
+
+### 13.4 Single-V100 unchanged between builds
+
+The "V100 prefill kernel fix" doesn't move our single-card numbers — Round 1 (`fork`, 07-22)
+and Round 2 (`fork2`, 07-23) are within run-to-run noise:
+
+| Single V100 @4k | Prefill (07-22 → 07-23) | Decode (07-22 → 07-23) |
+|---|---:|---:|
+| Q6_K | 2053 → 2039 t/s | 86.6 → 86.5 t/s |
+| PXQ6 | 2503 → 2499 t/s | 91.9 → 91.2 t/s |
+| PXQ4 | 2582 → 2572 t/s | 96.6 → 97.1 t/s |
+
+### 13.5 For the author
+
+Dual-V100 PXQ4/PXQ6 now run with `-sm layer -ts 1,1` on `v2026.07.23` — **no segfault**, thank
+you. One open item: **dual-split decode is a flat ~17 t/s** (both PXQ tiers) vs **~92 t/s for
+stock llama.cpp on the same two-card layer split** and ~97 t/s single-card fork. Startup shows
+`graph splits = 3`, `split_mode_graph_scheduling = 0`, `ROUTER_FUSE ON`. Looks like a per-token
+cross-GPU sync in the fused router/graph-split path at batch=1 — prefill scaling is excellent
+(2.4 k t/s), only decode is affected.
+
