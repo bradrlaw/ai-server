@@ -15,6 +15,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [Context ceiling + parallel scaling at large context (2026-07-22)](#context-ceiling--parallel-scaling-at-large-context-2026-07-22)
 - [ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)](#comfyui-image-generation--p100-vs-v100-txt2img-2026-07-22)
 - [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
+- [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -494,3 +495,60 @@ Full 256K only costs +2-4 GB over 16K thanks to SWA. **31B needs `--cache-type-k
 KV, needs flash-attn) to reach 128k — f16 KV at 131k hits 31GB + compute buffer and OOMs; q8_0
 brings it to ~26.7GB. The 12B and 26B-A4B have room to spare with f16 KV. Verified all three
 co-resident after tuning: P100 10.8GB / V100#1 26GB (31B@131k) / V100#2 18.0GB, all answering.
+
+## MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)
+
+Qwen trained a **Multi-Token-Prediction (MTP)** head directly into Qwen3.6-35B-A3B — a built-in
+self-speculative-decode drafter (extra `blk.40.nextn.*` tensors) that proposes the next few
+tokens for the model itself to verify in one pass. Our served `chat` GGUF
+(`Qwen3.6-35B-A3B-UD-Q6_K.gguf`) was converted **without** it, so we never used it. Unsloth ships
+the MTP-equipped file in a **separate** repo — `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` — at the same
+`UD-Q6_K` quant (30.0 GB vs our 29.3 GB; the ~0.7 GB delta is the embedded MTP head). Our stock
+`llama.cpp` build already supports it via `--spec-type draft-mtp` (no separate draft model).
+
+**This is a true apples-to-apples test: identical weights, identical engine, MTP off vs on**, so
+any decode gain is the speculative head, not a smaller quant (unlike the pxq_llama "+30%" — see
+`benchmark_pxq_llama.md` §14). One V100 (idx1), ctx 32768, q8_0 KV, `--parallel 1`,
+batch/ubatch 2048, greedy; 256-token generations. Harness: `scripts/mtp-bench.py`.
+
+![MTP off vs on — decode and draft acceptance](img/mtp-qwen35-chat.png)
+
+Steady-state at a 4k-token prompt:
+
+| Config | Prefill @4k | **Decode @4k** | Δ decode | Draft accept | Peak VRAM |
+|---|---:|---:|---:|---:|---:|
+| **MTP off** (baseline) | 1122 t/s | **88.9 t/s** | — | — | 29.4 GB |
+| MTP `n_max=1` | 1095 t/s | 109.1 t/s | **+23%** | 79% | 30.0 GB |
+| **MTP `n_max=2`** | 1100 t/s | **116.8 t/s** | **+31%** | 69% | 30.1 GB |
+| MTP `n_max=3` | 1094 t/s | 108.5 t/s | +22% | 62% | 30.2 GB |
+| MTP `n_max=4` | 1099 t/s | 106.6 t/s | +20% | 52% | 30.2 GB |
+
+Takeaways:
+
+- **MTP is a real, lossless decode win on our actual daily model**: ~**+25–31%** decode at
+  identical weights (peaks ~+35–42% at shorter 512-token prompts). Output is unchanged — the
+  main model verifies every drafted token.
+- **`n_max=2` is the sweet spot** (matches unsloth's recommendation). Deeper drafting
+  (`n_max` 3–4) *lowers* acceptance (52–62%) — more wasted draft passes — and nets less.
+- **Prefill cost is negligible** here (~2%, 1122→1100 t/s) — much cheaper than the pxq_llama
+  fork's MTP, which taxed prefill heavily (§14). Stock llama.cpp's in-model MTP only adds a small
+  per-step draft.
+- **VRAM cost is ~0.6–0.8 GB** (draft path + head). **Caveat for production:** our `chat` slot
+  runs **ctx 131072** and already peaks ~30.4 GB / 32 GB at a 128k prefill. MTP on top would OOM
+  at full context — to adopt it we'd cap ctx to ~32–64k or drop to `UD-Q5_K_XL`.
+- **Acceptance here is optimistic**: the summarization prompt is low-entropy (highly
+  predictable), so real chat/code will accept less and gain less than +31%. Still, even a
+  conservative +15–20% is free throughput from a model swap + one flag.
+
+**How to enable** (drop-in for the `chat` block, reduced ctx to fit):
+
+```bash
+llama-server \
+  --model models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf \
+  --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+A matching `unsloth/Qwen3.6-27B-MTP-GGUF` exists for the dense `coding` model (27B; MTP helps
+dense models more per unsloth's data), untested here.
