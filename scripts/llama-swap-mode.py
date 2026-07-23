@@ -91,6 +91,23 @@ def _apply_overrides(block: list[str], ov: dict) -> list[str]:
         for k, bl in enumerate(block):
             if "--ctx-size" in bl:
                 block[k] = re.sub(r"--ctx-size\s+\d+", f"--ctx-size {ov['ctx_size']}", bl)
+    if "model" in ov:
+        for k, bl in enumerate(block):
+            if "--model" in bl:
+                block[k] = re.sub(r"(--model\s+)\S+", rf"\g<1>{ov['model']}", bl)
+    if "spec" in ov:
+        # spec: none / false  -> strip the --spec-type ... draft flags (e.g. to disable
+        # MTP for a parallel worker pool). spec: "draft-mtp:N" -> set draft n-max to N.
+        want = ov["spec"]
+        for k, bl in enumerate(block):
+            if "--spec-type" in bl:
+                if not want or want == "none":
+                    block[k] = re.sub(r"\s*--spec-type\s+\S+(\s+--spec-draft-n-max\s+\d+)?",
+                                      "", bl)
+                elif ":" in str(want):
+                    stype, nmax = str(want).split(":", 1)
+                    block[k] = re.sub(r"--spec-type\s+\S+\s+--spec-draft-n-max\s+\d+",
+                                      f"--spec-type {stype} --spec-draft-n-max {nmax}", bl)
     if "concurrencyLimit" in ov:
         # update if present, else insert right after the `name:` line
         found = False

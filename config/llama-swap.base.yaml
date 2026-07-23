@@ -54,27 +54,32 @@ models:
       --batch-size 2048 --ubatch-size 1024
       ${common}
 
-  # --- chat: Qwen3.6-35B-A3B UD-Q6_K on V100 #2 (idx2) -------------------
-  # 27.3GB weights on a 32GB card -> use q8_0 KV cache to fit a useful context.
-  # Verified 2026-07-03: ctx 131072 (128k) with a 105k-token prefill peaks at
-  # 30.4GB/32GB (~2.4GB headroom, no OOM) — a bit safer than chat-uncensored-q6
-  # (~1GB) since these weights are ~1.7GB lighter. 128k is the realistic max for
-  # a Q6 on this card; 256k would add ~7-8GB of KV and OOM. Same base model/arch
-  # as the uncensored Q6 (40 layers, 2 KV heads), so KV stays cheap.
+  # --- chat: Qwen3.6-35B-A3B UD-Q6_K + MTP on V100 #2 (idx2) -------------
+  # MTP build (unsloth/Qwen3.6-35B-A3B-MTP-GGUF) — same UD-Q6_K weights plus the
+  # model's built-in multi-token-prediction head (embedded blk.40.nextn.*, +0.7GB),
+  # enabled with --spec-type draft-mtp. Lossless self-speculative decode: measured
+  # +25-31% decode (88.9 -> ~117 t/s @4k, n_max=2 sweet spot) at identical weights,
+  # ~2% prefill cost — see docs/benchmarking.md "MTP speculative decode" (2026-07-23).
+  # VRAM: MTP head + draft path cost ~0.7GB, so ctx is capped at 96k (98304) — a
+  # near-full 90k prefill peaks 31.86GB/32GB (~0.9GB headroom, measured). 128k would
+  # OOM with MTP; this trades 32k of context for the decode speedup. chat runs alone
+  # on idx2 (comfyui-secure evicts it before image gen via the free_gpu hook), so the
+  # full-card peak is the real ceiling. 40 layers, 2 KV heads -> KV stays cheap.
   "chat":
-    name: "Qwen3.6-35B-A3B (UD-Q6_K) — chat"
-    description: "General/family chat MoE, single V100."
+    name: "Qwen3.6-35B-A3B (UD-Q6_K + MTP) — chat"
+    description: "General/family chat MoE, single V100, MTP self-speculative decode."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf
-      --ctx-size 131072
+      --model ${models_dir}/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf
+      --ctx-size 98304
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
+      --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
   # --- big: Qwen3.6-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------

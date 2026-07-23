@@ -31,6 +31,9 @@ overrides:
   chat:
     parallel: 4
     concurrencyLimit: 12
+    ctx_size: 131072
+    spec: none    # MTP off for the batched sub-agent pool (helps single-stream, not P=4)
+    model: ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf  # non-MTP file (no unused head)
   fast:
     parallel: 2
     ctx_size: 24576

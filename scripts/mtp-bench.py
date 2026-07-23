@@ -86,9 +86,9 @@ def vram_used(gpu):
         return -1
 
 
-def build_cmd(nmax):
+def build_cmd(nmax, ctx=CTX):
     cmd = [STOCK_BIN, "--model", MODEL, "--host", "127.0.0.1", "--port", str(PORT),
-           "--gpu-layers", "999", "--flash-attn", "on", "--ctx-size", str(CTX),
+           "--gpu-layers", "999", "--flash-attn", "on", "--ctx-size", str(ctx),
            "--parallel", "1", "--batch-size", str(BATCH), "--ubatch-size", str(BATCH),
            "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     if nmax > 0:
@@ -96,10 +96,10 @@ def build_cmd(nmax):
     return cmd
 
 
-def launch(nmax):
+def launch(nmax, ctx=CTX):
     env = {**os.environ, "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
            "CUDA_VISIBLE_DEVICES": str(GPU)}
-    cmd = build_cmd(nmax)
+    cmd = build_cmd(nmax, ctx)
     log = open(f"/tmp/mtp-bench-{nmax}.log", "w")
     log.write("CMD: " + " ".join(cmd) + "\n"); log.flush()
     return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env,
@@ -179,11 +179,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
+    ap.add_argument("--ctx", type=int, default=CTX, help="context size to launch with")
+    ap.add_argument("--fill", type=int, default=0,
+                    help="if set, probe a single prompt of ~this many tokens (VRAM ceiling test)")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
+    ctx = a.ctx
+    sizes = [a.fill] if a.fill else PROMPT_SIZES
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    out = f"{DATA_DIR}/qwen35-chat-mtp.csv"
+    out = f"{DATA_DIR}/qwen35-chat-mtp-ctxfit.csv" if a.fill else f"{DATA_DIR}/qwen35-chat-mtp.csv"
     exists = os.path.exists(out)
     fout = open(out, "a", newline="")
     w = csv.DictWriter(fout, fieldnames=["engine", "model", "nmax", "prompt_tokens",
@@ -200,10 +205,10 @@ def main():
         for nmax in a.nmax:
             label = "baseline (MTP off)" if nmax == 0 else f"MTP n_max={nmax}"
             print(f"\n=== {label} — Qwen3.6-35B-A3B UD-Q6_K, V100 idx{GPU}, "
-                  f"ctx {CTX}, q8_0 KV ===", flush=True)
+                  f"ctx {ctx}, q8_0 KV ===", flush=True)
             proc = None
             try:
-                proc = launch(nmax)
+                proc = launch(nmax, ctx)
                 if not wait_ready():
                     print("[FAIL] server not ready; tail:")
                     print(subprocess.run(["tail", "-25", f"/tmp/mtp-bench-{nmax}.log"],
@@ -211,9 +216,9 @@ def main():
                     continue
                 print(f"ready; weights+ctx VRAM ~{vram_used(GPU)} MiB", flush=True)
                 probe(make_prompt(128), 16)  # warm
-                for sz in PROMPT_SIZES:
-                    if sz + GEN_TOKENS + 256 > CTX:
-                        continue
+                for sz in sizes:
+                    if sz + GEN_TOKENS + 256 > ctx:
+                        print(f"  prompt~{sz}: skipped (exceeds ctx {ctx})"); continue
                     ttft, tim = probe(make_prompt(sz), GEN_TOKENS)
                     if ttft is None:
                         print(f"  prompt~{sz}: probe failed"); continue
