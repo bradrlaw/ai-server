@@ -313,57 +313,38 @@ models:
       --batch-size 2048 --ubatch-size 2048
       ${common}
 
-  # --- chat-uncensored-q4: Qwen3.6-35B-A3B Uncensored (Q4_K_M) on V100 (idx1) -
-  # Abliterated/uncensored MoE (35B total / ~3B active). ~20GB weights on a 32GB
-  # card -> lots of room, so q8_0 KV gives a big context. Shares idx1 with coding /
-  # gemma-31b / the Q6 build, so requesting it evicts those.
-  # Verified 2026-07-03: ctx 262144 (256k = native max) loads at 24.8GB/32GB
-  # (~7.8GB headroom). Also tested 524288 (512k) -> loads at 29.1GB (~3.6GB
-  # headroom) but that is 2x native; without YaRN, quality degrades past 256k,
-  # so we cap at the native 262144 for trustworthy full-context use.
-  "chat-uncensored-q4":
-    name: "Qwen3.6-35B-A3B Uncensored (Q4_K_M) — chat"
-    description: "Uncensored general chat MoE (abliterated), Q4. Single V100; evicts coding."
-    ttl: 600
-    env:
-      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
-      - "CUDA_VISIBLE_DEVICES=1"
-    cmd: |
-      ${llama-server}
-      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
-      --ctx-size 262144
-      --cache-type-k q8_0
-      --cache-type-v q8_0
-      --parallel 1
-      --batch-size 2048 --ubatch-size 2048
-      ${common}
-
-  # --- chat-uncensored-q6: Qwen3.6-35B-A3B Uncensored (Q6_K_P) on V100 (idx1) -
-  # Higher-quality uncensored quant. ~29GB weights on a 32GB card -> q8_0 KV.
+  # --- chat-uncensored-q6: Qwen3.6-35B-A3B Uncensored (Q6_K) on V100 (idx1) -
+  # Higher-quality uncensored quant. 2026-07-23: swapped abliteration from
+  # HauhauCS-Aggressive (Q6_K_P, 30.6GB, no MTP) to the `heretic
+  # Native-MTP-Preserved` variant (Q6_K, 29.3GB) — actually 1.3GB SMALLER, and
+  # it ships the native MTP head. MTP self-spec n_max=2 lifts steady-state decode
+  # 91.0 -> 130.1 t/s (+43%, accept ~91%) at ~+0.7GB VRAM; lossless.
   # KV is cheap here (40 layers x 2 KV heads, q8_0) so context is affordable.
-  # Verified 2026-07-03: ctx 131072 (128k) with a full 120k prefill peaks at
-  # 31.8GB/32GB (~1.0GB headroom, no OOM). This is the RAGGED EDGE — it fits
-  # because KV+compute are preallocated at load and flash-attn keeps the compute
-  # buffer flat. A maxed-out ultra-long chat could OOM on a cuBLAS-workspace grab;
-  # that failure is visible (client error + `journalctl -u llama-swap` shows
-  # "CUDA error: out of memory"), non-corrupting, and self-recovering (llama-swap
-  # relaunches the backend on the next request). Use chat-uncensored-q4 for a
-  # roomy 128k. Do NOT raise Q6 ctx further.
+  # Verified 2026-07-03 (pre-swap): ctx 131072 (128k) with a full 120k prefill
+  # peaked at 31.8GB/32GB on the OLD 30.6GB weights (ragged edge). The heretic
+  # weights are 1.3GB smaller so even with MTP's +0.7GB buffer 128k stays within
+  # budget. This is still the tight slot -- a maxed-out ultra-long chat could OOM
+  # on a cuBLAS-workspace grab; that failure is visible (client error +
+  # `journalctl -u llama-swap` shows "CUDA error: out of memory"), non-corrupting,
+  # and self-recovering (llama-swap relaunches the backend on the next request).
+  # This is the sole uncensored slot (the Q4 variant was dropped to save disk).
+  # Do NOT raise Q6 ctx further.
   "chat-uncensored-q6":
-    name: "Qwen3.6-35B-A3B Uncensored (Q6_K_P) — chat"
-    description: "Uncensored general chat MoE (abliterated), Q6. Single V100; evicts coding."
+    name: "Qwen3.6-35B-A3B Uncensored (Q6_K) — chat"
+    description: "Uncensored general chat MoE (abliterated, heretic MTP), Q6. Single V100; evicts coding."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q6_K_P.gguf
+      --model ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf
       --ctx-size 131072
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
+      --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
 routing:
@@ -371,7 +352,7 @@ routing:
     use: matrix
     settings:
       matrix:
-        # Card map: idx0(P100)=fast(MoE)|fast-12b|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q4|chat-uncensored-q6|big ;
+        # Card map: idx0(P100)=fast(MoE)|fast-12b|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
         #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `fast`
         #           and `fast-uncensored` are mutually exclusive on idx0 (they
         #           evict each other); one of them coexists with all V100 activity.
@@ -384,7 +365,6 @@ routing:
           n: coder-next
           x: gemma-31b
           y: gemma-26b
-          u: chat-uncensored-q4
           w: chat-uncensored-q6
         evict_costs:
           b: 50   # BF16 is very slow to load; prefer keeping it if already up
@@ -399,7 +379,6 @@ routing:
           qg: "c & y & (f | fu)"    # coding vs gemma-26b head-to-head
           gq: "x & h & (f | fu)"    # gemma-31b vs chat head-to-head
           gg: "x & y & (f | fu)"    # both Gemmas (idx1+idx2) + P100 chat
-          qu: "u & h & (f | fu)"    # uncensored-Q4(idx1) + chat(idx2) + P100 chat
           qw: "w & h & (f | fu)"    # uncensored-Q6(idx1) + chat(idx2) + P100 chat
           max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
           cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat

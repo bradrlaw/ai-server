@@ -17,6 +17,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
 - [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
+  - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -740,4 +741,53 @@ CUDA_VISIBLE_DEVICES=0 llama-server \
 ```
 
 > `fast-12b` is a `--parallel 1` fallback with no mode overlay override, so MTP applies in every
+> serving mode.
+
+### MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)
+
+Our uncensored slot ran the **HauhauCS-Aggressive** abliteration of Qwen3.6-35B-A3B, which has
+**no MTP variant** (HauhauCS only ships MTP for their Gemma models), and Qwen's MTP head is
+*embedded* — you can't bolt a separate draft onto abliterated weights. To get MTP here we swapped
+the abliteration lineage to **`Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved`**
+(repo `TopherAU/…-GGUF`), which explicitly preserves the native `blk.40.nextn.*` head. Same
+in-model mechanism as `chat` (`--spec-type draft-mtp`, no separate draft file). The heretic **Q6_K
+is 29.3 GB — 1.3 GB *smaller* than the old HauhauCS Q6_K_P (30.6 GB)** — so despite MTP's ~0.7 GB
+buffer the tight Q6 slot has *more* headroom than before. Single V100 (idx1), q8_0 KV, ub2048,
+`--parallel 1`. Harness: `scripts/mtp-bench.py`.
+
+> We benchmarked a Q4_K_M of the same heretic model too (256k-capable, +30% decode) but **dropped
+> it to save disk** — the Q6 is the sole uncensored slot.
+
+![q6 MTP off vs on](img/mtp-qwen35-uncensored-q6.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt) — **`chat-uncensored-q6`**
+(Q6_K, 29.3 GB):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k test) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **91.0 t/s** | — | — | 29.2 GB |
+| `n_max=1` | 110.5 t/s | +21% | 83% | 29.8 GB |
+| **`n_max=2`** | **130.1 t/s** | **+43%** | 91% | 29.8 GB |
+
+Takeaways:
+
+- **~+43% decode**, lossless — right in the MoE MTP band (`chat` got +31%), since Qwen3.6-35B-A3B
+  fires only ~3 B active params/token. We ship **`n_max=2`**.
+- **Fits at full 128k production context with MTP** (measured live via the router): **128k = 31.7 GB
+  / 32 GB** (~1.1 GB headroom — still the ragged slot, but the smaller heretic weights keep 128k
+  viable where the old 30.6 GB Q6_K_P left almost nothing). Do NOT raise ctx further.
+- **This is a model swap, not just a flag** — the uncensoring persona changes from HauhauCS-Aggressive
+  to the heretic lineage. Approved by the owner as the only path to MTP on this slot.
+
+**How to enable** (shipped `chat-uncensored-q6` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1 llama-server \
+  --model models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf \
+  --ctx-size 131072 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> The uncensored slot is `--parallel 1` with no mode overlay override, so MTP applies in every
 > serving mode.
