@@ -1,0 +1,4 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+fork,p100-gemma-pxq2,,1024,123,1.322,93.2,8.1,11927
+fork,p100-gemma-pxq2,,1024,501,1.829,281.7,7.9,11973
+fork,p100-gemma-pxq2,,1024,0,4.223,0,0,0

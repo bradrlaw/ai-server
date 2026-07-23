@@ -1,0 +1,5 @@
+engine,target,spec,ubatch,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,vram_mib
+stock,p100-gemma26b,,1024,123,0.618,199.6,61.3,14729
+stock,p100-gemma26b,,1024,501,1.402,373.7,63.7,14729
+stock,p100-gemma26b,,1024,2040,4.303,475.4,60.3,14789
+stock,p100-gemma26b,,1024,4092,8.408,488.1,58.6,15045

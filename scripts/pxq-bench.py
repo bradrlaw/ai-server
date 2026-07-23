@@ -59,10 +59,20 @@ NCCL_DIR = "/srv/ai/venvs/comfyui/lib/python3.12/site-packages/nvidia/nccl/lib"
 FORK_LD = ":".join([f"{FORK_ROOT}/bin", f"{FORK_ROOT}/src", f"{FORK_ROOT}/ggml/src",
                     f"{FORK_ROOT}/examples/mtmd", "/usr/local/cuda/lib64", NCCL_DIR])
 
+# Round 2: newer fork build (v2026.07.23) with the V100 prefill kernel fix, gguf-py
+# PXQ row-meta anti-corruption fix, and the author-recommended layer-split path.
+FORK2_ROOT = "/srv/ai/src/pxq_llama/pxq_llama-2026-07-23-linux-x64"
+FORK2_BIN = f"{FORK2_ROOT}/bin/llama-server"
+FORK2_LD = ":".join([f"{FORK2_ROOT}/bin", f"{FORK2_ROOT}/src", f"{FORK2_ROOT}/ggml/src",
+                     f"{FORK2_ROOT}/examples/mtmd", "/usr/local/cuda/lib64", NCCL_DIR])
+
 ENGINES = {
     "stock": {"bin": STOCK_BIN, "env": {}},
     "fork":  {"bin": FORK_BIN,
               "env": {"LD_LIBRARY_PATH": FORK_LD, "PXA_ENHANCE": "1", "PXA_MODE": "balance"}},
+    # Round 2: PXA_ENHANCE=1 alone auto-wires per-arch kernels (no PXA_MODE needed).
+    "fork2": {"bin": FORK2_BIN,
+              "env": {"LD_LIBRARY_PATH": FORK2_LD, "PXA_ENHANCE": "1"}},
 }
 
 # gpus are PCI_BUS_ID indices (0=P100, 1/2=V100). ctx/batch/ubatch shared by both engines.
@@ -71,6 +81,11 @@ ENGINES = {
 Q35 = f"{MODELS_DIR}/qwen3.6-35b-a3b"
 PXQ = f"{MODELS_DIR}/pxq"
 TARGETS = {
+    # --- current P100 MoE (Gemma-4-26B-A4B Q4_K_XL, our `fast` slot) for reference ---
+    "p100-gemma26b": {  # matches the pxq P100 settings for a like-for-like compare
+        "model": f"{MODELS_DIR}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+
     # --- stock llama.cpp on the standard quant (baseline) ---
     "v100-qwen35-q6k": {  # Q6_K ~29GB fits a single V100
         "model": f"{Q35}/Qwen3.6-35B-A3B-UD-Q6_K.gguf",
@@ -95,7 +110,14 @@ TARGETS = {
         "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
     "p100-qwen35-pxq3": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ3.gguf",
         "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    # --- fork PXQ of the SAME Gemma-4-26B-A4B (QAT BF16 source) on the P100 ---
+    "p100-gemma-pxq2": {"model": f"{PXQ}/Gemma-4-26B-A4B-PXQ2.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    "p100-gemma-pxq3": {"model": f"{PXQ}/Gemma-4-26B-A4B-PXQ3.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
     "dualv100-qwen35-pxq4": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ4.gguf",
+        "gpus": [1, 2], "ctx": 8192, "batch": 2048, "ubatch": 2048, "split": "layer"},
+    "dualv100-qwen35-pxq6": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ6.gguf",
         "gpus": [1, 2], "ctx": 8192, "batch": 2048, "ubatch": 2048, "split": "layer"},
 }
 
@@ -153,7 +175,13 @@ def build_cmd(engine, tgt, spec):
            "--batch-size", str(cfg["batch"]), "--ubatch-size", str(cfg["ubatch"])]
     if len(cfg["gpus"]) > 1:
         cmd += ["--split-mode", cfg.get("split", "layer")]
-    if spec and engine == "fork":
+        if engine == "fork2":
+            # Author-recommended even tensor-split ratio for the layer-split path.
+            cmd += ["--tensor-split", ",".join("1" for _ in cfg["gpus"])]
+    if engine == "fork2":
+        # Author-recommended Round 2 flags (v2026.07.23): explicit f16 KV + jinja.
+        cmd += ["--cache-type-k", "f16", "--cache-type-v", "f16", "--jinja"]
+    if spec and engine in ("fork", "fork2"):
         cmd += ["--spec-type", spec]
     return cmd
 
