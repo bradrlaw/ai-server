@@ -96,16 +96,29 @@ def _apply_overrides(block: list[str], ov: dict) -> list[str]:
             if "--model" in bl:
                 block[k] = re.sub(r"(--model\s+)\S+", rf"\g<1>{ov['model']}", bl)
     if "spec" in ov:
-        # spec: none / false  -> strip the --spec-type ... draft flags (e.g. to disable
-        # MTP for a parallel worker pool). spec: "draft-mtp:N" -> set draft n-max to N.
+        # spec: none / false  -> strip ALL speculative-decode flags (--spec-type,
+        # --spec-draft-n-max, and the separate-draft-model flags --model-draft /
+        # --n-gpu-layers-draft) so a parallel worker pool runs without MTP. Handles
+        # both same-line (coding/chat) and one-flag-per-line (fast/big) layouts.
+        # spec: "draft-mtp:N" -> set draft n-max to N (same-line layouts).
         want = ov["spec"]
-        for k, bl in enumerate(block):
-            if "--spec-type" in bl:
-                if not want or want == "none":
-                    block[k] = re.sub(r"\s*--spec-type\s+\S+(\s+--spec-draft-n-max\s+\d+)?",
-                                      "", bl)
-                elif ":" in str(want):
-                    stype, nmax = str(want).split(":", 1)
+        if not want or want == "none":
+            pats = [r"--spec-type\s+\S+", r"--spec-draft-n-max\s+\d+",
+                    r"--model-draft\s+\S+", r"--n-gpu-layers-draft\s+\d+"]
+            new_block = []
+            for bl in block:
+                stripped = bl
+                for pat in pats:
+                    stripped = re.sub(pat, "", stripped)
+                # drop a flag-only line that is now blank
+                if bl.strip().startswith("--") and not stripped.strip():
+                    continue
+                new_block.append(stripped)
+            block[:] = new_block
+        elif ":" in str(want):
+            stype, nmax = str(want).split(":", 1)
+            for k, bl in enumerate(block):
+                if "--spec-type" in bl:
                     block[k] = re.sub(r"--spec-type\s+\S+\s+--spec-draft-n-max\s+\d+",
                                       f"--spec-type {stype} --spec-draft-n-max {nmax}", bl)
     if "concurrencyLimit" in ov:

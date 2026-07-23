@@ -650,3 +650,51 @@ CUDA_VISIBLE_DEVICES=1,2 llama-server \
 
 > `big` is `--parallel 1` in every serving mode (it preempts `coding`+`chat`), so MTP applies
 > unconditionally — no mode overlay overrides it.
+
+### MTP on the `fast` model — Gemma-4-26B-A4B MoE, **separate draft head** (2026-07-23)
+
+Unlike Qwen3.6 (embedded `nextn` head), **Gemma-4 has no embedded MTP head** — self-spec
+uses a **separate ~460 MB `gemma4-assistant` draft model** (`--model-draft` +
+`--spec-type draft-mtp`), the same mechanism `fast-uncensored` already uses for the 12B.
+Pulled `ironbcc/gemma-4-26B-A4B-it-MTP-GGUF` assistant heads (Q8_0 462 MB, Q4_K_M 325 MB;
+vocab-matched to our `it-qat` base) and benchmarked both. P100 (idx0), ctx 32768,
+f16 KV, ub1024, `--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![fast MTP off vs on — decode and draft acceptance](img/mtp-gemma26-fast.png)
+
+Decode throughput (steady-state at a ~4k-token prompt):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **59.4 t/s** | — | — | 15.3 GB |
+| **Q8 draft, `n_max=1`** | **83.8 t/s** | **+41%** | 78–98% | 15.9 GB (~0.45 GB free) |
+| Q8 draft, `n_max=2` | 83.7 t/s | +41% (erratic) | 56–85% | 15.9 GB |
+| Q4 draft, `n_max=1` | 83.2 t/s | +40% | 78–98% | 15.8 GB (~0.58 GB free) |
+| Q4 draft, `n_max=2` | 81.4 t/s | +37% (erratic) | 56–85% | 15.8 GB |
+
+Takeaways:
+
+- **MTP works on the MoE too — a solid ~+40% decode** (~60 → ~84 t/s), lossless. Smaller than
+  the dense wins (coding +79%, big +75%) because the MoE fires only ~3.8B params/token so it is
+  far less bandwidth-starved, but still a clear latency win for the always-on chat slot.
+- **`n_max=1` is the sweet spot.** The 1-token assistant head drafts a single token with high
+  acceptance (~78–98%); `n_max=2` drops acceptance to ~56% on short prompts and gets erratic.
+- **Q8 vs Q4 draft: identical decode.** Q8 (462 MB) and Q4 (325 MB) both land at ~83 t/s. We
+  **ship Q8** — the P100 is dedicated to `fast` while this model is loaded, so we spend the VRAM
+  on the higher-precision draft head (still ~0.45 GB free at 32k). Q4 is the fallback if headroom
+  ever gets tight.
+
+**How to enable** (this is the shipped `fast` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 llama-server \
+  --model models/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 32768 --parallel 1 --batch-size 2048 --ubatch-size 1024 \
+  --reasoning-budget 0 --flash-attn on \
+  --model-draft models/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 1 --n-gpu-layers-draft 99
+```
+
+> MTP is single-stream only, so the `agentic`/`heavy-coding` overlays (which run `fast` as a
+> P=2 worker pool) strip the draft via `spec: none` — the mode renderer now also removes the
+> separate `--model-draft` / `--n-gpu-layers-draft` flags, not just `--spec-type`.

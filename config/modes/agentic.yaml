@@ -42,6 +42,7 @@ overrides:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
+    spec: none   # MTP is single-stream only; strip the draft head for the P=2 pool
 # Warm all three so the whole agent worker set is ready immediately. gemma-26b
 # is warmed here (not chat) — requesting it evicts chat from idx2.
 preload:

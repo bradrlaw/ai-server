@@ -92,17 +92,24 @@ def vram_used(gpu):
 
 KV_TYPE = "q8_0"       # KV cache quant (big uses f16); set via --kv
 SPLIT = False          # --split-mode layer across multiple GPUs (dual-V100 big)
+DRAFT_MODEL = None     # separate draft-model GGUF (Gemma-4 assistant MTP); set via --draft-model
+UBATCH = None          # override ubatch (defaults to BATCH); set via --ubatch
+EXTRA = []             # extra passthrough flags (e.g. --reasoning-budget 0); set via --extra
 
 
 def build_cmd(nmax, ctx=CTX):
+    ub = UBATCH if UBATCH else BATCH
     cmd = [STOCK_BIN, "--model", MODEL, "--host", "127.0.0.1", "--port", str(PORT),
            "--gpu-layers", "999", "--flash-attn", "on", "--ctx-size", str(ctx),
-           "--parallel", "1", "--batch-size", str(BATCH), "--ubatch-size", str(BATCH),
+           "--parallel", "1", "--batch-size", str(BATCH), "--ubatch-size", str(ub),
            "--cache-type-k", KV_TYPE, "--cache-type-v", KV_TYPE]
     if SPLIT:
         cmd += ["--split-mode", "layer"]
     if nmax > 0:
         cmd += ["--spec-type", "draft-mtp", "--spec-draft-n-max", str(nmax)]
+        if DRAFT_MODEL:
+            cmd += ["--model-draft", DRAFT_MODEL, "--n-gpu-layers-draft", "99"]
+    cmd += EXTRA
     return cmd
 
 
@@ -186,7 +193,7 @@ def accept_rate(tim):
 
 
 def main():
-    global MODEL, GPU, KV_TYPE, SPLIT
+    global MODEL, GPU, KV_TYPE, SPLIT, DRAFT_MODEL, UBATCH, EXTRA
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
@@ -199,12 +206,19 @@ def main():
     ap.add_argument("--kv", default="q8_0", help="KV cache type (big uses f16)")
     ap.add_argument("--split", action="store_true",
                     help="--split-mode layer across the GPUs in --gpu (dual-V100 big)")
+    ap.add_argument("--draft-model", default=None,
+                    help="separate draft-model GGUF (Gemma-4 assistant MTP head); "
+                         "when set, MTP uses --model-draft instead of an embedded head")
+    ap.add_argument("--ubatch", type=int, default=None, help="override ubatch size (default = batch)")
+    ap.add_argument("--extra", default="", help="extra passthrough flags, space-separated (e.g. '--reasoning-budget 0')")
     ap.add_argument("--label", default="qwen35-chat",
                     help="model label: names the CSV (<label>-mtp.csv) and the 'model' column")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
     MODEL, GPU = a.model, a.gpu
     KV_TYPE, SPLIT = a.kv, a.split
+    DRAFT_MODEL, UBATCH = a.draft_model, a.ubatch
+    EXTRA = a.extra.split() if a.extra else []
     ctx = a.ctx
     sizes = [a.fill] if a.fill else PROMPT_SIZES
 

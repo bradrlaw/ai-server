@@ -39,6 +39,7 @@ overrides:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
+    spec: none   # MTP is single-stream only; strip the draft head for the P=2 pool
 # Warm all three so the primary + both worker pools are ready immediately.
 preload:
   - coding

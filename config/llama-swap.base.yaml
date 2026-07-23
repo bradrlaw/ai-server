@@ -186,9 +186,17 @@ models:
   # context? Use the `fast-12b` fallback (128k, dense).
   # --reasoning-budget 0 keeps replies immediate (no thinking phase), matching the
   # old `fast` persona. Runs CONCURRENTLY with coding+chat (own card).
+  # MTP (2026-07-23): Gemma-4 has no embedded MTP head, so self-spec uses a SEPARATE
+  # ~460MB gemma4-assistant draft head (unsloth/ironbcc it-qat-assistant, Q8_0) via
+  # --model-draft + --spec-type draft-mtp. Measured +38% decode (~60 -> ~83 t/s @4k,
+  # n_max=1 sweet spot; n_max=2 drops acceptance on this MoE). Draft fits the P100
+  # (~15.9GB/16GB, ~0.45GB free at 32k) — the card is dedicated to `fast` when this
+  # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `fast`
+  # model". NB: MTP is single-stream only — the agentic/heavy-coding overlays run
+  # `fast` at --parallel 2 and strip the draft (spec: none).
   "fast":
-    name: "Gemma-4-26B-A4B (MoE) — fast non-reasoning chat"
-    description: "Snappy general chat on the P100 (MoE, ~3.8B active); no reasoning phase. Always available."
+    name: "Gemma-4-26B-A4B (MoE + MTP) — fast non-reasoning chat"
+    description: "Snappy general chat on the P100 (MoE, ~3.8B active); no reasoning phase, MTP self-spec decode. Always available."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=0"
@@ -199,6 +207,10 @@ models:
       --parallel 1
       --batch-size 2048 --ubatch-size 1024
       --reasoning-budget 0
+      --model-draft ${models_dir}/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf
+      --spec-type draft-mtp
+      --spec-draft-n-max 1
+      --n-gpu-layers-draft 99
       ${common}
 
   # --- fast-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----

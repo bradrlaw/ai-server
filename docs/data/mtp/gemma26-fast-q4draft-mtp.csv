@@ -1,0 +1,9 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,gemma26-fast-q4draft,1,123,0.624,197.8,88.1,97.7,15747
+stock,gemma26-fast-q4draft,1,501,1.44,368.2,80.9,77.8,15747
+stock,gemma26-fast-q4draft,1,2040,4.307,476.2,80.6,83.3,15807
+stock,gemma26-fast-q4draft,1,4092,8.386,489.4,83.2,92.9,15807
+stock,gemma26-fast-q4draft,2,123,0.625,197.4,68.8,56.5,15747
+stock,gemma26-fast-q4draft,2,501,1.446,367.0,67.0,56.2,15747
+stock,gemma26-fast-q4draft,2,2040,4.29,476.9,75.9,72.2,15807
+stock,gemma26-fast-q4draft,2,4092,8.405,488.7,81.4,85.0,15807

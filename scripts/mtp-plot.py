@@ -41,10 +41,12 @@ def main():
     CSV, OUT = a.csv, a.out
     rows = load()
     nmaxes = sorted({int(r["nmax"]) for r in rows})
-    # steady-state decode per nmax
+    # steady-state decode per nmax — use the largest prompt bucket present
+    # (robust across tokenizers; e.g. Gemma yields 4092 vs Qwen 4091 for ~4k).
+    steady = max(int(r["prompt_tokens"]) for r in rows)
     dec = {}
     for r in rows:
-        if int(r["prompt_tokens"]) == STEADY:
+        if int(r["prompt_tokens"]) == steady:
             dec[int(r["nmax"])] = float(r["decode_tok_s"])
     base = dec[0]
 
