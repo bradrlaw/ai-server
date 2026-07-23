@@ -606,3 +606,47 @@ llama-server \
 > MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
 > throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
 > keeps MTP on the single-slot interactive `coding` primary.
+
+### MTP on the `big` model — Qwen3.6-27B UD-Q6_K_XL, **dual-V100 split** (2026-07-23)
+
+`big` is the max-quality dense 27B split across **both** V100s (`--split-mode layer`,
+f16 KV, `--parallel 1`, 256k ctx). The open question was whether the `draft-mtp`
+self-speculative path even *works* across a layer split between two GPUs — the earlier
+`chat`/`coding` tests only exercised a single card. It does. Swapped to
+`unsloth/Qwen3.6-27B-MTP-GGUF` `Qwen3.6-27B-UD-Q6_K_XL.gguf` (byte-identical UD-Q6_K_XL
+weights + embedded `blk.64.nextn.*` head, +0.38 GB). Apples-to-apples, both V100s
+(idx1+idx2), ctx 32768, **f16 KV**, `--split-mode layer`, `--parallel 1`, flash-attn on.
+
+![big MTP off vs on — decode and draft acceptance](img/mtp-qwen27-big.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt):
+
+| Config | Prefill t/s | Decode t/s | Δ decode | Accept % | VRAM (32k, both cards) |
+| --- | --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | 887 t/s | **23.8 t/s** | — | — | 29.2 GB |
+| MTP `n_max=1` | 827 t/s | 37.4 t/s | **+57%** | 88% | 31.1 GB |
+| **MTP `n_max=2`** | 821 t/s | **41.7 t/s** | **+75%** | 86% | 31.2 GB |
+
+Takeaways:
+
+- **The dual-card layer-split MTP path works and is a big win (+75%).** Baseline decode is
+  low (~24 t/s) because the inter-GPU layer split caps utilization at ~47%; MTP verifies cheap
+  drafted tokens "for free" in that idle compute, lifting decode to ~42 t/s with the *same*
+  ~86–88% acceptance the dense 27B posts on a single card. `n_max=2` is again the sweet spot.
+- **Prefill cost ~7%** (887→821 t/s) — a bit higher than the single-card slots but negligible
+  against the decode gain for `big`'s overnight long-context use.
+- **No context trade-off.** MTP adds only ~1.8 GB total across the two cards (~31 GB / 64 GB at
+  32k). `big` keeps its full **262144 (256k)** native ctx — VRAM headroom is ample on the pair.
+
+**How to enable** (this is the shipped `big` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1,2 llama-server \
+  --model models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf \
+  --ctx-size 262144 --cache-type-k f16 --cache-type-v f16 \
+  --split-mode layer --parallel 1 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> `big` is `--parallel 1` in every serving mode (it preempts `coding`+`chat`), so MTP applies
+> unconditionally — no mode overlay overrides it.

@@ -111,21 +111,28 @@ models:
   # a 104k-token prefill peaks at ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
   # card; decode ~22.6 t/s (layer-split limits GPU util ~47%). Deep 256k fills are
   # slow (~8+ min) — acceptable for unattended overnight passes.
+  # MTP (2026-07-23): switched to unsloth/Qwen3.6-27B-MTP-GGUF (same UD-Q6_K_XL,
+  # +380MB embedded nextn head) with self-spec draft-mtp n_max=2. Apples-to-apples
+  # dual-V100 split @32k f16 KV: decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance,
+  # lossless (main model verifies). The dual-card split-mode MTP path works. VRAM
+  # only +~1.8GB (~31GB total across both cards @32k) so 256k ctx headroom is fine.
   "big":
-    name: "Qwen3.6-27B (UD-Q6_K_XL) — max quality, dual-V100, 256k"
-    description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k. Preempts coding+chat."
+    name: "Qwen3.6-27B (UD-Q6_K_XL, MTP) — max quality, dual-V100, 256k"
+    description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
     ttl: 300
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-UD-Q6_K_XL.gguf
+      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16
       --split-mode layer
       --parallel 1
+      --spec-type draft-mtp
+      --spec-draft-n-max 2
       ${common}
 
   # --- coder-next: Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) dual-V100 --------

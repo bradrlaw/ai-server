@@ -76,21 +76,31 @@ def keepalive_unloader():
 
 
 def vram_used(gpu):
+    """Sum memory.used across one or more comma-separated GPU indices."""
     try:
-        r = subprocess.run(["nvidia-smi", "--query-gpu=memory.used",
-                            "--format=csv,noheader,nounits", "-i", str(gpu)],
-                           capture_output=True, text=True, timeout=10,
-                           env={**os.environ, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"})
-        return int(r.stdout.strip().splitlines()[0])
+        total = 0
+        for g in str(gpu).split(","):
+            r = subprocess.run(["nvidia-smi", "--query-gpu=memory.used",
+                                "--format=csv,noheader,nounits", "-i", g.strip()],
+                               capture_output=True, text=True, timeout=10,
+                               env={**os.environ, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"})
+            total += int(r.stdout.strip().splitlines()[0])
+        return total
     except Exception:
         return -1
+
+
+KV_TYPE = "q8_0"       # KV cache quant (big uses f16); set via --kv
+SPLIT = False          # --split-mode layer across multiple GPUs (dual-V100 big)
 
 
 def build_cmd(nmax, ctx=CTX):
     cmd = [STOCK_BIN, "--model", MODEL, "--host", "127.0.0.1", "--port", str(PORT),
            "--gpu-layers", "999", "--flash-attn", "on", "--ctx-size", str(ctx),
            "--parallel", "1", "--batch-size", str(BATCH), "--ubatch-size", str(BATCH),
-           "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+           "--cache-type-k", KV_TYPE, "--cache-type-v", KV_TYPE]
+    if SPLIT:
+        cmd += ["--split-mode", "layer"]
     if nmax > 0:
         cmd += ["--spec-type", "draft-mtp", "--spec-draft-n-max", str(nmax)]
     return cmd
@@ -176,7 +186,7 @@ def accept_rate(tim):
 
 
 def main():
-    global MODEL, GPU
+    global MODEL, GPU, KV_TYPE, SPLIT
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
@@ -184,12 +194,17 @@ def main():
     ap.add_argument("--fill", type=int, default=0,
                     help="if set, probe a single prompt of ~this many tokens (VRAM ceiling test)")
     ap.add_argument("--model", default=MODEL, help="MTP-equipped GGUF to benchmark")
-    ap.add_argument("--gpu", type=int, default=GPU, help="GPU index to pin (PCI_BUS_ID order)")
+    ap.add_argument("--gpu", type=str, default=str(GPU),
+                    help="GPU index to pin, or comma list e.g. '1,2' for dual-card split")
+    ap.add_argument("--kv", default="q8_0", help="KV cache type (big uses f16)")
+    ap.add_argument("--split", action="store_true",
+                    help="--split-mode layer across the GPUs in --gpu (dual-V100 big)")
     ap.add_argument("--label", default="qwen35-chat",
                     help="model label: names the CSV (<label>-mtp.csv) and the 'model' column")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
     MODEL, GPU = a.model, a.gpu
+    KV_TYPE, SPLIT = a.kv, a.split
     ctx = a.ctx
     sizes = [a.fill] if a.fill else PROMPT_SIZES
 
@@ -211,8 +226,8 @@ def main():
     try:
         for nmax in a.nmax:
             label = "baseline (MTP off)" if nmax == 0 else f"MTP n_max={nmax}"
-            print(f"\n=== {label} — {a.label} {MODEL.split('/')[-1]}, V100 idx{GPU}, "
-                  f"ctx {ctx}, q8_0 KV ===", flush=True)
+            print(f"\n=== {label} — {a.label} {MODEL.split('/')[-1]}, GPU {GPU}"
+                  f"{' split-layer' if SPLIT else ''}, ctx {ctx}, {KV_TYPE} KV ===", flush=True)
             proc = None
             try:
                 proc = launch(nmax, ctx)
