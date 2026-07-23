@@ -33,25 +33,37 @@ macros:
     --metrics
 
 models:
-  # --- coding: Qwen3.6-27B Q6_K on V100 #1 (idx1) -------------------------
   # KV is q8_0 (near-lossless 8-bit): halves KV vs f16, which both fixes a CUDA
-  # OOM on large prompts (f16 KV @160k left <1GB free, so the ub1024 prefill
-  # compute buffer couldn't allocate and the server crashed) AND frees enough
-  # room to raise context 160k -> 200k. At 200k q8_0 the card sits ~29.8/32GB
-  # (~3GB headroom); a 11k-token prompt prefills at ~790 t/s with no OOM.
+  # OOM on large prompts (f16 KV @160k left <1GB free, so the prefill compute
+  # buffer couldn't allocate and the server crashed) AND frees room for a large
+  # context. (Pre-MTP this slot ran non-MTP Q6_K at 200k, ~29.8/32GB.)
+  # --- coding: Qwen3.6-27B Q6_K + MTP on V100 #1 (idx1) ------------------
+  # MTP build (unsloth/Qwen3.6-27B-MTP-GGUF) — same Q6_K weights plus the model's
+  # built-in multi-token-prediction head (embedded blk.64.nextn.*, +0.35GB),
+  # enabled with --spec-type draft-mtp. Lossless self-speculative decode: this
+  # dense 27B is bandwidth-bound (~23 t/s baseline) with very high draft acceptance
+  # (~87%), so MTP is a BIG win — measured +81% decode (22.9 -> ~41 t/s, n_max=2
+  # sweet spot) at identical weights, ~2-5% prefill cost. See docs/benchmarking.md
+  # "MTP speculative decode" (2026-07-23).
+  # VRAM: MTP's extra ~1GB compute buffer means 200k no longer fits (OOM), so ctx is
+  # capped at 180k (184320) — a near-full prefill peaks 32.02GB/32GB (~0.75GB
+  # headroom, measured). This trades 20k of context for the ~+80% decode speedup.
+  # coding runs alone on idx1 (comfyui-open evicts it before image gen via the
+  # free_gpu hook), so the full-card peak is the real ceiling.
   "coding":
-    name: "Qwen3.6-27B (Q6_K) — coding"
-    description: "Daily-driver coding model, single V100. 200k ctx, q8_0 KV."
+    name: "Qwen3.6-27B (Q6_K + MTP) — coding"
+    description: "Daily-driver coding model, single V100, MTP self-speculative decode. 180k ctx, q8_0 KV."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf
-      --ctx-size 204800
+      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
+      --ctx-size 184320
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
-      --batch-size 2048 --ubatch-size 1024
+      --batch-size 2048 --ubatch-size 2048
+      --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K + MTP on V100 #2 (idx2) -------------

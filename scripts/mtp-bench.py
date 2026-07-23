@@ -176,19 +176,26 @@ def accept_rate(tim):
 
 
 def main():
+    global MODEL, GPU
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
     ap.add_argument("--ctx", type=int, default=CTX, help="context size to launch with")
     ap.add_argument("--fill", type=int, default=0,
                     help="if set, probe a single prompt of ~this many tokens (VRAM ceiling test)")
+    ap.add_argument("--model", default=MODEL, help="MTP-equipped GGUF to benchmark")
+    ap.add_argument("--gpu", type=int, default=GPU, help="GPU index to pin (PCI_BUS_ID order)")
+    ap.add_argument("--label", default="qwen35-chat",
+                    help="model label: names the CSV (<label>-mtp.csv) and the 'model' column")
     ap.add_argument("--no-restore", action="store_true")
     a = ap.parse_args()
+    MODEL, GPU = a.model, a.gpu
     ctx = a.ctx
     sizes = [a.fill] if a.fill else PROMPT_SIZES
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    out = f"{DATA_DIR}/qwen35-chat-mtp-ctxfit.csv" if a.fill else f"{DATA_DIR}/qwen35-chat-mtp.csv"
+    out = (f"{DATA_DIR}/{a.label}-mtp-ctxfit.csv" if a.fill
+           else f"{DATA_DIR}/{a.label}-mtp.csv")
     exists = os.path.exists(out)
     fout = open(out, "a", newline="")
     w = csv.DictWriter(fout, fieldnames=["engine", "model", "nmax", "prompt_tokens",
@@ -204,7 +211,7 @@ def main():
     try:
         for nmax in a.nmax:
             label = "baseline (MTP off)" if nmax == 0 else f"MTP n_max={nmax}"
-            print(f"\n=== {label} — Qwen3.6-35B-A3B UD-Q6_K, V100 idx{GPU}, "
+            print(f"\n=== {label} — {a.label} {MODEL.split('/')[-1]}, V100 idx{GPU}, "
                   f"ctx {ctx}, q8_0 KV ===", flush=True)
             proc = None
             try:
@@ -227,7 +234,7 @@ def main():
                     tps = tim.get("predicted_per_second", 0) or 0
                     acc = accept_rate(tim)
                     peak = vram_used(GPU)
-                    w.writerow({"engine": "stock", "model": "qwen35-chat", "nmax": nmax,
+                    w.writerow({"engine": "stock", "model": a.label, "nmax": nmax,
                                 "prompt_tokens": pn, "ttft_s": round(ttft, 3),
                                 "prefill_tok_s": round(pps, 1),
                                 "decode_tok_s": round(tps, 1),

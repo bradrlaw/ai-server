@@ -1,0 +1,2 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,qwen27-coding-base,0,4091,4.907,866.5,22.7,,30256

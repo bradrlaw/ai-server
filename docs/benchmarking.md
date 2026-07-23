@@ -16,6 +16,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)](#comfyui-image-generation--p100-vs-v100-txt2img-2026-07-22)
 - [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
 - [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
+  - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -533,22 +534,75 @@ Takeaways:
 - **Prefill cost is negligible** here (~2%, 1122→1100 t/s) — much cheaper than the pxq_llama
   fork's MTP, which taxed prefill heavily (§14). Stock llama.cpp's in-model MTP only adds a small
   per-step draft.
-- **VRAM cost is ~0.6–0.8 GB** (draft path + head). **Caveat for production:** our `chat` slot
-  runs **ctx 131072** and already peaks ~30.4 GB / 32 GB at a 128k prefill. MTP on top would OOM
-  at full context — to adopt it we'd cap ctx to ~32–64k or drop to `UD-Q5_K_XL`.
+- **VRAM cost is ~0.6–0.8 GB** (draft path + head). **Production fit:** our `chat` slot serves
+  MTP at **ctx 98304 (96k)** — a near-full 90k prefill peaks **31.86 GB / 32 GB** (~0.9 GB
+  headroom, measured). 128k would OOM with MTP, so this trades 32k of context for the speedup.
+  `chat` runs alone on idx2 (comfyui-secure evicts it before image gen via the free_gpu hook), so
+  the full-card peak is the real ceiling.
 - **Acceptance here is optimistic**: the summarization prompt is low-entropy (highly
   predictable), so real chat/code will accept less and gain less than +31%. Still, even a
   conservative +15–20% is free throughput from a model swap + one flag.
 
-**How to enable** (drop-in for the `chat` block, reduced ctx to fit):
+**How to enable** (this is the shipped `chat` block — ctx capped at 96k to fit MTP):
 
 ```bash
 llama-server \
   --model models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf \
-  --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --ctx-size 98304 --cache-type-k q8_0 --cache-type-v q8_0 \
   --parallel 1 --batch-size 2048 --ubatch-size 2048 --flash-attn on \
   --spec-type draft-mtp --spec-draft-n-max 2
 ```
 
-A matching `unsloth/Qwen3.6-27B-MTP-GGUF` exists for the dense `coding` model (27B; MTP helps
-dense models more per unsloth's data), untested here.
+### MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)
+
+Same test, same method, on the dense **`coding`** model (`unsloth/Qwen3.6-27B-MTP-GGUF`
+`Qwen3.6-27B-Q6_K.gguf`, byte-identical Q6_K weights + embedded `blk.64.nextn.*` head, +0.35 GB).
+One V100 (idx1), ctx 32768, q8_0 KV, `--parallel 1`, batch/ubatch 2048, flash-attn on.
+
+![Coding MTP off vs on — decode and draft acceptance](img/mtp-qwen27-coding.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt):
+
+| Config | Prefill t/s | Decode t/s | Δ decode | Accept % | VRAM (32k ctx) |
+| --- | --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | 865 t/s | **22.7 t/s** | — | — | 23.3 GB |
+| MTP `n_max=1` | 809 t/s | 36.4 t/s | **+60%** | 88% | 24.3 GB |
+| **MTP `n_max=2`** | 815 t/s | **40.6 t/s** | **+79%** | 86% | 24.5 GB |
+| MTP `n_max=3` | 813 t/s | 41.9 t/s | **+85%** | 78% | 24.6 GB |
+| MTP `n_max=4` | 811 t/s | 47.5 t/s | +109% | 82% | 24.8 GB |
+
+Takeaways:
+
+- **MTP is a much bigger win on `coding` than on `chat` (+79% vs +31%).** The dense 27B is
+  memory-bandwidth-bound (~22.7 t/s baseline) *and* has very high draft acceptance (~86–88%), so
+  each cheap draft step lands far more often than on the already-fast MoE `chat`. `n_max=2` is the
+  safe sweet spot; `n_max=3/4` post higher peaks but with lower/erratic acceptance.
+- **Prefill cost ~2–6%** (866→815 t/s) — negligible, as with `chat`.
+- **VRAM ceiling forces a ctx trade.** MTP adds an extra ~1 GB compute buffer, so the old **200k**
+  context **OOMs** with MTP. Measured ctx-ceiling (MTP `n_max=2`, near-full prefill peak):
+
+  | ctx | Peak VRAM | Free | Fits? |
+  | --- | --- | --- | --- |
+  | 204800 (200k) | — | — | ❌ OOM (needs +1072 MiB it can't get) |
+  | **184320 (180k)** | 32.02 GB | **~0.75 GB** | ✅ (shipped) |
+  | 163840 (160k) | 31.02 GB | ~1.75 GB | ✅ |
+  | 131072 (128k) | 29.42 GB | ~3.35 GB | ✅ |
+
+  We ship **180k** — the max that fits, matching the thin-margin precedent set by the `chat` slot.
+  KV scales ~48.8 MiB / 1k ctx; decode is flat ~40.7 t/s across all fitting ctx sizes. `coding`
+  runs alone on idx1 (comfyui-open evicts it before image gen via the free_gpu hook), so the
+  full-card peak is the real ceiling.
+
+**How to enable** (this is the shipped `coding` block — ctx capped at 180k to fit MTP):
+
+```bash
+llama-server \
+  --model models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf \
+  --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
+> throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
+> keeps MTP on the single-slot interactive `coding` primary.

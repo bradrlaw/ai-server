@@ -32,6 +32,9 @@ overrides:
   coding:
     parallel: 2
     concurrencyLimit: 8
+    ctx_size: 204800    # non-MTP file gets its full 200k back (204800 / 2 = ~100k/slot)
+    spec: none          # MTP is a single-stream latency win; useless for a P=2 throughput pool
+    model: ${models_dir}/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf  # non-MTP file (no unused head, fits 200k @ P=2)
   gemma-26b:
     parallel: 8
     concurrencyLimit: 16
