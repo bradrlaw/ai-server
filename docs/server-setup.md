@@ -586,8 +586,8 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
-| `coding` | Qwen3.6-27B **Q6_K**               | idx1        | 204800 | ~29.8 GB (q8_0 KV) |
-| `chat`   | Qwen3.6-35B-A3B **UD-Q6_K**        | idx2        | 16384 | ~28 GB (q8_0 KV) |
+| `coding` | Qwen3.6-27B **Q6_K + MTP**         | idx1        | 184320 | ~31.5 GB (q8_0 KV, MTP self-spec) |
+| `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
 | `fast`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
 | `fast-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `fast` |
@@ -694,8 +694,8 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 
 | `COPILOT_MODEL` | ctx-size | reasoning | `MAX_PROMPT_TOKENS` | `MAX_OUTPUT_TOKENS` | prompt+output |
 |-----------------|---------:|-----------|--------------------:|--------------------:|--------------:|
-| `coding`     | 204800 | yes | 131072 | 32768 | 163840 (~40k spare) |
-| `chat`       | 131072 | yes |  81920 | 24576 | 106496 (~24k spare) |
+| `coding`     | 184320 | yes | 131072 | 32768 | 163840 (~20k spare) |
+| `chat`       | 98304 | yes |  57344 | 24576 | 81920 (~16k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
 | `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
 | `fast`       | 32768 | **no** |  24576 |  8192 | 32768 (fits) |

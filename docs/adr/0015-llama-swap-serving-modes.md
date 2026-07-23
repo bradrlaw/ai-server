@@ -57,7 +57,7 @@ Modes shipped initially:
 
 - **daily** — base verbatim (all single-slot; coder-next `2`). Boot-preloads
   `fast`; a switch back warms the daily trio (coding + chat + fast).
-- **heavy-coding** — `coding` stays `--parallel 1` (full 200k ctx, interactive
+- **heavy-coding** — `coding` stays `--parallel 1` (full 180k MTP ctx, interactive
   primary on idx1); `chat` (idx2) and `fast` (idx0) go to `--parallel 4` as
   sub-agent worker pools (32.8k ctx/slot; `concurrencyLimit 12`). Same card
   residency as daily, so no eviction conflicts. Verified live: chat + fast each
@@ -102,3 +102,23 @@ Modes shipped initially:
   requests, but the real concurrency ceiling is llama-swap's per-model
   `--parallel` slot count + `concurrencyLimit`; the mode must change *those* on
   the engine. Rejected as insufficient.
+
+## Addendum (2026-07-23) — MTP self-speculative decode on `coding` + `chat`
+
+Both single-slot daily models now serve the MTP-equipped GGUF variants with
+`--spec-type draft-mtp --spec-draft-n-max 2` (see docs/benchmarking.md and
+ADR-0008). This changes the single-slot contexts referenced above:
+
+- **daily / heavy-coding `coding`** — Qwen3.6-27B-MTP Q6_K, ctx **184320 (180k)**,
+  not 200k (MTP's extra ~1 GB compute buffer OOMs at 200k). +79% decode.
+- **daily `chat`** — Qwen3.6-35B-A3B-MTP UD-Q6_K, ctx **98304 (96k)**, not 128k. +31% decode.
+
+Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`:
+
+- **heavy-coding `chat`** overrides back to the **non-MTP** file at `--parallel 4`
+  / ctx 131072 / spec off — MTP is a single-stream latency win, wasted (and VRAM-costly)
+  on a batched sub-agent pool.
+- **agentic `coding`** overrides back to the **non-MTP** file at `--parallel 2` /
+  ctx 204800 / spec off for the same reason.
+
+So MTP is active only where a slot serves one stream at a time.
