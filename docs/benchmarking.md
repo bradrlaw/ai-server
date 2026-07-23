@@ -15,6 +15,10 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [Context ceiling + parallel scaling at large context (2026-07-22)](#context-ceiling--parallel-scaling-at-large-context-2026-07-22)
 - [ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)](#comfyui-image-generation--p100-vs-v100-txt2img-2026-07-22)
 - [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
+- [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
+  - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
+  - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
+  - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -494,3 +498,344 @@ Full 256K only costs +2-4 GB over 16K thanks to SWA. **31B needs `--cache-type-k
 KV, needs flash-attn) to reach 128k — f16 KV at 131k hits 31GB + compute buffer and OOMs; q8_0
 brings it to ~26.7GB. The 12B and 26B-A4B have room to spare with f16 KV. Verified all three
 co-resident after tuning: P100 10.8GB / V100#1 26GB (31B@131k) / V100#2 18.0GB, all answering.
+
+## MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)
+
+Qwen trained a **Multi-Token-Prediction (MTP)** head directly into Qwen3.6-35B-A3B — a built-in
+self-speculative-decode drafter (extra `blk.40.nextn.*` tensors) that proposes the next few
+tokens for the model itself to verify in one pass. Our served `chat` GGUF
+(`Qwen3.6-35B-A3B-UD-Q6_K.gguf`) was converted **without** it, so we never used it. Unsloth ships
+the MTP-equipped file in a **separate** repo — `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` — at the same
+`UD-Q6_K` quant (30.0 GB vs our 29.3 GB; the ~0.7 GB delta is the embedded MTP head). Our stock
+`llama.cpp` build already supports it via `--spec-type draft-mtp` (no separate draft model).
+
+**This is a true apples-to-apples test: identical weights, identical engine, MTP off vs on**, so
+any decode gain is the speculative head, not a smaller quant (unlike the pxq_llama "+30%" — see
+`benchmark_pxq_llama.md` §14). One V100 (idx1), ctx 32768, q8_0 KV, `--parallel 1`,
+batch/ubatch 2048, greedy; 256-token generations. Harness: `scripts/mtp-bench.py`.
+
+![MTP off vs on — decode and draft acceptance](img/mtp-qwen35-chat.png)
+
+Steady-state at a 4k-token prompt:
+
+| Config | Prefill @4k | **Decode @4k** | Δ decode | Draft accept | Peak VRAM |
+|---|---:|---:|---:|---:|---:|
+| **MTP off** (baseline) | 1122 t/s | **88.9 t/s** | — | — | 29.4 GB |
+| MTP `n_max=1` | 1095 t/s | 109.1 t/s | **+23%** | 79% | 30.0 GB |
+| **MTP `n_max=2`** | 1100 t/s | **116.8 t/s** | **+31%** | 69% | 30.1 GB |
+| MTP `n_max=3` | 1094 t/s | 108.5 t/s | +22% | 62% | 30.2 GB |
+| MTP `n_max=4` | 1099 t/s | 106.6 t/s | +20% | 52% | 30.2 GB |
+
+Takeaways:
+
+- **MTP is a real, lossless decode win on our actual daily model**: ~**+25–31%** decode at
+  identical weights (peaks ~+35–42% at shorter 512-token prompts). Output is unchanged — the
+  main model verifies every drafted token.
+- **`n_max=2` is the sweet spot** (matches unsloth's recommendation). Deeper drafting
+  (`n_max` 3–4) *lowers* acceptance (52–62%) — more wasted draft passes — and nets less.
+- **Prefill cost is negligible** here (~2%, 1122→1100 t/s) — much cheaper than the pxq_llama
+  fork's MTP, which taxed prefill heavily (§14). Stock llama.cpp's in-model MTP only adds a small
+  per-step draft.
+- **VRAM cost is ~0.6–0.8 GB** (draft path + head). **Production fit:** our `chat` slot serves
+  MTP at **ctx 98304 (96k)** — a near-full 90k prefill peaks **31.86 GB / 32 GB** (~0.9 GB
+  headroom, measured). 128k would OOM with MTP, so this trades 32k of context for the speedup.
+  `chat` runs alone on idx2 (comfyui-secure evicts it before image gen via the free_gpu hook), so
+  the full-card peak is the real ceiling.
+- **Acceptance here is optimistic**: the summarization prompt is low-entropy (highly
+  predictable), so real chat/code will accept less and gain less than +31%. Still, even a
+  conservative +15–20% is free throughput from a model swap + one flag.
+
+**How to enable** (this is the shipped `chat` block — ctx capped at 96k to fit MTP):
+
+```bash
+llama-server \
+  --model models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf \
+  --ctx-size 98304 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+### MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)
+
+Same test, same method, on the dense **`coding`** model (`unsloth/Qwen3.6-27B-MTP-GGUF`
+`Qwen3.6-27B-Q6_K.gguf`, byte-identical Q6_K weights + embedded `blk.64.nextn.*` head, +0.35 GB).
+One V100 (idx1), ctx 32768, q8_0 KV, `--parallel 1`, batch/ubatch 2048, flash-attn on.
+
+![Coding MTP off vs on — decode and draft acceptance](img/mtp-qwen27-coding.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt):
+
+| Config | Prefill t/s | Decode t/s | Δ decode | Accept % | VRAM (32k ctx) |
+| --- | --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | 865 t/s | **22.7 t/s** | — | — | 23.3 GB |
+| MTP `n_max=1` | 809 t/s | 36.4 t/s | **+60%** | 88% | 24.3 GB |
+| **MTP `n_max=2`** | 815 t/s | **40.6 t/s** | **+79%** | 86% | 24.5 GB |
+| MTP `n_max=3` | 813 t/s | 41.9 t/s | **+85%** | 78% | 24.6 GB |
+| MTP `n_max=4` | 811 t/s | 47.5 t/s | +109% | 82% | 24.8 GB |
+
+Takeaways:
+
+- **MTP is a much bigger win on `coding` than on `chat` (+79% vs +31%).** The dense 27B is
+  memory-bandwidth-bound (~22.7 t/s baseline) *and* has very high draft acceptance (~86–88%), so
+  each cheap draft step lands far more often than on the already-fast MoE `chat`. `n_max=2` is the
+  safe sweet spot; `n_max=3/4` post higher peaks but with lower/erratic acceptance.
+- **Prefill cost ~2–6%** (866→815 t/s) — negligible, as with `chat`.
+- **VRAM ceiling forces a ctx trade.** MTP adds an extra ~1 GB compute buffer, so the old **200k**
+  context **OOMs** with MTP. Measured ctx-ceiling (MTP `n_max=2`, near-full prefill peak):
+
+  | ctx | Peak VRAM | Free | Fits? |
+  | --- | --- | --- | --- |
+  | 204800 (200k) | — | — | ❌ OOM (needs +1072 MiB it can't get) |
+  | **184320 (180k)** | 32.02 GB | **~0.75 GB** | ✅ (shipped) |
+  | 163840 (160k) | 31.02 GB | ~1.75 GB | ✅ |
+  | 131072 (128k) | 29.42 GB | ~3.35 GB | ✅ |
+
+  We ship **180k** — the max that fits, matching the thin-margin precedent set by the `chat` slot.
+  KV scales ~48.8 MiB / 1k ctx; decode is flat ~40.7 t/s across all fitting ctx sizes. `coding`
+  runs alone on idx1 (comfyui-open evicts it before image gen via the free_gpu hook), so the
+  full-card peak is the real ceiling.
+
+**How to enable** (this is the shipped `coding` block — ctx capped at 180k to fit MTP):
+
+```bash
+llama-server \
+  --model models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf \
+  --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
+> throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
+> keeps MTP on the single-slot interactive `coding` primary.
+
+### MTP on the `big` model — Qwen3.6-27B UD-Q6_K_XL, **dual-V100 split** (2026-07-23)
+
+`big` is the max-quality dense 27B split across **both** V100s (`--split-mode layer`,
+f16 KV, `--parallel 1`, 256k ctx). The open question was whether the `draft-mtp`
+self-speculative path even *works* across a layer split between two GPUs — the earlier
+`chat`/`coding` tests only exercised a single card. It does. Swapped to
+`unsloth/Qwen3.6-27B-MTP-GGUF` `Qwen3.6-27B-UD-Q6_K_XL.gguf` (byte-identical UD-Q6_K_XL
+weights + embedded `blk.64.nextn.*` head, +0.38 GB). Apples-to-apples, both V100s
+(idx1+idx2), ctx 32768, **f16 KV**, `--split-mode layer`, `--parallel 1`, flash-attn on.
+
+![big MTP off vs on — decode and draft acceptance](img/mtp-qwen27-big.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt):
+
+| Config | Prefill t/s | Decode t/s | Δ decode | Accept % | VRAM (32k, both cards) |
+| --- | --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | 887 t/s | **23.8 t/s** | — | — | 29.2 GB |
+| MTP `n_max=1` | 827 t/s | 37.4 t/s | **+57%** | 88% | 31.1 GB |
+| **MTP `n_max=2`** | 821 t/s | **41.7 t/s** | **+75%** | 86% | 31.2 GB |
+
+Takeaways:
+
+- **The dual-card layer-split MTP path works and is a big win (+75%).** Baseline decode is
+  low (~24 t/s) because the inter-GPU layer split caps utilization at ~47%; MTP verifies cheap
+  drafted tokens "for free" in that idle compute, lifting decode to ~42 t/s with the *same*
+  ~86–88% acceptance the dense 27B posts on a single card. `n_max=2` is again the sweet spot.
+- **Prefill cost ~7%** (887→821 t/s) — a bit higher than the single-card slots but negligible
+  against the decode gain for `big`'s overnight long-context use.
+- **No context trade-off.** MTP adds only ~1.8 GB total across the two cards (~31 GB / 64 GB at
+  32k). `big` keeps its full **262144 (256k)** native ctx — VRAM headroom is ample on the pair.
+
+**How to enable** (this is the shipped `big` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1,2 llama-server \
+  --model models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf \
+  --ctx-size 262144 --cache-type-k f16 --cache-type-v f16 \
+  --split-mode layer --parallel 1 --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> `big` is `--parallel 1` in every serving mode (it preempts `coding`+`chat`), so MTP applies
+> unconditionally — no mode overlay overrides it.
+
+### MTP on the `fast` model — Gemma-4-26B-A4B MoE, **separate draft head** (2026-07-23)
+
+Unlike Qwen3.6 (embedded `nextn` head), **Gemma-4 has no embedded MTP head** — self-spec
+uses a **separate ~460 MB `gemma4-assistant` draft model** (`--model-draft` +
+`--spec-type draft-mtp`), the same mechanism `fast-uncensored` already uses for the 12B.
+Pulled `ironbcc/gemma-4-26B-A4B-it-MTP-GGUF` assistant heads (Q8_0 462 MB, Q4_K_M 325 MB;
+vocab-matched to our `it-qat` base) and benchmarked both. P100 (idx0), ctx 32768,
+f16 KV, ub1024, `--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![fast MTP off vs on — decode and draft acceptance](img/mtp-gemma26-fast.png)
+
+Decode throughput (steady-state at a ~4k-token prompt):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **59.4 t/s** | — | — | 15.3 GB |
+| **Q8 draft, `n_max=1`** | **83.8 t/s** | **+41%** | 78–98% | 15.9 GB (~0.45 GB free) |
+| Q8 draft, `n_max=2` | 83.7 t/s | +41% (erratic) | 56–85% | 15.9 GB |
+| Q4 draft, `n_max=1` | 83.2 t/s | +40% | 78–98% | 15.8 GB (~0.58 GB free) |
+| Q4 draft, `n_max=2` | 81.4 t/s | +37% (erratic) | 56–85% | 15.8 GB |
+
+Takeaways:
+
+- **MTP works on the MoE too — a solid ~+40% decode** (~60 → ~84 t/s), lossless. Smaller than
+  the dense wins (coding +79%, big +75%) because the MoE fires only ~3.8B params/token so it is
+  far less bandwidth-starved, but still a clear latency win for the always-on chat slot.
+- **`n_max=1` is the sweet spot.** The 1-token assistant head drafts a single token with high
+  acceptance (~78–98%); `n_max=2` drops acceptance to ~56% on short prompts and gets erratic.
+- **Q8 vs Q4 draft: identical decode.** Q8 (462 MB) and Q4 (325 MB) both land at ~83 t/s. We
+  **ship Q8** — the P100 is dedicated to `fast` while this model is loaded, so we spend the VRAM
+  on the higher-precision draft head (still ~0.45 GB free at 32k). Q4 is the fallback if headroom
+  ever gets tight.
+
+**How to enable** (this is the shipped `fast` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 llama-server \
+  --model models/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 32768 --parallel 1 --batch-size 2048 --ubatch-size 1024 \
+  --reasoning-budget 0 --flash-attn on \
+  --model-draft models/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 1 --n-gpu-layers-draft 99
+```
+
+> MTP is single-stream only, so the `agentic`/`heavy-coding` overlays (which run `fast` as a
+> P=2 worker pool) strip the draft via `spec: none` — the mode renderer now also removes the
+> separate `--model-draft` / `--n-gpu-layers-draft` flags, not just `--spec-type`.
+
+### MTP on the `fast-12b` model — Gemma-4-12B dense, separate draft head (2026-07-23)
+
+The dense 12B fallback. Same separate-`gemma4-assistant`-draft mechanism as `fast`, but
+because it is a **dense** model it is bandwidth-bound (~28 t/s baseline) with very high draft
+acceptance — so MTP wins big, like the dense `coding` slot. Draft:
+`Janvitos/gemma-4-12B-it-qat-assistant-MTP-Q8_0-GGUF` (465 MB, vocab-matched). P100 (idx0),
+ctx 32768, f16 KV, ub2048, `--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![fast-12b MTP off vs on — decode and draft acceptance](img/mtp-gemma12-fast12b.png)
+
+Decode throughput (steady-state at a ~4k-token prompt):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **28.1 t/s** | — | — | 9.0 GB |
+| **`n_max=1`** | **47.0 t/s** | **+67%** | 92% | 9.8 GB (~6.5 GB free) |
+| `n_max=2` | 44.1 t/s | +57% | 87% | 9.8 GB |
+| `n_max=3` | 42.4 t/s | +51% | 85% | 9.8 GB |
+
+Takeaways:
+
+- **~+67% decode** (28 → 47 t/s), lossless — far bigger than the MoE `fast` (+41%) because the
+  dense 12B fires all its params per token (bandwidth-bound) and the assistant head lands ~92–98%.
+- **`n_max=1` is the steady-state winner.** Shorter prompts peak higher at n=2/3 (~55–56 t/s), but
+  acceptance decays past ~2k tokens, so at the 4k steady-state n=1 pulls ahead and holds the highest
+  sustained acceptance. We ship **n_max=1**.
+- **VRAM is a non-issue.** The 465 MB Q8 draft costs ~0.8 GB (~9.8 GB / 16 GB at 32k); the full
+  128k context and P100 co-hosting headroom are unaffected.
+
+**How to enable** (this is the shipped `fast-12b` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 llama-server \
+  --model models/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 131072 --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --reasoning-budget 0 --flash-attn on \
+  --model-draft models/gemma-4-12b/mtp-draft/gemma-4-12B-it-qat-assistant-MTP-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 1 --n-gpu-layers-draft 99
+```
+
+> `fast-12b` is a `--parallel 1` fallback with no mode overlay override, so MTP applies in every
+> serving mode.
+
+### MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)
+
+Our uncensored slot ran the **HauhauCS-Aggressive** abliteration of Qwen3.6-35B-A3B, which has
+**no MTP variant** (HauhauCS only ships MTP for their Gemma models), and Qwen's MTP head is
+*embedded* — you can't bolt a separate draft onto abliterated weights. To get MTP here we swapped
+the abliteration lineage to **`Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved`**
+(repo `TopherAU/…-GGUF`), which explicitly preserves the native `blk.40.nextn.*` head. Same
+in-model mechanism as `chat` (`--spec-type draft-mtp`, no separate draft file). The heretic **Q6_K
+is 29.3 GB — 1.3 GB *smaller* than the old HauhauCS Q6_K_P (30.6 GB)** — so despite MTP's ~0.7 GB
+buffer the tight Q6 slot has *more* headroom than before. Single V100 (idx1), q8_0 KV, ub2048,
+`--parallel 1`. Harness: `scripts/mtp-bench.py`.
+
+> We benchmarked a Q4_K_M of the same heretic model too (256k-capable, +30% decode) but **dropped
+> it to save disk** — the Q6 is the sole uncensored slot.
+
+![q6 MTP off vs on](img/mtp-qwen35-uncensored-q6.png)
+
+Decode throughput, MTP off vs on (steady-state at a ~4k-token prompt) — **`chat-uncensored-q6`**
+(Q6_K, 29.3 GB):
+
+| Config | Decode t/s | Δ decode | Accept % | VRAM (32k test) |
+| --- | --- | --- | --- | --- |
+| **MTP off** (baseline) | **91.0 t/s** | — | — | 29.2 GB |
+| `n_max=1` | 110.5 t/s | +21% | 83% | 29.8 GB |
+| **`n_max=2`** | **130.1 t/s** | **+43%** | 91% | 29.8 GB |
+
+Takeaways:
+
+- **~+43% decode**, lossless — right in the MoE MTP band (`chat` got +31%), since Qwen3.6-35B-A3B
+  fires only ~3 B active params/token. We ship **`n_max=2`**.
+- **Fits at full 128k production context with MTP** (measured live via the router): **128k = 31.7 GB
+  / 32 GB** (~1.1 GB headroom — still the ragged slot, but the smaller heretic weights keep 128k
+  viable where the old 30.6 GB Q6_K_P left almost nothing). Do NOT raise ctx further.
+- **This is a model swap, not just a flag** — the uncensoring persona changes from HauhauCS-Aggressive
+  to the heretic lineage. Approved by the owner as the only path to MTP on this slot.
+
+**How to enable** (shipped `chat-uncensored-q6` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1 llama-server \
+  --model models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf \
+  --ctx-size 131072 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+> The uncensored slot is `--parallel 1` with no mode overlay override, so MTP applies in every
+> serving mode.
+
+### MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)
+
+The max-quality dense Gemma comparison slot. Same separate-`gemma4-assistant`-draft mechanism as
+`fast`/`fast-12b`, and as a **dense** 31B it is heavily bandwidth-bound — so MTP delivers the
+**biggest win of the whole rollout**. Draft: `NotMe404/gemma-4-31b-it-assistant-mtp-gguf` (Q8_0,
+491 MB, vocab-matched at 262144 tokens). Single V100 (idx1), ctx 32768 test, q8_0 KV, ub2048,
+`--parallel 1`, `--reasoning-budget 0`, `--n-gpu-layers-draft 99`.
+
+![gemma-31b MTP off vs on — decode and draft acceptance](img/mtp-gemma31.png)
+
+Decode throughput, MTP off vs on, across prompt lengths (t/s), with steady-state at ~4k:
+
+| n_max | @512 | @2048 | **@4k (steady)** | Δ steady | Accept @4k |
+| --- | --- | --- | --- | --- | --- |
+| **off** (baseline) | 30.9 | 29.2 | **28.1** | — | — |
+| 1 | 45.0 | 44.4 | 41.9 | +49% | 100% |
+| 2 | 43.4 | 49.9 | 48.5 | +73% | 100% |
+| **3** | **53.8** | 56.6 | **56.5** | **+101%** | 100% |
+| 4 | 45.3 | 59.5 | 64.2 | +128% | 99.5% |
+| 5 | 44.5 | 59.7 | 68.9 | +145% | 99.1% |
+| 6 | 39.7 | 62.2 | 71.6 | +155% | 98.6% |
+
+Takeaways:
+
+- **~+101% decode** (28 → 56.5 t/s) at **n_max=3** — the assistant head lands ~90–100% acceptance
+  because the dense 31B is highly predictable, so each verify step commits several tokens.
+- **n=3 is the robust production pick.** Higher n_max posts bigger *steady-state* numbers (up to
+  +155% at n=6) but **craters on shorter / less-predictable prompts** — acceptance at a 512-token
+  prompt falls to ~50% (n=4) → ~39% (n=6), dragging real decode *below* n=3. n=3 is the only setting
+  that is at or near the top across **every** prompt length (it is the outright best at 512 tokens).
+- **VRAM is a non-issue.** The 491 MB Q8 draft costs ~1.2 GB; full 128k production context loads at
+  **28.1 GB / 32 GB** (measured live via the router, ~4.6 GB headroom).
+
+**How to enable** (this is the shipped `gemma-31b` block):
+
+```bash
+CUDA_VISIBLE_DEVICES=1 llama-server \
+  --model models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf \
+  --ctx-size 131072 --cache-type-k q8_0 --cache-type-v q8_0 \
+  --parallel 1 --batch-size 2048 --ubatch-size 2048 \
+  --model-draft models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf \
+  --spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99
+```
+
+> `gemma-31b` is a `--parallel 1` comparison slot with no mode overlay override, so MTP applies in
+> every serving mode.

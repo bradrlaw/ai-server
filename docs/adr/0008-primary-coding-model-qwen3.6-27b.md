@@ -42,8 +42,8 @@ Pre-built GGUFs exist (unsloth, bartowski, lmstudio-community), so no manual
 - Positive: strong, current coding model with verified llama.cpp support and
   ready-made GGUFs; dense 27B fits a single V100 at Q6_K for simple, fast serving.
 - Negative: hybrid linear-attention arch is newer — watch for llama.cpp
-  correctness/perf fixes. Skip "MTP" GGUF variants unless we wire up
-  multi-token-prediction speculative decoding.
+  correctness/perf fixes. (The "MTP" GGUF variant is now adopted — see the
+  2026-07-23 addendum below.)
 - Follow-up: record TP=2 vs single-card numbers (feeds ADR-0005), then pick the
   serving quant + `-sm` mode per model.
 
@@ -56,3 +56,21 @@ Pre-built GGUFs exist (unsloth, bartowski, lmstudio-community), so no manual
   does not fit 2×V100 (64 GB); Q6_K fits one card.**
 - **Download BF16 safetensors and convert ourselves** — unnecessary; quality
   GGUFs already exist.
+
+## Addendum (2026-07-23) — MTP self-speculative decode adopted
+
+We wired up multi-token-prediction, so the earlier "skip MTP variants" note no
+longer applies. The `coding` slot now serves `unsloth/Qwen3.6-27B-MTP-GGUF`
+`Qwen3.6-27B-Q6_K.gguf` (byte-identical Q6_K weights + embedded `blk.64.nextn.*`
+head, +0.35 GB) with `--spec-type draft-mtp --spec-draft-n-max 2`.
+
+- **+79% single-stream decode** (22.7 → ~40.6 t/s, `n_max=2`) at identical weights,
+  lossless (the main model verifies every drafted token), ~2–6% prefill cost. The
+  dense 27B is bandwidth-bound with very high draft acceptance (~86–88%), so it
+  gains far more than the MoE `chat` (+31%). Apples-to-apples on stock llama.cpp,
+  one V100. Full data: docs/benchmarking.md "MTP on the `coding` model".
+- **Context trade:** MTP's extra ~1 GB compute buffer means 200k OOMs, so ctx is
+  capped at **180k (184320)** — near-full prefill peaks 32.02/32 GB (~0.75 GB free).
+- MTP is a single-stream latency win, so the `agentic` mode (coding at `--parallel 2`)
+  overrides back to the non-MTP file at 200k with spec off; `heavy-coding` keeps MTP
+  on the single-slot interactive primary.

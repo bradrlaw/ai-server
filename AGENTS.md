@@ -53,9 +53,10 @@ Read this first, then the detailed docs:
   (autonomous throughput: `coding` P=2, `gemma-26b` P=8 in place of `chat` on idx2, `fast` P=2).
   Switch with `scripts/llama-swap-mode.py set <mode>` (no restart — `-watch-config` reloads) or the
   `llama-swap-mode` MCP (`set_mode`). `list` / `current` / `show <mode>` to inspect.
-- **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.6-27B Q6_K,
-  160k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE, idx2), `big` (27B BF16, dual-V100), `fast`
-  (Gemma-4-12B, P100, non-reasoning), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
+- **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.6-27B Q6_K
+  **+ MTP** self-spec decode, 180k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE UD-Q6_K **+ MTP**, 96k
+  ctx, idx2), `big` (27B BF16, dual-V100), `fast`
+  (Gemma-4-26B-A4B MoE, P100, non-reasoning), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
   Most Qwen3.6 models are **reasoning** models (thinking phase) — give generous `max_tokens`.
 
 ## Testing a config change

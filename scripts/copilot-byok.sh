@@ -26,14 +26,14 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 # output budget because the hidden thinking phase spends output tokens. Values already set
 # in the environment win, so you can override per invocation.
 #   ctx-size / reasoning (see config/llama-swap.yaml):
-#     coding     204800  reasoning
-#     chat       131072  reasoning
+#     coding     184320  reasoning  (Q6_K + MTP self-spec decode; 200k OOMs with MTP)
+#     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
 #     fast       32768   NON-thinking (Gemma-4-26B-A4B MoE; fast-12b fallback=131072)
 case "$COPILOT_MODEL" in
-  coding)     def_prompt=131072; def_output=32768 ;;
-  chat)       def_prompt=81920;  def_output=24576 ;;
+  coding)     def_prompt=131072; def_output=32768 ;;   # 163840 <= 184320 (~20k spare)
+  chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
   big)        def_prompt=163840; def_output=32768 ;;
   # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
   # Keep prompt + output within one slot: 98304 + 32768 = 131072.

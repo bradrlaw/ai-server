@@ -1,0 +1,13 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,qwen27-big,0,122,0.451,271.6,23.8,,29104
+stock,qwen27-big,0,500,0.92,679.5,24.3,,29132
+stock,qwen27-big,0,2039,2.344,872.9,24.1,,29232
+stock,qwen27-big,0,4091,4.637,886.9,23.8,,29232
+stock,qwen27-big,1,122,0.565,216.8,37.4,89.6,30890
+stock,qwen27-big,1,500,1.03,592.5,37.7,87.5,30932
+stock,qwen27-big,1,2039,2.552,801.3,37.6,87.5,31082
+stock,qwen27-big,1,4091,4.968,827.1,37.4,87.5,31082
+stock,qwen27-big,2,122,0.537,228.0,42.0,87.1,31040
+stock,qwen27-big,2,500,1.028,591.9,42.6,86.4,31082
+stock,qwen27-big,2,2039,2.553,801.5,42.3,86.4,31232
+stock,qwen27-big,2,4091,4.995,821.0,41.7,86.4,31232

@@ -2,9 +2,10 @@
 # ---------------------------------------------------------------------------
 # Interactive coding session that spawns multiple sub-agents.
 #
-#   * PRIMARY (interactive)  -> `coding` (Qwen3.6-27B, idx1). Stays single-slot
-#     so it keeps its FULL 200k context for the human-driven, long-context
-#     agentic session. NOT overridden here (base --parallel 1).
+#   * PRIMARY (interactive)  -> `coding` (Qwen3.6-27B + MTP, idx1). Stays
+#     single-slot so it keeps its full 180k MTP context for the human-driven,
+#     long-context agentic session — and single-stream is exactly where MTP's
+#     ~+80% decode helps most. NOT overridden here (inherits base: MTP, P=1).
 #   * SUB-AGENT WORKER POOLS -> `chat` (35B-A3B MoE, idx2) and `fast` (26B-A4B MoE, idx0)
 #     (Gemma-12B, P100 idx0) get several parallel slots so many delegated
 #     sub-agents run concurrently instead of serializing behind one slot.
@@ -25,16 +26,20 @@
 name: heavy-coding
 label: "Heavy coding (interactive + sub-agent pools)"
 description: >
-  Primary interactive coding on `coding` (full 200k ctx, single slot) with
+  Primary interactive coding on `coding` (full 180k MTP ctx, single slot) with
   parallel sub-agent worker pools on `chat` (P=4) and `fast` (P=2, MoE VRAM-bound).
 overrides:
   chat:
     parallel: 4
     concurrencyLimit: 12
+    ctx_size: 131072
+    spec: none    # MTP off for the batched sub-agent pool (helps single-stream, not P=4)
+    model: ${models_dir}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf  # non-MTP file (no unused head)
   fast:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
+    spec: none   # MTP is single-stream only; strip the draft head for the P=2 pool
 # Warm all three so the primary + both worker pools are ready immediately.
 preload:
   - coding

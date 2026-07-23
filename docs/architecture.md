@@ -79,8 +79,8 @@ Power caps (ADR-0009): V100 175W, P100 200W. Caps don't affect VRAM.
 
 | GPU | Idx / bus | Primary role | Resident VRAM (typical) | Spare |
 |-----|-----------|--------------|-------------------------|-------|
-| V100 #1 | 1 / bus03 | Qwen3.6-27B **coding** (Q6_K) | ~22 GB + KV | ~8 GB |
-| V100 #2 | 2 / bus04 | Qwen3.6-35B-A3B **chat** (Q4_K_M) | ~21 GB + KV | ~10 GB |
+| V100 #1 | 1 / bus03 | Qwen3.6-27B **coding** (Q6_K + MTP, 180k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.75 GB |
+| V100 #2 | 2 / bus04 | Qwen3.6-35B-A3B **chat** (UD-Q6_K + MTP, 96k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.9 GB |
 | both V100 | 1+2 | *Occasional* big/high-quant (TP=2 `-sm layer`) | preempts the two above | — |
 | P100 | 0 / bus01 | **Gemma-4-12B `fast`** (always-on) + aux mix (co-resident) | ~10.8 GB + aux, see below | — |
 
