@@ -30,6 +30,8 @@ and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate fr
 - [5. Apples-to-apples: engine vs quant (the key result)](#5-apples-to-apples-engine-vs-quant-the-key-result)
 - [6. Results — single V100 (idx1)](#6-results--single-v100-idx1)
 - [7. Results — P100 (idx0)](#7-results--p100-idx0)
+  - [7.1 vs our current P100 MoE (Gemma-4-26B-A4B)](#71-vs-our-current-p100-moe-gemma-4-26b-a4b)
+  - [7.2 Can we run our Gemma-4-26B-A4B on the fork?](#72-can-we-run-our-gemma-4-26b-a4b-on-the-fork-convert-works-runtime-doesnt)
 - [8. Results — dual V100 (idx1+idx2)](#8-results--dual-v100-idx1idx2)
 - [9. Speculative decoding (MTP)](#9-speculative-decoding-mtp)
 - [10. Caveats & limitations](#10-caveats--limitations)
@@ -186,6 +188,40 @@ perplexity run). So PXQ2 is the *speed/footprint* winner, but **not** a proven q
 replacement for the `fast` slot. PXQ3 (3.27 bpw, same VRAM) is the more like-for-like candidate
 if we ever wanted to A/B a 35B `fast` on the P100 — it would need a quality check first.
 
+### 7.2 Can we run *our* Gemma-4-26B-A4B on the fork? (convert works, runtime doesn't)
+
+Natural follow-up: rather than swap in a Qwen, could we PXQ-quantize the Gemma we already run
+and get the fork's engine speedup on it? We took the **QAT-unquantized BF16** source
+(`google/gemma-4-26b-a4b-it-qat-q4_0-unquantized`, the exact lineage of our `UD-Q4_K_XL`),
+converted it to a BF16 GGUF, and built **PXQ2 / PXQ3** with the fork's `llama-quantize`.
+
+**Quantizing works** — the fork accepts the `gemma4` MoE arch and applies its native
+`PXQ{2,3}` (LM4 / LM8 bit-plane × E16-row) to the expert tensors (`ffn_*_exps`), producing
+valid 8.2 GB (PXQ2) / 11.0 GB (PXQ3) files.
+
+**Running them does not.** On the P100 the fork loads the model fully GPU-resident but:
+
+| Engine / quant (P100) | Prefill @512 | Decode | Peak VRAM | Status |
+|---|---:|---:|---:|---:|
+| stock **Gemma Q4_K_XL** (current `fast`) | 374 t/s | ~63 t/s | 14.7 GB | ✅ works |
+| fork **Gemma PXQ3** | 281 t/s | **8.0 t/s** | 14.6 GB | ❌ heap-corrupts >1k tok |
+| fork **Gemma PXQ2** | 282 t/s | **7.9 t/s** | 11.9 GB | ❌ heap-corrupts >1k tok |
+
+Two independent failures, identical across both quant tiers:
+- **Decode collapses to ~8 t/s** (~8× *slower* than stock Gemma, and vs ~62 t/s the fork gets
+  on Qwen PXQ2). It's the same 8.0/7.9 regardless of quant size, so the bottleneck is not the
+  weights — the fork routes Gemma-4 through an unoptimized (scalar) path. Prefill is *also*
+  slower than stock (281 vs 374 t/s) — the opposite of the ~1.7× engine win the fork gives on
+  Qwen.
+- **`double free or corruption (!prev)`** — the server crashes on the first ≥1024-token batch.
+
+**Conclusion:** the fork's PXQ *quantizer* is arch-general, but its PXA inference runtime is
+**tuned for its target model (Qwen3.6-35B-A3B)** and does not properly support Gemma-4's
+128-expert MoE + interleaved sliding-window attention. For Gemma the fork is strictly worse
+than stock on every axis *and* unstable, so **converting our Gemma to PXQ is not worthwhile** —
+keep Gemma on stock llama.cpp. The fork's speedups only materialize on the arch it was built
+for.
+
 ## 8. Results — dual V100 (idx1+idx2)
 
 Stock Q6_K splits cleanly across both V100s (`--split-mode layer`):
@@ -238,6 +274,13 @@ python3 scripts/pxq-bench.py --engine fork  --target v100-qwen35-q6k  --no-resto
 # 3. Fork PXQ tiers:
 python3 scripts/pxq-bench.py --engine fork  --target v100-qwen35-pxq6 --no-restore
 python3 scripts/pxq-bench.py --engine fork  --target v100-qwen35-pxq4 --no-restore
+# 3b. Gemma-4-26B-A4B on the fork (converts, but runtime is broken — §7.2):
+scripts/hf-dl download google/gemma-4-26b-a4b-it-qat-q4_0-unquantized \
+  --local-dir models/gemma-4-26b-a4b-qat-bf16
+PYTHONPATH=src/llama.cpp/gguf-py venvs/comfyui/bin/python src/llama.cpp/convert_hf_to_gguf.py \
+  models/gemma-4-26b-a4b-qat-bf16 --outtype bf16 --outfile models/pxq/Gemma-4-26B-A4B-BF16.gguf
+"$FORK"/bin/llama-quantize models/pxq/Gemma-4-26B-A4B-BF16.gguf models/pxq/Gemma-4-26B-A4B-PXQ3.gguf PXQ3 16
+python3 scripts/pxq-bench.py --engine fork  --target p100-gemma-pxq3 --no-restore
 # 4. Restore the daily serving trio when done:
 python3 scripts/llama-swap-mode.py set daily
 ```
@@ -260,6 +303,8 @@ extra VRAM and no decode benefit. Its **PXQ** quants stack on top — PXQ4 reach
 prefill vs stock Q6_K and **28 % less VRAM**, and (more importantly for our fleet) make the
 **P100 a viable host for a 35B-class MoE**, which stock cannot do in any standard quant. The
 costs: the prebuilt binary needs a borrowed `libnccl.so.2`, **it crashes on the no-NVLink
-dual-V100 split**, PXQ is lower-bitrate (quality not scored), and a fork crash can poison the
-GPU driver until a privileged reset. Worth keeping for **single-card P100/V100 MoE**
-experiments and prefill-heavy workloads; **not** a drop-in for our multi-GPU daily stack today.
+dual-V100 split**, PXQ is lower-bitrate (quality not scored), it is **Qwen-specific — our
+Gemma-4-26B-A4B converts to PXQ but decodes at ~8 t/s and heap-corrupts (§7.2)**, and a fork
+crash can poison the GPU driver until a privileged reset. Worth keeping for **single-card
+P100/V100 MoE** experiments (on Qwen-family models) and prefill-heavy workloads; **not** a
+drop-in for our multi-GPU daily stack today.

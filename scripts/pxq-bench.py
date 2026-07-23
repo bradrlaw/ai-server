@@ -100,6 +100,11 @@ TARGETS = {
         "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
     "p100-qwen35-pxq3": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ3.gguf",
         "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    # --- fork PXQ of the SAME Gemma-4-26B-A4B (QAT BF16 source) on the P100 ---
+    "p100-gemma-pxq2": {"model": f"{PXQ}/Gemma-4-26B-A4B-PXQ2.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
+    "p100-gemma-pxq3": {"model": f"{PXQ}/Gemma-4-26B-A4B-PXQ3.gguf",
+        "gpus": [0], "ctx": 8192, "batch": 1024, "ubatch": 1024},
     "dualv100-qwen35-pxq4": {"model": f"{PXQ}/Qwen3.6-35B-A3B-PXQ4.gguf",
         "gpus": [1, 2], "ctx": 8192, "batch": 2048, "ubatch": 2048, "split": "layer"},
 }
