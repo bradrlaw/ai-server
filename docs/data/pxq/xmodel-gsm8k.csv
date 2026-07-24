@@ -1,0 +1,6 @@
+model,family,params,quant,engine,size_gb,fits_p100,task,n,flexible_extract,strict_match,stderr
+gemma-4-12b,gemma4-dense,12B,Q4_K_XL,stock,6.7,yes,gsm8k,200,0.955,0.960,0.0147
+gemma-4-26b-a4b,gemma4-moe,26B-A4B,Q4_K_XL,stock,13.6,yes,gsm8k,200,0.950,0.950,0.0154
+Qwen3.6-35B-A3B,qwen36-moe,35B-A3B,PXQ2,fork,10.8,yes,gsm8k,200,0.855,0.855,0.0250
+Qwen3.6-35B-A3B,qwen36-moe,35B-A3B,PXQ4,fork,18.8,no,gsm8k,100,0.950,0.950,0.0219
+Qwen3.6-35B-A3B,qwen36-moe,35B-A3B,Q8_0,stock,36.9,no,gsm8k,100,0.980,0.980,0.0141

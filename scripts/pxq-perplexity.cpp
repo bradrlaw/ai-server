@@ -99,7 +99,8 @@ int main(int argc, char **argv) {
     if (max_chunks > 0 && n_chunks > max_chunks) n_chunks = max_chunks;
     const int first = n_ctx / 2;                 // canonical: score only 2nd half
     const llama_token bos = llama_token_bos(model);
-    double nll = 0.0; long count = 0;
+    double nll = 0.0; long count = 0; long bytes = 0;
+    char piece[256];
     llama_batch b = llama_batch_init(n_ctx, 0, 1);
     for (int c = 0; c < n_chunks; c++) {
         int start = c * n_ctx;
@@ -128,13 +129,20 @@ int main(int argc, char **argv) {
             llama_token tgt = toks[start + k + 1];
             double logp = (double)(lg[tgt] - max) - log(sum);
             nll -= logp; count++;
+            // bits-per-byte: accumulate the raw UTF-8 byte length of the target
+            // token so quality is comparable ACROSS tokenizers (Qwen vs Gemma).
+            int pn = llama_token_to_piece(model, tgt, piece, sizeof(piece), 0, false);
+            if (pn > 0) bytes += pn;
         }
         if ((c + 1) % 10 == 0 || c + 1 == n_chunks)
-            fprintf(stderr, "  chunk %d/%d  ppl=%.4f\n", c + 1, n_chunks, exp(nll / count));
+            fprintf(stderr, "  chunk %d/%d  ppl=%.4f  bpb=%.4f\n", c + 1, n_chunks,
+                    exp(nll / count), (nll / log(2.0)) / (bytes > 0 ? bytes : 1));
     }
     llama_batch_free(b);
     double ppl = exp(nll / count);
+    double bpb = (nll / log(2.0)) / (bytes > 0 ? bytes : 1);
     fprintf(stderr, "\n");
-    printf("PPL %.5f  (chunks=%d ctx=%d predictions=%ld)\n", ppl, n_chunks, n_ctx, count);
+    printf("PPL %.5f  BPB %.5f  (chunks=%d ctx=%d predictions=%ld bytes=%ld)\n",
+           ppl, bpb, n_chunks, n_ctx, count, bytes);
     return 0;
 }
