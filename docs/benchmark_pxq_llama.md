@@ -42,6 +42,7 @@ and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate fr
 - [15. Round 4 — root-causing (and fixing) the dual-V100 decode collapse](#15-round-4--root-causing-and-fixing-the-dual-v100-decode-collapse)
 - [16. Round 5 — output quality: perplexity of PXQ vs standard K-quants](#16-round-5--output-quality-perplexity-of-pxq-vs-standard-k-quants)
 - [17. Round 6 — cross-model output quality on the P100 (task accuracy, GSM8K)](#17-round-6--cross-model-output-quality-on-the-p100-task-accuracy-gsm8k)
+- [18. Round 7 — the author's mixed-tier PXQ-Universal (PXA-Fusion4-35B) fit-vs-quality](#18-round-7--the-authors-mixed-tier-pxq-universal-pxa-fusion4-35b-fit-vs-quality)
 
 ---
 
@@ -749,3 +750,118 @@ scripts/lm-eval-run.sh qwen35-q8 http://127.0.0.1:8898/v1/chat/completions gsm8k
 # chart:
 venvs/comfyui/bin/python scripts/pxq-xmodel-plot.py
 ```
+
+---
+
+## 18. Round 7 — the author's mixed-tier PXQ-Universal (PXA-Fusion4-35B) fit-vs-quality
+
+Round 6 delivered a blunt verdict: the only *uniform* PXQ quant that fits a 35B on
+the 16 GB P100 is **PXQ2**, and PXQ2 craters to 85.5 % GSM8K — ~10 pts below the
+Gemmas we already serve there. The author's answer is **PXQ-Universal**: a *mixed
+per-tensor* quant that spends more bits where they matter (attention/router) and
+fewer on the bulk experts, targeting a size that just fits 16 GB. He published two
+tiers of his own **PXA-Fusion4-35B** merge and asked us to run them through this
+harness — the "fit-vs-quality number I'm most curious about on your rig."
+
+This round measures both tiers on **exactly the Round 6 test**: GSM8K 5-shot CoT
+greedy (exact-match) for task accuracy, plus wikitext perplexity for an intra-model
+bit-depth delta.
+
+### Setup
+- **Model:** `poisonxa/PXA-Fusion4-35B-GGUF` — a "fusion" merge (**different base
+  model** than the §16/§17 Qwen3.6-35B-A3B), reasoning-capable (thinking →
+  `reasoning_content`, answer → `content`). Two mixed-tier presets:
+  - `PXA-Fusion4-35B-PXQU16.gguf` — 14.6 GB on disk (`--pxq-universal 16g`)
+  - `PXA-Fusion4-35B-PXQU12.gguf` — 12.18 GB on disk (`--pxq-universal 12g`)
+- **Runtime:** the same **2026-07-23 fork build** already used in Rounds 4–6
+  (`src/pxq_llama/pxq_llama-2026-07-23-linux-x64`); its PXQ-Universal runtime is
+  the type `256 PXQ_UNIVERSAL` in `llama-quantize`. No new build, no dual-GPU path,
+  no nccl workaround (the 07-23 `lib/` bundles `libnccl.so.2`).
+- **GSM8K:** `scripts/lm-eval-run.sh <label> <fork-chat-url> gsm8k 100 6144 6 "until=<|im_end|>"`
+  — reasoning model, so the big gen budget + `until=<|im_end|>` are mandatory (§17).
+- **Perplexity:** `scripts/bin/pxq-perplexity -m <gguf> -f wiki.test.raw -c 512
+  --max-chunks 100 -ngl 999` (Qwen `add_bos=false`, canonical windowing — §16).
+- **P100 fit:** each tier launched standalone on idx0 at `--ctx-size 32768
+  --parallel 1` with **q8_0 KV** (`--flash-attn on --jinja --n-gpu-layers 99`);
+  VRAM read from `nvidia-smi`. Accuracy/PPL are GPU-independent and were run on the
+  idle V100s in parallel.
+
+### Results
+
+| Tier | On-disk | Weights (bpw) | P100 total @32k/par1/q8_0-KV | Headroom | GSM8K flex / strict (n=100) | wikitext PPL (100×512) |
+|------|--------:|---------------|:-----------------------------|---------:|:---------------------------:|-----------------------:|
+| **PXQU16** | 14.6 GB | 13.586 GiB (3.287) | **15.1 GiB / 16** | ~1.2 GB | **93.0 % / 92.0 %** | **7.70349** |
+| **PXQU12** | 12.18 GB | 11.336 GiB (2.743) | **12.8 GiB / 16** | ~3.5 GB | 82.0 % / 80.0 % | 8.14917 |
+
+_(P100 buffer breakdown, both tiers @32k q8_0: KV self ~340 MiB, CUDA0 compute
+buffer ~1146 MiB.)_
+
+For the P100-fitting frontier this sits against (from §17, GSM8K flexible-extract):
+
+| Model | On-disk | Fits P100 | GSM8K |
+|-------|--------:|:---:|------:|
+| gemma-4-12b (dense) | 6.7 GB | yes | 95.5 % |
+| gemma-4-26b-a4b (MoE) | 13.6 GB | yes | 95.0 % |
+| **Fusion4-35B PXQU16** | 14.6 GB | **yes** | **93.0 %** |
+| Qwen3.6-35B PXQ2 (uniform) | 10.8 GB | yes | 85.5 % |
+| **Fusion4-35B PXQU12** | 12.18 GB | **yes** | 82.0 % |
+
+![Fusion4 fit-vs-quality](img/pxq-fusion4-fit-quality.png)
+
+### Findings
+1. **Mixed-tier delivers on its core promise: PXQU16 (93 %) beats uniform PXQ2
+   (85.5 %) by +7.5 pts at a comparable fit.** Spending bits where they matter
+   instead of flat 2-bit closes most of the gap the uniform low-bit quant couldn't
+   — the author's central PXQ-Universal thesis holds on task accuracy.
+2. **But §17's directional verdict survives: the Gemmas still lead on the P100.**
+   PXQU16 (14.6 GB, 93 %) is still ~2 pts behind gemma-4-26b-a4b (13.6 GB, 95 %) and
+   gemma-4-12b (6.7 GB, 95.5 %) — both *smaller* and with far more KV headroom (the
+   12B leaves ~9 GB free vs PXQU16's ~1.2 GB). PXQU16 narrows the gap from ~10 pts to
+   ~2, but doesn't erase it.
+3. **PXQU12 is a false economy.** Pushing the mix down to ~2.74 bpw (12.18 GB) drops
+   GSM8K to 82 % — *below* even uniform PXQ2's 85.5 %. Below the PXQU16 tier the
+   mixed-tier advantage inverts; there's no reason to trade the headroom for it.
+4. **Perplexity: only the intra-model delta is meaningful.** Fusion4 is a *different
+   base* than the Qwen anchors in §16 (fork PXQ6/PXQ4 ≈ 7.449, Q6_K ≈ 6.798), so its
+   absolute 7.70 / 8.15 are **not** comparable to those numbers. The clean signal is
+   **PXQU12 is +5.8 % PPL over PXQU16**, tracking the −11 pt GSM8K drop — bit-depth
+   degradation is real and monotonic within the model.
+
+### Verdict
+**PXQU16 is the first fork quant that makes a 35B on the P100 genuinely competitive
+— but still not the winner.** At 93 % GSM8K it is a large, real improvement over the
+uniform-PXQ2 35B (85.5 %) that Round 6 rejected, validating the mixed-tier approach.
+For the P100 specifically, though, the served Gemmas remain the better pick: they
+match or beat PXQU16 at smaller size with dramatically more context headroom.
+**PXQU16 is worth keeping in the toolbox for a genuinely 35B-specific P100 workload;
+PXQU12 is not (worse than uniform PXQ2). Daily P100 serving stays on Gemma-4-26B-A4B.**
+
+> Caveat: GSM8K still saturates near the top (93–95 %), so it cleanly separates the
+> PXQU16/Gemma tier from the PXQU12/PXQ2 tier but can't finely rank PXQU16 vs the
+> Gemmas at the ceiling — a harder generative task (`mmlu_generative`) would sharpen
+> that ~2-pt gap.
+
+**Reproduce:**
+
+```bash
+FORK=/srv/ai/src/pxq_llama/pxq_llama-2026-07-23-linux-x64
+# 1) download both tiers (gitignored):
+scripts/hf-dl download poisonxa/PXA-Fusion4-35B-GGUF PXA-Fusion4-35B-PXQU16.gguf --local-dir models/pxq-fusion4
+scripts/hf-dl download poisonxa/PXA-Fusion4-35B-GGUF PXA-Fusion4-35B-PXQU12.gguf --local-dir models/pxq-fusion4
+# 2) serve a tier on a GPU (idx set by CUDA_VISIBLE_DEVICES; PXQ needs full residency):
+env CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 \
+  LD_LIBRARY_PATH=$FORK/lib:/usr/local/cuda/lib64 \
+  $FORK/bin/llama-server -m models/pxq-fusion4/PXA-Fusion4-35B-PXQU16.gguf \
+  --flash-attn on --jinja --n-gpu-layers 99 --ctx-size 32768 --parallel 1 --port 8899 &
+# 3) GSM8K (reasoning: big budget + until override):
+scripts/lm-eval-run.sh fusion4-pxqu16 http://127.0.0.1:8899/v1/chat/completions gsm8k 100 6144 6 "until=<|im_end|>"
+# 4) perplexity (Qwen add_bos=false, canonical windowing):
+LD_LIBRARY_PATH=$FORK/lib:/usr/local/cuda/lib64 GGML_CUDA_NO_VMM=1 \
+  scripts/bin/pxq-perplexity -m models/pxq-fusion4/PXA-Fusion4-35B-PXQU16.gguf \
+  -f src/llama.cpp/wikitext-2-raw/wiki.test.raw -c 512 --max-chunks 100 -ngl 999
+# chart:
+venvs/comfyui/bin/python scripts/pxq-fusion4-plot.py
+```
+
+Data: `docs/data/pxq/fusion4-gsm8k-ppl.csv`, per-run outputs under
+`docs/data/lm-eval/fusion4-pxqu{16,12}-gsm8k-20260724/`.
