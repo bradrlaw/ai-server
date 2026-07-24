@@ -1,0 +1,3 @@
+model,tier,file_gb,weights_gib,bpw,p100_total_gib_c32k,fits_p100,gsm8k_n,gsm8k_flex,gsm8k_strict,ppl_wiki_100x512
+PXA-Fusion4-35B,PXQU16,14.6,13.586,3.287,15.1,yes,100,0.93,0.92,7.70349
+PXA-Fusion4-35B,PXQU12,12.18,11.336,2.743,12.8,yes,100,0.82,0.80,8.14917
