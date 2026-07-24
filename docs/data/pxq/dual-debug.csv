@@ -1,0 +1,14 @@
+config,engine,quant,split,decode_short_tps,prefill_4k_tps,note
+repro-pxq4-layer,fork2,PXQ4,layer,17.0,2242.4,reproduces the collapse
+q6k-fork-layer,fork2,Q6_K,layer,16.7,1769.3,fork collapses on a STANDARD quant too
+pxq4-enhance-off,fork2,PXQ4,layer,17.0,2218.2,PXA disabled entirely - no effect
+pxq4-routerfuse-off,fork2,PXQ4,layer,16.9,2257.7,author suspected lever - no effect
+pxq4-vmm-on,fork2,PXQ4,layer,17.0,2199.2,drop forced NO_VMM - no effect and no crash
+pxq4-no-peer,fork2,PXQ4,layer,17.0,2213.3,peer-access disabled - no effect
+pxq4-smgs1,fork2,PXQ4,layer,17.3,2166.2,force split-mode-graph-scheduling on layer path - no effect (flag on but executor unchanged)
+pxq4-async,fork2,PXQ4,layer,17.4,2264.5,scheduler_async on layer path - no effect
+pxq4-smgs1-async,fork2,PXQ4,layer,17.3,2254.1,smgs + async on layer path - no effect
+pxq4-sm-graph,fork2,PXQ4,graph,93.0,2284.1,FIX - fork native graph split restores decode
+q6k-sm-graph,fork2,Q6_K,graph,85.5,1813.6,FIX confirmed quant-independent
+pxq4-single,fork2,PXQ4,single,111.3,2484.5,single-card reference
+q6k-stock-layer,stock,Q6_K,layer,93.1,1226.0,stock on the SAME two cards - fast

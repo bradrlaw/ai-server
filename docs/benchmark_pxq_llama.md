@@ -402,6 +402,10 @@ stock llama.cpp on the same two-card layer split** and ~97 t/s single-card fork.
 cross-GPU sync in the fused router/graph-split path at batch=1 — prefill scaling is excellent
 (2.4 k t/s), only decode is affected.
 
+> **Resolved in Round 4 (§15):** the ~17 t/s is a `-sm layer` artifact on our PHB (no-NVLink)
+> box, not a pathology. The fork's native **`-sm graph -ts 1,1`** restores decode to ~93 t/s
+> (PXQ4) / ~85 t/s (Q6_K) while keeping the ~2.3 k t/s prefill.
+
 
 ## 14. Round 3 — the author's own model (PXA-Fusion4-35B) + the "+30%" claim
 
@@ -494,3 +498,68 @@ MTP stacks on top of everything else and is quant-independent. Two caveats we me
 - Nothing here changes the §12 verdict: **keep stock llama.cpp for daily serving** (decode
   parity, no PXQ requantize, no MTP dependency); pxq_llama remains a compelling **prefill /
   prompt-processing** engine and a way to squeeze a 35B onto the 16 GB P100.
+
+## 15. Round 4 — root-causing (and *fixing*) the dual-V100 decode collapse
+
+The fork author couldn't reproduce our flat ~17 t/s dual-split decode (§13.3/§13.5) — his own
+2× V100 holds ~92 t/s and toggling `PXA_ROUTER_FUSE` changed nothing. He asked for the exact
+command, commit, split mode, `--n-cpu-moe` status, and a real root cause. We ran a
+**single-lever isolation matrix** and found the answer: **it's a split-mode selection artifact,
+not a hardware/topology pathology.** Running the fork's native **`-sm graph`** instead of
+`-sm layer` restores decode from **17 → 93 t/s**. Harness: `scripts/pxq-dual-debug.py`; data:
+`docs/data/pxq/dual-debug.csv`.
+
+**Static answers to the author's questions:**
+- **Commit:** `v2026.07.23`, version 50, `92e2814`. **`--n-cpu-moe`?** No — `--gpu-layers 999`,
+  everything on GPU. **Split mode we hit the bug with:** `-sm layer -ts 1,1` (the mode *he
+  recommended to fix the crash*). **Topology:** no NVLink; `nvidia-smi topo -m` = **PHB** between
+  all GPUs (peer traffic crosses the CPU host bridge). CPU i7-6950X, PCIe 3.0.
+
+### 15.1 The isolation matrix
+
+Same two V100s (idx1+idx2), ctx 8192, decode at batch=1. First we ruled out every env/PXA lever
+on the **layer** split, then found the fix by switching the **split mode**:
+
+| Config | Engine / quant | Split | Lever | **Decode** | Prefill @4k |
+|---|---|---|---|---:|---:|
+| `repro-pxq4-layer` | fork2 PXQ4 | layer | baseline env | **17.0** | 2242 |
+| `q6k-fork-layer` | fork2 **Q6_K** | layer | standard quant | **16.7** | 1769 |
+| `pxq4-enhance-off` | fork2 PXQ4 | layer | no `PXA_ENHANCE` | **17.0** | 2218 |
+| `pxq4-routerfuse-off` | fork2 PXQ4 | layer | `PXA_ROUTER_FUSE=0` | **16.9** | 2258 |
+| `pxq4-vmm-on` | fork2 PXQ4 | layer | drop `GGML_CUDA_NO_VMM` | **17.0** | 2199 |
+| `pxq4-no-peer` | fork2 PXQ4 | layer | `PEER_MAX_BATCH_SIZE=0` | **17.0** | 2213 |
+| `pxq4-smgs1` | fork2 PXQ4 | layer | `--split-mode-graph-scheduling` | **17.3** | 2166 |
+| `pxq4-async` | fork2 PXQ4 | layer | `--scheduler_async` | **17.4** | 2265 |
+| **`pxq4-sm-graph`** | fork2 PXQ4 | **graph** | **`-sm graph`** | **93.0** | 2284 |
+| **`q6k-sm-graph`** | fork2 **Q6_K** | **graph** | **`-sm graph`** | **85.5** | 1814 |
+| `pxq4-single` | fork2 PXQ4 | single | (ref) | 111.3 | 2485 |
+| `q6k-stock-layer` | **stock** Q6_K | layer | stock, same 2 cards | 93.1 | 1226 |
+
+### 15.2 What we ruled out, and the fix
+
+On the **layer** split every fork lever is null — the collapse is identical (~17 t/s) with PXA
+off, `ROUTER_FUSE=0` (the author's suspect, confirmed not it), VMM on (and it did **not** crash),
+peer-access off, and even with `--split-mode-graph-scheduling` forced on (the startup flag flips
+to `1` but decode stays 17 — that toggle doesn't switch the executor). It also hits a plain
+**`Q6_K`** (16.7 t/s), so it's not PXQ-specific.
+
+The single thing that fixes it is the **split mode itself**: the fork ships a dedicated
+**`-sm graph`** executor (splits tensors *and* the compute graph across GPUs) distinct from the
+inherited `-sm layer` path. `-sm graph` decodes at **93.0 t/s (PXQ4) / 85.5 t/s (Q6_K)** — a
+**~5.5×** recovery — while keeping the fork's ~2280 t/s prefill. The layer path is what serialized
+a per-token host-bridge round-trip on our PHB (no-NVLink) box; the graph executor doesn't.
+
+**Root cause:** the author's `-sm layer -ts 1,1` advice fixed the Round-2 *crash* but put us on the
+slow, inherited layer-split decode path. His own box shows ~92 t/s because he runs the fork's
+native `-sm graph` (or his lower-latency PCIe/NVLink layout hides the layer-path round-trip). The
+"17 t/s" was a **mode-selection artifact**, not an unfixable multi-GPU pathology.
+
+### 15.3 Takeaways
+
+- **Dual-V100 on the fork is fully viable** — use **`-sm graph -ts 1,1`**, not `-sm layer`. You
+  get full decode (~93 t/s, on par with stock and single-card) *plus* the fork's ~1.9× prefill.
+- For our 32 GB cards PXQ4/PXQ6 still fit a **single** V100 (97–111 t/s), so single-card remains
+  simplest; but `-sm graph` now makes multi-card worthwhile for models that don't fit one card,
+  without the decode tax.
+- The §12 daily-serving verdict is unchanged (stock llama.cpp), but the fork's dual-GPU story is
+  no longer a liability — it was a wrong-flag footgun the author's crash-fix advice steered us into.
