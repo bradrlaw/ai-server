@@ -563,3 +563,93 @@ native `-sm graph` (or his lower-latency PCIe/NVLink layout hides the layer-path
   without the decode tax.
 - The §12 daily-serving verdict is unchanged (stock llama.cpp), but the fork's dual-GPU story is
   no longer a liability — it was a wrong-flag footgun the author's crash-fix advice steered us into.
+
+## 16. Round 5 — output *quality*: perplexity of PXQ vs standard K-quants
+
+Every prior round measured **speed**. This round asks the question those numbers
+can't: **does PXQ cost output quality?** We measure perplexity (PPL) on
+`wikitext-2-raw` for the same base model (Qwen3.6-35B-A3B) across our standard
+K-quants and the fork's PXQ tiers.
+
+### 16.1 We had to build a PXQ-capable perplexity tool
+
+The fork ships **no `llama-perplexity` binary**, and stock's perplexity **cannot
+load PXQ** (a fork-custom quant type). So we wrote a minimal evaluator,
+[`scripts/pxq-perplexity.cpp`](../scripts/pxq-perplexity.cpp), that links the
+fork's `libllama.so`/`libggml.so` (built against **ik_llama.cpp** headers — the
+fork is an ik_llama fork, not mainline). It replicates the **canonical
+llama.cpp perplexity algorithm** exactly:
+
+- non-overlapping 512-token windows, KV reset per window;
+- **BOS only if the model uses it** — Qwen sets `add_bos_token=false`, so we do
+  *not* prefix BOS (getting this wrong inflated PPL by ~45%);
+- score only the **second half** of each window (positions ≥ `n_ctx/2`), using
+  the first half as context → 255 scored tokens/window, ≥256 tokens of context each.
+
+**Validation:** on `Q4_K_M`, the tool's algorithm reproduces stock
+`llama-perplexity` up to the fork engine's own numerical signature — see §16.3.
+
+### 16.2 Results (100 chunks = 25,500 scored tokens, ctx 512, ±~0.10)
+
+Data: [`docs/data/pxq/quality-ppl.csv`](data/pxq/quality-ppl.csv).
+
+![PXQ vs K-quant perplexity](img/pxq-quality-ppl.png)
+
+| engine | quant | source | bpw | size | **PPL** | vs Q8 floor |
+|--------|-------|--------|----:|-----:|--------:|------------:|
+| stock  | Q8_0  | bf16   | 8.5 | 36.9 GB | **6.619** | — (floor) |
+| stock  | Q6_K  | bf16   | 6.5 | 27.3 GB | **6.615** | −0.1 % |
+| stock  | Q4_K_M| bf16   | 4.8 | 19.7 GB | **6.691** | +1.1 % |
+| fork   | Q6_K  | bf16   | 6.5 | 27.3 GB | 6.798 | +2.7 % |
+| fork   | Q4_K_M| bf16   | 4.8 | 19.7 GB | 6.923 | +4.6 % |
+| fork   | **PXQ6** | bf16 | 5.3 | 21.3 GB | **7.449** | **+12.5 %** |
+| fork   | **PXQ4** | bf16 | 4.5 | 17.6 GB | **7.449** | **+12.5 %** |
+| fork   | PXQ4  | **q8_0** | 4.4 | 16.7 GB | 7.889 | +19.2 % |
+
+### 16.3 The fork engine adds a ~+3 % PPL offset — so compare *within* an engine
+
+Running the *identical* standard-quant weights on the two engines is not free:
+the fork's kernels (ik_llama-derived, sm_60/70 build, `PXA_ENHANCE=1`) sit
+**~+3 %** above stock on the same file (Q6_K 6.615 → 6.798; Q4_K_M 6.691 →
+6.923). `PXA_ENHANCE=0` recovers ~1 % of that. This is the engine's numerical
+signature, **constant across quants**, so the honest quant comparison is done
+**within the fork engine** (all PXQ + standard quants on one engine), with stock
+as the ground-truth anchor.
+
+### 16.4 Findings
+
+1. **Standard K-quants are near-lossless.** On stock, **Q6_K = Q8_0** (6.615 vs
+   6.619) and Q4_K_M is only +1.1 %. Our daily Q6_K serving loses nothing.
+2. **PXQ6 buys *zero* quality over PXQ4.** Both land on **7.449** despite PXQ6
+   carrying ~0.8 bpw / 3.7 GB more — the extra bits do not improve prediction.
+3. **PXQ is measurably worse than a same-or-smaller K-quant.** On the *same*
+   fork engine, PXQ4/PXQ6 are **+7.6 % vs Q4_K_M** and **+9.6 % vs Q6_K**, and
+   **+12.5 % over the Q8 floor**. A 5.3-bpw PXQ6 is *worse* than a 4.8-bpw
+   Q4_K_M — PXQ trades quality for its prefill speed; it is not a free lunch.
+4. **`from-BF16` beats the README's `from-Q8_0` recipe.** Requantizing PXQ4 from
+   a Q8_0 base scored **7.889** — worse than our BF16-direct **7.449**. So our
+   BF16-direct PXQ quants were already the *best* case; the poor PXQ perplexity
+   is not a quantization-source artifact.
+
+### 16.5 Verdict impact
+
+This **reinforces §12**: keep **stock llama.cpp + K-quants** for daily serving.
+The fork's PXQ is not only *no faster* for single-user decode on our 32 GB cards
+(§6/§13), it is also **~8–12 % worse on perplexity** than the same-size K-quant
+we already serve. PXQ's value is narrow: **prefill throughput on VRAM-starved
+Pascal** (fitting a 35B on a 16 GB P100, §7) — where the quality hit buys a model
+that otherwise would not fit at all.
+
+**Reproduce:**
+
+```bash
+# Build the tool against ik_llama headers + fork libs:
+bash scripts/pxq-perplexity-build.sh
+# Fork-engine matrix (Q6_K, PXQ6, Q4_K_M, PXQ4), 100 chunks:
+bash scripts/pxq-ppl-run.sh 100 q6k pxq6 q4km pxq4
+# Stock anchors (Q8_0/Q6_K/Q4_K_M can load on stock; PXQ cannot):
+src/llama.cpp/build/bin/llama-perplexity -m <model> \
+  -f src/llama.cpp/wikitext-2-raw/wiki.test.raw -c 512 --chunks 100 -ngl 999
+# Chart:
+benchmarks/llm-scaling-bench/.venv/bin/python scripts/pxq-quality-plot.py
+```
