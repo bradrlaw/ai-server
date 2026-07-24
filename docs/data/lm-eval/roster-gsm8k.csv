@@ -1,0 +1,11 @@
+served_model,base,family,params,quant,size_gb,gpu,reasoning,task,n,flexible_extract,strict_match,stderr
+chat,Qwen3.6-35B-A3B,qwen36-moe,35B-A3B,UD-Q6_K,30.0,V100,yes,gsm8k,100,0.990,0.990,0.0100
+coding,Qwen3.6-27B,qwen36-dense,27B,Q6_K,22.9,V100,yes,gsm8k,100,0.980,0.980,0.0141
+big,Qwen3.6-27B,qwen36-dense,27B,UD-Q6_K_XL,26.0,dual-V100,yes,gsm8k,100,0.980,0.980,0.0141
+chat-uncensored-q6,Qwen3.6-35B-A3B-heretic,qwen36-moe,35B-A3B,Q6_K,29.3,V100,yes,gsm8k,100,0.980,0.980,0.0141
+gemma-31b,Gemma-4-31B,gemma4-dense,31B,Q4_K_XL,17.3,V100,no,gsm8k,200,0.980,0.980,0.0099
+coder-next,Qwen3-Coder-Next-80B-A3B,qwen3-coder-moe,80B-A3B,Q4_K_XL,49.6,dual-V100,no,gsm8k,200,0.960,0.945,0.0139
+fast-12b,Gemma-4-12B,gemma4-dense,12B,Q4_K_XL,6.7,P100,no,gsm8k,200,0.955,0.960,0.0147
+fast,Gemma-4-26B-A4B,gemma4-moe,26B-A4B,Q4_K_XL,14.2,P100,no,gsm8k,200,0.950,0.950,0.0154
+gemma-26b,Gemma-4-26B-A4B,gemma4-moe,26B-A4B,Q4_K_XL,14.2,V100,no,gsm8k,200,0.950,0.950,0.0154
+fast-uncensored,Gemma4-12B-Uncensored-HauhauCS-Balanced,gemma4-dense,12B,Q4_K_M,7.4,P100,yes,gsm8k,100,0.410,0.410,0.0494
