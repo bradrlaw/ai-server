@@ -563,3 +563,186 @@ native `-sm graph` (or his lower-latency PCIe/NVLink layout hides the layer-path
   without the decode tax.
 - The §12 daily-serving verdict is unchanged (stock llama.cpp), but the fork's dual-GPU story is
   no longer a liability — it was a wrong-flag footgun the author's crash-fix advice steered us into.
+
+## 16. Round 5 — output *quality*: perplexity of PXQ vs standard K-quants
+
+Every prior round measured **speed**. This round asks the question those numbers
+can't: **does PXQ cost output quality?** We measure perplexity (PPL) on
+`wikitext-2-raw` for the same base model (Qwen3.6-35B-A3B) across our standard
+K-quants and the fork's PXQ tiers.
+
+### 16.1 We had to build a PXQ-capable perplexity tool
+
+The fork ships **no `llama-perplexity` binary**, and stock's perplexity **cannot
+load PXQ** (a fork-custom quant type). So we wrote a minimal evaluator,
+[`scripts/pxq-perplexity.cpp`](../scripts/pxq-perplexity.cpp), that links the
+fork's `libllama.so`/`libggml.so` (built against **ik_llama.cpp** headers — the
+fork is an ik_llama fork, not mainline). It replicates the **canonical
+llama.cpp perplexity algorithm** exactly:
+
+- non-overlapping 512-token windows, KV reset per window;
+- **BOS only if the model uses it** — Qwen sets `add_bos_token=false`, so we do
+  *not* prefix BOS (getting this wrong inflated PPL by ~45%);
+- score only the **second half** of each window (positions ≥ `n_ctx/2`), using
+  the first half as context → 255 scored tokens/window, ≥256 tokens of context each.
+
+**Validation:** on `Q4_K_M`, the tool's algorithm reproduces stock
+`llama-perplexity` up to the fork engine's own numerical signature — see §16.3.
+
+### 16.2 Results (100 chunks = 25,500 scored tokens, ctx 512, ±~0.10)
+
+Data: [`docs/data/pxq/quality-ppl.csv`](data/pxq/quality-ppl.csv).
+
+![PXQ vs K-quant perplexity](img/pxq-quality-ppl.png)
+
+| engine | quant | source | bpw | size | **PPL** | vs Q8 floor |
+|--------|-------|--------|----:|-----:|--------:|------------:|
+| stock  | Q8_0  | bf16   | 8.5 | 36.9 GB | **6.619** | — (floor) |
+| stock  | Q6_K  | bf16   | 6.5 | 27.3 GB | **6.615** | −0.1 % |
+| stock  | Q4_K_M| bf16   | 4.8 | 19.7 GB | **6.691** | +1.1 % |
+| fork   | Q6_K  | bf16   | 6.5 | 27.3 GB | 6.798 | +2.7 % |
+| fork   | Q4_K_M| bf16   | 4.8 | 19.7 GB | 6.923 | +4.6 % |
+| fork   | **PXQ6** | bf16 | 5.3 | 21.3 GB | **7.449** | **+12.5 %** |
+| fork   | **PXQ4** | bf16 | 4.5 | 17.6 GB | **7.449** | **+12.5 %** |
+| fork   | PXQ4  | **q8_0** | 4.4 | 16.7 GB | 7.889 | +19.2 % |
+
+### 16.3 The fork engine adds a ~+3 % PPL offset — so compare *within* an engine
+
+Running the *identical* standard-quant weights on the two engines is not free:
+the fork's kernels (ik_llama-derived, sm_60/70 build, `PXA_ENHANCE=1`) sit
+**~+3 %** above stock on the same file (Q6_K 6.615 → 6.798; Q4_K_M 6.691 →
+6.923). `PXA_ENHANCE=0` recovers ~1 % of that. This is the engine's numerical
+signature, **constant across quants**, so the honest quant comparison is done
+**within the fork engine** (all PXQ + standard quants on one engine), with stock
+as the ground-truth anchor.
+
+### 16.4 Findings
+
+1. **Standard K-quants are near-lossless.** On stock, **Q6_K = Q8_0** (6.615 vs
+   6.619) and Q4_K_M is only +1.1 %. Our daily Q6_K serving loses nothing.
+2. **PXQ6 buys *zero* quality over PXQ4.** Both land on **7.449** despite PXQ6
+   carrying ~0.8 bpw / 3.7 GB more — the extra bits do not improve prediction.
+3. **PXQ is measurably worse than a same-or-smaller K-quant.** On the *same*
+   fork engine, PXQ4/PXQ6 are **+7.6 % vs Q4_K_M** and **+9.6 % vs Q6_K**, and
+   **+12.5 % over the Q8 floor**. A 5.3-bpw PXQ6 is *worse* than a 4.8-bpw
+   Q4_K_M — PXQ trades quality for its prefill speed; it is not a free lunch.
+4. **`from-BF16` beats the README's `from-Q8_0` recipe.** Requantizing PXQ4 from
+   a Q8_0 base scored **7.889** — worse than our BF16-direct **7.449**. So our
+   BF16-direct PXQ quants were already the *best* case; the poor PXQ perplexity
+   is not a quantization-source artifact.
+
+### 16.5 Verdict impact
+
+This **reinforces §12**: keep **stock llama.cpp + K-quants** for daily serving.
+The fork's PXQ is not only *no faster* for single-user decode on our 32 GB cards
+(§6/§13), it is also **~8–12 % worse on perplexity** than the same-size K-quant
+we already serve. PXQ's value is narrow: **prefill throughput on VRAM-starved
+Pascal** (fitting a 35B on a 16 GB P100, §7) — where the quality hit buys a model
+that otherwise would not fit at all.
+
+**Reproduce:**
+
+```bash
+# Build the tool against ik_llama headers + fork libs:
+bash scripts/pxq-perplexity-build.sh
+# Fork-engine matrix (Q6_K, PXQ6, Q4_K_M, PXQ4), 100 chunks:
+bash scripts/pxq-ppl-run.sh 100 q6k pxq6 q4km pxq4
+# Stock anchors (Q8_0/Q6_K/Q4_K_M can load on stock; PXQ cannot):
+src/llama.cpp/build/bin/llama-perplexity -m <model> \
+  -f src/llama.cpp/wikitext-2-raw/wiki.test.raw -c 512 --chunks 100 -ngl 999
+# Chart:
+benchmarks/llm-scaling-bench/.venv/bin/python scripts/pxq-quality-plot.py
+```
+
+## 17. Round 6 — cross-model output quality on the P100 (task accuracy, GSM8K)
+
+Round 5 measured PXQ *perplexity* within the Qwen family. This round answers the
+practical deployment question: **on the 16 GB P100, does the fork-enabled 35B
+actually beat the models we already serve there** — the Gemma-4-12B dense and the
+Gemma-4-26B-A4B MoE? The fork is the *only* way to fit a 35B on a P100 (via its
+low-bit PXQ quants), so the fair test is "best model that fits 16 GB."
+
+### Why task accuracy, not perplexity
+Perplexity/BPB is **not comparable across tokenizers** (Qwen 248k vs Gemma 262k
+vocab), so it can't rank Qwen vs Gemma. Worse, **Gemma-4 evaluates incorrectly in
+our llama.cpp batched path** — `llama-perplexity` PPL *rises* with context
+(340→1283) and Winogrande scores a random 50 %, even though the model **generates
+correctly** through the server (coherent Rayleigh-scattering answers, "Paris", etc.).
+The bug is gemma4-specific (Qwen evaluates fine: Winogrande 75 %) and unfixed in
+mainline (0 gemma commits ahead of our build). llama.cpp's server also never
+implements OpenAI `echo`+`logprobs`, so **loglikelihood** tasks (winogrande/
+hellaswag) can't be driven over the API either.
+
+Resolution: a **generative** benchmark run through the working chat endpoint with
+[lm-evaluation-harness]. Generation is correct for every model, quant-accurate, and
+backend-agnostic (llama-swap, the pxq fork server, LiteLLM) — a reusable standard
+test. Task: **GSM8K, 5-shot CoT, greedy** (`temperature=0`), scored by exact-match.
+
+### Setup
+- Harness: `scripts/lm-eval-run.sh <model> <chat-url> gsm8k <n> <max_gen_toks> <conc> [extra]`
+  (`local-chat-completions`, `--apply_chat_template`). venv `venvs/lm-eval` (CPU torch).
+- **Reasoning-model gotcha:** Qwen3.6 emits a thinking phase; the fork server puts it
+  in `reasoning_content` and the answer in `content`. GSM8K's default stop string
+  `"Question:"` fires *inside* the thinking phase and truncates before any `content`
+  is produced → **0 %** artefact. Fix: pass `until=<|im_end|>` and `max_gen_toks=6144`
+  so the model finishes thinking and writes `#### N` into `content`. Gemma is
+  non-reasoning (512 tokens, default stops fine).
+- Gemma runs on the P100 via llama-swap; Qwen PXQ2/PXQ4 via the fork server
+  (`--flash-attn on --jinja`, `--parallel 4`) on a V100; Qwen Q8_0 stock dual-V100.
+  Accuracy is GPU-independent, so the ceiling quants were measured on V100s.
+
+### Results — GSM8K 5-shot exact_match (flexible-extract)
+
+| Model | Quant | Size | Fits 16 GB P100? | GSM8K | n |
+|-------|-------|-----:|:---:|------:|--:|
+| Qwen3.6-35B-A3B | **Q8_0** (ceiling) | 36.9 GB | no (dual-V100) | **98.0 %** | 100 |
+| Qwen3.6-35B-A3B | **PXQ4** | 18.8 GB | no (one V100) | 95.0 % | 100 |
+| gemma-4-12b (dense) | Q4_K_XL | 6.7 GB | **yes** | **95.5 %** | 200 |
+| gemma-4-26b-a4b (MoE) | Q4_K_XL | 13.6 GB | **yes** | 95.0 % | 200 |
+| Qwen3.6-35B-A3B | **PXQ2** | 10.8 GB | **yes** | **85.5 %** | 200 |
+
+![Cross-model GSM8K](img/pxq-xmodel-gsm8k.png)
+
+### Findings
+1. **The 35B is a genuinely strong model** — at Q8_0 it tops the field (98 %), and
+   even PXQ4 holds 95 %. Its *ability* is not in question.
+2. **But the only quant that fits the P100 is PXQ2, and PXQ2 craters to 85.5 %** —
+   a **–12.5 pt** drop from the Q8 ceiling and, decisively, **~10 pt below both
+   Gemmas** we already serve on that card.
+3. **The PXQ quality cliff is between 4-bit and 2-bit.** PXQ4 (95 %) ≈ Q8 ≈ Gemma;
+   PXQ2 (85.5 %) falls off. This refines Round 5's perplexity result (PXQ4 ≈ PXQ6):
+   the extra bits don't help *down* to PXQ4, but dropping to PXQ2 to make a 35B fit
+   16 GB does real, measurable damage. (PXQ4 at 18.8 GB needs a full V100 — at which
+   tier you'd just serve Q6_K/Q8 on the V100 anyway.)
+
+### Verdict
+**On the P100, the fork-enabled 35B does *not* beat the Gemmas.** The quant that
+enables the fit (PXQ2) is ~10 pts worse than the 6.7 GB Gemma-4-12B and the 13.6 GB
+Gemma-4-26B-A4B — both of which fit comfortably with room for large KV context.
+PXQ's "fit a 35B on a P100" trick is real, but the resulting model is lower quality
+than what already runs there. **Keep Gemma-4-26B-A4B (or 12B) on the P100; PXQ2-35B
+is not worth it.** The 35B only wins at PXQ4+/Q8, which require a V100 — where stock
+K-quants serve it losslessly without the fork.
+
+> Caveat: GSM8K saturates at the top (95–98 %), so it cleanly exposes the PXQ2 cliff
+> and Gemma parity but can't finely rank PXQ4/Q8/Gemma at the ceiling. For sharper
+> top-end separation, re-run the harness with `--tasks mmlu_generative` (harder,
+> broader) — the harness already supports it.
+
+**Reproduce:**
+
+```bash
+# 0) one-time: venv (uv, CPU torch) already at venvs/lm-eval
+# 1) Gemmas via llama-swap (non-reasoning):
+scripts/lm-eval-run.sh fast     http://127.0.0.1:9090/v1/chat/completions gsm8k 200 512 4
+scripts/lm-eval-run.sh fast-12b http://127.0.0.1:9090/v1/chat/completions gsm8k 200 512 4
+# 2) Qwen PXQ via the fork server (reasoning: bigger budget + until override):
+#    fork llama-server --model models/pxq/Qwen3.6-35B-A3B-PXQ2.gguf --flash-attn on \
+#      --jinja --parallel 4 --port 8899   (env: PXA_ENHANCE=1, see scripts/pxq-make-quants.sh)
+scripts/lm-eval-run.sh qwen35-pxq2 http://127.0.0.1:8899/v1/chat/completions gsm8k 200 6144 4 "until=<|im_end|>"
+# 3) Qwen Q8_0 ceiling, stock dual-V100:
+#    llama-server -m models/pxq/Qwen3.6-35B-A3B-Q8_0.gguf -sm layer -ts 1,1 --flash-attn on --jinja --port 8898
+scripts/lm-eval-run.sh qwen35-q8 http://127.0.0.1:8898/v1/chat/completions gsm8k 100 6144 2 "until=<|im_end|>"
+# chart:
+venvs/comfyui/bin/python scripts/pxq-xmodel-plot.py
+```
