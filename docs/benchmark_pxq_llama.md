@@ -39,6 +39,9 @@ and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate fr
 - [12. Verdict](#12-verdict)
 - [13. Round 2 — newer build v2026.07.23 + author feedback](#13-round-2--newer-build-v20260723--author-feedback)
 - [14. Round 3 — the author's own model (PXA-Fusion4-35B) + the "+30%" claim](#14-round-3--the-authors-own-model-pxa-fusion4-35b--the-30-claim)
+- [15. Round 4 — root-causing (and fixing) the dual-V100 decode collapse](#15-round-4--root-causing-and-fixing-the-dual-v100-decode-collapse)
+- [16. Round 5 — output quality: perplexity of PXQ vs standard K-quants](#16-round-5--output-quality-perplexity-of-pxq-vs-standard-k-quants)
+- [17. Round 6 — cross-model output quality on the P100 (task accuracy, GSM8K)](#17-round-6--cross-model-output-quality-on-the-p100-task-accuracy-gsm8k)
 
 ---
 
