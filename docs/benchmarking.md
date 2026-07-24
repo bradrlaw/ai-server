@@ -19,6 +19,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
   - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
   - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
+- [Output-quality benchmark — GSM8K across the served roster (2026-07-24)](#output-quality-benchmark--gsm8k-across-the-served-roster-2026-07-24)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -839,3 +840,65 @@ CUDA_VISIBLE_DEVICES=1 llama-server \
 
 > `gemma-31b` is a `--parallel 1` comparison slot with no mode overlay override, so MTP applies in
 > every serving mode.
+
+## Output-quality benchmark — GSM8K across the served roster (2026-07-24)
+
+Having verified the **speed** wins (MTP, `--parallel`, quant choices), this pass measures
+**output quality** across every model in the daily llama-swap roster, to confirm those
+speedups did not come with an accuracy regression and to rank the models on a reasoning task.
+
+**Task:** GSM8K (grade-school math word problems), **5-shot CoT, greedy** (`temperature=0`),
+scored by `exact_match` (flexible-extract). Driven through the reusable harness
+`scripts/lm-eval-run.sh` (lm-evaluation-harness → OpenAI-compatible chat endpoint). GSM8K is
+generative because llama.cpp's server returns no prompt-token logprobs (loglikelihood tasks
+like hellaswag/winogrande can't run) and gemma-4's batched-eval path is broken in our build —
+but its server *generation* is correct, so generative GSM8K is the portable quality proxy.
+
+**How it was run:** accuracy is independent of GPU/parallelism, so instead of the slow single-slot
+daily servers we spun up dedicated stock `llama-server` instances (`--parallel 6–8`) on the two
+V100s in parallel, one model at a time — see `scripts/roster-gsm8k-eval.sh`. Reasoning models
+(Qwen3.6 thinking + gemma reasoning-on) used `max_gen_toks=6144` and `until=<|im_end|>` so the
+task's default stop strings don't fire inside the thinking phase; non-reasoning models used
+`max_gen_toks=512`. Weights/quant match production; MTP draft heads were omitted (lossless — they
+don't change greedy output). Reasoning models were run at n=100, non-reasoning at n=200.
+
+| served model | base / quant | params | GPU | reasoning | n | flexible | strict | ±stderr |
+|---|---|---|---|:-:|--:|--:|--:|--:|
+| `chat` | Qwen3.6-35B-A3B UD-Q6_K | 35B-A3B | V100 | ✓ | 100 | **99.0%** | 99.0% | 1.0 |
+| `coding` | Qwen3.6-27B Q6_K | 27B | V100 | ✓ | 100 | **98.0%** | 98.0% | 1.4 |
+| `big` | Qwen3.6-27B UD-Q6_K_XL | 27B | dual-V100 | ✓ | 100 | **98.0%** | 98.0% | 1.4 |
+| `chat-uncensored-q6` | Qwen3.6-35B-A3B heretic Q6_K | 35B-A3B | V100 | ✓ | 100 | **98.0%** | 98.0% | 1.4 |
+| `gemma-31b` | Gemma-4-31B Q4_K_XL | 31B | V100 | ✗ | 200 | **98.0%** | 98.0% | 1.0 |
+| `coder-next` | Qwen3-Coder-Next-80B-A3B Q4_K_XL | 80B-A3B | dual-V100 | ✗ | 200 | **96.0%** | 94.5% | 1.4 |
+| `fast-12b` | Gemma-4-12B Q4_K_XL | 12B | P100 | ✗ | 200 | **95.5%** | 96.0% | 1.5 |
+| `fast` | Gemma-4-26B-A4B Q4_K_XL | 26B-A4B | P100 | ✗ | 200 | **95.0%** | 95.0% | 1.5 |
+| `gemma-26b` | Gemma-4-26B-A4B Q4_K_XL | 26B-A4B | V100 | ✗ | 200 | **95.0%** | 95.0% | 1.5 |
+| `fast-uncensored` | Gemma4-12B Uncensored HauhauCS-Balanced Q4_K_M | 12B | P100 | ✓ | 100 | **41.0%** | 41.0% | 4.9 |
+
+![Roster GSM8K quality](img/roster-gsm8k.png)
+
+Data: `docs/data/lm-eval/roster-gsm8k.csv` (+ per-model `docs/data/lm-eval/<model>-gsm8k-*/`).
+Chart: `scripts/roster-gsm8k-plot.py`. `gemma-26b` is the **same GGUF** as `fast` (different slot),
+so it scores identically and is omitted from the chart.
+
+**Findings**
+
+- **No quality regression from the speed work.** All the production reasoning + coding + chat
+  models cluster at **98–99%** — MTP self-speculative decode and the Q6_K/Q4_K_XL quant choices
+  cost nothing on GSM8K. The daily trio (`coding` 98%, `chat` 99%, `fast` 95%) is healthy.
+- **The uncensored *chat* model is fine; the uncensored *fast* model is not.** `chat-uncensored-q6`
+  (Qwen3.6-35B heretic) matches the stock `chat` at 98–99%, so abliteration cost it nothing here.
+  But **`fast-uncensored` collapses to 41%** — a ~55-point drop from the base `fast-12b` (95.5%).
+  This is a *genuine* capability loss, not a harness artifact: 0/100 generations were empty, the
+  model simply gets the arithmetic wrong (under greedy decoding the reasoning-on Balanced tune
+  rambles/loops and frequently fails to converge on the correct number). **Treat `fast-uncensored`
+  as a creative/uncensored-chat model only — do not route math/agentic/tool work to it.**
+- **Size/quant ranking is intuitive.** The big reasoning models (Qwen3.6 35B/27B, Gemma-4-31B) lead;
+  the small P100 Gemmas trail by a few points but are still strong (95–96%). `coder-next` (an
+  80B-A3B *coding* model) lands at 96% — good for a code-specialized model on a math task.
+- **`coder-next` loads on our stock build** (llama.cpp b9850) — the earlier b9850+ requirement is
+  satisfied, no fork needed.
+
+> **Caveat:** GSM8K is one narrow (grade-school math) axis and n is modest (±1–5 pts). It's a
+> regression tripwire and a coarse ranker, **not** a full capability eval. The 41% `fast-uncensored`
+> result is large enough to be a real signal regardless.
