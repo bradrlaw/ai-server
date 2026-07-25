@@ -19,6 +19,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
   - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
   - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
+  - [MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)](#mtp-benefit-by-prompt-type--temperature--is-mtp-hurts-creative-writing-a-metal-artefact-2026-07-24)
 - [Output-quality benchmark — GSM8K across the served roster (2026-07-24)](#output-quality-benchmark--gsm8k-across-the-served-roster-2026-07-24)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
@@ -840,6 +841,75 @@ CUDA_VISIBLE_DEVICES=1 llama-server \
 
 > `gemma-31b` is a `--parallel 1` comparison slot with no mode overlay override, so MTP applies in
 > every serving mode.
+
+### MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)
+
+A Mac-Studio user (M2 Ultra, **Metal** backend) reported that with Qwen3.6-27B, MTP
+speculative decode **helps for coding but *hurts* creative writing** even with params
+tuned for their machine — MTP head n=5 gave 1.35× on code (temp=0) but **0.91×** on
+creative writing (temp=1), and a 0.8B drafter at n=20 was worse still (0.88×). The
+question: is that a **Metal-platform** quirk, or an intrinsic property of the prompt
+type / sampling temperature that should reproduce anywhere?
+
+We reproduced it on our **CUDA/V100** platform with the same model class (our `coding`
+slot, `Qwen3.6-27B-Q6_K` with the embedded `nextn` MTP head). Their test *bundles*
+content with temperature (code=temp0, prose/creative=temp1), so to disentangle the two
+we ran the **full matrix**: `{code, technical-prose, creative} × {temp 0, temp 1} ×
+{baseline, MTP n=2, MTP n=5}`, single V100 (idx1), ctx 8192, q8_0 KV, 320-token
+generations. Because Qwen3.6 is a reasoning model, we **disabled thinking** (prefilled
+empty `<think></think>`) so decode is measured over the *actual* code/prose/creative
+tokens, not uniform reasoning text. Harness: `scripts/mtp-scenario-bench.py`.
+
+![MTP benefit by prompt type & temperature](img/mtp-scenario-sweep.png)
+
+Decode tok/s (speedup vs the flat ~22.3 t/s baseline) and draft acceptance:
+
+| Prompt type | Temp | Baseline | MTP n=2 (accept) | MTP n=5 (accept) |
+| --- | --- | --- | --- | --- |
+| **code** | 0 | 22.4 | 42.6 (**+90%**, 94.5%) | 48.5 (**+116%**, 80.4%) |
+| **code** | 1 | 22.4 | 42.6 (+90%, 94.5%) | 47.8 (+113%, 78.9%) |
+| technical-prose | 0 | 22.3 | 36.6 (+64%, 73.9%) | 33.4 (+50%, 49.0%) |
+| technical-prose | 1 | 22.3 | 34.7 (+55%, 67.3%) | 30.8 (+38%, 43.6%) |
+| **creative** | 0 | 22.3 | 32.8 (+47%, 60.8%) | 25.0 (+12%, 31.4%) |
+| **creative** | 1 | 22.3 | 29.4 (+31%, 49.4%) | **21.9 (−2%, 25.1%)** |
+
+Findings:
+
+- **It reproduces on CUDA — so it is *not* a Metal artefact.** At the aggressive `n=5`,
+  **creative writing at temp=1 nets 21.9 t/s vs 22.3 baseline (0.98×) — an actual
+  slowdown**, the same direction as the reporter's 0.91×. The cause is universal to
+  speculative decode: MTP only wins when drafted tokens are *accepted*; rejected drafts
+  are wasted verify compute. The backend doesn't change that arithmetic.
+- **Two independent axes drive acceptance down.** (1) **Content predictability** — even
+  at temp=0, acceptance falls code 94% → prose 74% → creative 61% (n=2). Code has highly
+  predictable structure (syntax, boilerplate) the MTP head nails; prose and especially
+  creative writing are higher-entropy. (2) **Temperature** — raising temp 0→1 diverges the
+  *sampled* token from the greedy draft, dropping creative acceptance 61%→49% (n=2). Both
+  compound.
+- **`n_max` is a risk dial, and higher is not "more tuned" — it's more aggressive.** A big
+  `n` amplifies both outcomes: on code it extends the accepted run (n=5 → +116%), but on
+  low-acceptance content it drafts long chains that get rejected, so the wasted work
+  *exceeds* the savings and decode drops **below baseline**. This is exactly why the
+  reporter's n=5 / n=20 configs hurt their non-code cases hardest.
+- **Our shipped `n_max=2` never regresses.** Across every cell its worst case is creative
+  temp=1 at **+31%** (29.4 t/s); it's +90% on code. The conservative `n=2` captures most
+  of the code win while staying safe on prose/creative — vindicating the daily setting.
+
+**Verdict:** the "MTP hurts creative writing" report is **real and platform-independent** —
+it's the prompt type (token predictability) and sampling temperature governing draft
+acceptance, not the Metal backend. Keep `--spec-draft-n-max 2` for a mixed workload; only
+push `n_max` higher on a code-dominated, low-temperature slot where acceptance stays ≳80%.
+
+**Reproduce:**
+
+```bash
+# full matrix (3 prompt types × 2 temps × {baseline, n=2, n=5}) on V100 idx1:
+python3 scripts/mtp-scenario-bench.py --nmax 0 2 5 --temps 0 1 --gen 320
+# chart:
+venvs/comfyui/bin/python scripts/mtp-scenario-plot.py
+```
+
+Data: `docs/data/mtp/scenario-sweep.csv`.
 
 ## Output-quality benchmark — GSM8K across the served roster (2026-07-24)
 
