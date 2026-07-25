@@ -17,6 +17,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)](#p100-fast-slot-12b-dense-vs-26b-a4b-moe--ttft--prefill-2026-07-22)
 - [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
+  - [Chaining `ngram-mod` before `draft-mtp` on the `coding` slot (2026-07-25)](#chaining-ngram-mod-before-draft-mtp-on-the-coding-slot-2026-07-25)
   - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
   - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
   - [MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)](#mtp-benefit-by-prompt-type--temperature--is-mtp-hurts-creative-writing-a-metal-artefact-2026-07-24)
@@ -622,6 +623,66 @@ llama-server \
 > MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
 > throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
 > keeps MTP on the single-slot interactive `coding` primary.
+
+### Chaining `ngram-mod` before `draft-mtp` on the `coding` slot (2026-07-25)
+
+A reader of the MTP benchmarks suggested chaining a **model-free n-gram drafter ahead of MTP**
+on a coding slot:
+
+```bash
+--spec-type draft-mtp,ngram-mod --spec-draft-p-min 0.85 --spec-draft-n-max 4 \
+  --spec-ngram-mod-n-match 24 --spec-ngram-mod-n-min 8 --spec-ngram-mod-n-max 16
+```
+
+Our stock build (b9850) supports the comma-list `--spec-type` and the `--spec-ngram-mod-*` flags.
+`ngram-mod` proposes drafts by matching the **generated suffix against the context history** — so
+it only helps when the model **echoes** its input (large diffs, "return the whole file", refactors,
+boilerplate), and does nothing for freshly-generated prose/logic. To expose that, `mtp-bench.py`
+grew a `--prompt code` mode (an echo-heavy "reproduce this module verbatim" prompt) alongside the
+default generative `summary` prompt, plus a `--spec-type` override. A/B on `coding`
+(Qwen3.6-27B Q6_K, V100 idx1, ctx 40960, q8_0 KV, 512-tok gens, temp 0) — **decode tok/s (accept%)**:
+
+| prompt | size | off | `draft-mtp` n2 (shipped) | `draft-mtp` n4 | `draft-mtp,ngram-mod` n4 |
+|--------|-----:|----:|-------------------------:|---------------:|-------------------------:|
+| **code** (echo-heavy) | ~5k  | 21.8 | 42.6 (100%) | 53.2 (100%) | **64.9 (74%)** |
+| **code** (echo-heavy) | ~21k | 20.1 | 38.8 (100%) | 48.3 (100%) | **58.2 (73%)** |
+| summary (generative)  | ~4k  |  —   | 40.6 (86%)  | 47.3 (82%)  | **32.1 (66%)** |
+| summary (generative)  | ~16k |  —   | 41.4 (100%) | 44.0 (82%)  | 51.4 (92%)† |
+
+**Takeaways:**
+- **On echo-heavy coding, `ngram-mod` is a genuine, isolated win.** Separating it from the
+  `n_max` 2→4 bump: ngram adds **+22 % over `draft-mtp` n4** and **+52 % over the shipped n2**
+  (**+198 % vs off**) at ~5k, holding to +50 %/+20 % at ~21k. `ngram-mod` proposes long verbatim
+  spans that get accepted in bulk, so per-token accept **drops** (74 %) while throughput jumps —
+  accept% is misleading here; look at tok/s.
+- **It can hurt pure generative short-context** (−32 % vs `draft-mtp` n4 @4k summary): with no echo
+  to match, rejected n-gram drafts waste decode steps. († the 16k "gain" is an artifact of the
+  synthetic filler prompt degenerating into repetition, which `ngram-mod` then matches — not a real
+  generative win.)
+- **Side finding:** simply raising MTP `n_max` **2→4** helped *both* workloads unconditionally
+  (+25 % code, +16 % generative @4k) for **+0.3 GB** VRAM — a lower-risk lever independent of ngram.
+- The suggested `--cache-type-k-draft/v-draft q4_0` are **no-ops for this slot** — they quantize a
+  *separate draft model's* KV cache, but `coding` uses an **embedded** MTP head + the model-free
+  `ngram-mod`, so there is no draft-model KV to quantize. Omitted here.
+
+**Decision:** the daily `coding` slot serves a **mix** of echo and generative work, so blanket
+`ngram-mod` is not shipped (risks ~30 % regressions on generative turns). It's best as an **opt-in
+for edit/refactor-heavy sessions** (candidate: a `coding-edit` mode overlay). The unconditional
+`n_max` 2→4 bump is a separate candidate worth validating on the full 500→32k sweep before shipping.
+
+Data: `docs/data/mtp/coding-ngram-hybrid.csv`. Reproduce:
+
+```bash
+M=models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
+# echo-heavy code prompt: off + shipped MTP n2 + deeper n4
+python3 scripts/mtp-bench.py --model $M --gpu 1 --ctx 40960 --ubatch 2048 \
+  --prompt code --sizes 4096,16384 --gen 512 --nmax 0 2 4 --label coding-code --no-restore
+# hybrid: ngram-mod ahead of MTP
+python3 scripts/mtp-bench.py --model $M --gpu 1 --ctx 40960 --ubatch 2048 \
+  --prompt code --sizes 4096,16384 --gen 512 --nmax 4 --label coding-code --no-restore \
+  --spec-type "draft-mtp,ngram-mod" \
+  --extra "--spec-draft-p-min 0.85 --spec-ngram-mod-n-match 24 --spec-ngram-mod-n-min 8 --spec-ngram-mod-n-max 16"
+```
 
 ### MTP on the `big` model — Qwen3.6-27B UD-Q6_K_XL, **dual-V100 split** (2026-07-23)
 

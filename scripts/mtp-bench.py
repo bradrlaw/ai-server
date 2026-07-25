@@ -61,6 +61,35 @@ def make_prompt(approx_tokens):
             "\n\nSummary:")
 
 
+# Echo-heavy coding prompt: the model must reproduce a whole module verbatim while
+# inserting one novel line per function. Most output tokens match the context, so
+# the model-free ngram-mod drafter can propose long verbatim spans (draft-mtp
+# handles the few novel tokens). This is the scenario where `ngram-mod` before
+# `draft-mtp` is expected to help — unlike the summary prompt above, where the
+# generated text does NOT echo the input.
+_CODE_FN = (
+    'def process_item_{i}(record, config, logger):\n'
+    '    """Validate and transform a single record."""\n'
+    '    if record is None:\n'
+    '        logger.warning("null record at index %d", {i})\n'
+    '        return None\n'
+    '    value = record.get("value", 0) * config.scale + config.offset\n'
+    '    if value > config.threshold:\n'
+    '        logger.info("item {i} exceeds threshold: %s", value)\n'
+    '    return {{"id": record["id"], "value": value, "ok": True}}\n\n')
+
+
+def make_code_prompt(approx_tokens):
+    reps = max(1, approx_tokens // 90)
+    body = "".join(_CODE_FN.format(i=i) for i in range(reps))
+    return ("Below is a Python module. Return the COMPLETE module verbatim, but insert the "
+            "line `    # validated` as the first line inside each function body. Output only "
+            "the code, no commentary.\n\n```python\n" + body + "```\n")
+
+
+PROMPT_FNS = {"summary": make_prompt, "code": make_code_prompt}
+
+
 def swap_unload_all():
     for path in ("/unload", "/api/unload"):
         try:
@@ -99,6 +128,7 @@ SPLIT = False          # --split-mode layer across multiple GPUs (dual-V100 big)
 DRAFT_MODEL = None     # separate draft-model GGUF (Gemma-4 assistant MTP); set via --draft-model
 UBATCH = None          # override ubatch (defaults to BATCH); set via --ubatch
 EXTRA = []             # extra passthrough flags (e.g. --reasoning-budget 0); set via --extra
+SPEC_TYPE = "draft-mtp"  # speculative decode type; set via --spec-type (e.g. "draft-mtp,ngram-mod")
 
 
 def build_cmd(nmax, ctx=CTX):
@@ -110,7 +140,7 @@ def build_cmd(nmax, ctx=CTX):
     if SPLIT:
         cmd += ["--split-mode", "layer"]
     if nmax > 0:
-        cmd += ["--spec-type", "draft-mtp", "--spec-draft-n-max", str(nmax)]
+        cmd += ["--spec-type", SPEC_TYPE, "--spec-draft-n-max", str(nmax)]
         if DRAFT_MODEL:
             cmd += ["--model-draft", DRAFT_MODEL, "--n-gpu-layers-draft", "99"]
     cmd += EXTRA
@@ -197,7 +227,7 @@ def accept_rate(tim):
 
 
 def main():
-    global MODEL, GPU, KV_TYPE, SPLIT, DRAFT_MODEL, UBATCH, EXTRA
+    global MODEL, GPU, KV_TYPE, SPLIT, DRAFT_MODEL, UBATCH, EXTRA, SPEC_TYPE, GEN_TOKENS
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
@@ -215,6 +245,14 @@ def main():
                          "when set, MTP uses --model-draft instead of an embedded head")
     ap.add_argument("--ubatch", type=int, default=None, help="override ubatch size (default = batch)")
     ap.add_argument("--extra", default="", help="extra passthrough flags, space-separated (e.g. '--reasoning-budget 0')")
+    ap.add_argument("--spec-type", default="draft-mtp",
+                    help="speculative decode type passed to --spec-type (e.g. 'draft-mtp,ngram-mod')")
+    ap.add_argument("--prompt", choices=list(PROMPT_FNS), default="summary",
+                    help="prompt shape: 'summary' (generative, ngram-unfavorable) or "
+                         "'code' (echo-heavy, ngram-favorable)")
+    ap.add_argument("--sizes", default="",
+                    help="comma list of prompt sizes to sweep, overriding the default 500-32k set")
+    ap.add_argument("--gen", type=int, default=GEN_TOKENS, help="tokens to generate per probe")
     ap.add_argument("--label", default="qwen35-chat",
                     help="model label: names the CSV (<label>-mtp.csv) and the 'model' column")
     ap.add_argument("--no-restore", action="store_true")
@@ -223,8 +261,14 @@ def main():
     KV_TYPE, SPLIT = a.kv, a.split
     DRAFT_MODEL, UBATCH = a.draft_model, a.ubatch
     EXTRA = a.extra.split() if a.extra else []
+    SPEC_TYPE = a.spec_type
+    GEN_TOKENS = a.gen
+    prompt_fn = PROMPT_FNS[a.prompt]
     ctx = a.ctx
-    sizes = [a.fill] if a.fill else PROMPT_SIZES
+    if a.sizes:
+        sizes = [int(s) for s in a.sizes.split(",")]
+    else:
+        sizes = [a.fill] if a.fill else PROMPT_SIZES
 
     os.makedirs(DATA_DIR, exist_ok=True)
     out = (f"{DATA_DIR}/{a.label}-mtp-ctxfit.csv" if a.fill
@@ -255,11 +299,11 @@ def main():
                                          capture_output=True, text=True).stdout)
                     continue
                 print(f"ready; weights+ctx VRAM ~{vram_used(GPU)} MiB", flush=True)
-                probe(make_prompt(128), 16)  # warm
+                probe(prompt_fn(128), 16)  # warm
                 for sz in sizes:
                     if sz + GEN_TOKENS + 256 > ctx:
                         print(f"  prompt~{sz}: skipped (exceeds ctx {ctx})"); continue
-                    ttft, tim = probe(make_prompt(sz), GEN_TOKENS)
+                    ttft, tim = probe(prompt_fn(sz), GEN_TOKENS)
                     if ttft is None:
                         print(f"  prompt~{sz}: probe failed"); continue
                     pn = tim.get("prompt_n", 0)
