@@ -513,8 +513,9 @@ the MTP-equipped file in a **separate** repo — `unsloth/Qwen3.6-35B-A3B-MTP-GG
 
 **This is a true apples-to-apples test: identical weights, identical engine, MTP off vs on**, so
 any decode gain is the speculative head, not a smaller quant (unlike the pxq_llama "+30%" — see
-`benchmark_pxq_llama.md` §14). One V100 (idx1), ctx 32768, q8_0 KV, `--parallel 1`,
-batch/ubatch 2048, greedy; 256-token generations. Harness: `scripts/mtp-bench.py`.
+`benchmark_pxq_llama.md` §14). One V100 (idx1), ctx 40960, q8_0 KV, `--parallel 1`,
+batch/ubatch 2048, greedy; 256-token generations; prompt sweep **500 → 32k tokens**.
+Harness: `scripts/mtp-bench.py`.
 
 ![MTP off vs on — decode and draft acceptance](img/mtp-qwen35-chat.png)
 
@@ -522,20 +523,26 @@ Steady-state at a 4k-token prompt:
 
 | Config | Prefill @4k | **Decode @4k** | Δ decode | Draft accept | Peak VRAM |
 |---|---:|---:|---:|---:|---:|
-| **MTP off** (baseline) | 1122 t/s | **88.9 t/s** | — | — | 29.4 GB |
-| MTP `n_max=1` | 1095 t/s | 109.1 t/s | **+23%** | 79% | 30.0 GB |
-| **MTP `n_max=2`** | 1100 t/s | **116.8 t/s** | **+31%** | 69% | 30.1 GB |
-| MTP `n_max=3` | 1094 t/s | 108.5 t/s | +22% | 62% | 30.2 GB |
-| MTP `n_max=4` | 1099 t/s | 106.6 t/s | +20% | 52% | 30.2 GB |
+| **MTP off** (baseline) | 1182 t/s | **89.3 t/s** | — | — | 29.2 GB |
+| MTP `n_max=1` | 1129 t/s | 109.0 t/s | **+22%** | 79% | 29.8 GB |
+| **MTP `n_max=2`** | 1129 t/s | **117.8 t/s** | **+32%** | 69% | 29.9 GB |
+| MTP `n_max=3` | 1125 t/s | 108.3 t/s | +21% | 62% | 29.9 GB |
+| MTP `n_max=4` | 1124 t/s | 106.9 t/s | +20% | 52% | 30.0 GB |
 
 Takeaways:
 
-- **MTP is a real, lossless decode win on our actual daily model**: ~**+25–31%** decode at
-  identical weights (peaks ~+35–42% at shorter 512-token prompts). Output is unchanged — the
+- **MTP is a real, lossless decode win on our actual daily model**: ~**+20–32%** decode at
+  identical weights (peaks ~**+37–43%** at shorter 512-token prompts). Output is unchanged — the
   main model verifies every drafted token.
 - **`n_max=2` is the sweet spot** (matches unsloth's recommendation). Deeper drafting
   (`n_max` 3–4) *lowers* acceptance (52–62%) — more wasted draft passes — and nets less.
-- **Prefill cost is negligible** here (~2%, 1122→1100 t/s) — much cheaper than the pxq_llama
+- **Long context benefits *more*, not less.** Across the 500→32k sweep, `n_max=2` decode gain
+  rises from **+32% @4k to +57% @32k** (116.8 vs 74.5 t/s baseline) — the baseline decode slows
+  under the growing KV while the cheap MTP verify step does not. Acceptance is **U-shaped**: it
+  dips through the 2–8k mid-range (~69%) then *recovers* to **~85–92% at 16–32k** as the
+  low-entropy summary prompt becomes more predictable. The +32% @4k figure is a floor, not a
+  ceiling, for long-context chat.
+- **Prefill cost is negligible** here (~4%, 1182→1129 t/s) — much cheaper than the pxq_llama
   fork's MTP, which taxed prefill heavily (§14). Stock llama.cpp's in-model MTP only adds a small
   per-step draft.
 - **VRAM cost is ~0.6–0.8 GB** (draft path + head). **Production fit:** our `chat` slot serves
@@ -544,7 +551,7 @@ Takeaways:
   `chat` runs alone on idx2 (comfyui-secure evicts it before image gen via the free_gpu hook), so
   the full-card peak is the real ceiling.
 - **Acceptance here is optimistic**: the summarization prompt is low-entropy (highly
-  predictable), so real chat/code will accept less and gain less than +31%. Still, even a
+  predictable), so real chat/code will accept less and gain less than +32%. Still, even a
   conservative +15–20% is free throughput from a model swap + one flag.
 
 **How to enable** (this is the shipped `chat` block — ctx capped at 96k to fit MTP):

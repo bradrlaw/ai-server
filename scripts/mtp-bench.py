@@ -29,9 +29,13 @@ STOCK_BIN = "/srv/ai/src/llama.cpp/build/bin/llama-server"
 SWAP = "http://127.0.0.1:9090"
 DATA_DIR = "/srv/ai/docs/data/mtp"
 GPU = 1                     # free V100 for testing (idx1)
-CTX = 32768                 # test ctx (weights ~28GB + MTP; leaves headroom on 32GB)
+CTX = 40960                 # test ctx: must exceed the largest prompt (32k) + gen +
+                            # margin. 35B-A3B MoE q8_0 KV is cheap (prod runs 96k), so
+                            # ~40k fits comfortably alongside ~28GB weights + MTP on 32GB.
 BATCH = 2048
-PROMPT_SIZES = [128, 512, 2048, 4096]
+# Prompt-size sweep spanning ~500 tokens up to 32k, doubling each step, to profile
+# MTP prefill/decode/acceptance across a wide context range.
+PROMPT_SIZES = [512, 1024, 2048, 4096, 8192, 16384, 32768]
 GEN_TOKENS = 256            # longer gen -> steadier decode + MTP acceptance signal
 
 
