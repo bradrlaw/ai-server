@@ -41,9 +41,11 @@ def main():
     CSV, OUT = a.csv, a.out
     rows = load()
     nmaxes = sorted({int(r["nmax"]) for r in rows})
-    # steady-state decode per nmax — use the largest prompt bucket present
-    # (robust across tokenizers; e.g. Gemma yields 4092 vs Qwen 4091 for ~4k).
-    steady = max(int(r["prompt_tokens"]) for r in rows)
+    # steady-state decode per nmax — use the ~4k prompt bucket (closest to 4096),
+    # a representative chat prompt that stays stable as the sweep range grows and
+    # keeps this panel comparable to the other MTP sections (all "@4k steady-state").
+    avail = sorted({int(r["prompt_tokens"]) for r in rows})
+    steady = min(avail, key=lambda s: abs(s - 4096))
     dec = {}
     for r in rows:
         if int(r["prompt_tokens"]) == steady:
@@ -60,7 +62,7 @@ def main():
     axes[0].set_xticks(list(x)); axes[0].set_xticklabels(labels, fontsize=9)
     axes[0].set_ylabel("tokens / s"); axes[0].grid(axis="y", alpha=0.3)
     axes[0].set_axisbelow(True)
-    axes[0].set_title("Decode @4k prompt — MTP off vs on\n(same " + a.weights +
+    axes[0].set_title(f"Decode @{round(steady/1024)}k prompt — MTP off vs on\n(same " + a.weights +
                       " weights, stock llama.cpp, one V100)", fontsize=11, fontweight="bold")
     for rect, v, n in zip(b, vals, nmaxes):
         lbl = f"{v:.0f}" + ("" if n == 0 else f"\n+{v/base-1:.0%}")
@@ -79,6 +81,9 @@ def main():
             acc.append(float(m[0]["accept_pct"]) if m and m[0]["accept_pct"] else None)
         axes[1].plot(sizes, acc, marker="o", label=f"n_max={n}")
     axes[1].set_xlabel("prompt size (tokens)"); axes[1].set_ylabel("draft acceptance %")
+    axes[1].set_xscale("log", base=2)
+    axes[1].set_xticks(sizes)
+    axes[1].set_xticklabels([f"{round(s/1024)}k" if s >= 1000 else str(s) for s in sizes], fontsize=8)
     axes[1].set_title("MTP draft acceptance vs prompt size\n(low-entropy summary prompt "
                       "— optimistic)", fontsize=11, fontweight="bold")
     axes[1].grid(alpha=0.3); axes[1].legend(fontsize=8.5); axes[1].set_ylim(0, 100)

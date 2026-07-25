@@ -69,7 +69,10 @@ services:
 
   # mcpo — MCP-to-OpenAPI proxy. Exposes each MCP server in mcpo/config.json as
   # an authenticated OpenAPI endpoint (http://mcpo:8000/<tool>) for Open WebUI.
-  # config.json is the versioned MCP inventory; --hot-reload picks up edits.
+  # config.json is the versioned MCP inventory. NOTE: --hot-reload was removed —
+  # mcpo's file watcher polls in a tight loop over the read-only /config bind
+  # mount (inotify doesn't propagate across the mount), pegging a CPU core. Edit
+  # config.json then `docker compose up -d mcpo` (or restart) to pick up changes.
   mcpo:
     image: ghcr.io/open-webui/mcpo:main
     container_name: mcpo
@@ -93,7 +96,6 @@ services:
       - "8000"
       - "--api-key"
       - "${MCPO_API_KEY}"
-      - "--hot-reload"
       - "--config"
       - "/config/config.json"
     volumes:
