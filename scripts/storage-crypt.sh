@@ -93,6 +93,18 @@ cmd_unlock() {
     echo ">> mounting ${MOUNT}"
     mount "${MAPPER_DEV}" "${MOUNT}"
   fi
+  # Recreate filebrowser so its bind-mounts re-resolve the now-present
+  # symlinked secure dirs (/srv/ai/comfyui/{input,output}-secure ->
+  # /srv/ai/storage/...). Docker resolves bind sources at create time, so a
+  # plain restart is not enough. Best-effort: never fail the unlock over this.
+  if command -v docker >/dev/null 2>&1 && [[ -f /srv/ai/docker/docker-compose.yml ]]; then
+    if docker compose version >/dev/null 2>&1; then
+      echo ">> recreating filebrowser to pick up encrypted-volume mounts"
+      ( cd /srv/ai/docker && docker compose up -d --force-recreate filebrowser ) \
+        || echo "   warning: filebrowser recreate failed (recreate it manually)" >&2
+    fi
+  fi
+
   echo "unlocked."
   cmd_status
 }
