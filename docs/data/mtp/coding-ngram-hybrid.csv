@@ -1,0 +1,15 @@
+prompt,config,nmax,spec_type,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+code,off,0,none,5100,6.166,852.0,21.8,,23886
+code,off,0,none,20827,27.419,760.6,20.1,,23886
+code,mtp-n2,2,draft-mtp,5100,6.599,795.0,42.6,100.0,25146
+code,mtp-n2,2,draft-mtp,20827,29.679,703.5,38.8,100.0,25146
+code,mtp-n4,4,draft-mtp,5100,6.562,799.5,53.2,100.0,25446
+code,mtp-n4,4,draft-mtp,20827,28.963,720.0,48.3,100.0,25446
+code,mtp+ngram-n4,4,"draft-mtp,ngram-mod",5100,6.596,794.5,64.9,74.2,25448
+code,mtp+ngram-n4,4,"draft-mtp,ngram-mod",20827,29.267,712.7,58.2,73.4,25448
+summary,mtp-n2,2,draft-mtp,4091,5.275,805.2,40.6,86.4,25146
+summary,mtp-n2,2,draft-mtp,16376,22.096,743.1,41.4,100.0,25146
+summary,mtp-n4,4,draft-mtp,4091,5.248,807.6,47.3,82.1,25446
+summary,mtp-n4,4,draft-mtp,16376,21.945,748.1,44.0,82.1,25446
+summary,mtp+ngram-n4,4,"draft-mtp,ngram-mod",4091,5.235,808.9,32.1,65.6,25448
+summary,mtp+ngram-n4,4,"draft-mtp,ngram-mod",16376,21.859,751.0,51.4,92.3,25448
