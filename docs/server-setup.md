@@ -43,7 +43,7 @@ Last updated: 2026-06-30
 | Motherboard  | MSI X99A Gaming Titanium Pro (LGA2011-3, X99 chipset) |
 | CPU          | Intel Core i7-6950X (10C/20T, Broadwell-E, 40 PCIe lanes, ~140W TDP) |
 | RAM          | 128 GB |
-| Storage      | Intel 2 TB SSD (NVMe, `/dev/nvme0n1`) — installed in PCIe slot 4 |
+| Storage      | **Boot/root:** Intel 2 TB SSD (NVMe, `/dev/nvme0n1`, PCIe slot 4) — `/`, ~1.1T. **Encrypted:** ADATA SU760 512 GB SATA (LUKS2 `aidata` → `/srv/ai/storage`, manual unlock) on SATA7. **Bulk (unsecured):** Seagate ST1000DM003 1 TB SATA (ext4 `aibulk` → `/srv/ai/storage-bulk`) on SATA8 — models & other large non-secret data |
 | GPU 1        | NVIDIA Tesla V100-PCIE-32GB — slot 1 — compute cap **7.0** (Volta) |
 | GPU 2        | NVIDIA Tesla V100-PCIE-32GB — slot 3 — compute cap **7.0** (Volta) |
 | GPU 3        | NVIDIA Tesla P100-PCIE-16GB — slot 6 — compute cap **6.0** (Pascal) |
@@ -239,8 +239,13 @@ less fragile and engines independently upgradable.
 7. **API gateway:** to expose one OpenAI-style endpoint over multiple backends
    (P100 embeddings + V100 coding), consider **LiteLLM** as a router/proxy — fits the
    "agent routing" goal. Plan systemd services + auth + reverse proxy.
-8. **Storage layout:** root FS is the 2TB NVMe (`/`, 1.1T free). Decide where large
-   model weights live (`/srv/ai/models`) and back up configs.
+8. **Storage layout:** three tiers — (a) **boot/root** on the 2TB NVMe (`/`, ~1.1T
+   free); (b) **encrypted** ADATA SU760 (LUKS2 `aidata` → `/srv/ai/storage`, manual
+   passphrase unlock via `scripts/storage-crypt.sh`, `noauto`) for secrets/private
+   media; (c) **unsecured bulk** Seagate 1TB (ext4 `LABEL=aibulk` →
+   `/srv/ai/storage-bulk`, fstab `defaults,nofail`) for model weights and other large
+   non-secret data. Prefer `/srv/ai/storage-bulk` for big model downloads to keep `/`
+   free.
 
 ---
 
