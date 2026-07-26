@@ -245,7 +245,11 @@ less fragile and engines independently upgradable.
    media; (c) **unsecured bulk** Seagate 1TB (ext4 `LABEL=aibulk` →
    `/srv/ai/storage-bulk`, fstab `defaults,nofail`) for model weights and other large
    non-secret data. Prefer `/srv/ai/storage-bulk` for big model downloads to keep `/`
-   free.
+   free. **Model cold-tier:** `/srv/ai/models/cold` is a symlink →
+   `/srv/ai/storage-bulk/models` — hot/served model dirs stay directly under
+   `/srv/ai/models/`; rarely-used, base-weight, or superseded-quant dirs (e.g. the plain
+   `qwen3.6-27b/` BF16+non-MTP quants, `pxq-fusion4/`, `qwen3.5-9b/`) live under
+   `/srv/ai/models/cold/` on the 1TB. Nothing in `llama-swap.base.yaml` references `cold/`.
 
 ---
 
