@@ -35,11 +35,13 @@ ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launc
 # service — mounting 0 comfyui tools until it reconnects. Bounce the mcpo container
 # once this bridge is actually accepting connections so the comfyui tools always load.
 # We POLL the bridge port (127.0.0.1:9000, any HTTP reply — a bare GET returns 406)
-# for up to ~60s instead of a blind `sleep 5`: bouncing mcpo before the network /
-# bridge are ready is what left mcpo's uvx stdio subprocesses dead and spinning a CPU
-# core at boot (see docker-compose.yml mcpo boot-race note). Leading '-' + guards:
-# never fail this service if docker/mcpo/curl isn't present.
-ExecStartPost=-/bin/bash -c 'for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:9000/mcp && break; sleep 2; done; sleep 2; docker restart mcpo 2>/dev/null || true'
+# for up to ~60s and ONLY restart mcpo if the bridge came up. This matters because
+# Type=simple runs ExecStartPost even when ExecStart later fails (e.g. ComfyUI down),
+# so guarding on the poll avoids pointlessly bouncing mcpo in a failed restart loop.
+# A blind bounce here is also what left mcpo's uvx stdio subprocesses dead and
+# spinning a CPU core at boot (see docker-compose.yml mcpo boot-race note). Leading
+# '-' + guards: never fail this service if docker/mcpo/curl isn't present.
+ExecStartPost=-/bin/bash -c 'for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:9000/mcp && { sleep 2; docker restart mcpo 2>/dev/null || true; exit 0; }; sleep 2; done'
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15
