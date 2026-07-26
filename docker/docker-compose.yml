@@ -73,10 +73,23 @@ services:
   # mcpo's file watcher polls in a tight loop over the read-only /config bind
   # mount (inotify doesn't propagate across the mount), pegging a CPU core. Edit
   # config.json then `docker compose up -d mcpo` (or restart) to pick up changes.
+  #
+  # Boot-race hardening (2026-07-26): mcpo spawns its stdio MCP servers via
+  # `uvx`/`uv`. Without a persistent uv cache, every (re)start re-downloads
+  # mcp-server-time/fetch/git from PyPI; at boot, before the network is ready,
+  # those fetches fail, the subprocesses die (become zombies), and mcpo's async
+  # loop busy-spins on the dead stdout pipes → a pegged CPU core. Two guards:
+  #   1. mcpo-uv-cache volume → uvx starts from cache (fast, no PyPI round-trip),
+  #      so the subprocesses no longer die on a boot-time network race.
+  #   2. healthcheck does a REAL `time` tool call (a bare /docs GET returns 200
+  #      even while spinning) so a dead-subprocess spin is detected; the autoheal
+  #      sidecar then restarts the container automatically.
   mcpo:
     image: ghcr.io/open-webui/mcpo:main
     container_name: mcpo
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     ports:
       - "8000:8000"
     # LITELLM_MASTER_KEY (+ others) from .env enter mcpo's env and are inherited
@@ -104,6 +117,20 @@ services:
       # inspect it (log/diff/status/show). RO by design: LLM-driven agents
       # cannot commit/mutate the real repo. Add more repos as extra :ro mounts.
       - /srv/ai:/repos/ai-server:ro
+      # Persistent uv cache so `uvx` stdio MCP servers start from cache instead
+      # of re-downloading from PyPI on every restart (see boot-race note above).
+      - mcpo-uv-cache:/root/.cache/uv
+    # Liveness probe that actually EXERCISES a stdio subprocess end-to-end: a
+    # dead/zombie subprocess makes this call hang or error even though /docs
+    # still returns 200. $MCPO_API_KEY comes from ./.env via env_file. On
+    # sustained failure the container is marked unhealthy and the autoheal
+    # sidecar restarts it. Generous start_period covers a cold (uncached) boot.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 8 -X POST http://127.0.0.1:8000/time/get_current_time -H \"Authorization: Bearer $MCPO_API_KEY\" -H 'Content-Type: application/json' -d '{\"timezone\":\"UTC\"}' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     networks:
       - ai
 
@@ -226,6 +253,24 @@ services:
     networks:
       - ai
 
+  # autoheal — watches containers labelled `autoheal=true` and restarts any that
+  # Docker marks `unhealthy`. Docker's own `restart:` policy only reacts to a
+  # container EXITING, not to an unhealthy healthcheck, so this sidecar is what
+  # turns mcpo's healthcheck into an actual self-heal (e.g. the boot-race
+  # dead-subprocess CPU spin). Mounts the Docker socket read-only + needs no
+  # network. MONITOR_ALL is off, so only opted-in (labelled) containers heal.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "15"
+      AUTOHEAL_START_PERIOD: "60"
+      TZ: America/New_York
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
 networks:
   ai:
     name: ai
@@ -235,3 +280,6 @@ volumes:
     name: open-webui-data
   filebrowser-data:
     name: filebrowser-data
+  # uv cache for mcpo's stdio MCP servers (see mcpo boot-race note).
+  mcpo-uv-cache:
+    name: mcpo-uv-cache
