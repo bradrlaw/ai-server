@@ -23,6 +23,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
   - [MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)](#mtp-benefit-by-prompt-type--temperature--is-mtp-hurts-creative-writing-a-metal-artefact-2026-07-24)
 - [Output-quality benchmark — GSM8K across the served roster (2026-07-24)](#output-quality-benchmark--gsm8k-across-the-served-roster-2026-07-24)
+- [Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)](#candidate-eval--ternary-bonsai-27b-ternary-q2_0-on-the-p100-2026-07-26)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -1101,3 +1102,56 @@ so it scores identically and is omitted from the chart.
 > **Caveat:** GSM8K is one narrow (grade-school math) axis and n is modest (±1–5 pts). It's a
 > regression tripwire and a coarse ranker, **not** a full capability eval. The 41% `fast-uncensored`
 > result is large enough to be a real signal regardless.
+
+## Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)
+
+Evaluated [`prism-ml/Ternary-Bonsai-27B-gguf`](https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf)
+— a **ternary** (`{-1,0,+1}`, `Q2_0_g128`, ~1.71 bits/weight) build of Qwen3.6-27B — as a possible
+always-on P100 model. It is a genuine sub-2-bit weight format, **not** a K-quant: the GGUF tensors use
+ggml type id **42**, which stock llama.cpp rejects, so it can only be served by the vendor's
+[PrismML-Eng/llama.cpp fork](https://github.com/PrismML-Eng/llama.cpp) (custom 2-bit hybrid-attention
+kernels). We built the fork at `/srv/ai/src/llama.cpp-prism` (CUDA `sm_60;sm_70`, commit `7529fda`).
+
+**Quality — same harness/methodology as the roster GSM8K table above** (5-shot CoT, greedy
+`temperature=0`, reasoning params `max_gen_toks=6144` + `until=<|im_end|>`, n=100), driven through the
+fork's `llama-server` on the P100 (idx0):
+
+| candidate | base / format | bits/wt | size | GPU | n | flexible | strict | ±stderr |
+|---|---|--:|--:|---|--:|--:|--:|--:|
+| **`bonsai-27b`** | Qwen3.6-27B ternary **Q2_0** | **1.71** | **6.66 GiB** | P100 | 100 | **98.0%** | 98.0% | 1.4 |
+
+That **ties `coding`/`big`/`gemma-31b` (98%)**, sits 1 pt under `chat` (99%), and is **3 pts above the
+current P100 residents `fast`/`gemma-26b` (95%)** — at a fraction of their footprint. The vendor's own
+card claims 94.6% of FP16 across a 15-benchmark thinking-mode suite; our GSM8K point corroborates that
+the ternary quantization keeps math reasoning essentially intact.
+
+**Speed (P100, `llama-bench` + `llama-cli`):**
+
+| config | pp512 | tg128 |
+|---|--:|--:|
+| bare `Q2_0` | 134.9 t/s | 17.3 t/s |
+| `Q2_0` + DSpark drafter (`--spec-type draft-dspark --spec-draft-n-max 4`) | — | **23.3 t/s (1.35x)** |
+
+Note Bonsai ships **no embedded MTP head** — the base `Q2_0` is bare, and **DSpark is a separate optional
+drafter file** (`dspark-Q4_1.gguf`, 1.95 GB), i.e. a standalone EAGLE-style draft model rather than
+Qwen3.6's embedded self-spec. So there is no wasted-head VRAM to strip for a throughput pool; you simply
+omit `--model-draft`. The 1.35x is a **single-stream** win (like MTP), useless for a parallel fan-out.
+
+**Verdict — not adopted (for now).**
+
+- **Quality-per-GB is excellent**, and it clearly out-reasons the current P100 Gemmas on GSM8K.
+- **But it's a *dense* 27B-equivalent compute load**: 17–23 t/s single-stream on the P100 vs the much
+  faster **Gemma-4-26B-A4B MoE** (~4B active/token) that holds the P100 slot today. That makes it a poor
+  fit for **agentic mode** (throughput / parallel fan-out) — its sweet spot is the opposite regime, a
+  single-stream *max-quality reasoning* slot with DSpark on.
+- **Operational cost:** requires maintaining a second (fork) llama.cpp binary.
+
+Kept as a **cold-tier** candidate (`/srv/ai/models/cold/ternary-bonsai-27b/`) for a possible future
+quality-oriented mode / separate project; the fork build stays at `/srv/ai/src/llama.cpp-prism`.
+
+Data: `docs/data/lm-eval/bonsai-27b-gsm8k-20260726/`. Runner: `tmp/bonsai-eval/run-bonsai-gsm8k.sh`
+(one-off, gitignored).
+
+> **Caveat:** as with the roster table, GSM8K is one narrow axis at modest n (±1.4 pts). The vendor card
+> also reports weaker agentic/tool-calling (BFCL/τ²-Bench ~74) and vision (~65) — the categories ternary
+> holds least well — so a 98% math score should not be read as blanket parity with the served roster.
