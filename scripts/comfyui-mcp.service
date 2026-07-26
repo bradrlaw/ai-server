@@ -33,9 +33,13 @@ Environment=HOME=/home/brad
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py
 # mcpo (docker) does NOT retry a failed MCP server and, on boot, races ahead of this
 # service — mounting 0 comfyui tools until it reconnects. Bounce the mcpo container
-# once this bridge is up (after a short bind delay) so the comfyui tools always load.
-# Leading '-' + guard: never fail this service if docker/mcpo isn't present.
-ExecStartPost=-/bin/bash -c 'sleep 5; docker restart mcpo 2>/dev/null || true'
+# once this bridge is actually accepting connections so the comfyui tools always load.
+# We POLL the bridge port (127.0.0.1:9000, any HTTP reply — a bare GET returns 406)
+# for up to ~60s instead of a blind `sleep 5`: bouncing mcpo before the network /
+# bridge are ready is what left mcpo's uvx stdio subprocesses dead and spinning a CPU
+# core at boot (see docker-compose.yml mcpo boot-race note). Leading '-' + guards:
+# never fail this service if docker/mcpo/curl isn't present.
+ExecStartPost=-/bin/bash -c 'for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:9000/mcp && break; sleep 2; done; sleep 2; docker restart mcpo 2>/dev/null || true'
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15
