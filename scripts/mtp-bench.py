@@ -129,6 +129,7 @@ DRAFT_MODEL = None     # separate draft-model GGUF (Gemma-4 assistant MTP); set 
 UBATCH = None          # override ubatch (defaults to BATCH); set via --ubatch
 EXTRA = []             # extra passthrough flags (e.g. --reasoning-budget 0); set via --extra
 SPEC_TYPE = "draft-mtp"  # speculative decode type; set via --spec-type (e.g. "draft-mtp,ngram-mod")
+TEMP = 0.0             # sampling temperature; set via --temp (entropy sensitivity of acceptance)
 
 
 def build_cmd(nmax, ctx=CTX):
@@ -189,7 +190,7 @@ def wait_ready(timeout=300):
 
 def probe(prompt, gen_tokens):
     payload = {"prompt": prompt, "n_predict": gen_tokens, "stream": True,
-               "cache_prompt": False, "temperature": 0.0}
+               "cache_prompt": False, "temperature": TEMP, "seed": 1234}
     req = urllib.request.Request(f"http://127.0.0.1:{PORT}/completion",
                                  data=json.dumps(payload).encode(),
                                  headers={"Content-Type": "application/json"})
@@ -227,7 +228,7 @@ def accept_rate(tim):
 
 
 def main():
-    global MODEL, GPU, KV_TYPE, SPLIT, DRAFT_MODEL, UBATCH, EXTRA, SPEC_TYPE, GEN_TOKENS
+    global MODEL, GPU, KV_TYPE, SPLIT, DRAFT_MODEL, UBATCH, EXTRA, SPEC_TYPE, GEN_TOKENS, TEMP
     ap = argparse.ArgumentParser()
     ap.add_argument("--nmax", type=int, nargs="+", default=[0, 1, 2, 3, 4],
                     help="MTP n_max values to test; 0 = baseline (MTP off)")
@@ -253,6 +254,7 @@ def main():
     ap.add_argument("--sizes", default="",
                     help="comma list of prompt sizes to sweep, overriding the default 500-32k set")
     ap.add_argument("--gen", type=int, default=GEN_TOKENS, help="tokens to generate per probe")
+    ap.add_argument("--temp", type=float, default=0.0, help="sampling temperature (default 0.0)")
     ap.add_argument("--label", default="qwen35-chat",
                     help="model label: names the CSV (<label>-mtp.csv) and the 'model' column")
     ap.add_argument("--no-restore", action="store_true")
@@ -263,6 +265,7 @@ def main():
     EXTRA = a.extra.split() if a.extra else []
     SPEC_TYPE = a.spec_type
     GEN_TOKENS = a.gen
+    TEMP = a.temp
     prompt_fn = PROMPT_FNS[a.prompt]
     ctx = a.ctx
     if a.sizes:

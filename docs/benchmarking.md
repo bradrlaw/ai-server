@@ -18,6 +18,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [MTP speculative decode on our `chat` model — Qwen3.6-35B-A3B (2026-07-23)](#mtp-speculative-decode-on-our-chat-model--qwen36-35b-a3b-2026-07-23)
   - [MTP on the `coding` model — Qwen3.6-27B Q6_K (2026-07-23)](#mtp-on-the-coding-model--qwen36-27b-q6_k-2026-07-23)
   - [Chaining `ngram-mod` before `draft-mtp` on the `coding` slot (2026-07-25)](#chaining-ngram-mod-before-draft-mtp-on-the-coding-slot-2026-07-25)
+  - [MTP draft-depth sweep on `coding` — shipping `n_max` 2→3 (2026-07-25)](#mtp-draft-depth-sweep-on-coding--shipping-n_max-23-2026-07-25)
   - [MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)](#mtp-on-the-uncensored-chat-uncensored-q6-model--qwen36-35b-a3b-heretic-2026-07-23)
   - [MTP on the `gemma-31b` model — Gemma-4-31B dense, separate draft head (2026-07-23)](#mtp-on-the-gemma-31b-model--gemma-4-31b-dense-separate-draft-head-2026-07-23)
   - [MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)](#mtp-benefit-by-prompt-type--temperature--is-mtp-hurts-creative-writing-a-metal-artefact-2026-07-24)
@@ -659,16 +660,17 @@ default generative `summary` prompt, plus a `--spec-type` override. A/B on `codi
   to match, rejected n-gram drafts waste decode steps. († the 16k "gain" is an artifact of the
   synthetic filler prompt degenerating into repetition, which `ngram-mod` then matches — not a real
   generative win.)
-- **Side finding:** simply raising MTP `n_max` **2→4** helped *both* workloads unconditionally
-  (+25 % code, +16 % generative @4k) for **+0.3 GB** VRAM — a lower-risk lever independent of ngram.
+- **Side finding (now shipped as `n_max=3`):** simply raising MTP `n_max` above 2 helped *both*
+  workloads unconditionally. This was validated on the full 500→32k sweep below and the `coding`
+  slot now ships `--spec-draft-n-max 3`.
 - The suggested `--cache-type-k-draft/v-draft q4_0` are **no-ops for this slot** — they quantize a
   *separate draft model's* KV cache, but `coding` uses an **embedded** MTP head + the model-free
   `ngram-mod`, so there is no draft-model KV to quantize. Omitted here.
 
 **Decision:** the daily `coding` slot serves a **mix** of echo and generative work, so blanket
 `ngram-mod` is not shipped (risks ~30 % regressions on generative turns). It's best as an **opt-in
-for edit/refactor-heavy sessions** (candidate: a `coding-edit` mode overlay). The unconditional
-`n_max` 2→4 bump is a separate candidate worth validating on the full 500→32k sweep before shipping.
+for edit/refactor-heavy sessions** (candidate: a `coding-edit` mode overlay). The deeper-MTP side
+finding *was* worth shipping — see the sweep below.
 
 Data: `docs/data/mtp/coding-ngram-hybrid.csv`. Reproduce:
 
@@ -682,6 +684,45 @@ python3 scripts/mtp-bench.py --model $M --gpu 1 --ctx 40960 --ubatch 2048 \
   --prompt code --sizes 4096,16384 --gen 512 --nmax 4 --label coding-code --no-restore \
   --spec-type "draft-mtp,ngram-mod" \
   --extra "--spec-draft-p-min 0.85 --spec-ngram-mod-n-match 24 --spec-ngram-mod-n-min 8 --spec-ngram-mod-n-max 16"
+```
+
+### MTP draft-depth sweep on `coding` — shipping `n_max` 2→3 (2026-07-25)
+
+The ngram A/B incidentally showed that deeper MTP (`n_max` > 2) helps *both* echo and generative
+work, so I validated it properly before touching the shipped default. Full **500→32k** sweep,
+`n_max ∈ {0,2,3,4}`, on both the echo `code` and generative `summary` prompts (Qwen3.6-27B Q6_K,
+V100 idx1, ctx 40960, q8_0 KV, 512-tok gens, temp 0):
+
+![coding MTP n_max sweep](img/mtp-coding-nmax-sweep.png)
+
+Mean decode tok/s across the sweep (and per-cell regressions vs the shipped `n2`):
+
+| prompt | `n2` (was) | `n3` (new) | `n4` | cells below `n2` |
+|--------|-----------:|-----------:|-----:|------------------|
+| code (echo)      | 41.0 | **44.8** (+9 %) | 46.4 (+13 %) | `n3`: none · `n4`: 1 (@1.3k: 36.5 vs 43.3) |
+| summary (generative) | 40.2 | **42.5** (+6 %) | 45.1 (+12 %) | `n3`: none · `n4`: none |
+
+**Why `n3`, not `n4`:**
+- `n3` beats `n2` in **every one of the 13 cells** (both prompts) — a clean, monotonic upgrade with
+  no regressions.
+- `n4` has a higher *average* but **regresses at some sizes** (draft over-shoot — e.g. code @1.3k
+  drops to 36.5 vs `n2`'s 43.3, accept 59 %), so it's not a safe unconditional default.
+- **VRAM at the production 180k ctx** (measured, near-full prefill peak): `n2` 32.02 GB → `n3`
+  ~32.18 GB → `n4` 32.32 GB on the 32 GB card. `n3` keeps ~0.6 GB headroom; `n4` leaves only
+  ~0.45 GB — too tight for a card that already runs near-full.
+- A temp-0.7 spot check confirmed `n3`/`n4` still beat `n2` under realistic sampling (echo stays
+  ~100 % accept; generative accept falls to ~65-86 % but throughput still wins) — no repeat of the
+  `n=5` @ T1 slowdown seen in the prompt-type/temperature study.
+
+Shipped: `config/llama-swap.base.yaml` `coding` block → `--spec-draft-n-max 3` (daily/heavy-coding
+inherit; `agentic` still strips MTP for its P=2 pool). Data: `docs/data/mtp/coding-nmax-sweep.csv`.
+
+```bash
+M=models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
+python3 scripts/mtp-bench.py --model $M --gpu 1 --ctx 40960 --ubatch 2048 \
+  --gen 512 --nmax 0 2 3 4 --prompt code    --label coding-nmax-code --no-restore
+python3 scripts/mtp-bench.py --model $M --gpu 1 --ctx 40960 --ubatch 2048 \
+  --gen 512 --nmax 0 2 3 4 --prompt summary --label coding-nmax-sum  --no-restore
 ```
 
 ### MTP on the `big` model — Qwen3.6-27B UD-Q6_K_XL, **dual-V100 split** (2026-07-23)

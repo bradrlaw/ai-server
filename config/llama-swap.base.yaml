@@ -42,12 +42,16 @@ models:
   # built-in multi-token-prediction head (embedded blk.64.nextn.*, +0.35GB),
   # enabled with --spec-type draft-mtp. Lossless self-speculative decode: this
   # dense 27B is bandwidth-bound (~23 t/s baseline) with very high draft acceptance
-  # (~87%), so MTP is a BIG win — measured +81% decode (22.9 -> ~41 t/s, n_max=2
-  # sweet spot) at identical weights, ~2-5% prefill cost. See docs/benchmarking.md
+  # (~87%), so MTP is a BIG win — measured +81% decode (22.9 -> ~41 t/s at n_max=2)
+  # at identical weights, ~2-5% prefill cost. See docs/benchmarking.md
   # "MTP speculative decode" (2026-07-23).
+  # n_max=3 (2026-07-25): a full 500->32k sweep showed n_max=3 beats n_max=2 in every
+  # cell (no regressions), avg +6-9% single-stream decode, for +150MB. n_max=4 is a bit
+  # faster on average but regresses at some sizes (draft over-shoot) and halves the
+  # headroom, so n=3 is the robust default. See "Chaining ngram-mod..." + the n_max sweep.
   # VRAM: MTP's extra ~1GB compute buffer means 200k no longer fits (OOM), so ctx is
-  # capped at 180k (184320) — a near-full prefill peaks 32.02GB/32GB (~0.75GB
-  # headroom, measured). This trades 20k of context for the ~+80% decode speedup.
+  # capped at 180k (184320) — a near-full prefill peaks ~32.17GB/32GB at n=3 (~0.6GB
+  # headroom, measured n2=32.02 / n4=32.32). This trades 20k of context for the speedup.
   # coding runs alone on idx1 (comfyui-open evicts it before image gen via the
   # free_gpu hook), so the full-card peak is the real ceiling.
   "coding":
@@ -63,7 +67,7 @@ models:
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
-      --spec-type draft-mtp --spec-draft-n-max 2
+      --spec-type draft-mtp --spec-draft-n-max 3
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K + MTP on V100 #2 (idx2) -------------
