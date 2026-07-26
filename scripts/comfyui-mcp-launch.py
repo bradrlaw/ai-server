@@ -19,13 +19,34 @@ Config via env (see comfyui-mcp.service):
 """
 import os
 import sys
+import time
 
 SRC = os.getenv("COMFY_MCP_SRC", "/srv/ai/src/comfyui-mcp-server")
 sys.path.insert(0, SRC)
 # publish-root detection uses cwd; run from the repo root like upstream expects.
 os.chdir(SRC)
 
-import server  # noqa: E402  (module-level ComfyUI availability check runs on import)
+# Upstream server.py runs a ComfyUI availability check at *import* time and calls
+# sys.exit(1) if ComfyUI is unreachable. That makes the bridge (and its :9000
+# endpoint) disappear whenever ComfyUI is intentionally down — e.g. the quiet-hours
+# window stops comfyui-open/secure to free the V100 overnight. When the bridge is
+# gone, mcpo's "comfyui" streamable-http upstream fails to initialise at startup,
+# which cancels mcpo's whole lifespan and leaves it spinning a CPU core at 100%
+# (taking the healthy stdio tools down with it).
+#
+# To keep :9000 reachable at all times, start the bridge in a *degraded* mode when
+# ComfyUI is down: neutralise the import-time hard-exit (and skip its retry sleeps)
+# so the FastMCP server still comes up and serves the tool list. Tool *calls* will
+# fail until ComfyUI returns, but mcpo connects cleanly and stays healthy. When
+# ComfyUI comes back, calls succeed again (the client connects per request). This
+# keeps the upstream clone pristine — no fork required.
+_orig_exit, _orig_sleep = sys.exit, time.sleep
+sys.exit = lambda *a, **k: None        # let module load past the availability guard
+time.sleep = lambda *a, **k: None      # don't block on the 5-attempt backoff
+try:
+    import server  # noqa: E402  (module-level ComfyUI availability check runs on import)
+finally:
+    sys.exit, time.sleep = _orig_exit, _orig_sleep
 
 server.mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
 _port = os.getenv("FASTMCP_PORT", "").strip()
