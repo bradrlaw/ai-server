@@ -11,7 +11,7 @@ set -euo pipefail
 
 GPU=${GPU:-1}
 CAPS=(${CAPS:-250 200 175 150})
-MODEL=${MODEL:-$(ls /srv/ai/models/qwen3.6-27b/*Q6_K*.gguf 2>/dev/null | head -1)}
+MODEL=${MODEL:-$(ls /srv/ai/models/cold/qwen3.6-27b/*Q6_K*.gguf /srv/ai/models/qwen3.6-27b-mtp/*Q6_K*.gguf 2>/dev/null | head -1)}
 BIN=${BIN:-/srv/ai/src/llama.cpp/build/bin/llama-bench}
 NGL=${NGL:-999}                 # GPU layers to offload (lower for a tight-fit card)
 PP=${PP:-2048}                  # prefill tokens
