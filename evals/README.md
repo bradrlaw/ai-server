@@ -88,7 +88,11 @@ refreshes the test's `summary.html`.
 - **`outputs/<label>/run.html`** — a per-run page: metric cards, the llama.cpp load
   command, the sampler, the full `meta.json`, and (for HTML tests) the rendered page inline.
 
-Both are plain files — browse them in Filebrowser (`:8083` → `/data/evals`) or open directly.
+Both are plain files. **To view rendered pages, use the evals web viewer at
+`http://<server>:8085/`** (a read-only static server that serves this tree with
+directory listing) — open `localmind-landing-page/summary.html`, then click into any
+run. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it shows HTML
+*source* rather than rendering it.
 
 ## Scoring
 

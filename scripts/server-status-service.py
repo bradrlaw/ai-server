@@ -86,6 +86,7 @@ SERVICES = os.environ.get(
     "LiteLLM=http://127.0.0.1:4000/health/liveliness=,"
     "mcpo=http://127.0.0.1:8000/docs=8000,"
     "Filebrowser=http://127.0.0.1:8083/health=8083,"
+    "Evals viewer=http://127.0.0.1:8085/=8085,"
     "OpenClaw=http://127.0.0.1:18789/healthz=http://localhost:18789,"
     "Hermes dashboard=http://127.0.0.1:9119/=9119,"
     "Hermes API=http://127.0.0.1:8642/health=8642",

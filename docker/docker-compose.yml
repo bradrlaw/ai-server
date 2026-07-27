@@ -167,6 +167,23 @@ services:
     networks:
       - ai
 
+  # evals-web — tiny read-only static server that RENDERS the model-eval HTML
+  # (evals/summary.html, per-run run.html, each model's index.html). Filebrowser
+  # only shows HTML source; this serves the tree with proper text/html + directory
+  # autoindex so pages render and the run.html inline previews work. No auth
+  # (LAN/Tailscale), read-only mount — the content is non-secret eval output.
+  evals-web:
+    image: nginx:1.27-alpine
+    container_name: evals-web
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    volumes:
+      - /srv/ai/evals:/usr/share/nginx/html:ro
+      - ./evals-web/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - ai
+
   # OpenClaw — self-hosted multi-channel personal-assistant gateway (Node daemon).
   # Talks to the native models through the LiteLLM gateway (host :4000) via its
   # dedicated `litellm` provider (config in the state dir). Control UI + API on
