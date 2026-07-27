@@ -1,0 +1,27 @@
+{
+  "label": "base-qwen3.6-27b",
+  "items": 40,
+  "K": 5,
+  "n_gens": 200,
+  "sampler": {
+    "temp": 1.0,
+    "top_p": 0.95,
+    "top_k": 20
+  },
+  "accuracy_avg": 0.815,
+  "accuracy_majority": 0.85,
+  "reasoning_tokens": {
+    "mean": 1241.0,
+    "std": 1298.6
+  },
+  "completion_tokens": {
+    "mean": 1406.4,
+    "std": 1339.7
+  },
+  "answer_tokens": {
+    "mean": 162.5,
+    "std": 100.9
+  },
+  "truncated_length": 2,
+  "errors": 0
+}

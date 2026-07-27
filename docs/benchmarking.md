@@ -24,6 +24,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [MTP benefit by prompt type & temperature — is "MTP hurts creative writing" a Metal artefact? (2026-07-24)](#mtp-benefit-by-prompt-type--temperature--is-mtp-hurts-creative-writing-a-metal-artefact-2026-07-24)
 - [Output-quality benchmark — GSM8K across the served roster (2026-07-24)](#output-quality-benchmark--gsm8k-across-the-served-roster-2026-07-24)
 - [Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)](#candidate-eval--ternary-bonsai-27b-ternary-q2_0-on-the-p100-2026-07-26)
+- [Candidate eval — ThinkingCap-Qwen3.6-27B (token-efficient fine-tune) vs the `coding` base (2026-07-26)](#candidate-eval--thinkingcap-qwen36-27b-token-efficient-fine-tune-vs-the-coding-base-2026-07-26)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -1155,3 +1156,61 @@ Data: `docs/data/lm-eval/bonsai-27b-gsm8k-20260726/`. Runner: `tmp/bonsai-eval/r
 > **Caveat:** as with the roster table, GSM8K is one narrow axis at modest n (±1.4 pts). The vendor card
 > also reports weaker agentic/tool-calling (BFCL/τ²-Bench ~74) and vision (~65) — the categories ternary
 > holds least well — so a 98% math score should not be read as blanket parity with the served roster.
+
+## Candidate eval — ThinkingCap-Qwen3.6-27B (token-efficient fine-tune) vs the `coding` base (2026-07-26)
+
+Evaluated [`bottlecapai/ThinkingCap-Qwen3.6-27B`](https://huggingface.co/bottlecapai/ThinkingCap-Qwen3.6-27B)
+— a **token-efficient thinking** fine-tune of **the exact base our `coding`/`big` slots run**
+(Qwen3.6-27B). Its headline claim: **~50 % fewer thinking tokens on average** (up to 90 % best case) at
+preserved accuracy. It ships only full-precision safetensors, but the authors + community publish GGUFs;
+we tested the official **Q6_K** (22.4 GB, the same quant as `coding`). Both the official and the
+`protoLabsAI` MTP GGUF already carry the **embedded `nextn` (MTP) head** (`blk.64.nextn.*`), so it is a
+true drop-in: standard `qwen35` arch on our **stock** llama.cpp, same `--spec-type draft-mtp` self-spec.
+
+We ran a **matched** comparison against the current `coding` file
+(`models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf`) — identical servers (one per V100), thinking **on**,
+same GSM8K item set — measuring both **accuracy** and **thinking-token count** (llama-server routes the
+reasoning phase into `reasoning_content`, which we tokenize per generation). Two sampler regimes: greedy
+(`temp 0`, reproducible) and the model's **recommended operating point** (`temp 1.0`, `top_p 0.95`,
+`top_k 20`, 5 samples/item).
+
+| regime | model | accuracy | mean reasoning tok | mean total tok | σ(reasoning) | trunc @8k |
+|---|---|--:|--:|--:|--:|--:|
+| greedy (80×1) | stock Qwen3.6-27B | 87.5 % | 1137 | 1280 | — | 2 |
+| greedy (80×1) | **ThinkingCap** | 91.2 % | **453** (**−60 %**) | 550 | — | 0 |
+| temp 1.0 (40×5) | stock Qwen3.6-27B | 81.5 % | 1241 | 1406 | **1299** | 2 |
+| temp 1.0 (40×5) | **ThinkingCap** | 83.0 % | **453** (**−63 %**) | 556 | **151** | 0 |
+
+![ThinkingCap vs base](img/thinkingcap-27b.png)
+
+**Findings:**
+
+- **~60–63 % fewer thinking tokens** — meets and beats the "~50 % avg" claim on both samplers.
+- **Accuracy preserved** — 81.5 % vs 83.0 % per-sample (temp 1.0), 85.0 % vs 82.5 % majority@5; the base
+  edges greedy 87.5 % → 91.2 % is offset the other way at temp 1.0. Differences sit inside the n=40–80 CI
+  (±~4 pts): the honest read is **statistical parity**, not a quality win either way.
+- **Variance collapse (the sleeper win).** The stock base's per-problem reasoning length is *wildly*
+  unpredictable — σ **≈ 1299 tokens ≈ its own mean** at temp 1.0, occasionally running away into the 8 k
+  cap (2/200 truncations, i.e. wrong answers from over-thinking). ThinkingCap's σ is **151** and it never
+  truncated. For a serving slot that means **predictable latency** and no runaway generations.
+- **MTP decode is at parity** — with `--spec-type draft-mtp --spec-draft-n-max 3` both models decode
+  **~35 t/s** on the V100. So the per-token speed is unchanged; the end-to-end win comes entirely from
+  emitting fewer tokens: **~2.3–2.5× faster wall-clock per answer** at the same quality
+  (base ≈105 s vs ThinkingCap ≈46 s per GSM8K item in the greedy pass).
+
+**Verdict — strong `coding`-slot candidate, kept hot for a live trial.**
+
+It is a genuine drop-in (same base, quant, VRAM, MTP self-spec, stock engine) that returns equivalent
+answers ~2.5× faster with far more predictable latency. GSM8K is a narrow, easy axis — the base
+over-thinks it, which likely *flatters* the token-savings gap — so a live trial on real coding/agentic
+traffic (where the vendor's own GPQA/MMLU-Pro/LiveCodeBench tables still show 25–68 % reductions) is the
+right next step before swapping the daily `coding` model. Kept hot at
+`/srv/ai/models/thinkingcap-27b/` (official Q6_K + `protoLabsAI` Q6_K-MTP).
+
+Data + reproducible harness: `docs/data/thinkingcap-27b-20260726/` (`harness.py`, `run-matched.sh`,
+`run-temp1.sh`, per-generation `*.jsonl`, item sets). Chart: `scripts/thinkingcap-plot.py`.
+
+> **Caveat:** greedy (`temp 0`) is not the model's recommended operating point (`temp 1.0`); we report
+> both. Accuracy is measured on GSM8K only at modest n — treat the parity claim as "no regression
+> detected on math reasoning," not blanket equivalence. The thinking-token reduction is the robust,
+> reproducible result across both samplers.

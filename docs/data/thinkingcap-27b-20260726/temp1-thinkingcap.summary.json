@@ -1,0 +1,27 @@
+{
+  "label": "thinkingcap-27b",
+  "items": 40,
+  "K": 5,
+  "n_gens": 200,
+  "sampler": {
+    "temp": 1.0,
+    "top_p": 0.95,
+    "top_k": 20
+  },
+  "accuracy_avg": 0.83,
+  "accuracy_majority": 0.825,
+  "reasoning_tokens": {
+    "mean": 453.1,
+    "std": 150.5
+  },
+  "completion_tokens": {
+    "mean": 556.2,
+    "std": 188.4
+  },
+  "answer_tokens": {
+    "mean": 100.0,
+    "std": 58.5
+  },
+  "truncated_length": 0,
+  "errors": 0
+}
