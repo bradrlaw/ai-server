@@ -160,6 +160,9 @@ services:
       # Read-write access to the ComfyUI models tree for manual model uploads
       # (checkpoints/, loras/, vae/, diffusion_models/, text_encoders/, etc.).
       - /srv/ai/comfyui/models:/data/models
+      # Read-only view of the model-eval framework so test outputs (rendered
+      # landing pages, meta/check JSON) are easy to browse/preview & download.
+      - /srv/ai/evals:/data/evals:ro
       - filebrowser-data:/database
     networks:
       - ai
