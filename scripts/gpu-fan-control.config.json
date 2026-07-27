@@ -1,5 +1,5 @@
 {
-  "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (P100 reports no memory temp -> uses core). Wiring/pwm verified: pwm5=V100 GPU1(bus03), pwm4=V100 GPU2(bus04), pwm1=P100 GPU0(bus01). Fans 40x28mm high-static-pressure; V100 15k rpm max, P100 6k rpm max. Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=P100(bus01), 1=V100(bus03), 2=V100(bus04). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
+  "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (passive cards without a memory-temp sensor use core). Wiring/pwm verified: pwm5=V100 GPU1(bus03), pwm4=V100 GPU2(bus04), pwm1=idx0(bus01). Fans 40x28mm high-static-pressure; V100 15k rpm max, pump 6k rpm max. Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=idx0(bus01, was P100 -> now GTX Titan X stopgap since 2026-07-27 P100 HBM ECC death; self-cooled, fan.speed logged as gpufan%), 1=V100(bus03), 2=V100(bus04). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
   "interval_sec": 4,
   "expected_gpu_count": 3,
   "gpu_wait_timeout_sec": 90,
@@ -10,7 +10,7 @@
     "1": 175,
     "2": 175
   },
-  "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W). Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)/GPU2(idx2)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C). P100(idx0)=200W: never throttles (settles ~70-75C, 15C headroom), so this is a longevity/noise trim at ~0% throughput cost. Board limits: V100 100-250W, P100 125-250W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
+  "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W) AND re-reconciled every power_recheck_sec. Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)/GPU2(idx2)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C). idx0=200W: GTX Titan X stopgap (board default 250W, range 150-275W). A 250W sustained-load test 2026-07-27 showed the card's own blower keeps up fine (held 83C, fan only ~50%, NO hard throttle), BUT Maxwell GPU Boost 2.0 has an 83C temp target and self-trims boost clocks to hold it, so steady state converges to ~200W / ~1126MHz whether the cap is 200W or 250W -- 250W only buys a ~4s opening burst. So we keep the 200W longevity/noise trim (thermally & perf identical at steady state, slightly cooler bursts). Board limits: V100 100-250W, P100 125-250W, Titan X 150-275W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
   "zones": [
     {
       "name": "V100 GPU1 (bus03)",
@@ -53,24 +53,19 @@
       ]
     },
     {
-      "name": "P100 (PUMP_FAN)",
+      "name": "Titan X (idx0, self-cooled)",
+      "_zone_note": "STOPGAP 2026-07-27: the P100 (idx0/bus01) died from an uncorrectable HBM2 double-bit ECC error (Xid 48/64/62/171/154, page-retirement fatal, microcontroller halt -> whole NVML wedged). Replaced by a 12GB GTX Titan X (Maxwell sm_52). Unlike the passive P100, the Titan X cools itself with its OWN built-in fan (readable via nvidia-smi fan.speed, logged as gpufan%) and does NOT use the chassis PUMP_FAN. So this zone is monitor_only: it logs the card's temp + its own fan but drives no chassis PWM. The listed pwm (pwm1, the old P100 pump fan) is handed back to BIOS auto at startup so we stop forcing an unused fan. When a passive P100/V100 returns to idx0, drop monitor_only and restore the curve/min_duty below.",
       "gpus": [
         0
       ],
+      "monitor_only": true,
       "hwmon_name": "nct6792",
       "pwm": "pwm1",
-      "min_duty": 70,
-      "hysteresis_c": 3,
-      "curve": [
-        [
-          38,
-          70
-        ],
-        [
-          70,
-          100
-        ]
-      ]
+      "_restore_p100_curve": {
+        "min_duty": 70,
+        "hysteresis_c": 3,
+        "curve": [[38, 70], [70, 100]]
+      }
     }
   ],
   "_pwm_mapping_note": "PHYSICAL mapping verified via verify-gpu-fan-mapping.sh 2026-07-01 (idle cross-test, one V100 fan MAX / other FLOOR): pwm5 cools GPU1(bus03), pwm4 cools GPU2(bus04). This is SWAPPED vs the naive identify-fan.sh guess. pwm1=P100(6.5k). pwm2=case/CPU, pwm3=3-pin side fan over V100s (non-PWM, BIOS). NOTE: fan RPM correlating with a GPU's temp under the daemon only proves the daemon drives that pwm from that GPU -- NOT which card it physically cools; only the forced-fan cross-test does."

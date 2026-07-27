@@ -198,23 +198,33 @@ models:
   # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `fast`
   # model". NB: MTP is single-stream only — the agentic/heavy-coding overlays run
   # `fast` at --parallel 2 and strip the draft (spec: none).
+  # TEMPORARY (2026-07-27): the P100 (idx0) failed with an uncorrectable HBM
+  # double-bit ECC error (Xid 48/64/62, page-retirement fatal, "GPU Reset
+  # Required") and was replaced by a stopgap 12GB GTX TITAN X (Maxwell sm_52).
+  # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `fast` temporarily
+  # serves the dense 12B (~6.3GB, fits with comfortable headroom). RESTORE the
+  # MoE block below when a 16GB+ card (P100/V100) returns to idx0.
+  #   --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+  #   --batch-size 2048 --ubatch-size 1024
+  #   --model-draft ${models_dir}/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf
+  # NB: the MTP draft (--spec-type draft-mtp) CRASHES on the Maxwell Titan X with a
+  # CUDA illegal-memory-access in common_speculative_impl_draft_mtp::draft (the
+  # draft ctx also fails to init: "Gemma4Assistant requires ctx_other to be set").
+  # So the draft is STRIPPED on all three idx0 models during the stopgap (slower
+  # decode, but it actually serves). RESTORE the draft lines with the 16GB+ card.
   "fast":
-    name: "Gemma-4-26B-A4B (MoE + MTP) — fast non-reasoning chat"
-    description: "Snappy general chat on the P100 (MoE, ~3.8B active); no reasoning phase, MTP self-spec decode. Always available."
+    name: "Gemma-4-12B dense — fast non-reasoning chat (TITAN X stopgap)"
+    description: "Snappy general chat on the stopgap 12GB Titan X (idx0); dense 12B, no reasoning phase. Temporary replacement for the failed P100's 26B MoE. MTP draft disabled (crashes on Maxwell)."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=0"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+      --model ${models_dir}/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
       --ctx-size 32768
       --parallel 1
-      --batch-size 2048 --ubatch-size 1024
+      --batch-size 2048 --ubatch-size 2048
       --reasoning-budget 0
-      --model-draft ${models_dir}/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf
-      --spec-type draft-mtp
-      --spec-draft-n-max 1
-      --n-gpu-layers-draft 99
       ${common}
 
   # --- fast-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
@@ -231,9 +241,14 @@ models:
   # costs ~0.8GB (~9.8GB/16GB at 32k) so 128k headroom is unaffected. See
   # docs/benchmarking.md "MTP on the `fast-12b` model". Always --parallel 1 (no
   # overlay overrides it), so MTP applies in every mode.
+  # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
+  # 128k ctx OOMs on 12GB (weights 6.3GB + 128k KV > 12GB), so ctx is dropped to
+  # 32768. The MTP draft (--spec-type draft-mtp) also CRASHES on the Maxwell Titan
+  # X (CUDA illegal memory access in the draft sampler), so it is STRIPPED here.
+  # RESTORE --ctx-size 131072 + the draft lines when a 16GB+ card returns to idx0.
   "fast-12b":
-    name: "Gemma-4-12B dense (MTP) — fast fallback (headroom)"
-    description: "Dense 12B fallback on the P100; more VRAM headroom (128k ctx) than the MoE `fast`, MTP self-spec decode. Shares idx0 (mutually exclusive)."
+    name: "Gemma-4-12B dense — fast fallback (headroom)"
+    description: "Dense 12B fallback on the idx0 Titan X stopgap. Shares idx0 (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -241,14 +256,10 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
-      --ctx-size 131072
+      --ctx-size 32768
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       --reasoning-budget 0
-      --model-draft ${models_dir}/gemma-4-12b/mtp-draft/gemma-4-12B-it-qat-assistant-MTP-Q8_0.gguf
-      --spec-type draft-mtp
-      --spec-draft-n-max 1
-      --n-gpu-layers-draft 99
       ${common}
 
   # --- fast-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
@@ -260,9 +271,16 @@ models:
   # Vision via --mmproj; MTP speculative decoding (Unsloth draft head) for ~60%
   # faster generation with identical output. Tuned sampling per the model card.
   # ttl unloads it so `fast` reclaims the card.
+  # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
+  # 128k ctx OOMs on 12GB, so ctx dropped to 32768. This tune also loads a BF16
+  # mmproj (vision) on top of ~7.4GB Q4_K_M weights, so it is the tightest of the
+  # idx0 models on 12GB — watch for OOM. The MTP draft (--spec-type draft-mtp) also
+  # CRASHES on the Maxwell Titan X (CUDA illegal memory access in the draft
+  # sampler), so it is STRIPPED here. RESTORE --ctx-size 131072 + the draft lines
+  # when a 16GB+ card returns to idx0.
   "fast-uncensored":
-    name: "Gemma-4-12B Uncensored — reasoning chat + vision (MTP)"
-    description: "Uncensored/abliterated Gemma-4-12B on the P100; reasoning on, vision (mmproj), MTP speculative decoding. Shares idx0 with fast (mutually exclusive)."
+    name: "Gemma-4-12B Uncensored — reasoning chat + vision"
+    description: "Uncensored/abliterated Gemma-4-12B on the idx0 Titan X stopgap; reasoning on, vision (mmproj). Shares idx0 with fast (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -271,10 +289,7 @@ models:
       ${llama-server}
       --model ${models_dir}/gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf
       --mmproj ${models_dir}/gemma-4-12b-uncensored/mmproj-Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf
-      --model-draft ${models_dir}/gemma-4-12b-uncensored/mtp-gemma-4-12B-it.gguf
-      --spec-type draft-mtp
-      --n-gpu-layers-draft 99
-      --ctx-size 131072
+      --ctx-size 32768
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       --temp 0.6 --top-k 64 --top-p 0.9 --min-p 0.05 --repeat-penalty 1.1

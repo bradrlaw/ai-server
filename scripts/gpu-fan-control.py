@@ -46,9 +46,16 @@ def gpu_temps():
     than the GPU core and throttles at ~85 C -- so the fan MUST be driven off the
     memory temperature, not the core. We control on eff = max(core, mem). The P100
     reports temperature.memory as N/A, so it falls back to core only.
+
+    We also read fan.speed: the passive datacenter cards (P100/V100) report N/A
+    (they are cooled only by the chassis shroud fans this daemon drives), but a
+    consumer card that self-cools with its own onboard fan (e.g. the GTX Titan X
+    stopgap in idx0) reports its fan duty -- we surface that in the log so its
+    self-managed cooling is visible.
     """
     out = subprocess.check_output(
-        ["nvidia-smi", "--query-gpu=index,temperature.gpu,temperature.memory",
+        ["nvidia-smi",
+         "--query-gpu=index,temperature.gpu,temperature.memory,fan.speed",
          "--format=csv,noheader,nounits"], text=True)
     temps = {}
     for line in out.strip().splitlines():
@@ -60,8 +67,14 @@ def gpu_temps():
                 mem = int(parts[2])
             except ValueError:      # "N/A" / "[Not Supported]"
                 mem = None
+        fan = None
+        if len(parts) > 3:
+            try:
+                fan = int(parts[3])
+            except ValueError:      # passive cards report "[N/A]"
+                fan = None
         eff = max(core, mem) if mem is not None else core
-        temps[idx] = {"core": core, "mem": mem, "eff": eff}
+        temps[idx] = {"core": core, "mem": mem, "eff": eff, "fan": fan}
     return temps
 
 
@@ -181,21 +194,38 @@ class Zone:
     def __init__(self, cfg):
         self.name = cfg["name"]
         self.gpus = cfg["gpus"]
-        self.curve = sorted(cfg["curve"])
         self.hysteresis = cfg.get("hysteresis_c", 3)
         self.min_duty = cfg.get("min_duty", 30)
-        hw = find_hwmon(cfg.get("hwmon_name", "nct6775"))
-        if hw is None:
-            raise RuntimeError(f"hwmon '{cfg.get('hwmon_name')}' not found")
-        self.pwm = os.path.join(hw, cfg["pwm"])
-        self.enable = self.pwm + "_enable"
-        if "REPLACE_ME" in cfg["pwm"] or not os.path.exists(self.pwm):
+        # A monitor-only zone drives NO chassis PWM -- it exists purely to log a
+        # GPU's temp (and its own onboard fan) when the card cools itself (e.g. a
+        # consumer GTX Titan X, whose built-in fan replaces the passive P100's
+        # chassis pump fan). Any pwm listed is only used to hand that header back
+        # to BIOS auto at startup so we stop forcing an unused fan.
+        self.monitor_only = cfg.get("monitor_only", False)
+        self.curve = sorted(cfg.get("curve", []))
+        self.pwm = None
+        self.enable = None
+        pwm_name = cfg.get("pwm")
+        if pwm_name and "REPLACE_ME" not in pwm_name:
+            hw = find_hwmon(cfg.get("hwmon_name", "nct6775"))
+            if hw is None:
+                raise RuntimeError(f"hwmon '{cfg.get('hwmon_name')}' not found")
+            pwm_path = os.path.join(hw, pwm_name)
+            if not os.path.exists(pwm_path):
+                raise RuntimeError(
+                    f"zone '{self.name}': pwm channel '{pwm_name}' not found "
+                    f"({pwm_path}). Run identify-fan.sh and edit the config.")
+            self.pwm = pwm_path
+            self.enable = pwm_path + "_enable"
+        elif not self.monitor_only:
             raise RuntimeError(
-                f"zone '{self.name}': pwm channel '{cfg['pwm']}' not set/found "
-                f"({self.pwm}). Run identify-fan.sh and edit the config.")
+                f"zone '{self.name}': no pwm channel set. Run identify-fan.sh "
+                f"and edit the config (or mark the zone monitor_only).")
         self._last_temp = None
 
     def set_enable(self, mode):
+        if self.enable is None:
+            return
         try:
             open(self.enable, "w").write(str(mode))
         except OSError as e:
@@ -210,20 +240,30 @@ class Zone:
     def update(self, temps):
         # eff = max(core, memory) across this zone's GPUs; memory is the V100
         # throttle limiter and runs much hotter than the core under load.
-        vals = [temps.get(i, {"core": 0, "mem": None, "eff": 0}) for i in self.gpus]
+        vals = [temps.get(i, {"core": 0, "mem": None, "eff": 0, "fan": None}) for i in self.gpus]
         t = max((v["eff"] for v in vals), default=0)
         core = max((v["core"] for v in vals), default=0)
         mem = max((v["mem"] for v in vals if v["mem"] is not None), default=None)
+        gpufan = next((v["fan"] for v in vals if v.get("fan") is not None), None)
+        label = f"{core}C" if mem is None else f"c{core}/m{mem}C"
+        # A self-cooled card (consumer GPU with its own fan) reports its fan duty;
+        # passive P100/V100 report N/A. Surface it so the card's own cooling shows.
+        if gpufan is not None:
+            label += f" gpufan{gpufan}%"
+        if self.monitor_only:
+            # No chassis fan to drive; the card manages its own cooling.
+            return label, None
         # hysteresis: only react if temp moved enough
         if self._last_temp is not None and abs(t - self._last_temp) < self.hysteresis:
             t = self._last_temp
         else:
             self._last_temp = t
         duty = self.write_duty(interp(self.curve, t))
-        label = f"{core}C" if mem is None else f"c{core}/m{mem}C"
         return label, duty
 
     def full_speed(self):
+        if self.monitor_only or self.pwm is None:
+            return
         self.set_enable(1)
         try:
             self.write_duty(100)
@@ -231,6 +271,8 @@ class Zone:
             pass
 
     def restore_auto(self):
+        if self.enable is None:
+            return
         # 5 = nct6775 "smart fan"/BIOS auto; fall back to 2, then full speed.
         for mode in (5, 2):
             try:
@@ -258,7 +300,10 @@ def main():
     reconcile_power_limits(power_limits)
     last_power_check = time.time()
     for z in zones:
-        z.set_enable(1)  # manual PWM
+        if z.monitor_only:
+            z.restore_auto()  # hand any listed header back to BIOS; we only log
+        else:
+            z.set_enable(1)  # manual PWM
     log(f"controlling {len(zones)} zone(s), interval {interval}s, "
         f"power recheck {power_recheck}s")
 
@@ -291,7 +336,10 @@ def main():
             for z in zones:
                 try:
                     label, duty = z.update(temps)
-                    status.append(f"{z.name}:{label}->{duty:.0f}%")
+                    if duty is None:
+                        status.append(f"{z.name}:{label}[monitor]")
+                    else:
+                        status.append(f"{z.name}:{label}->{duty:.0f}%")
                 except Exception as e:
                     log(f"{z.name} update error ({e}) -> 100%")
                     z.full_speed()
