@@ -1,9 +1,9 @@
 {
-  "file": "outputs/chat/index.html",
+  "file": "outputs/chat-uncensored-q6/index.html",
   "score": 27,
   "max": 27,
   "pct": 100.0,
-  "bytes": 36470,
+  "bytes": 38855,
   "checks": {
     "doctype": {
       "pass": true,

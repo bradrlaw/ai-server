@@ -1,0 +1,63 @@
+{
+  "test": "localmind-landing-page",
+  "model_slot": "chat-uncensored-q6",
+  "label": "chat-uncensored-q6",
+  "model_name": "Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf",
+  "model_path": "/srv/ai/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10003",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf\n--ctx-size 131072\n--cache-type-k q8_0\n--cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 2\n--host 127.0.0.1 --port 10003 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 14167,
+    "prompt_tokens": 838,
+    "total_tokens": 15005,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 112.1,
+    "ttft_ms": 1256.069,
+    "prefill_tps": 667.1608008795696,
+    "decode_tps": 128.01723344917988,
+    "prompt_tokens": 838,
+    "predicted_tokens": 14167,
+    "prefill_ms": 1256.069,
+    "decode_ms": 110664.788
+  },
+  "mtp": {
+    "draft_n": 9836,
+    "draft_n_accepted": 9250,
+    "accept_rate": 0.94,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 838,
+    "prompt_ms": 1256.069,
+    "prompt_per_token_ms": 1.4988890214797135,
+    "prompt_per_second": 667.1608008795696,
+    "predicted_n": 14167,
+    "predicted_ms": 110664.788,
+    "predicted_per_token_ms": 7.811448295334228,
+    "predicted_per_second": 128.01723344917988,
+    "draft_n": 9836,
+    "draft_n_accepted": 9250
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 38855,
+  "reasoning_bytes": 1022,
+  "wall_secs": 112.1,
+  "created_utc": "2026-07-27T06:02:36+00:00"
+}

@@ -71,8 +71,9 @@ CHECKS = [
     ("features", 1, lambda l, r: sum(k in l for k in
      ["any model", "zero latency", "full privacy", "gpu"]) >= 2,
      "Features grid (>=2 named features)"),
-    ("how_it_works", 1, lambda l, r: "chat locally" in l
-     and ("choose a model" in l or "install" in l), "How-It-Works steps"),
+    ("how_it_works", 1, lambda l, r: sum(re.search(rf"\b{w}\b", l) is not None
+     for w in ("install", "choose", "chat")) >= 3,
+     "How-It-Works steps (install / choose / chat flow)"),
     ("pricing_prices", 2, lambda l, r: has_prices(r),
      "Pricing tiers $0 / $12 / $29 (tag-tolerant)"),
     ("most_popular", 1, lambda l, r: "most popular" in l, "'Most Popular' tier"),

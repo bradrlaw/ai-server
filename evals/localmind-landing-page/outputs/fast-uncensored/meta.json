@@ -1,0 +1,63 @@
+{
+  "test": "localmind-landing-page",
+  "model_slot": "fast-uncensored",
+  "label": "fast-uncensored",
+  "model_name": "Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf",
+  "model_path": "/srv/ai/models/gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10008",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf\n--mmproj /srv/ai/models/gemma-4-12b-uncensored/mmproj-Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf\n--model-draft /srv/ai/models/gemma-4-12b-uncensored/mtp-gemma-4-12B-it.gguf\n--spec-type draft-mtp\n--n-gpu-layers-draft 99\n--ctx-size 131072\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--temp 0.6 --top-k 64 --top-p 0.9 --min-p 0.05 --repeat-penalty 1.1\n--host 127.0.0.1 --port 10008 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 7821,
+    "prompt_tokens": 847,
+    "total_tokens": 8668,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 270.5,
+    "ttft_ms": 3218.564,
+    "prefill_tps": 263.160838187465,
+    "decode_tps": 30.87175451996571,
+    "prompt_tokens": 847,
+    "predicted_tokens": 7821,
+    "prefill_ms": 3218.564,
+    "decode_ms": 253338.371
+  },
+  "mtp": {
+    "draft_n": 7059,
+    "draft_n_accepted": 5467,
+    "accept_rate": 0.774,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 847,
+    "prompt_ms": 3218.564,
+    "prompt_per_token_ms": 3.799957497048406,
+    "prompt_per_second": 263.160838187465,
+    "predicted_n": 7821,
+    "predicted_ms": 253338.371,
+    "predicted_per_token_ms": 32.392068917018285,
+    "predicted_per_second": 30.87175451996571,
+    "draft_n": 7059,
+    "draft_n_accepted": 5467
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 24438,
+  "reasoning_bytes": 3399,
+  "wall_secs": 270.5,
+  "created_utc": "2026-07-27T05:57:51+00:00"
+}

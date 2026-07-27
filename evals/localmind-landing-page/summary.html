@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>localmind-landing-page</h1>
-<p class="sub">Model-eval comparison &middot; 5 run(s) &middot; sorted by objective score, then decode speed</p>
+<p class="sub">Model-eval comparison &middot; 8 run(s) &middot; sorted by objective score, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>MTP</th>
@@ -46,6 +46,36 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>stop</td>
       <td class="name">2026-07-27</td>
       <td class="l"><a href="outputs/chat/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/chat-uncensored-q6/run.html"><span class="model">chat-uncensored-q6</span></a>
+        <div class="name">Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">94%</span></td>
+      <td>38855 B</td>
+      <td>14167</td>
+      <td>1256.1 ms</td>
+      <td>667.2</td>
+      <td>128.0</td>
+      <td>112.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/chat-uncensored-q6/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/fast/run.html"><span class="model">fast</span></a>
+        <div class="name">gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">84%</span></td>
+      <td>26903 B</td>
+      <td>7318</td>
+      <td>2034.5 ms</td>
+      <td>416.3</td>
+      <td>79.3</td>
+      <td>94.3 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/fast/index.html">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap</span></a>
@@ -93,6 +123,21 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/big/index.html">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/fast-uncensored/run.html"><span class="model">fast-uncensored</span></a>
+        <div class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">77%</span></td>
+      <td>24438 B</td>
+      <td>7821</td>
+      <td>3218.6 ms</td>
+      <td>263.2</td>
+      <td>30.9</td>
+      <td>270.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/fast-uncensored/index.html">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/gemma-31b/run.html"><span class="model">gemma-31b</span></a>
         <div class="name">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf</div></td>
       <td><span class="score">27/27</span> <span class="name">100%</span></td>
@@ -109,6 +154,6 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
     </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-07-27T05:17:44+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-07-27T06:09:03+00:00 by scripts/eval-summary.py.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

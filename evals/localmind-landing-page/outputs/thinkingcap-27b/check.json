@@ -58,7 +58,7 @@
     "how_it_works": {
       "pass": true,
       "weight": 1,
-      "desc": "How-It-Works steps"
+      "desc": "How-It-Works steps (install / choose / chat flow)"
     },
     "pricing_prices": {
       "pass": true,
