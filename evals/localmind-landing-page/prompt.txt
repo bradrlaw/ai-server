@@ -1,0 +1,40 @@
+Build a single, completely self-contained HTML landing page for a fictional product called "LocalMind" — an app that lets users run large language models on their own hardware, no cloud required.
+
+Hard constraints:
+
+One file only. Everything inline: HTML, CSS (in <style>), JavaScript (in <script>).
+Zero external dependencies. No CDN links, no external fonts, no frameworks, no external images. If you need icons, use SVG inline or Unicode. If you need fonts, use system font stacks.
+No placeholder styles. Every hover state, transition, and interaction must be real, working CSS/JS.
+Design:
+
+Dark mode throughout. Deep backgrounds (not pure black — think #0a0a0f–#12121a range), subtle gradients, accent color that pops.
+Modern, polished aesthetic. Think Linear / Vercel / Raycast energy: generous whitespace, tight typography, subtle borders/glows, no clutter.
+Fully responsive. Must look great at 320px mobile through 1440px+ desktop. Use a mobile-first approach with media queries.
+Sections (in order):
+
+Navigation — Sticky top bar with the product logo/name and links to sections. Hamburger menu on mobile.
+Hero — Bold headline that sells the value prop ("Run AI Locally. Own Your Data. No Limits."), subheadline, primary CTA button ("Get Early Access") and secondary CTA ("See How It Works"). Include a subtle animated visual element (CSS-only — a glowing orb, gradient pulse, or something that evokes "local AI" without external assets).
+Features grid — 3–4 feature cards with icons (inline SVG or emoji), titles, and short descriptions. Think: "Any Model," "Zero Latency," "Full Privacy," "GPU Optimized."
+How It Works — 3-step horizontal flow (works vertically on mobile): "Install → Choose a Model → Chat Locally." Each step has a number, title, and one-line description.
+Pricing — Two or three tier cards (e.g. Free, Pro, Studio). The middle card should be visually highlighted as "Most Popular." Include real pricing ($0, $12/mo, $29/mo) and feature lists with checkmarks. Hover effects on cards (lift, glow, border highlight — pick one and commit).
+About / Social proof — Short paragraph about the mission ("We believe AI should be personal..."). Include 2–3 fake but realistic-looking testimonials with names, roles, and quotes. No profile images — use initials in styled circles.
+Footer — Minimal. Product name, copyright, a couple of link columns (Product, Company, Legal), and a subtle top border.
+Interactions and polish:
+
+Smooth scroll on nav links.
+Hover states on all buttons, cards, and links — nothing feels dead.
+Subtle entrance animation on scroll for sections (fade-up, staggered — IntersectionObserver is fine).
+Mobile hamburger menu that actually opens/closes with a smooth transition.
+CTA buttons have a satisfying hover/active state (scale, glow, or color shift).
+Typography: Use a system font stack that looks great (e.g. -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif). Establish a clear type scale — hero should be massive, body should be comfortable to read.
+
+Color palette suggestion (feel free to adjust):
+
+Background: #09090b
+Surface/cards: #13111c
+Border: rgba(255,255,255,0.06)
+Primary accent: #7c5cfc (purple) or #6d5acf
+Secondary accent: #00d4aa (teal) for highlights
+Text primary: #fafafa
+Text muted: #71717a
+Output the complete HTML file. No explanations before or after — just the code block.

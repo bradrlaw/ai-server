@@ -1,0 +1,30 @@
+{
+  "test": "localmind-landing-page",
+  "model": "coding",
+  "label": "coding",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "usage": {
+    "completion_tokens": 15431,
+    "prompt_tokens": 838,
+    "total_tokens": 16269,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 40130,
+  "reasoning_bytes": 992,
+  "wall_secs": 357.7,
+  "created_utc": "2026-07-27T03:41:04+00:00"
+}
