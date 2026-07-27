@@ -51,7 +51,12 @@ The single most important check is **`self_contained`** — any external URL in 
 | **Hero visual** | The CSS-only animated element (orb/pulse/gradient) actually looks intentional |
 | **Code quality** | Readable, well-structured, no dead/placeholder styles, semantic HTML |
 
-Record final numbers in `RESULTS.md` (objective score + the five manual axes + notes).
+Record final numbers by editing each run's `outputs/<label>/scores.json` (five axes,
+0–5 each, plus a `notes` string; a blank stub is auto-created for every run). Then run
+`scripts/eval-summary.py --test localmind-landing-page` to regenerate the scoreboard —
+`RESULTS.md` (markdown) and the **Design** column in `summary.html` / the axis cards in
+each `run.html` update automatically. `RESULTS.md` and `summary.html` are generated; don't
+hand-edit them.
 
 ## Notes on fairness
 

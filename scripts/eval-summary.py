@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Rebuild the comparison summary page for an eval test from its run outputs.
+"""Rebuild the comparison summary + scoreboard for an eval test from its runs.
 
-Scans evals/<test>/outputs/*/meta.json (+ check.json when present) and writes
-evals/<test>/summary.html — a single sortable table comparing every recorded run
-on the metrics that matter (objective score, output size, TTFT, prefill/decode
-throughput, MTP, wall time). Each row links to the run's own view page and to the
-raw model output.
+Scans evals/<test>/outputs/*/ (meta.json, check.json, scores.json) and writes:
+  - evals/<test>/summary.html — sortable comparison table (objective score, manual
+    design subtotal, output size, TTFT, prefill/decode throughput, MTP, wall time),
+    plus a refreshed run.html per model.
+  - evals/<test>/RESULTS.md   — a markdown scoreboard merging the automated
+    objective/perf metrics with the manual design scores.
 
-eval-run.py calls build_summary() after every run so the page is always current;
-run this script directly to rebuild the whole page from scratch:
+Objective scores come from check.py; design scores are hand-entered per run in
+outputs/<label>/scores.json (five 0–5 axes + notes) — a blank stub is created
+automatically for any run that lacks one. summary.html / RESULTS.md are generated
+artifacts: edit scores.json, not them.
+
+eval-run.py calls build_summary() after every run so both stay current; run this
+script directly to rebuild from scratch:
 
   scripts/eval-summary.py --test localmind-landing-page
   scripts/eval-summary.py --all        # rebuild every test under evals/
@@ -38,6 +44,47 @@ def _fmt(v, nd=1, suffix=""):
     return f"{v}{suffix}"
 
 
+# Manual design-quality axes (0-5 each). Scored by a human in each output dir's
+# scores.json; absent/None = unscored. Keys map to the rubric in the test README.
+AXES = [
+    ("visual_polish", "Visual polish"),
+    ("responsiveness", "Responsiveness"),
+    ("interaction", "Interaction"),
+    ("hero_visual", "Hero visual"),
+    ("code_quality", "Code quality"),
+]
+AXIS_MAX = 5
+DESIGN_MAX = len(AXES) * AXIS_MAX  # 25
+
+
+def design_subtotal(scores):
+    """Return (subtotal, n_scored). A run counts as scored only when every axis
+    has a numeric value, so partial scoring never masquerades as a real total."""
+    if not scores:
+        return None, 0
+    vals = [scores.get(k) for k, _ in AXES]
+    nums = [v for v in vals if isinstance(v, (int, float))]
+    if len(nums) != len(AXES):
+        return None, len(nums)
+    return sum(nums), len(nums)
+
+
+def score_template():
+    d = {k: None for k, _ in AXES}
+    d["notes"] = ""
+    return d
+
+
+def ensure_score_stub(out_dir):
+    """Create a blank scores.json in a run dir if none exists (so it's obvious
+    what to fill in). Never overwrites an existing one."""
+    p = os.path.join(out_dir, "scores.json")
+    if not os.path.exists(p):
+        with open(p, "w") as f:
+            json.dump(score_template(), f, indent=2)
+    return p
+
+
 def collect_runs(test_dir):
     out_root = os.path.join(test_dir, "outputs")
     runs = []
@@ -50,6 +97,8 @@ def collect_runs(test_dir):
             continue
         meta["_label"] = label
         meta["_check"] = _load(os.path.join(d, "check.json"))
+        ensure_score_stub(d)
+        meta["_scores"] = _load(os.path.join(d, "scores.json"))
         runs.append(meta)
     return runs
 
@@ -122,6 +171,9 @@ def write_run_html(out_dir, meta):
 
     cards = [
         _card("Objective", f'{chk.get("score")}/{chk.get("max")}' if chk.get("max") else "—", teal=True),
+        _card("Design", (f'{sub}/{DESIGN_MAX}'
+                         if (sub := design_subtotal(meta.get("_scores"))[0]) is not None
+                         else "unscored"), teal=True),
         _card("TTFT", num(perf.get("ttft_ms"), 0, " ms")),
         _card("Prefill", num(perf.get("prefill_tps"), 1, " t/s")),
         _card("Decode", num(perf.get("decode_tps"), 1, " t/s"), teal=True),
@@ -131,6 +183,18 @@ def write_run_html(out_dir, meta):
         _card("MTP", mtp_pill),
         _card("Finish", html.escape(str(meta.get("finish_reason")))),
     ]
+
+    scores = meta.get("_scores") or {}
+    axis_cards = [
+        _card(lbl, (f'{scores.get(k)}/{AXIS_MAX}'
+                    if isinstance(scores.get(k), (int, float)) else "—"))
+        for k, lbl in AXES
+    ]
+    notes = (scores.get("notes") or "").strip()
+    design_section = (
+        f'<h2>Design scores (manual, 0–{AXIS_MAX} each)</h2>\n'
+        f'<div class="grid">\n{os.linesep.join(axis_cards)}\n</div>\n'
+        + (f'<pre>{html.escape(notes)}</pre>\n' if notes else ""))
 
     preview = ""
     if is_html:
@@ -158,6 +222,7 @@ def write_run_html(out_dir, meta):
 <div class="grid">
 {os.linesep.join(cards)}
 </div>
+{design_section}
 {preview}
 <h2>llama.cpp load command</h2>
 <pre>{load_cmd}</pre>
@@ -169,6 +234,77 @@ def write_run_html(out_dir, meta):
 """
     with open(os.path.join(out_dir, "run.html"), "w") as f:
         f.write(doc)
+
+
+def build_results_md(test_dir, runs_sorted, now):
+    """Write <test_dir>/RESULTS.md — a markdown scoreboard merging the automated
+    objective/perf metrics with the manual design scores from each scores.json.
+    Generated file: edit scores.json (not this) and rerun to refresh."""
+    test = os.path.basename(test_dir.rstrip("/"))
+    axis_hdr = " | ".join(lbl for _, lbl in AXES)
+    axis_sep = " | ".join("---:" for _ in AXES)
+
+    lines = [
+        f"# {test} — results scoreboard",
+        "",
+        "**Generated by `scripts/eval-summary.py` — do not edit by hand.**",
+        "To record design scores, edit each run's `outputs/<label>/scores.json`",
+        f"(five axes, 0–{AXIS_MAX} each) and rerun `scripts/eval-summary.py --test {test}`.",
+        "",
+        "## Objective + performance (automated)",
+        "",
+        "| Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |",
+    ]
+    for m in runs_sorted:
+        chk = m.get("_check") or {}
+        perf = m.get("performance") or {}
+        mtp = m.get("mtp") or {}
+        usage = m.get("usage") or {}
+        obj = f'{chk["score"]}/{chk["max"]}' if chk.get("max") else "—"
+        dec = _fmt(perf.get("decode_tps"), 1)
+        ttft = _fmt(perf.get("ttft_ms"), 0, " ms")
+        mtp_s = "on" if mtp.get("enabled") else "off"
+        if mtp.get("enabled") and mtp.get("accept_rate") is not None:
+            mtp_s += f' {mtp["accept_rate"]*100:.0f}%'
+        lines.append(
+            f'| `{m.get("model_slot") or m["_label"]}` | {m.get("model_name") or "—"} '
+            f'| {obj} | {dec} | {ttft} | {_fmt(usage.get("completion_tokens"))} '
+            f'| {_fmt(m.get("output_bytes"))} B | {mtp_s} | {m.get("finish_reason")} |')
+
+    lines += [
+        "",
+        f"## Design quality (manual, 0–{AXIS_MAX} each; subtotal /{DESIGN_MAX})",
+        "",
+        f"| Model | {axis_hdr} | Design | Notes |",
+        f"| --- | {axis_sep} | ---: | --- |",
+    ]
+    for m in runs_sorted:
+        scores = m.get("_scores") or {}
+        cells = []
+        for k, _ in AXES:
+            v = scores.get(k)
+            cells.append(str(v) if isinstance(v, (int, float)) else "·")
+        sub, _ = design_subtotal(scores)
+        sub_s = f"{sub}/{DESIGN_MAX}" if sub is not None else "—"
+        note = (scores.get("notes") or "").replace("|", "\\|").replace("\n", " ").strip()
+        lines.append(
+            f'| `{m.get("model_slot") or m["_label"]}` | ' + " | ".join(cells)
+            + f' | {sub_s} | {note} |')
+
+    lines += [
+        "",
+        "Axes (see this test's `README.md` for what each measures): "
+        + ", ".join(lbl for _, lbl in AXES) + ".",
+        "`·` = not yet scored.",
+        "",
+        f"_Last generated {now}._",
+        "",
+    ]
+    out_path = os.path.join(test_dir, "RESULTS.md")
+    with open(out_path, "w") as f:
+        f.write("\n".join(lines))
+    return out_path
 
 
 def build_summary(test_dir):
@@ -183,12 +319,13 @@ def build_summary(test_dir):
         write_run_html(os.path.join(test_dir, "outputs", m["_label"]), m)
 
     rows = []
-    # sort: highest objective score first, then fastest decode
+    # sort: highest objective score first, then design subtotal, then decode speed
     def sort_key(m):
         c = m.get("_check") or {}
         score = c.get("score", -1)
+        sub, _ = design_subtotal(m.get("_scores"))
         perf = m.get("performance") or {}
-        return (-score, -(perf.get("decode_tps") or 0))
+        return (-score, -(sub if sub is not None else -1), -(perf.get("decode_tps") or 0))
     for m in sorted(runs, key=sort_key):
         label = m["_label"]
         perf = m.get("performance") or {}
@@ -203,6 +340,10 @@ def build_summary(test_dir):
         if chk.get("max"):
             pct = 100 * chk["score"] / chk["max"]
             score_cell = f'<span class="score">{chk["score"]}/{chk["max"]}</span> <span class="name">{pct:.0f}%</span>'
+
+        sub, _ = design_subtotal(m.get("_scores"))
+        design_cell = (f'<span class="score">{sub}/{DESIGN_MAX}</span>'
+                       if sub is not None else '<span class="name">—</span>')
 
         mtp_cell = ('<span class="pill mtp-on">on</span>' if mtp.get("enabled")
                     else '<span class="pill mtp-off">off</span>')
@@ -221,6 +362,7 @@ def build_summary(test_dir):
       <td class="l"><a href="{run_html}"><span class="model">{html.escape(m.get('model_slot') or label)}</span></a>
         <div class="name">{html.escape(model_name)}</div></td>
       <td>{score_cell}</td>
+      <td>{design_cell}</td>
       <td>{mtp_cell}</td>
       <td>{_fmt(m.get('output_bytes'))} B</td>
       <td>{_fmt(usage.get('completion_tokens'))}</td>
@@ -233,7 +375,7 @@ def build_summary(test_dir):
       <td class="l"><a href="{out_link}">output</a></td>
     </tr>""")
 
-    body = "\n".join(rows) if rows else '    <tr><td class="l" colspan="12">no runs yet</td></tr>'
+    body = "\n".join(rows) if rows else '    <tr><td class="l" colspan="13">no runs yet</td></tr>'
     doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -241,10 +383,10 @@ def build_summary(test_dir):
 <style>{ROW_CSS}</style></head>
 <body>
 <h1>{html.escape(test)}</h1>
-<p class="sub">Model-eval comparison &middot; {len(runs)} run(s) &middot; sorted by objective score, then decode speed</p>
+<p class="sub">Model-eval comparison &middot; {len(runs)} run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
-    <th class="l">Model / weights</th><th>Objective</th><th>MTP</th>
+    <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
     <th>Output</th><th>Compl. tok</th><th>TTFT</th><th>Prefill t/s</th>
     <th>Decode t/s</th><th>Wall</th><th>Finish</th><th>Date</th><th class="l">Link</th>
   </tr></thead>
@@ -253,12 +395,14 @@ def build_summary(test_dir):
   </tbody>
 </table></div>
 <p class="foot">Generated {html.escape(now)} by scripts/eval-summary.py.
+Objective = automated check.py. Design = manual 0–{AXIS_MAX} axes from each run's scores.json (subtotal /{DESIGN_MAX}; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>
 """
     out_path = os.path.join(test_dir, "summary.html")
     with open(out_path, "w") as f:
         f.write(doc)
+    build_results_md(test_dir, sorted(runs, key=sort_key), now)
     return out_path
 
 

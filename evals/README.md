@@ -20,8 +20,9 @@ evals/
         meta.json               # model, load command, sampler, usage, MTP, perf timings
         run.html                # human-readable view: metrics + rendered output + raw
         check.json              # optional: objective-check results (from check.py)
+        scores.json             # manual design scores (five 0–5 axes + notes)
     summary.html                # auto-built comparison table across all runs
-    RESULTS.md                  # optional: summary scoreboard across models
+    RESULTS.md                  # auto-built scoreboard (objective+perf + manual scores)
 ```
 
 Conventions:
@@ -30,6 +31,9 @@ Conventions:
 - **One directory per model run**, named by a short model label (e.g. `coding`,
   `thinkingcap-27b`, `gemma-31b`). Re-running overwrites that model's dir.
 - **Keep raw output.** `raw.txt` + `meta.json` make every run auditable and reproducible.
+- **`scores.json` is the only hand-edited result file** — the manual design scores. A blank
+  stub is auto-created per run; fill it and rebuild. `summary.html` and `RESULTS.md` are
+  generated, never hand-edited.
 - **`summary.html` is generated, never hand-edited.** `eval-run.py` refreshes it after every
   run; rebuild it from scratch anytime with `scripts/eval-summary.py --test <name>`.
 
@@ -96,7 +100,18 @@ run. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it sho
 
 ## Scoring
 
-Each test defines its own rubric in its `README.md`. Where constraints are objectively
-checkable (self-containment, required sections, required interactions), a `check.py`
-automates that portion; subjective quality (visual design, code quality) stays a manual
-score. Record final scores in the test's `RESULTS.md`.
+Each test defines its own rubric in its `README.md`. Two parts:
+
+- **Objective (automated)** — `check.py` scores objectively-checkable constraints
+  (self-containment, required sections/interactions) and writes `check.json` per run.
+- **Subjective (manual)** — design/quality axes scored 0–5 by hand. Enter them in each run's
+  `outputs/<label>/scores.json` (a blank stub is auto-created), then rebuild:
+
+  ```bash
+  scripts/eval-summary.py --test <name>
+  ```
+
+  This regenerates **`RESULTS.md`** — the scoreboard merging the automated objective/perf
+  metrics with your design scores — and refreshes the **Design** column in `summary.html`
+  and the axis cards in each `run.html`. `RESULTS.md` and `summary.html` are generated;
+  edit `scores.json`, not them.
