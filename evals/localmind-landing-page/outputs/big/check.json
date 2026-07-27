@@ -1,0 +1,114 @@
+{
+  "file": "outputs/big/index.html",
+  "score": 27,
+  "max": 27,
+  "pct": 100.0,
+  "bytes": 32613,
+  "checks": {
+    "doctype": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Has <!DOCTYPE html>"
+    },
+    "inline_style": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <style> block"
+    },
+    "inline_script": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <script> block"
+    },
+    "self_contained": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Zero external deps (no http(s):// or //cdn in src/href/@import/url())"
+    },
+    "no_ext_stylesheet": {
+      "pass": true,
+      "weight": 1,
+      "desc": "No external <link rel=stylesheet>"
+    },
+    "nav_sticky": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Sticky/fixed navigation (position:sticky|fixed)"
+    },
+    "hamburger": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Hamburger / mobile menu toggle"
+    },
+    "hero_headline": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Hero value-prop headline"
+    },
+    "cta_early_access": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Primary CTA 'Get Early Access'"
+    },
+    "features": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Features grid (>=2 named features)"
+    },
+    "how_it_works": {
+      "pass": true,
+      "weight": 1,
+      "desc": "How-It-Works steps"
+    },
+    "pricing_prices": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Pricing tiers $0 / $12 / $29"
+    },
+    "most_popular": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'Most Popular' tier"
+    },
+    "testimonials": {
+      "pass": true,
+      "weight": 1,
+      "desc": "About / social-proof copy"
+    },
+    "footer": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Footer present"
+    },
+    "media_queries": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Responsive @media queries"
+    },
+    "transitions": {
+      "pass": true,
+      "weight": 1,
+      "desc": "CSS transitions"
+    },
+    "intersection_observer": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Scroll entrance via IntersectionObserver"
+    },
+    "smooth_scroll": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Smooth scroll"
+    },
+    "system_font": {
+      "pass": true,
+      "weight": 1,
+      "desc": "System font stack"
+    },
+    "hover_states": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Hover states (:hover)"
+    }
+  }
+}

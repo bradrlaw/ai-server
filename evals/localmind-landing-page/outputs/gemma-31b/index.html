@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind | Run AI Locally. Own Your Data.</title>
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #13111c;
+            --border: rgba(255, 255, 255, 0.08);
+            --primary: #7c5cfc;
+            --primary-glow: rgba(124, 92, 252, 0.3);
+            --secondary: #00d4aa;
+            --text-main: #fafafa;
+            --text-muted: #71717a;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- Utility Classes --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .section-padding {
+            padding: 6rem 0;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            font-size: 0.95rem;
+            border: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+            box-shadow: 0 0 30px var(--primary-glow);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* --- Navigation --- */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            background: rgba(9, 9, 11, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 72px;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--text-main);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 6px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-main);
+        }
+
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            z-index: 1100;
+        }
+
+        .hamburger span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--text-main);
+            margin: 5px 0;
+            transition: var(--transition);
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            position: relative;
+            padding: 10rem 0 6rem;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .hero-visual {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+            z-index: -1;
+            filter: blur(60px);
+            animation: pulse 8s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            letter-spacing: -2px;
+            background: linear-gradient(to bottom, #fff 40%, #a1a1aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 2.5rem;
+        }
+
+        .hero-ctas {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        /* --- Features Section --- */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 2rem;
+            border-radius: 16px;
+            transition: var(--transition);
+            text-align: left;
+        }
+
+        .feature-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 1.25rem;
+            color: var(--secondary);
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* --- How It Works --- */
+        .how-it-works {
+            background: rgba(255,255,255,0.01);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .steps-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 2rem;
+            margin-top: 3rem;
+            position: relative;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: var(--surface);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-weight: 800;
+            transition: var(--transition);
+        }
+
+        .step:hover .step-number {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .step h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .step p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* --- Pricing --- */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .price-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3rem 2rem;
+            border-radius: 24px;
+            text-align: center;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .price-card.popular {
+            border-color: var(--primary);
+            position: relative;
+            transform: scale(1.05);
+        }
+
+        .price-card.popular::before {
+            content: 'MOST POPULAR';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 4px 12px;
+            border-radius: 100px;
+            letter-spacing: 1px;
+        }
+
+        .price-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .price-value {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+        }
+
+        .price-value span {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .price-features {
+            list-style: none;
+            margin-bottom: 2rem;
+            text-align: left;
+            flex-grow: 1;
+        }
+
+        .price-features li {
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .check {
+            color: var(--secondary);
+            width: 18px;
+        }
+
+        /* --- About / Social Proof --- */
+        .about-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .about-content p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 4rem;
+        }
+
+        .testimonials {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .testimonial-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            padding: 2rem;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            color: var(--text-main);
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+
+        .author-info h4 {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .author-info p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* --- Footer --- */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 4rem 0 2rem;
+            background: var(--bg);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .footer-col h4 {
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-main);
+        }
+
+        .footer-col ul {
+            list-style: none;
+        }
+
+        .footer-col ul li {
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-col ul li a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+
+        .footer-col ul li a:hover {
+            color: var(--primary);
+        }
+
+        .footer-bottom {
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* --- Animations --- */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- Mobile Responsive --- */
+        @media (max-width: 992px) {
+            .hero h1 { font-size: 3rem; }
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                position: fixed;
+                top: 0;
+                right: -100%;
+                width: 100%;
+                height: 100vh;
+                background: var(--bg);
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                transition: 0.4s ease-in-out;
+                z-index: 1050;
+            }
+
+            .nav-links.open {
+                right: 0;
+            }
+
+            .nav-links li {
+                margin: 1.5rem 0;
+            }
+
+            .nav-links a {
+                font-size: 1.5rem;
+            }
+
+            .hamburger {
+                display: block;
+            }
+
+            .hamburger.open span:nth-child(1) {
+                transform: rotate(45deg) translate(5px, 5px);
+            }
+
+            .hamburger.open span:nth-child(2) {
+                opacity: 0;
+            }
+
+            .hamburger.open span:nth-child(3) {
+                transform: rotate(-45deg) translate(5px, -5px);
+            }
+
+            .hero h1 { font-size: 2.5rem; }
+            .hero-ctas { flex-direction: column; }
+            .steps-container { flex-direction: column; gap: 4rem; }
+            .price-card.popular { transform: scale(1); }
+            .footer-grid { grid-template-columns: 1fr; text-align: center; }
+            .footer-col ul { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="container nav-content">
+            <a href="#" class="logo">
+                <div class="logo-icon"></div>
+                LocalMind
+            </a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how">How It Works</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#about">About</a></li>
+            </ul>
+            <button class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <main>
+        <section class="hero">
+            <div class="hero-visual"></div>
+            <div class="container">
+                <h1 class="reveal">Run AI Locally.<br>Own Your Data. No Limits.</h1>
+                <p class="reveal">The most powerful LLM orchestrator for your own hardware. Private, fast, and completely disconnected from the cloud.</p>
+                <div class="hero-ctas reveal">
+                    <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+                    <a href="#how" class="btn btn-secondary">See How It Works</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="section-padding">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 class="reveal" style="font-size: 2.5rem; margin-bottom: 1rem;">Everything you need, on-device.</h2>
+                    <p class="reveal" style="color: var(--text-muted); max-width: 600px; margin: 0 auto;">Stop paying monthly subscriptions for AI that reads your data. Take control of your intelligence.</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card reveal">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <h3>Any Model</h3>
+                        <p>Compatible with Llama 3, Mistral, Phi, and any GGUF or EXL2 format model you can find.</p>
+                    </div>
+                    <div class="feature-card reveal">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <h3>Zero Latency</h3>
+                        <p>Direct GPU acceleration via CUDA and Metal. No network lag, no API queues, just instant responses.</p>
+                    </div>
+                    <div class="feature-card reveal">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        <h3>Full Privacy</h3>
+                        <p>Your data never leaves your machine. Air-gapped compatibility for maximum security environments.</p>
+                    </div>
+                    <div class="feature-card reveal">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+                        <h3>GPU Optimized</h3>
+                        <p>Smart VRAM management that lets you run larger models on consumer-grade hardware.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="how" class="section-padding how-it-works">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 class="reveal" style="font-size: 2.5rem;">Three steps to local AI.</h2>
+                </div>
+                <div class="steps-container">
+                    <div class="step reveal">
+                        <div class="step-number">1</div>
+                        <h3>Install</h3>
+                        <p>Download the LocalMind client and set up your environment in seconds.</p>
+                    </div>
+                    <div class="step reveal">
+                        <div class="step-number">2</div>
+                        <h3>Choose Model</h3>
+                        <p>Browse our library or import your own model files from HuggingFace.</p>
+                    </div>
+                    <div class="step reveal">
+                        <div class="step-number">3</div>
+                        <h3>Chat Locally</h3>
+                        <p>Start interacting with your AI. No internet required, no limits on tokens.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pricing" class="section-padding">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 class="reveal" style="font-size: 2.5rem;">Simple, transparent pricing.</h2>
+                </div>
+                <div class="pricing-grid">
+                    <div class="price-card reveal">
+                        <h3>Free</h3>
+                        <div class="price-value">$0<span>/mo</span></div>
+                        <ul class="price-features">
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Basic Model Support</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Community Support</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Local Storage</li>
+                        </ul>
+                        <a href="#" class="btn btn-secondary">Get Started</a>
+                    </div>
+                    <div class="price-card popular reveal">
+                        <h3>Pro</h3>
+                        <div class="price-value">$12<span>/mo</span></div>
+                        <ul class="price-features">
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> All Pro Models</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Priority Updates</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Advanced Quantization</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> API Access (Local)</li>
+                        </ul>
+                        <a href="#" class="btn btn-primary">Go Pro</a>
+                    </div>
+                    <div class="price-card reveal">
+                        <h3>Studio</h3>
+                        <div class="price-value">$29<span>/mo</span></div>
+                        <ul class="price-features">
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Multi-GPU Orchestration</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Custom Model Training</li>
+                            <li><svg class="check" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> Enterprise Support</li>
+                        </ul>
+                        <a href="#" class="btn btn-secondary">Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="about" class="section-padding">
+            <div class="container">
+                <div class="about-content">
+                    <h2 class="reveal" style="font-size: 2.5rem; margin-bottom: 1.5rem;">Our Mission</h2>
+                    <p class="reveal">We believe that intelligence should be a personal utility, not a rented service. LocalMind is building the infrastructure to ensure that as AI evolves, the power remains in the hands of the individual, not the cloud provider.</p>
+                    
+                    <div class="testimonials">
+                        <div class="testimonial-card reveal">
+                            <p class="testimonial-text">"Finally, I can build my internal knowledge base without worrying about my company's data leaking into a training set."</p>
+                            <div class="testimonial-author">
+                                <div class="avatar">JD</div>
+                                <div class="author-info">
+                                    <h4>Jane Doe</h4>
+                                    <p>CTO at NexaFlow</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="testimonial-card reveal">
+                            <p class="testimonial-text">"The performance on my RTX 4090 is unbelievable. It's faster than any cloud API I've used this year."</p>
+                            <div class="testimonial-author">
+                                <div class="avatar" style="background: var(--secondary); color: #000;">MK</div>
+                                <div class="author-info">
+                                    <h4>Marcus Kim</h4>
+                                    <p>Independent Researcher</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <a href="#" class="logo" style="margin-bottom: 1rem;">
+                        <div class="logo-icon"></div>
+                        LocalMind
+                    </a>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Empowering the world with sovereign artificial intelligence.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#how">How it Works</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Careers</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#">Privacy</a></li>
+                        <li><a href="#">Terms</a></li>
+                        <li><a href="#">Security</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 LocalMind Inc. All rights reserved.</p>
+                <div style="display: flex; gap: 1rem;">
+                    <a href="#" style="color: var(--text-muted); text-decoration: none;">Twitter</a>
+                    <a href="#" style="color: var(--text-muted); text-decoration: none;">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile Menu Logic
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.getElementById('navLinks');
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('open');
+            navLinks.classList.toggle('open');
+        });
+
+        // Close menu when a link is clicked
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                hamburger.classList.remove('open');
+                navLinks.classList.remove('open');
+            });
+        });
+
+        // Scroll Reveal Animation
+        const observerOptions = {
+            threshold: 0.15
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Staggered reveal for grid items
+        const staggerElements = (selector, delayBase) => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach((el, index) => {
+                el.style.transitionDelay = `${index * delayBase}ms`;
+            });
+        };
+
+        staggerElements('.features-grid .feature-card', 100);
+        staggerElements('.steps-container .step', 150);
+        staggerElements('.pricing-grid .price-card', 100);
+        staggerElements('.testimonials .testimonial-card', 200);
+    </script>
+</body>
+</html>

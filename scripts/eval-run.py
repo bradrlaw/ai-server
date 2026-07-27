@@ -34,7 +34,6 @@ Default endpoint is the llama-swap router (http://127.0.0.1:9090/v1/chat/complet
 which loads the requested `--model` on demand.
 """
 import argparse
-import html as htmllib
 import importlib.util
 import json
 import os
@@ -131,95 +130,6 @@ def perf_from_timings(t, wall_secs):
     return perf, {"draft_n": dn, "draft_n_accepted": da, "accept_rate": accept}
 
 
-RUN_CSS = """
-:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
---accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
-font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
-h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
-letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
-.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
-.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-.card .v{font-size:22px;font-weight:600;margin-top:4px}
-.card .v.teal{color:var(--teal)}
-pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
-.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
-.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
-.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
-"""
-
-
-def card(k, v, teal=False):
-    cls = "v teal" if teal else "v"
-    return f'<div class="card"><div class="k">{htmllib.escape(k)}</div><div class="{cls}">{v}</div></div>'
-
-
-def write_run_html(out_dir, meta, out_file, is_html):
-    perf = meta.get("performance") or {}
-    mtp = meta.get("mtp") or {}
-    usage = meta.get("usage") or {}
-    chk = meta.get("_check") or {}
-
-    def num(v, nd=1, s=""):
-        return "—" if v is None else (f"{v:.{nd}f}{s}" if isinstance(v, float) else f"{v}{s}")
-
-    mtp_pill = ('<span class="pill mtp-on">on</span>' if mtp.get("enabled")
-                else '<span class="pill mtp-off">off</span>')
-    if mtp.get("enabled") and mtp.get("accept_rate") is not None:
-        mtp_pill += f' {mtp["accept_rate"]*100:.0f}% accept'
-
-    cards = [
-        card("Objective", f'{chk.get("score")}/{chk.get("max")}' if chk.get("max") else "—", teal=True),
-        card("TTFT", num(perf.get("ttft_ms"), 0, " ms")),
-        card("Prefill", num(perf.get("prefill_tps"), 1, " t/s")),
-        card("Decode", num(perf.get("decode_tps"), 1, " t/s"), teal=True),
-        card("Wall time", num(meta.get("wall_secs"), 1, " s")),
-        card("Completion tok", num(usage.get("completion_tokens"))),
-        card("Output size", num(meta.get("output_bytes"), 0, " B")),
-        card("MTP", mtp_pill),
-        card("Finish", htmllib.escape(str(meta.get("finish_reason")))),
-    ]
-
-    preview = ""
-    if is_html:
-        preview = (f'<h2>Rendered output</h2>\n'
-                   f'<iframe class="frame" src="{htmllib.escape(out_file)}" '
-                   f'title="rendered output"></iframe>\n')
-
-    meta_json = htmllib.escape(json.dumps(
-        {k: v for k, v in meta.items() if not k.startswith("_")}, indent=2))
-    load_cmd = htmllib.escape(meta.get("load_command") or "(unavailable)")
-
-    doc = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{htmllib.escape(meta.get('model_slot') or meta.get('label'))} — {htmllib.escape(meta.get('test'))}</title>
-<style>{RUN_CSS}</style></head>
-<body>
-<h1>{htmllib.escape(meta.get('model_slot') or meta.get('label'))}</h1>
-<p class="sub">{htmllib.escape(meta.get('model_name') or '')} &middot; {htmllib.escape(meta.get('test'))}
-&middot; {htmllib.escape((meta.get('created_utc') or '')[:19])} UTC
-&middot; <a href="../../summary.html">← all runs</a>
-&middot; <a href="{htmllib.escape(out_file)}">output</a>
-&middot; <a href="raw.txt">raw reply</a></p>
-<div class="grid">
-{os.linesep.join(cards)}
-</div>
-{preview}
-<h2>llama.cpp load command</h2>
-<pre>{load_cmd}</pre>
-<h2>Sampler / request</h2>
-<pre>{htmllib.escape(json.dumps(meta.get('sampler'), indent=2))}</pre>
-<h2>meta.json</h2>
-<pre>{meta_json}</pre>
-</body></html>
-"""
-    with open(os.path.join(out_dir, "run.html"), "w") as f:
-        f.write(doc)
 
 
 def main():
@@ -314,17 +224,8 @@ def main():
     with open(os.path.join(out_dir, "meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
 
-    # attach an objective score if a checker has already run for this label
-    chk = None
-    chk_path = os.path.join(out_dir, "check.json")
-    if os.path.isfile(chk_path):
-        try:
-            chk = json.load(open(chk_path))
-        except Exception:
-            chk = None
-    meta["_check"] = chk
-    write_run_html(out_dir, meta, out_name, is_html)
-
+    # build_summary() (re)generates this run's run.html + the comparison page,
+    # picking up check.json for any output that has already been scored.
     summary_path = eval_summary.build_summary(test_dir)
 
     warn = "" if extracted else "  ⚠ no code block found — saved raw content"
