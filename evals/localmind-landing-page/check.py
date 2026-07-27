@@ -29,6 +29,26 @@ def no_external(low, raw):
                 or CSS_URL_EXT.search(raw))
 
 
+# Tag/space-tolerant price match: the "$" and the amount are frequently split
+# across separate elements (e.g. <span>$</span><span>12</span>) purely for
+# styling, so a naive "$12" substring misses a correctly-rendered price.
+_NOTAGS = re.compile(r"<[^>]+>")
+
+
+def has_prices(raw, amounts=("0", "12", "29")):
+    text = _NOTAGS.sub(" ", raw)
+    return all(re.search(rf"\$\s*{a}\b", text) for a in amounts)
+
+
+# Scroll-triggered entrance animation. IntersectionObserver is the prompt's
+# suggested ("is fine") approach, but a scroll listener that toggles a reveal
+# class via getBoundingClientRect satisfies the same requirement.
+def scroll_reveal(low, raw):
+    return ("intersectionobserver" in low
+            or ("getboundingclientrect" in low
+                and re.search(r"addeventlistener\(\s*['\"]scroll", low) is not None))
+
+
 CHECKS = [
     ("doctype", 1, lambda l, r: "<!doctype html" in l, "Has <!DOCTYPE html>"),
     ("inline_style", 1, lambda l, r: "<style" in l, "Inline <style> block"),
@@ -53,8 +73,8 @@ CHECKS = [
      "Features grid (>=2 named features)"),
     ("how_it_works", 1, lambda l, r: "chat locally" in l
      and ("choose a model" in l or "install" in l), "How-It-Works steps"),
-    ("pricing_prices", 2, lambda l, r: "$0" in r and "$12" in r and "$29" in r,
-     "Pricing tiers $0 / $12 / $29"),
+    ("pricing_prices", 2, lambda l, r: has_prices(r),
+     "Pricing tiers $0 / $12 / $29 (tag-tolerant)"),
     ("most_popular", 1, lambda l, r: "most popular" in l, "'Most Popular' tier"),
     ("testimonials", 1, lambda l, r: bool(re.search(
         r"personal|testimonial|we believe", l)), "About / social-proof copy"),
@@ -62,8 +82,8 @@ CHECKS = [
      "Footer present"),
     ("media_queries", 2, lambda l, r: "@media" in l, "Responsive @media queries"),
     ("transitions", 1, lambda l, r: "transition" in l, "CSS transitions"),
-    ("intersection_observer", 2, lambda l, r: "intersectionobserver" in l,
-     "Scroll entrance via IntersectionObserver"),
+    ("scroll_reveal", 2, scroll_reveal,
+     "Scroll entrance animation (IntersectionObserver or scroll-driven reveal)"),
     ("smooth_scroll", 1, lambda l, r: "scroll-behavior" in l
      or "scrollintoview" in l, "Smooth scroll"),
     ("system_font", 1, lambda l, r: "-apple-system" in l

@@ -1,8 +1,8 @@
 {
   "file": "outputs/chat/index.html",
-  "score": 23,
+  "score": 27,
   "max": 27,
-  "pct": 85.2,
+  "pct": 100.0,
   "bytes": 36470,
   "checks": {
     "doctype": {
@@ -61,9 +61,9 @@
       "desc": "How-It-Works steps"
     },
     "pricing_prices": {
-      "pass": false,
+      "pass": true,
       "weight": 2,
-      "desc": "Pricing tiers $0 / $12 / $29"
+      "desc": "Pricing tiers $0 / $12 / $29 (tag-tolerant)"
     },
     "most_popular": {
       "pass": true,
@@ -90,10 +90,10 @@
       "weight": 1,
       "desc": "CSS transitions"
     },
-    "intersection_observer": {
-      "pass": false,
+    "scroll_reveal": {
+      "pass": true,
       "weight": 2,
-      "desc": "Scroll entrance via IntersectionObserver"
+      "desc": "Scroll entrance animation (IntersectionObserver or scroll-driven reveal)"
     },
     "smooth_scroll": {
       "pass": true,

@@ -63,7 +63,7 @@
     "pricing_prices": {
       "pass": true,
       "weight": 2,
-      "desc": "Pricing tiers $0 / $12 / $29"
+      "desc": "Pricing tiers $0 / $12 / $29 (tag-tolerant)"
     },
     "most_popular": {
       "pass": true,
@@ -90,10 +90,10 @@
       "weight": 1,
       "desc": "CSS transitions"
     },
-    "intersection_observer": {
+    "scroll_reveal": {
       "pass": true,
       "weight": 2,
-      "desc": "Scroll entrance via IntersectionObserver"
+      "desc": "Scroll entrance animation (IntersectionObserver or scroll-driven reveal)"
     },
     "smooth_scroll": {
       "pass": true,
