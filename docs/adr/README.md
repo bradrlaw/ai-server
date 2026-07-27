@@ -33,6 +33,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0014](0014-p100-fast-fp16-carveout.md) | Patch llama.cpp to disable FAST_FP16 on the Tesla P100 (sm_60) | Accepted |
 | [0015](0015-llama-swap-serving-modes.md) | llama-swap serving modes (base + overlay) | Accepted |
 | [0016](0016-personal-assistant-gateways.md) | Personal-assistant gateway layer (OpenClaw + Hermes) | Accepted |
+| [0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md) | P100 HBM2 ECC death: diagnosis + Titan X stopgap swap | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
