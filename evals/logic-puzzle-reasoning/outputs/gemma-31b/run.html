@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gemma-31b — logic-puzzle-reasoning</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
+letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .v{font-size:22px;font-weight:600;margin-top:4px}
+.card .v.teal{color:var(--teal)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
+.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
+.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
+</style></head>
+<body>
+<h1>gemma-31b</h1>
+<p class="sub">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf &middot; logic-puzzle-reasoning
+&middot; 2026-07-27T09:46:29 UTC
+&middot; <a href="../../summary.html">← all runs</a>
+&middot; <a href="output.md">output</a>
+&middot; <a href="raw.txt">raw reply</a></p>
+<div class="grid">
+<div class="card"><div class="k">Objective</div><div class="v teal">12/12</div></div>
+<div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">930 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">428.2 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">28.6 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">375.5 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">10708</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">2931 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 34% accept</div></div>
+<div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
+</div>
+<h2>Design scores (manual, 0–5 each)</h2>
+<div class="grid">
+<div class="card"><div class="k">Correctness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Rigor / stepwise</div><div class="v">—</div></div>
+<div class="card"><div class="k">Contradiction handling</div><div class="v">—</div></div>
+<div class="card"><div class="k">Clarity</div><div class="v">—</div></div>
+<div class="card"><div class="k">Verification</div><div class="v">—</div></div>
+</div>
+
+<h2>Output (output.md)</h2>
+<pre>To solve this logic puzzle, we will list the given information and deduce the attributes for each researcher (Conference, Month, and Subfield).
+
+### 1. Known Information
+From the clues, we can establish the following certainties:
+*   **Ada:** Conference = NeurIPS, Subfield = Computer Vision (C1)
+*   **Clara:** Subfield = NLP (C11)
+*   **NLP Paper:** Month = June (C2) $\rightarrow$ **Clara:** Month = June
+*   **Ben:** Month = August (C8)
+*   **ICML:** Month = March (C12)
+*   **Theory Paper:** Conference = ACL (C7)
+*   **Robotics Paper:** Conference = ICLR (C5)
+
+### 2. Step-by-Step Deduction
+
+**Step 1: Determine the months for each researcher.**
+*   We have the months: January, March, June, August, and October.
+*   **Clara** is June (from C11 and C2).
+*   **Ben** is August (from C8).
+*   **Clara&#x27;s** month (June) comes before **Dana&#x27;s** month (C4). The only months remaining after June are August and October. Since Ben is in August, **Dana must be in October**.
+*   **Eli** presented in either January or October (C6). Since Dana is in October, **Eli must be in January**.
+*   The only remaining month is March. Therefore, **Ada must be in March**.
+
+**Step 2: Assign conferences based on the months.**
+*   We know from C12 that the **ICML conference was in March**.
+*   From Step 1, we deduced that **Ada&#x27;s month is March**.
+*   Therefore, **Ada must have presented at ICML**.
+
+**Step 3: Identify the contradiction.**
+*   Clue C1 explicitly states: **&quot;Ada presented at NeurIPS.&quot;**
+*   Our deduction from the other clues (C2, C4, C6, C8, C11, C12) concludes that **Ada presented at ICML**.
+*   Because a researcher can only publish exactly one paper at one conference, Ada cannot be at both NeurIPS and ICML.
+
+### 3. Further Verification of Contradiction
+Even if we ignore the month deduction and look at **Ben**, we find another contradiction:
+*   **Ben&#x27;s Subfield:** He is not Theory or Robotics (C3). Ada is Computer Vision (C1) and Clara is NLP (C11). Therefore, **Ben must be Reinforcement Learning (RL)**.
+*   **Ben&#x27;s Conference:** He did not present at ACL or EMNLP (C3). Ada is at NeurIPS (C1). ICLR is the Robotics paper (C5), and Ben is RL. Therefore, **Ben must be at ICML**.
+*   **The Conflict:** If Ben is at ICML, his month must be March (C12). However, Clue C8 explicitly states **Ben&#x27;s conference was in August**.
+
+### Final Conclusion
+The puzzle contains contradictory clues. Specifically, the requirements for Ben&#x27;s conference and month, as well as the timeline for Ada and Dana, cannot be satisfied simultaneously.
+
+*   **Contradiction A:** The month sequence (Clara &lt; Dana, Ben = August, Eli = Jan/Oct) forces Ada into March, which makes her ICML (C12), contradicting C1 (Ada = NeurIPS).
+*   **Contradiction B:** Ben&#x27;s constraints (Not ACL, Not EMNLP, Not NeurIPS, Not ICLR) force him to be ICML, which makes him March (C12), contradicting C8 (Ben = August).
+
+**The puzzle has no consistent solution.**</pre>
+
+<h2>llama.cpp load command</h2>
+<pre>/srv/ai/src/llama.cpp/build/bin/llama-server
+--model /srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf
+--ctx-size 131072
+--cache-type-k q8_0 --cache-type-v q8_0
+--parallel 1
+--batch-size 2048 --ubatch-size 2048
+--model-draft /srv/ai/models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf
+--spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99
+--host 127.0.0.1 --port 10010 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics</pre>
+<h2>Sampler / request</h2>
+<pre>{
+  &quot;temperature&quot;: 0.7,
+  &quot;top_p&quot;: 0.95,
+  &quot;top_k&quot;: 20,
+  &quot;max_tokens&quot;: 32000
+}</pre>
+<h2>meta.json</h2>
+<pre>{
+  &quot;test&quot;: &quot;logic-puzzle-reasoning&quot;,
+  &quot;model_slot&quot;: &quot;gemma-31b&quot;,
+  &quot;label&quot;: &quot;gemma-31b&quot;,
+  &quot;model_name&quot;: &quot;gemma-4-31B-it-qat-UD-Q4_K_XL.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf&quot;,
+  &quot;endpoint&quot;: &quot;http://127.0.0.1:9090/v1/chat/completions&quot;,
+  &quot;proxy&quot;: &quot;http://localhost:10010&quot;,
+  &quot;sampler&quot;: {
+    &quot;temperature&quot;: 0.7,
+    &quot;top_p&quot;: 0.95,
+    &quot;top_k&quot;: 20,
+    &quot;max_tokens&quot;: 32000
+  },
+  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf\n--ctx-size 131072\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--model-draft /srv/ai/models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf\n--spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99\n--host 127.0.0.1 --port 10010 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
+  &quot;usage&quot;: {
+    &quot;completion_tokens&quot;: 10708,
+    &quot;prompt_tokens&quot;: 398,
+    &quot;total_tokens&quot;: 11106,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    }
+  },
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;performance&quot;: {
+    &quot;wall_secs&quot;: 375.5,
+    &quot;ttft_ms&quot;: 929.541,
+    &quot;prefill_tps&quot;: 428.1683110266249,
+    &quot;decode_tps&quot;: 28.63422996712717,
+    &quot;prompt_tokens&quot;: 398,
+    &quot;predicted_tokens&quot;: 10708,
+    &quot;prefill_ms&quot;: 929.541,
+    &quot;decode_ms&quot;: 373958.022
+  },
+  &quot;mtp&quot;: {
+    &quot;draft_n&quot;: 16020,
+    &quot;draft_n_accepted&quot;: 5369,
+    &quot;accept_rate&quot;: 0.335,
+    &quot;enabled&quot;: true
+  },
+  &quot;server_timings&quot;: {
+    &quot;cache_n&quot;: 0,
+    &quot;prompt_n&quot;: 398,
+    &quot;prompt_ms&quot;: 929.541,
+    &quot;prompt_per_token_ms&quot;: 2.335530150753769,
+    &quot;prompt_per_second&quot;: 428.1683110266249,
+    &quot;predicted_n&quot;: 10708,
+    &quot;predicted_ms&quot;: 373958.022,
+    &quot;predicted_per_token_ms&quot;: 34.92323701905118,
+    &quot;predicted_per_second&quot;: 28.63422996712717,
+    &quot;draft_n&quot;: 16020,
+    &quot;draft_n_accepted&quot;: 5369
+  },
+  &quot;extraction&quot;: {
+    &quot;extracted&quot;: false,
+    &quot;kind&quot;: &quot;full-content&quot;
+  },
+  &quot;output_file&quot;: &quot;output.md&quot;,
+  &quot;output_bytes&quot;: 2931,
+  &quot;reasoning_bytes&quot;: 30685,
+  &quot;wall_secs&quot;: 375.5,
+  &quot;created_utc&quot;: &quot;2026-07-27T09:46:29+00:00&quot;
+}</pre>
+</body></html>

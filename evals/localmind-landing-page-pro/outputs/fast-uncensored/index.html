@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind | Run AI Locally</title>
+    <style>
+        :root {
+            --bg-dark: #07070a;
+            --bg-light: #12121a;
+            --primary: #7c5cfc;
+            --secondary: #00d4aa;
+            --text-main: #fafafa;
+            --text-muted: #71717a;
+            --border: rgba(255, 255, 255, 0.1);
+            --glow: rgba(124, 92, 252, 0.3);
+            --transition-fast: 0.2s ease;
+            --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        body {
+            overflow-x: hidden;
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-weight: 700; letter-spacing: -0.02em; }
+        p { color: var(--text-muted); }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 5%;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        nav.scrolled {
+            background: rgba(7, 7, 10, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            height: 60px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-main);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0%;
+            height: 2px;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 15px var(--glow);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.03);
+            box-shadow: 0 6px 20px var(--glow);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            transform: scale(1.03);
+        }
+
+        /* Mobile Menu */
+        .hamburger {
+            display: none;
+            cursor: pointer;
+            z-index: 1100;
+            background: none;
+            border: none;
+        }
+
+        .hamburger span {
+            display: block;
+            width: 25px;
+            height: 2px;
+            background: var(--text-main);
+            margin: 4px 0;
+            transition: 0.3s;
+        }
+
+        .nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            transform: translateY(-100%);
+            transition: transform 0.5s ease;
+            z-index: 999;
+        }
+
+        .nav-overlay.active {
+            transform: translateY(0);
+        }
+
+        /* Hero Section */
+        .hero {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+            padding-top: 80px;
+        }
+
+        #heroCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+            font-size: 1.2rem;
+        }
+
+        /* Features Grid */
+        section {
+            padding: 100px 0;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+        }
+
+        .feature-card {
+            padding: 3rem 2rem;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px -10px var(--glow);
+        }
+
+        .feature-card svg {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 1.5rem;
+            fill: var(--secondary);
+        }
+
+        /* How It Works */
+        .how-it-works {
+            background: var(--bg-light);
+            position: relative;
+        }
+
+        .steps-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0 auto 1rem;
+        }
+
+        .step-line {
+            position: absolute;
+            top: 30px;
+            height: 2px;
+            background: var(--border);
+            z-index: 1;
+        }
+
+        /* Pricing */
+        .pricing-grid {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .price-card {
+            padding: 3rem 2rem;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            width: 320px;
+            transition: all 0.3s ease;
+        }
+
+        .price-card.featured {
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 40px rgba(124, 92, 252, 0.15);
+            transform: scale(1.05);
+        }
+
+        .price-card h3 { margin-bottom: 0.5rem; }
+        .price-card .amount { font-size: 2.5rem; font-weight: 800; margin-bottom: 1rem; }
+        .price-card ul { list-style: none; margin-bottom: 2rem; }
+        .price-card li { margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; font-size: 0.9rem;}
+        .price-card svg { width: 16px; height: 16px; fill: var(--secondary); }
+
+        /* Terminal Demo */
+        .demo-section {
+            background: #050507;
+        }
+
+        .terminal-window {
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 12px;
+            background: #1a1a24;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+        }
+
+        .terminal-header {
+            padding: 12px;
+            background: #2d2d3a;
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+
+        .terminal-body {
+            padding: 2rem;
+            font-family: 'Courier New', Courier, monospace;
+            min-height: 300px;
+        }
+
+        .msg { margin-bottom: 1.5rem; animation: fadeIn 0.4s ease forwards; }
+        .user-msg { color: var(--secondary); }
+        .ai-msg { color: var(--text-main); border-left: 2px solid var(--primary); padding-left: 10px;}
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            margin-right: 4px;
+            animation: bounce 1.2s infinite ease-in-out;
+        }
+
+        /* Testimonials */
+        .testimonial-grid {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .test-card {
+            max-width: 350px;
+            padding: 2rem;
+            border-radius: 16px;
+            background: var(--bg-light);
+            font-style: italic;
+        }
+
+        .initials {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-top: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+        }
+
+        /* FAQ */
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 0;
+        }
+
+        .faq-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out;
+            color: var(--text-muted);
+            padding-top: 0.5rem;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 200px;
+            padding-bottom: 1rem;
+        }
+
+        .faq-header svg {
+            transition: transform 0.3s ease;
+        }
+
+        .faq-item.active svg {
+            transform: rotate(180deg);
+        }
+
+        /* CTA Banner */
+        .cta-banner {
+            background: linear-gradient(45deg, #7c5cfc, #00d4aa);
+            padding: 6rem 2rem;
+            text-align: center;
+            border-radius: 30px;
+            margin: 4rem auto;
+            max-width: 1200px;
+        }
+
+        .cta-banner h2 { color: white; font-size: 3rem; margin-bottom: 1rem;}
+        .cta-input {
+            padding: 1rem;
+            border-radius: 8px;
+            border: none;
+            width: 300px;
+            margin-right: 10px;
+            font-size: 1rem;
+        }
+
+        /* Footer */
+        footer {
+            padding: 4rem 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-5px); }
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links, .logo { display: none; }
+            .hamburger { display: block; }
+            .features-grid { grid-template-columns: 1fr; }
+            .steps-container { flex-direction: column; }
+            .step-line { height: 2px; width: 2px; left: 50%; top: 60px; transform: rotate(90deg); }
+            .pricing-grid { flex-direction: column; align-items: center; }
+            .cta-input { width: 100%; margin-bottom: 1rem; }
+        }
+
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 2.5rem; }
+            section { padding: 60px 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav id="mainNav">
+        <div class="logo">LocalMind</div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it Works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
+            <a href="#cta" class="btn btn-primary" style="padding: 0.6rem 1.2rem;">Join Waitlist</a>
+        </div>
+        <button class="hamburger" id="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+    <div class="nav-overlay" id="navOverlay">
+        <a href="#features" style="font-size: 2rem; text-decoration: none; color: white;">Features</a>
+        <a href="#how-it-works" style="font-size: 2rem; text-decoration: none; color: white;">How it Works</a>
+        <a href="#pricing" style="font-size: 2rem; text-decoration: none; color: white;">Pricing</a>
+        <a href="#faq" style="font-size: 2rem; text-decoration: none; color: white;">FAQ</a>
+    </div>
+
+    <section class="hero">
+        <canvas id="heroCanvas"></canvas>
+        <div class="container">
+            <h1>Run AI Locally. <br><span style="color: var(--primary)">Own Your Data.</span> No Limits.</h1>
+            <p>Experience the power of Large Language Models without the cloud latency or subscription fees. LocalMind brings intelligence to your hardware, instantly.</p>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <a href="#cta" class="btn btn-primary">Get Early Access</a>
+                <a href="#how-it-works" class="btn btn-outline">See How it Works</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="container">
+        <div class="section-title reveal">
+            <h2>Powerful Features</h2>
+            <p>Engineered for performance and privacy.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card reveal">
+                <svg viewBox="0 0 24 24"><path d="M13,9H11V7H13L12,6L11,7V9H9V15H7V13H9V11H7C5.89,11 5,11.9 5,13V19C5,20.1 5.9,21 7,21H17C18.1,21 19,20.1 19,19V13H17V11H19C19.1,11 20,11 21,11V15H19V13H21V9C21,8.1 20.1,7 19,7H17V5H13V7H11V9ZM14,13H10V11H14M14,15H10V17H14M14,19H10V21H14Z"/></svg>
+                <h3>Zero Latency</h3>
+                <p>No more waiting for the cloud. Process tokens instantly on your GPU or CPU.</p>
+            </div>
+            <div class="feature-card reveal">
+                <svg viewBox="0 0 24 24"><path d="M12,1L3,5V11C3,16.59 7.38,21.84 13,23.91V3C18.62,2.09 23,6.41 23,12V20C23,24.03 18.03,27.5 12,27.5C5.97,27.5 1,24.03 1,12V3C1,16.59 5.38,21.84 13,23.91V1H12L12,1M12,7C10.34,7 9,8.34 9,10V13H15V10C15,8.34 13.66,7 12,7Z"/></svg>
+                <h3>Total Privacy</h3>
+                <p>Your data never leaves your machine. Perfect for sensitive work and private thoughts.</p>
+            </div>
+            <div class="feature-card reveal">
+                <svg viewBox="0 0 24 24"><path d="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></svg>
+                <h3>Model Library</h3>
+                <p>One-click imports for Llama 3, Mistral, and more. Stay updated effortlessly.</p>
+            </div>
+            <div class="feature-card reveal">
+                <svg viewBox="0 0 24 24"><path d="M19,3H5C3.89,3 3,3.89 3,5V19C3,20.11 3.89,21 5,21H19C20.11,21 21,20.11 21,19V5C21,3.89 20.11,3 19,3M19,19H5V5H19V19Z"/></svg>
+                <h3>Hardware Agnostic</h3>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <div class="section-title reveal">
+                <h2>How It Works</h2>
+                <p>From installation to intelligence in three simple steps.</p>
+            </div>
+            <div class="steps-container reveal">
+                <div class="step-line" style="left: 16.6%; width: 66%;"></div>
+                <div class="step-line" style="left: 50%; width: 33%;"></div>
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Install</h3>
+                    <p>Download the LocalMind app and choose your preferred hardware driver.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Choose Model</h3>
+                    <p>Pick from our curated library of models based on your needs (Fast vs. Smart).</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Chat Locally</h3>
+                    <p>Start interacting with your local AI instantly, offline or online.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing" class="container">
+        <div class="section-title reveal">
+            <h2>Simple Pricing</h2>
+            <p>Choose the plan that fits your workflow.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="price-card reveal">
+                <h3>Free</h3>
+                <div class="amount">$0</div>
+                <p>Perfect for hobbyists</p>
+                <ul>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Community Models</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Basic UI</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Local Storage</li>
+                </ul>
+                <a href="#" class="btn btn-outline">Get Started</a>
+            </div>
+            <div class="price-card featured reveal">
+                <span style="background: var(--secondary); color: #000; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; position: absolute; top: -15px; left: 50%; transform: translateX(-50%);">MOST POPULAR</span>
+                <h3>Pro</h3>
+                <div class="amount">$12<span>/mo</span></div>
+                <p>For power users</p>
+                <ul>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>All Community Models</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Priority Updates</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Cloud Sync</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Custom Presets</li>
+                </ul>
+                <a href="#" class="btn btn-primary">Go Pro</a>
+            </div>
+            <div class="price-card reveal">
+                <h3>Studio</h3>
+                <div class="amount">$29<span>/mo</span></div>
+                <p>For creative teams</p>
+                <ul>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Multi-Model Support</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Team Collaboration</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>API Access</li>
+                    <li><svg viewBox="0 0 24 24"><path d="M9,16.17L11.59,13.59L14.82,16.17L14.82,8.83L11.59,6.41L9,9.25L6.41,6.41L4.18,8.83L4.18,16.17L6.41,13.59L9,16.17M12,2L4,9V22H20V9L12,2Z"/></svg>Priority Support</li>
+                </ul>
+                <a href="#" class="btn btn-outline">Get Studio</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="demo" class="demo-section">
+        <div class="container">
+            <div class="section-title reveal">
+                <h2>Interactive Demo</h2>
+                <p>Experience the speed of local inference.</p>
+            </div>
+            <div class="terminal-window reveal">
+                <div class="terminal-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                </div>
+                <div class="terminal-body">
+                    <div class="msg user-msg">> What's the best model for local use?</div>
+                    <div class="msg ai-msg">> For most users, Llama 3 and Mistral are excellent starting points. They offer a great balance between parameter count and reasoning capability while fitting comfortably into modern hardware.</div>
+                    <div class="msg user-msg">> Does it run offline?</div>
+                    <div class="msg ai-msg">> Yes! Once the model is loaded into your memory, you can disconnect from the internet entirely. LocalMind handles everything on-device.</div>
+                    <div class="msg typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testimonials">
+        <div class="container">
+            <div class="section-title reveal">
+                <h2>What Users Say</h2>
+            </div>
+            <div class="testimonial-grid">
+                <div class="test-card reveal">
+                    "LocalMind changed my workflow. No more worrying about privacy or high API costs."
+                    <div class="initials">JD</div>
+                    <p><strong>Jane Doe</strong>, UX Designer</p>
+                </div>
+                <div class="test-card reveal">
+                    "The speed of running models locally is incredible. The UI is so clean and intuitive."
+                    <div class="initials">MK</div>
+                    <p><strong>Mark Knight</strong>, Software Engineer</p>
+                </div>
+                <div class="test-card reveal">
+                    "Finally, an app that makes local AI accessible to everyone without complex setup."
+                    <div class="initials">SL</div>
+                    <p><strong>Sarah Lee</strong>, Data Scientist</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq">
+        <div class="container">
+            <div class="section-title reveal">
+                <h2>Frequently Asked Questions</h2>
+            </div>
+            <div class="faq-container">
+                <div class="faq-item reveal">
+                    <div class="faq-header">What hardware do I need? <span><svg width="20" height="20" viewBox="0 0 24 24"><path d="M7.41,8.59L12,13.17L16.59,8.59L18.83,10.91L18,12V20H6V12L5.17,10.91L7.41,8.59Z"/></svg></span></div>
+                    <div class="faq-answer">LocalMind works on most modern hardware. For best results, a dedicated GPU (like NVIDIA RTX or Apple M-series) is recommended, but it runs beautifully on CPUs too.</div>
+                </div>
+                <div class="faq-item reveal">
+                    <div class="faq-header">Is it completely offline? <span><svg width="20" height="20" viewBox="0 0 24 24"><path d="M7.41,8.59L12,13.17L16.59,8.59L18.83,10.91L18,12V20H6V12L5.17,10.91L7.41,8.59Z"/></svg></span></div>
+                    <div class="faq-answer">Yes! Once you've downloaded your models, LocalMind requires zero internet connection to generate text or perform inference.</div>
+                </div>
+                <div class="faq-item reveal">
+                    <div class="faq-header">How many models can I run at once? <span><svg width="20" height="20" viewBox="0 0 24 24"><path d="M7.41,8.59L12,13.17L16.59,8.59L18.83,10.91L18,12V20H6V12L5.17,10.91L7.41,8.59Z"/></svg></span></div>
+                    <div class="faq-answer">You can switch between models instantly or run multiple small models in parallel, depending on your available VRAM/RAM.</div>
+                </div>
+                <div class="faq-item reveal">
+                    <div class="faq-header">Can I export my own custom models? <span><svg width="20" height="20" viewBox="0 0 24 24"><path d="M7.41,8.59L12,13.17L16.59,8.59L18.83,10.91L18,12V20H6V12L5.17,10.91L7.41,8.59Z"/></svg></span></div>
+                    <div class="faq-answer">Absolutely. LocalMind supports standard formats like GGUF and Safetensors, allowing you to import any model from Hugging Face.</div>
+                </div>
+                <div class="faq-item reveal">
+                    <div class="faq-header">Does it support image generation? <span><svg width="20" height="20" viewBox="0 0 24 24"><path d="M7.41,8.59L12,13.17L16.59,8.59L18.83,10.91L18,12V20H6V12L5.17,10.91L7.41,8.59Z"/></svg></span></div>
+                    <div class="faq-answer">While primarily optimized for LLMs, LocalMind includes a dedicated module for running Stable Diffusion and other local image generators.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div id="cta" class="container">
+        <div class="cta-banner reveal">
+            <h2>Ready to own your intelligence?</h2>
+            <p>Join 10,000+ users running AI on their own terms.</p>
+            <div style="margin-top: 2rem;">
+                <input type="email" class="cta-input" placeholder="Enter your email">
+                <button class="btn btn-primary" id="joinBtn">Join the Waitlist</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="#" style="color: inherit; text-decoration: none;">Privacy</a>
+                <a href="#" style="color: inherit; text-decoration: none;">Terms</a>
+                <a href="#" style="color: inherit; text-decoration: none;">Twitter</a>
+            </div>
+            <p>&copy; <span id="year"></span> LocalMind. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Canvas Particle System
+        const canvas = document.getElementById('heroCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+                this.color = Math.random() > 0.5 ? '#7c5cfc' : '#00d4aa';
+            }
+            update(mouseX, mouseY) {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (Math.hypot(this.x - mouseX, this.y - mouseY) < 200) {
+                    this.x += (mouseX - this.x) * 0.01;
+                    this.y += (mouseY - this.y) * 0.01;
+                }
+
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = 0.3;
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 100; i++) {
+            particles.push(new Particle());
+        }
+
+        let mouse = { x: -1000, y: -1000 };
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update(mouse.x, mouse.y);
+                p.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Navigation & Scroll Effects
+        const nav = document.getElementById('mainNav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // Hamburger Menu Logic
+        const hamburger = document.getElementById('hamburger');
+        const overlay = document.getElementById('navOverlay');
+        hamburger.addEventListener('click', () => {
+            overlay.classList.toggle('active');
+            const spans = hamburger.querySelectorAll('span');
+            if (overlay.classList.contains('active')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(5px, -5px)';
+            } else {
+                spans[0].style.transform = '';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = '';
+            }
+        });
+
+        // Intersection Observer for Reveal Animations
+        const observerOptions = {
+            threshold: 0.15,
+            rootMargin: "0px 0px -50px 0px"
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // FAQ Accordion Logic
+        const faqItems = document.querySelectorAll('.faq-item');
+        faqItems.forEach(item => {
+            const header = item.querySelector('.faq-header');
+            header.addEventListener('click', () => {
+                const isActive = item.classList.contains('active');
+                
+                // Close all others
+                faqItems.forEach(i => i.classList.remove('active'));
+                
+                // Toggle current
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // CTA Button State Change
+        const joinBtn = document.getElementById('joinBtn');
+        joinBtn.addEventListener('click', () => {
+            joinBtn.innerText = "You're in! 🎉";
+            joinBtn.style.background = "#00d4aa";
+        });
+
+        // Set Year
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Smooth Scroll for links (fallback)
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                if (targetId !== '#') {
+                    const targetElement = document.getElementById(targetId);
+                    if (targetElement) {
+                        window.scrollTo({
+                            top: targetElement.offsetTop - 80,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>

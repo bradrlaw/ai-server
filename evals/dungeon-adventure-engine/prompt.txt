@@ -1,0 +1,60 @@
+Implement a text-based adventure game engine in a single Python file. No external libraries — only the standard library. The code must be well-structured, well-commented, and production-quality.
+
+Requirements:
+
+Core Engine:
+
+A GameState class that tracks: current room, inventory, visited rooms, flags (boolean state for events), and game history (list of all events/messages).
+A Room class with: name, description, exits (dict mapping direction → target room ID), items (list of item IDs), and optional locked doors with required keys/items.
+An Item class with: name, description, and optional on_use callback that modifies game state.
+A GameEngine class that ties it all together: parses player input, routes commands, updates state, and produces output.
+Command System:
+
+Support these commands (case-insensitive):
+
+look — print current room description and visible items
+look at <item> — print item description
+go <direction> / move <direction> / <direction> — move north/south/east/west
+take <item> — add item to inventory (only if in current room)
+drop <item> — remove from inventory, place in current room
+inventory / i — list inventory
+use <item> — activate an item's on_use effect
+help — print all available commands
+history — print the last 10 events
+quit — exit gracefully
+Input parsing should handle:
+
+Partial matches (e.g., "inv" → "inventory", "n" → "north")
+Synonyms ("examine" = "look at", "grab" = "take")
+Graceful error messages for unknown commands, items not present, or locked doors
+World: A Small Dungeon (build this in):
+
+Create a playable mini-dungeon with at least 6 rooms and 4 items:
+
+Entrance Hall — starting room. A rusted key lies on the floor. Exits: north, east.
+Library — north of Entrance. A dusty bookshelf blocks the way south. Contains a "lever" item. Description changes when lever is pulled (bookshelf moves, revealing a secret passage west). Exits: south, west (west locked until lever pulled).
+Armory — east of Entrance. Contains a "torch." A locked door leads north; requires the rusted key. Exits: west, north (locked).
+Treasure Room — north of Armory (behind locked door). Contains a "golden coin" and a riddle inscription. Exits: south.
+Secret Chamber — west of Library (unlocked only after pulling lever). Contains an "ancient scroll." Reading the scroll (use scroll) reveals the game's secret ending. Exits: east.
+Garden — south of Entrance. A peaceful clearing. A message says "You've found peace." Exits: north.
+Item behaviors:
+
+rusted key — opens the Armory's north door when the player tries to go north while holding it (auto-used)
+lever — when used in the Library, unlocks the west passage permanently
+torch — when taken, the Armory description changes to mention "flickering light"
+ancient scroll — when used, prints the secret ending and sets a "won" flag
+golden coin — purely cosmetic, but its description is witty
+Output:
+
+Print a styled ASCII banner on game start.
+After each command, print a separator line and the result.
+If the player tries to go through a locked door, explain what's needed.
+If the player solves the secret ending, print a victory message.
+Code quality:
+
+Type hints on all functions and classes.
+Docstrings on all public methods.
+A __main__ block that instantiates the dungeon, prints the banner, and runs the game loop.
+Handle EOFError and KeyboardInterrupt gracefully (print goodbye message).
+No global mutable state — everything through the GameState/GameEngine classes.
+Output only the Python code. No explanation outside the code fence.

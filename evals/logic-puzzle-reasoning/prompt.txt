@@ -1,0 +1,35 @@
+You're given a logic puzzle. Solve it step by step, showing your full reasoning. Do not skip steps or jump to the answer — I want to see your chain of thought.
+
+The Scenario:
+
+Five researchers — Ada, Ben, Clara, Dana, and Eli — each published exactly one paper at one of five conferences this year: ACL, EMNLP, NeurIPS, ICML, and ICLR. Each conference happens in a different month: January, March, June, August, and October. Each researcher works on a different subfield: NLP, Computer Vision, Reinforcement Learning, Theory, and Robotics.
+
+Clues:
+
+Ada presented at NeurIPS, and her paper was on Computer Vision.
+The NLP paper was presented in June.
+Ben did not present at ACL or EMNLP, and his paper was not on Theory or Robotics.
+Clara's conference was in a month that comes before Dana's month in calendar order.
+The Robotics paper was presented at ICLR.
+Eli presented in either January or October.
+The Theory paper was presented at ACL.
+Ben's conference was in August.
+The EMNLP conference was not in January.
+Dana did not present on Computer Vision.
+Clara's paper was on NLP.
+The ICML conference was in March.
+Questions:
+
+For each researcher, determine:
+
+Their conference
+Their month
+Their subfield
+Walk through your reasoning explicitly:
+
+Start by listing what you know for certain from the clues.
+Show each deduction step by step, explaining why each conclusion follows.
+If you hit a branching point, explain why one branch is eliminated.
+Present the final answer as a clean table.
+Verify the answer by checking every clue against it.
+If any clue is contradictory or the puzzle has multiple solutions, say so explicitly.

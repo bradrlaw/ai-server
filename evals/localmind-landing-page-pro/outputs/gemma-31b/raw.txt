@@ -1,0 +1,1191 @@
+===== reasoning_content =====
+LocalMind (Local LLM App).
+Single HTML file, zero external dependencies (no CDNs, no fonts, no images). All inline.
+Dark mode (#07070a–#12121a), Purple (#7c5cfc), Teal (#00d4aa), White/Muted text. Linear/Vercel style. Responsive.
+
+        *   Sticky Nav (with hamburger, IntersectionObserver active link).
+        *   Hero (Canvas particle field/gradient, big headline, CTAs).
+        *   Features Grid (2x2, hover glow, lift).
+        *   How It Works (3-step flow, connecting lines, responsive).
+        *   Pricing (3 tiers, Pro highlighted, checkmarks).
+        *   Interactive Demo (Terminal window, fake chat, typing indicator).
+        *   Testimonials (3 cards, gradient initials).
+        *   FAQ (Accordion, smooth transition, exclusive open).
+        *   CTA Banner (Email input, success state).
+        *   Footer (Dynamic year).
+
+        *   Smooth scroll.
+        *   IntersectionObserver fade-up animations.
+        *   Button scaling/shadows.
+        *   Link underlines.
+        *   Hamburger morphing (3 lines -> X).
+        *   Nav blur on scroll.
+        *   Typography (system stack, clamp).
+
+    *   *Colors:*
+        *   BG: `#07070a`
+        *   Surface: `#12121a`
+        *   Primary: `#7c5cfc`
+        *   Secondary: `#00d4aa`
+        *   Text: `#fafafa`
+        *   Muted: `#71717a`
+
+    *   *Layout Strategy:*
+        *   CSS Grid for features and pricing.
+        *   Flexbox for nav and footer.
+        *   Relative/Absolute positioning for the "How It Works" lines.
+        *   `backdrop-filter: blur(12px)` for the nav.
+
+    *   *Canvas implementation:* A simple particle system. Points moving randomly, connecting with lines if close enough. This creates that "AI/Neural" feel.
+
+    *   *Animations:*
+        *   `@keyframes fadeInUp` for the scroll reveal.
+        *   `transition` for the accordion `max-height`.
+        *   `transition` for the hamburger lines.
+
+    *   *HTML:* Basic boilerplate.
+    *   *CSS:*
+        *   Reset.
+        *   Variables for colors.
+        *   Utility classes for animations.
+        *   Specific styles for each section.
+        *   Mobile-first media queries.
+    *   *JS:*
+        *   Canvas animation loop.
+        *   IntersectionObserver for active links and fade-ins.
+        *   Hamburger menu toggle.
+        *   FAQ logic.
+        *   CTA success state.
+        *   Smooth scrolling.
+
+    *   *Hamburger Morph:* Three spans. Top rotates 45deg, mid fades, bottom -45deg.
+    *   *Connecting Lines (How it Works):* Use a pseudo-element on the container or a background SVG. Actually, a simple CSS border/div that hides on mobile is easiest.
+    *   *Terminal:* Monospace font, `overflow-x: auto` for the chat bubbles.
+    *   *FAQ:* Use `max-height: 0` and `max-height: 500px` (or similar) for the transition.
+
+    *   Check: No external fonts? Yes, system stack.
+    *   Check: No external images? Yes, SVGs.
+    *   Check: No CDNs? Yes.
+    *   Check: Dark mode? Yes.
+    *   Check: Responsive? Yes.
+    *   Check: All interaction constraints met? Yes.
+
+    *   *Canvas:* I'll implement a "Neural Network" particle field.
+    *   *Nav:* Ensure the `IntersectionObserver` updates the `active` class on the links.
+    *   *Pricing:* Make sure the "Pro" card has a distinct glow using `box-shadow: 0 0 20px rgba(124, 92, 252, 0.3)`.
+
+===== content =====
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind | Run AI Locally. Own Your Data.</title>
+    <style>
+        :root {
+            --bg-deep: #07070a;
+            --bg-surface: #12121a;
+            --primary: #7c5cfc;
+            --secondary: #00d4aa;
+            --text-main: #fafafa;
+            --text-muted: #71717a;
+            --border: rgba(255, 255, 255, 0.1);
+            --border-bright: rgba(124, 92, 252, 0.4);
+            --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            line-height: 1.625;
+            overflow-x: hidden;
+        }
+
+        /* --- Typography --- */
+        h1 { font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 1rem; }
+        h3 { font-size: 1.25rem; font-weight: 600; }
+        p { color: var(--text-muted); font-size: 1rem; }
+        .muted { color: var(--text-muted); font-size: 0.875rem; }
+
+        /* --- Layout Utilities --- */
+        section {
+            padding: 100px 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            font-size: 0.95rem;
+            border: none;
+            gap: 8px;
+        }
+        .btn:hover { transform: scale(1.03); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-secondary { background: transparent; color: white; border: 1px solid var(--border); }
+        .btn-secondary:hover { border-color: var(--primary); }
+
+        /* --- Navigation --- */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            padding: 20px 24px;
+            transition: var(--transition);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+        }
+        nav.scrolled {
+            padding: 12px 24px;
+            background: rgba(7, 7, 10, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: white;
+            text-decoration: none;
+        }
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            position: relative;
+            transition: var(--transition);
+        }
+        .nav-links a:hover, .nav-links a.active { color: white; }
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: var(--transition);
+        }
+        .nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
+
+        /* --- Mobile Menu --- */
+        .hamburger {
+            display: none;
+            cursor: pointer;
+            width: 24px;
+            height: 18px;
+            position: relative;
+            z-index: 1100;
+        }
+        .hamburger span {
+            display: block;
+            position: absolute;
+            height: 2px;
+            width: 100%;
+            background: white;
+            border-radius: 2px;
+            transition: var(--transition);
+        }
+        .hamburger span:nth-child(1) { top: 0; }
+        .hamburger span:nth-child(2) { top: 8px; }
+        .hamburger span:nth-child(3) { bottom: 0; }
+        .hamburger.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+        .hamburger.open span:nth-child(2) { opacity: 0; }
+        .hamburger.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+        .mobile-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-deep);
+            z-index: 1050;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            transform: translateY(-100%);
+            transition: transform 0.5s cubic-bezier(0.77, 0, 0.175, 1);
+        }
+        .mobile-overlay.open { transform: translateY(0); }
+        .mobile-overlay a {
+            font-size: 2rem;
+            color: white;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            position: relative;
+            text-align: center;
+            padding-top: 180px;
+            padding-bottom: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 1;
+            transform: none;
+        }
+        #hero-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .hero-content {
+            max-width: 900px;
+            z-index: 1;
+        }
+        .hero h1 { margin-bottom: 24px; }
+        .hero p {
+            font-size: 1.25rem;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .hero-ctas {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        /* --- Features Grid --- */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-top: 48px;
+        }
+        .feature-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            padding: 32px;
+            border-radius: 16px;
+            transition: var(--transition);
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 0 30px rgba(124, 92, 252, 0.15);
+        }
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+        .feature-card p {
+            margin-top: 12px;
+            font-size: 0.95rem;
+        }
+
+        /* --- How It Works --- */
+        .how-it-works {
+            text-align: center;
+        }
+        .steps-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            margin-top: 60px;
+            gap: 40px;
+        }
+        .step {
+            flex: 1;
+            position: relative;
+            z-index: 2;
+        }
+        .step-number {
+            width: 64px;
+            height: 64px;
+            background: var(--bg-surface);
+            border: 2px solid var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0 auto 24px;
+            transition: var(--transition);
+        }
+        .step:hover .step-number {
+            background: var(--primary);
+            box-shadow: 0 0 20px var(--primary);
+        }
+        .steps-line {
+            position: absolute;
+            top: 32px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: var(--border);
+            z-index: 1;
+        }
+
+        /* --- Pricing --- */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 48px;
+        }
+        .price-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            padding: 40px;
+            border-radius: 24px;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .price-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--border-bright);
+        }
+        .price-card.featured {
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 40px rgba(124, 92, 252, 0.2);
+        }
+        .badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+        .price-value {
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 16px 0;
+        }
+        .price-value span {
+            font-size: 1rem;
+            color: var(--text-muted);
+        }
+        .price-features {
+            list-style: none;
+            margin: 32px 0;
+            flex-grow: 1;
+        }
+        .price-features li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+        }
+        .check-icon {
+            width: 18px;
+            height: 18px;
+            color: var(--secondary);
+        }
+
+        /* --- Interactive Demo --- */
+        .demo-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 48px;
+        }
+        .terminal {
+            width: 100%;
+            max-width: 800px;
+            background: #0f0f13;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.5);
+        }
+        .terminal-header {
+            background: #1a1a22;
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+        .terminal-body {
+            padding: 24px;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .user-bubble {
+            align-self: flex-end;
+            background: var(--primary);
+            color: white;
+        }
+        .ai-bubble {
+            align-self: flex-start;
+            background: #22222b;
+            color: #ddd;
+            border: 1px solid var(--border);
+        }
+        .terminal-input {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            background: #0f0f13;
+            align-items: center;
+        }
+        .terminal-input span { color: var(--secondary); font-weight: bold; }
+        .fake-input {
+            flex-grow: 1;
+            color: #888;
+            font-size: 0.9rem;
+        }
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 8px 0;
+        }
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        /* --- Testimonials --- */
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 48px;
+        }
+        .testimonial-card {
+            background: var(--bg-surface);
+            padding: 32px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+        .testimonial-text {
+            font-style: italic;
+            margin-bottom: 24px;
+            color: var(--text-main);
+        }
+        .testimonial-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: white;
+        }
+
+        /* --- FAQ --- */
+        .faq-container {
+            max-width: 800px;
+            margin: 48px auto 0;
+        }
+        .faq-item {
+            border-bottom: 1px solid var(--border);
+        }
+        .faq-question {
+            width: 100%;
+            padding: 24px 0;
+            background: none;
+            border: none;
+            color: white;
+            text-align: left;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+        .faq-question:hover { color: var(--primary); }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-muted);
+            padding-bottom: 0;
+        }
+        .faq-item.open .faq-answer {
+            max-height: 200px;
+            padding-bottom: 24px;
+        }
+        .chevron {
+            width: 20px;
+            height: 20px;
+            transition: transform 0.3s ease;
+        }
+        .faq-item.open .chevron { transform: rotate(180deg); }
+
+        /* --- CTA Banner --- */
+        .cta-banner {
+            background: linear-gradient(135deg, #1a1a2e 0%, #12121a 100%);
+            padding: 80px 24px;
+            border-radius: 32px;
+            text-align: center;
+            margin: 100px auto;
+            border: 1px solid var(--primary);
+            position: relative;
+            overflow: hidden;
+        }
+        .cta-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(124, 92, 252, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .cta-form {
+            display: flex;
+            gap: 12px;
+            max-width: 500px;
+            margin: 32px auto 0;
+        }
+        .cta-input {
+            flex-grow: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+            transition: var(--transition);
+        }
+        .cta-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.2);
+        }
+
+        /* --- Footer --- */
+        footer {
+            padding: 60px 24px;
+            border-top: 1px solid var(--border);
+            margin-top: 100px;
+        }
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 40px;
+        }
+        .footer-links {
+            display: flex;
+            gap: 48px;
+        }
+        .footer-column {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .footer-column h4 {
+            color: white;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        .footer-column a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+        .footer-column a:hover { color: white; }
+
+        /* --- Responsive --- */
+        @media (max-width: 1024px) {
+            .pricing-grid { grid-template-columns: repeat(2, 1fr); }
+            .pricing-grid .price-card:last-child { grid-column: span 2; }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hamburger { display: block; }
+            .features-grid, .testimonials-grid { grid-template-columns: 1fr; }
+            .steps-container { flex-direction: column; align-items: center; text-align: center; }
+            .steps-line { display: none; }
+            .step { width: 100%; }
+            .cta-form { flex-direction: column; }
+            .footer-content { flex-direction: column; text-align: center; }
+            .footer-links { justify-content: center; }
+            .hero h1 { font-size: 3rem; }
+        }
+
+        @media (max-width: 320px) {
+            h1 { font-size: 2rem; }
+            .btn { width: 100%; }
+            .hero-ctas { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav id="main-nav">
+        <a href="#" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            LocalMind
+        </a>
+        <div class="nav-links">
+            <a href="#features" class="nav-item">Features</a>
+            <a href="#how-it-works" class="nav-item">How it Works</a>
+            <a href="#pricing" class="nav-item">Pricing</a>
+            <a href="#faq" class="nav-item">FAQ</a>
+            <a href="#cta" class="btn btn-primary">Get Early Access</a>
+        </div>
+        <div class="hamburger" id="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </nav>
+
+    <div class="mobile-overlay" id="mobile-overlay">
+        <a href="#features" class="nav-item">Features</a>
+        <a href="#how-it-works" class="nav-item">How it Works</a>
+        <a href="#pricing" class="nav-item">Pricing</a>
+        <a href="#faq" class="nav-item">FAQ</a>
+        <a href="#cta" class="btn btn-primary">Get Early Access</a>
+    </div>
+
+    <section class="hero" id="home">
+        <canvas id="hero-canvas"></canvas>
+        <div class="hero-content">
+            <h1>Run AI Locally.<br>Own Your Data. No Limits.</h1>
+            <p>Deploy state-of-the-art LLMs on your own hardware. Total privacy, zero subscription fees, and lightning-fast inference without the cloud.</p>
+            <div class="hero-ctas">
+                <a href="#cta" class="btn btn-primary">Join the Waitlist</a>
+                <a href="#demo" class="btn btn-secondary">See it in Action</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features">
+        <div style="text-align: center; margin-bottom: 48px;">
+            <h2>Engineered for Sovereignty</h2>
+            <p>Everything you need to run powerful models without leaving your room.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <h3>Air-Gapped Privacy</h3>
+                <p>Your prompts and data never leave your machine. No telemetry, no logging, no cloud leaks.</p>
+            </div>
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <h3>Hardware Optimized</h3>
+                <p>Native support for NVIDIA CUDA, Apple Metal, and Vulkan for maximum tokens per second.</p>
+            </div>
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <h3>Model Agnostic</h3>
+                <p>Run Llama 3, Mistral, Phi, or Gemma. Just drop in your GGUF or EXL2 files and start chatting.</p>
+            </div>
+            <div class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <h3>Zero Latency</h3>
+                <p>Eliminate API round-trips. Experience instant responses limited only by your local VRAM.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="how-it-works">
+        <h2>Three Steps to Freedom</h2>
+        <p>Getting your first local model running takes less than five minutes.</p>
+        <div class="steps-container">
+            <div class="steps-line"></div>
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Install</h3>
+                <p>Download the LocalMind binary for macOS, Windows, or Linux.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Choose a Model</h3>
+                <p>Browse our curated library or import your own weights from HuggingFace.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Chat Locally</h3>
+                <p>Start prompting with full control over temperature, context, and system prompts.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing">
+        <div style="text-align: center; margin-bottom: 48px;">
+            <h2>Simple, Transparent Pricing</h2>
+            <p>From hobbyists to enterprise studios.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="price-card">
+                <h3>Free</h3>
+                <div class="price-value">$0<span>/mo</span></div>
+                <p>Perfect for getting started with local AI.</p>
+                <ul class="price-features">
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Basic Model Library</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Local Inference</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Community Support</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 1 Active Model</li>
+                </ul>
+                <a href="#cta" class="btn btn-secondary">Get Started</a>
+            </div>
+            <div class="price-card featured">
+                <div class="badge">Most Popular</div>
+                <h3>Pro</h3>
+                <div class="price-value">$12<span>/mo</span></div>
+                <p>For power users and AI enthusiasts.</p>
+                <ul class="price-features">
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Unlimited Models</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Priority Model Updates</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Advanced Quantization</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Multi-GPU Support</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> API Access (Local)</li>
+                </ul>
+                <a href="#cta" class="btn btn-primary">Go Pro</a>
+            </div>
+            <div class="price-card">
+                <h3>Studio</h3>
+                <div class="price-value">$29<span>/mo</span></div>
+                <p>For teams and professional developers.</p>
+                <ul class="price-features">
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Team Collaboration</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Custom Model Fine-tuning</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Enterprise Support</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Shared Model Cache</li>
+                    <li><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Full Audit Logs</li>
+                </ul>
+                <a href="#cta" class="btn btn-secondary">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="demo">
+        <div style="text-align: center; margin-bottom: 48px;">
+            <h2>Experience the Speed</h2>
+            <p>A glimpse into the LocalMind terminal interface.</p>
+        </div>
+        <div class="demo-container">
+            <div class="terminal">
+                <div class="terminal-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                </div>
+                <div class="terminal-body">
+                    <div class="chat-bubble user-bubble">How do I optimize Llama 3 for an 8GB VRAM card?</div>
+                    <div class="chat-bubble ai-bubble">I recommend using a 4-bit GGUF quantization. This will reduce the memory footprint to ~5.5GB, leaving plenty of room for a 8k context window.</div>
+                    <div class="chat-bubble user-bubble">Can you run this entirely offline?</div>
+                    <div class="chat-bubble ai-bubble">Absolutely. Once the model is downloaded, LocalMind disconnects from the network. Your data never leaves your RAM.</div>
+                    <div class="typing">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+                <div class="terminal-input">
+                    <span>&gt;</span>
+                    <div class="fake-input">Type a prompt to your local model...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testimonials">
+        <div style="text-align: center; margin-bottom: 48px;">
+            <h2>Trusted by Pioneers</h2>
+            <p>Joining thousands of developers reclaiming their AI.</p>
+        </div>
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <p class="testimonial-text">"LocalMind changed how we handle sensitive client data. No more worrying about cloud leaks or API costs."</p>
+                <div class="testimonial-user">
+                    <div class="user-avatar">JD</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Julian Dane</div>
+                        <div class="muted">CTO, NexaFlow</div>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <p class="testimonial-text">"The performance on my M3 Max is unbelievable. It's faster than GPT-4 for most of my coding tasks."</p>
+                <div class="testimonial-user">
+                    <div class="user-avatar">SM</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Sarah Miller</div>
+                        <div class="muted">Independent Dev</div>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <p class="testimonial-text">"Finally, an app that makes local LLMs accessible to people who aren't CLI wizards. Just works."</p>
+                <div class="testimonial-user">
+                    <div class="user-avatar">RK</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Ryan Kim</div>
+                        <div class="muted">Product Designer</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq">
+        <div style="text-align: center; margin-bottom: 48px;">
+            <h2>Common Questions</h2>
+        </div>
+        <div class="faq-container">
+            <div class="faq-item">
+                <button class="faq-question">
+                    What hardware do I need to run LocalMind?
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>For small models (1B-3B), 8GB of RAM is sufficient. For standard models (7B-13B), we recommend at least 16GB of RAM or 8GB of VRAM (NVIDIA/Apple Silicon). For larger models, 32GB+ is ideal.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    Is LocalMind truly offline?
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Yes. After the initial installation and model download, you can disable your internet connection entirely. The inference engine runs locally on your CPU/GPU.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    Which model formats are supported?
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>We natively support GGUF, EXL2, and AWQ formats. If you have a model in another format, our built-in converter can often handle it.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    How does this differ from Ollama or LM Studio?
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>LocalMind focuses on a seamless "Studio" experience, offering advanced memory management, integrated model fine-tuning tools, and a highly optimized UI for professional workflows.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    Can I use my own datasets for fine-tuning?
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Yes, our Studio plan includes a local fine-tuning suite that allows you to train LoRA adapters on your own JSONL datasets without any data leaving your machine.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="cta">
+        <div class="cta-banner">
+            <h2>Ready to Own Your Intelligence?</h2>
+            <p>Join 12,000+ early adopters. Get notified the moment we launch.</p>
+            <form class="cta-form" id="waitlist-form">
+                <input type="email" class="cta-input" placeholder="Enter your email" required>
+                <button type="submit" class="btn btn-primary" id="submit-btn">Join the Waitlist</button>
+            </form>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <a href="#" class="logo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    LocalMind
+                </a>
+                <span class="muted">© <span id="year"></span> LocalMind Inc.</span>
+            </div>
+            <div class="footer-links">
+                <div class="footer-column">
+                    <h4>Product</h4>
+                    <a href="#features">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#demo">Demo</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Company</h4>
+                    <a href="#">About</a>
+                    <a href="#">Blog</a>
+                    <a href="#">Careers</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Legal</h4>
+                    <a href="#">Privacy</a>
+                    <a href="#">Terms</a>
+                    <a href="#">License</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // --- Hero Canvas Animation ---
+        const canvas = document.getElementById('hero-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let mouse = { x: null, y: null };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.speedY = Math.random() * 0.5 - 0.25;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x > canvas.width) this.x = 0;
+                if (this.x < 0) this.x = canvas.width;
+                if (this.y > canvas.height) this.y = 0;
+                if (this.y < 0) this.y = canvas.height;
+
+                // Subtle mouse attraction
+                if (mouse.x) {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 200) {
+                        this.x += dx * 0.001;
+                        this.y += dy * 0.001;
+                    }
+                }
+            }
+            draw() {
+                ctx.fillStyle = 'rgba(124, 92, 252, 0.5)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < 80; i++) {
+                particles.push(new Particle());
+            }
+        }
+        initParticles();
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particles.forEach((p, i) => {
+                p.update();
+                p.draw();
+                
+                for (let j = i + 1; j < particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p.x - p2.x;
+                    let dy = p.y - p2.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 150) {
+                        ctx.strokeStyle = `rgba(124, 92, 252, ${0.2 * (1 - dist/150)})`;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // --- Navigation & Scroll ---
+        const nav = document.getElementById('main-nav');
+        const hamburger = document.getElementById('hamburger');
+        const overlay = document.getElementById('mobile-overlay');
+        const navItems = document.querySelectorAll('.nav-item');
+
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('open');
+            overlay.classList.toggle('open');
+        });
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                hamburger.classList.remove('open');
+                overlay.classList.remove('open');
+            });
+        });
+
+        // Intersection Observer for Active Links & Fade-ins
+        const observerOptions = { threshold: 0.2 };
+        const sectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    
+                    // Update active nav link
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll('.nav-links a').forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section').forEach(section => {
+            sectionObserver.observe(section);
+        });
+
+        // --- FAQ Accordion ---
+        const faqQuestions = document.querySelectorAll('.faq-question');
+        faqQuestions.forEach(q => {
+            q.addEventListener('click', () => {
+                const item = q.parentElement;
+                const isOpen = item.classList.contains('open');
+                
+                // Close all other items
+                document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+                
+                if (!isOpen) {
+                    item.classList.add('open');
+                }
+            });
+        });
+
+        // --- CTA Form ---
+        const form = document.getElementById('waitlist-form');
+        const submitBtn = document.getElementById('submit-btn');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitBtn.innerText = "You're in! 🎉";
+            submitBtn.style.background = "var(--secondary)";
+            form.querySelector('input').value = "";
+            submitBtn.disabled = true;
+        });
+
+        // --- Footer Year ---
+        document.getElementById('year').innerText = new Date().getFullYear();
+    </script>
+</body>
+</html>
+```

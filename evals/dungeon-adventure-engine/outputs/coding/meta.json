@@ -1,0 +1,63 @@
+{
+  "test": "dungeon-adventure-engine",
+  "model_slot": "coding",
+  "label": "coding",
+  "model_name": "Qwen3.6-27B-Q6_K.gguf",
+  "model_path": "/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10005",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf\n--ctx-size 184320\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 3\n--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 14318,
+    "prompt_tokens": 832,
+    "total_tokens": 15150,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 364.6,
+    "ttft_ms": 1251.326,
+    "prefill_tps": 664.894679723749,
+    "decode_tps": 39.45458117053839,
+    "prompt_tokens": 832,
+    "predicted_tokens": 14318,
+    "prefill_ms": 1251.326,
+    "decode_ms": 362898.289
+  },
+  "mtp": {
+    "draft_n": 12855,
+    "draft_n_accepted": 10032,
+    "accept_rate": 0.78,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 832,
+    "prompt_ms": 1251.326,
+    "prompt_per_token_ms": 1.503997596153846,
+    "prompt_per_second": 664.894679723749,
+    "predicted_n": 14318,
+    "predicted_ms": 362898.289,
+    "predicted_per_token_ms": 25.34559917586255,
+    "predicted_per_second": 39.45458117053839,
+    "draft_n": 12855,
+    "draft_n_accepted": 10032
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "output.py",
+  "output_bytes": 16491,
+  "reasoning_bytes": 39915,
+  "wall_secs": 364.6,
+  "created_utc": "2026-07-27T09:08:30+00:00"
+}

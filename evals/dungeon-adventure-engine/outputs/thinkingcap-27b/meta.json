@@ -1,0 +1,63 @@
+{
+  "test": "dungeon-adventure-engine",
+  "model_slot": "thinkingcap-27b",
+  "label": "thinkingcap-27b",
+  "model_name": "ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "model_path": "/srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "endpoint": "http://127.0.0.1:8902/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server --model /srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --batch-size 2048 --ubatch-size 2048 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 8902 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 13259,
+    "prompt_tokens": 832,
+    "total_tokens": 14091,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 335.2,
+    "ttft_ms": 1265.871,
+    "prefill_tps": 657.2549651583771,
+    "decode_tps": 39.75146397755253,
+    "prompt_tokens": 832,
+    "predicted_tokens": 13259,
+    "prefill_ms": 1265.871,
+    "decode_ms": 333547.464
+  },
+  "mtp": {
+    "draft_n": 11982,
+    "draft_n_accepted": 9264,
+    "accept_rate": 0.773,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 832,
+    "prompt_ms": 1265.871,
+    "prompt_per_token_ms": 1.5214795673076924,
+    "prompt_per_second": 657.2549651583771,
+    "predicted_n": 13259,
+    "predicted_ms": 333547.464,
+    "predicted_per_token_ms": 25.156306207104606,
+    "predicted_per_second": 39.75146397755253,
+    "draft_n": 11982,
+    "draft_n_accepted": 9264
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "output.py",
+  "output_bytes": 15851,
+  "reasoning_bytes": 36218,
+  "wall_secs": 335.2,
+  "created_utc": "2026-07-27T10:52:27+00:00"
+}

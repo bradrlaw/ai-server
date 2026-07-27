@@ -1,0 +1,164 @@
+{
+  "file": "outputs/gemma-31b/index.html",
+  "score": 41,
+  "max": 41,
+  "pct": 100.0,
+  "bytes": 42929,
+  "checks": {
+    "doctype": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Has <!DOCTYPE html>"
+    },
+    "inline_style": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <style> block"
+    },
+    "inline_script": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <script> block"
+    },
+    "self_contained": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Zero external deps (no http(s):// or //cdn in src/href/@import/url())"
+    },
+    "no_ext_stylesheet": {
+      "pass": true,
+      "weight": 1,
+      "desc": "No external <link rel=stylesheet>"
+    },
+    "nav_sticky": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Sticky/fixed navigation"
+    },
+    "hamburger": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Hamburger / mobile menu toggle"
+    },
+    "active_nav_observer": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Active-nav-on-scroll via IntersectionObserver"
+    },
+    "nav_blur": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Nav backdrop-filter blur on scroll"
+    },
+    "hero_headline": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Hero value-prop headline"
+    },
+    "cta_early_access": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Primary CTA 'Get Early Access'"
+    },
+    "hero_visual": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Canvas hero or CSS-animated orb"
+    },
+    "inline_svg_icons": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline SVG icons (>=3)"
+    },
+    "css_grid": {
+      "pass": true,
+      "weight": 1,
+      "desc": "CSS grid layout"
+    },
+    "how_it_works": {
+      "pass": true,
+      "weight": 1,
+      "desc": "How-It-Works install/choose/chat flow"
+    },
+    "pricing_prices": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Pricing tiers $0 / $12 / $29 (tag-tolerant)"
+    },
+    "most_popular": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'Most Popular' tier badge"
+    },
+    "terminal_demo": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Interactive fake chat terminal"
+    },
+    "typing_indicator": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Animated typing indicator"
+    },
+    "testimonials": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Testimonials w/ initials"
+    },
+    "faq": {
+      "pass": true,
+      "weight": 2,
+      "desc": "FAQ / accordion section"
+    },
+    "faq_smooth": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Accordion max-height expand + chevron rotate"
+    },
+    "waitlist_form": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Waitlist email input + success state (\u201cYou're in! \ud83c\udf89\u201d)"
+    },
+    "footer": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Footer present"
+    },
+    "year_js": {
+      "pass": true,
+      "weight": 1,
+      "desc": "JS copyright year (getFullYear)"
+    },
+    "media_queries": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Responsive @media (>=2)"
+    },
+    "transitions": {
+      "pass": true,
+      "weight": 1,
+      "desc": "CSS transitions"
+    },
+    "scroll_reveal": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Scroll entrance animation"
+    },
+    "smooth_scroll": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Smooth scroll"
+    },
+    "system_font": {
+      "pass": true,
+      "weight": 1,
+      "desc": "System font stack"
+    },
+    "hover_states": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Hover states (:hover)"
+    }
+  }
+}

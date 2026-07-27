@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gemma-31b — dungeon-adventure-engine</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
+letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .v{font-size:22px;font-weight:600;margin-top:4px}
+.card .v.teal{color:var(--teal)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
+.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
+.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
+</style></head>
+<body>
+<h1>gemma-31b</h1>
+<p class="sub">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf &middot; dungeon-adventure-engine
+&middot; 2026-07-27T09:50:13 UTC
+&middot; <a href="../../summary.html">← all runs</a>
+&middot; <a href="output.py">output</a>
+&middot; <a href="raw.txt">raw reply</a></p>
+<div class="grid">
+<div class="card"><div class="k">Objective</div><div class="v teal">27/29</div></div>
+<div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">1424 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">594.3 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">25.4 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">217.1 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">5467</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">15580 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 25% accept</div></div>
+<div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
+</div>
+<h2>Design scores (manual, 0–5 each)</h2>
+<div class="grid">
+<div class="card"><div class="k">Architecture</div><div class="v">—</div></div>
+<div class="card"><div class="k">Code quality</div><div class="v">—</div></div>
+<div class="card"><div class="k">Completeness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Robustness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Output polish</div><div class="v">—</div></div>
+</div>
+
+<h2>Output (output.py)</h2>
+<pre>import sys
+from typing import Dict, List, Optional, Callable, Set
+
+
+class Item:
+    &quot;&quot;&quot;Represents an item that can be picked up, dropped, or used.&quot;&quot;&quot;
+
+    def __init__(
+        self, 
+        item_id: str, 
+        name: str, 
+        description: str, 
+        on_use: Optional[Callable[[&#x27;GameState&#x27;, &#x27;GameEngine&#x27;], str]] = None
+    ):
+        self.id = item_id
+        self.name = name
+        self.description = description
+        self.on_use = on_use
+
+    def __repr__(self) -&gt; str:
+        return self.name
+
+
+class Room:
+    &quot;&quot;&quot;Represents a location in the game world.&quot;&quot;&quot;
+
+    def __init__(
+        self, 
+        room_id: str, 
+        name: str, 
+        description: Callable[[&#x27;GameState&#x27;], str], 
+        exits: Dict[str, str], 
+        items: Optional[List[str]] = None, 
+        locks: Optional[Dict[str, str]] = None
+    ):
+        self.id = room_id
+        self.name = name
+        self.description_func = description
+        self.exits = exits  # direction -&gt; room_id
+        self.items = items or []
+        self.locks = locks or {}  # direction -&gt; required_item_id
+
+    def get_description(self, state: &#x27;GameState&#x27;) -&gt; str:
+        &quot;&quot;&quot;Returns the room description based on current game state.&quot;&quot;&quot;
+        return self.description_func(state)
+
+
+class GameState:
+    &quot;&quot;&quot;Tracks the mutable state of the game session.&quot;&quot;&quot;
+
+    def __init__(self, starting_room_id: str):
+        self.current_room_id = starting_room_id
+        self.inventory: Set[str] = set()
+        self.visited_rooms: Set[str] = {starting_room_id}
+        self.flags: Dict[str, bool] = {}
+        self.history: List[str] = []
+        self.is_running = True
+
+    def add_log(self, message: str) -&gt; None:
+        &quot;&quot;&quot;Adds a message to the game history.&quot;&quot;&quot;
+        self.history.append(message)
+
+
+class GameEngine:
+    &quot;&quot;&quot;The main controller that handles input, logic, and world management.&quot;&quot;&quot;
+
+    def __init__(self, rooms: Dict[str, Room], items: Dict[str, Item]):
+        self.rooms = rooms
+        self.items = items
+        self.state = GameState(&quot;entrance&quot;)
+
+        # Command mapping for synonyms and partials
+        self.command_map = {
+            &quot;look&quot;: self._cmd_look,
+            &quot;examine&quot;: self._cmd_look_at,
+            &quot;look at&quot;: self._cmd_look_at,
+            &quot;go&quot;: self._cmd_move,
+            &quot;move&quot;: self._cmd_move,
+            &quot;take&quot;: self._cmd_take,
+            &quot;grab&quot;: self._cmd_take,
+            &quot;drop&quot;: self._cmd_drop,
+            &quot;inventory&quot;: self._cmd_inventory,
+            &quot;i&quot;: self._cmd_inventory,
+            &quot;inv&quot;: self._cmd_inventory,
+            &quot;use&quot;: self._cmd_use,
+            &quot;help&quot;: self._cmd_help,
+            &quot;history&quot;: self._cmd_history,
+            &quot;quit&quot;: self._cmd_quit,
+            &quot;exit&quot;: self._cmd_quit,
+        }
+
+        # Direction mapping for shortcuts
+        self.dir_map = {
+            &quot;n&quot;: &quot;north&quot;, &quot;north&quot;: &quot;north&quot;,
+            &quot;s&quot;: &quot;south&quot;, &quot;south&quot;: &quot;south&quot;,
+            &quot;e&quot;: &quot;east&quot;, &quot;east&quot;: &quot;east&quot;,
+            &quot;w&quot;: &quot;west&quot;, &quot;west&quot;: &quot;west&quot;,
+        }
+
+    def _log(self, message: str) -&gt; str:
+        &quot;&quot;&quot;Helper to log a message to state and return it for printing.&quot;&quot;&quot;
+        self.state.add_log(message)
+        return message
+
+    def _cmd_look(self, args: List[str]) -&gt; str:
+        room = self.rooms[self.state.current_room_id]
+        desc = room.get_description(self.state)
+        
+        items_here = [self.items[iid].name for iid in room.items]
+        item_str = f&quot;\nItems here: {&#x27;, &#x27;.join(items_here)}&quot; if items_here else &quot;&quot;
+        
+        exits_str = f&quot;\nExits: {&#x27;, &#x27;.join(room.exits.keys())}&quot;
+        
+        return self._log(f&quot;{room.name}\n{desc}{item_str}{exits_str}&quot;)
+
+    def _cmd_look_at(self, args: List[str]) -&gt; str:
+        if not args:
+            return &quot;Look at what?&quot;
+        
+        target = args[0].lower()
+        # Search inventory first, then room
+        room = self.rooms[self.state.current_room_id]
+        all_visible_items = {self.items[iid].name.lower(): iid 
+                             for iid in (list(self.state.inventory) + room.items)}
+        
+        if target in all_visible_items:
+            item_id = all_visible_items[target]
+            return self._log(self.items[item_id].description)
+        
+        return self._log(f&quot;You don&#x27;t see a {target} here.&quot;)
+
+    def _cmd_move(self, args: List[str]) -&gt; str:
+        if not args:
+            return &quot;Go where?&quot;
+        
+        direction = args[0].lower()
+        if direction not in self.dir_map:
+            return &quot;I don&#x27;t understand that direction.&quot;
+        
+        full_dir = self.dir_map[direction]
+        room = self.rooms[self.state.current_room_id]
+        
+        if full_dir not in room.exits:
+            return self._log(f&quot;You cannot go {full_dir} from here.&quot;)
+        
+        # Check for locks
+        if full_dir in room.locks:
+            required_item = room.locks[full_dir]
+            if required_item in self.state.inventory:
+                # Auto-unlock logic
+                del room.locks[full_dir]
+                self._log(f&quot;You use the {self.items[required_item].name} to unlock the way.&quot;)
+            else:
+                return self._log(f&quot;The way {full_dir} is locked. You need something to open it.&quot;)
+        
+        target_room_id = room.exits[full_dir]
+        self.state.current_room_id = target_room_id
+        self.state.visited_rooms.add(target_room_id)
+        
+        return self._cmd_look([])
+
+    def _cmd_take(self, args: List[str]) -&gt; str:
+        if not args:
+            return &quot;Take what?&quot;
+        
+        target = args[0].lower()
+        room = self.rooms[self.state.current_room_id]
+        
+        for iid in room.items[:]:
+            item = self.items[iid]
+            if item.name.lower() == target:
+                room.items.remove(iid)
+                self.state.inventory.add(iid)
+                # Specific behavior for torch
+                if iid == &quot;torch&quot;:
+                    self.state.flags[&quot;has_torch&quot;] = True
+                return self._log(f&quot;You picked up the {item.name}.&quot;)
+        
+        return self._log(f&quot;There is no {target} here.&quot;)
+
+    def _cmd_drop(self, args: List[str]) -&gt; str:
+        if not args:
+            return &quot;Drop what?&quot;
+        
+        target = args[0].lower()
+        for iid in list(self.state.inventory):
+            item = self.items[iid]
+            if item.name.lower() == target:
+                self.state.inventory.remove(iid)
+                self.rooms[self.state.current_room_id].items.append(iid)
+                return self._log(f&quot;You dropped the {item.name}.&quot;)
+        
+        return self._log(f&quot;You aren&#x27;t carrying a {target}.&quot;)
+
+    def _cmd_inventory(self, args: List[str]) -&gt; str:
+        if not self.state.inventory:
+            return self._log(&quot;Your inventory is empty.&quot;)
+        
+        items_list = [self.items[iid].name for iid in self.state.inventory]
+        return self._log(f&quot;You are carrying: {&#x27;, &#x27;.join(items_list)}&quot;)
+
+    def _cmd_use(self, args: List[str]) -&gt; str:
+        if not args:
+            return &quot;Use what?&quot;
+        
+        target = args[0].lower()
+        for iid in self.state.inventory:
+            item = self.items[iid]
+            if item.name.lower() == target:
+                if item.on_use:
+                    return self._log(item.on_use(self.state, self))
+                return self._log(f&quot;The {item.name} can&#x27;t be used right now.&quot;)
+        
+        return self._log(f&quot;You don&#x27;t have a {target}.&quot;)
+
+    def _cmd_help(self, args: List[str]) -&gt; str:
+        cmds = &quot;\n&quot;.join([
+            &quot;look / examine &lt;item&gt; - Describe surroundings or objects&quot;,
+            &quot;go &lt;north/south/east/west&gt; - Move between rooms&quot;,
+            &quot;take &lt;item&gt; - Pick up an object&quot;,
+            &quot;drop &lt;item&gt; - Leave an object behind&quot;,
+            &quot;inventory / i - Check your bags&quot;,
+            &quot;use &lt;item&gt; - Activate an item&quot;,
+            &quot;history - See recent events&quot;,
+            &quot;quit - End the game&quot;
+        ])
+        return f&quot;Available commands:\n{cmds}&quot;
+
+    def _cmd_history(self, args: List[str]) -&gt; str:
+        last_events = self.state.history[-10:]
+        return &quot;\n&quot;.join(last_events) if last_events else &quot;History is empty.&quot;
+
+    def _cmd_quit(self, args: List[str]) -&gt; str:
+        self.state.is_running = False
+        return &quot;Thanks for playing!&quot;
+
+    def process_input(self, raw_input: str) -&gt; str:
+        &quot;&quot;&quot;Parses user input and routes it to the appropriate command.&quot;&quot;&quot;
+        parts = raw_input.strip().split()
+        if not parts:
+            return &quot;&quot;
+        
+        cmd_word = parts[0].lower()
+        args = parts[1:]
+
+        # Handle multi-word commands like &quot;look at&quot;
+        if len(parts) &gt;= 2 and f&quot;{parts[0].lower()} {parts[1].lower()}&quot; in self.command_map:
+            cmd_key = f&quot;{parts[0].lower()} {parts[1].lower()}&quot;
+            args = parts[2:]
+        else:
+            cmd_key = cmd_word
+
+        handler = self.command_map.get(cmd_key)
+        if handler:
+            return handler(args)
+        
+        return &quot;I don&#x27;t understand that command. Type &#x27;help&#x27; for a list of actions.&quot;
+
+
+# --- World Construction ---
+
+def entrance_desc(s: GameState) -&gt; str:
+    return &quot;A cold, damp entrance hall. The air is thick with dust.&quot;
+
+def library_desc(s: GameState) -&gt; str:
+    if s.flags.get(&quot;lever_pulled&quot;):
+        return &quot;The library. A massive bookshelf has slid aside, revealing a secret passage to the west.&quot;
+    return &quot;A vast library filled with rotting Tomes. A heavy bookshelf blocks the western wall.&quot;
+
+def armory_desc(s: GameState) -&gt; str:
+    if s.flags.get(&quot;has_torch&quot;):
+        return &quot;The armory. Your torch casts a flickering light across rusted racks of armor.&quot;
+    return &quot;The armory. It is pitch black in here; you can barely see your hand in front of your face.&quot;
+
+def treasure_desc(s: GameState) -&gt; str:
+    return &quot;The Treasure Room! A glittering hoard of gold surrounds a pedestal with a riddle: &#x27;What has keys but no locks?&#x27;&quot;
+
+def secret_desc(s: GameState) -&gt; str:
+    return &quot;A hidden chamber. It feels timeless here. An ancient scroll rests on a stone plinth.&quot;
+
+def garden_desc(s: GameState) -&gt; str:
+    return &quot;A peaceful clearing with soft grass and a gentle breeze. You&#x27;ve found peace.&quot;
+
+def use_lever(s: GameState, e: GameEngine) -&gt; str:
+    if s.current_room_id == &quot;library&quot;:
+        s.flags[&quot;lever_pulled&quot;] = True
+        return &quot;You pull the lever. With a grinding sound, the bookshelf slides to the right!&quot;
+    return &quot;You can&#x27;t use the lever here.&quot;
+
+def use_scroll(s: GameState, e: GameEngine) -&gt; str:
+    s.flags[&quot;won&quot;] = True
+    return &quot;The scroll reads: &#x27;The true treasure was the code all along.&#x27;\n*** YOU HAVE FOUND THE SECRET ENDING! ***&quot;
+
+# Initialize Items
+items_data = {
+    &quot;rusted_key&quot;: Item(&quot;rusted_key&quot;, &quot;Rusted Key&quot;, &quot;An old, iron key covered in orange rust.&quot;),
+    &quot;lever&quot;: Item(&quot;lever&quot;, &quot;Lever&quot;, &quot;A heavy metal handle embedded in the wall.&quot;, on_use=use_lever),
+    &quot;torch&quot;: Item(&quot;torch&quot;, &quot;Torch&quot;, &quot;A bundle of resin-soaked wood. It provides light.&quot;),
+    &quot;golden_coin&quot;: Item(&quot;golden_coin&quot;, &quot;Golden Coin&quot;, &quot;A coin from a fallen empire. It looks expensive, but it&#x27;s actually chocolate.&quot;),
+    &quot;ancient_scroll&quot;: Item(&quot;ancient_scroll&quot;, &quot;Ancient Scroll&quot;, &quot;A brittle piece of parchment.&quot;, on_use=use_scroll),
+}
+
+# Initialize Rooms
+rooms_data = {
+    &quot;entrance&quot;: Room(&quot;entrance&quot;, &quot;Entrance Hall&quot;, entrance_desc, 
+                     exits={&quot;north&quot;: &quot;library&quot;, &quot;east&quot;: &quot;armory&quot;, &quot;south&quot;: &quot;garden&quot;}, 
+                     items=[&quot;rusted_key&quot;]),
+    &quot;library&quot;: Room(&quot;library&quot;, &quot;Library&quot;, library_desc, 
+                    exits={&quot;south&quot;: &quot;entrance&quot;, &quot;west&quot;: &quot;secret&quot;}, 
+                    items=[&quot;lever&quot;], 
+                    locks={&quot;west&quot;: &quot;lever_pulled_flag&quot;}), # Logic handled in move for flags
+    &quot;armory&quot;: Room(&quot;armory&quot;, &quot;Armory&quot;, armory_desc, 
+                   exits={&quot;west&quot;: &quot;entrance&quot;, &quot;north&quot;: &quot;treasure&quot;}, 
+                   items=[&quot;torch&quot;], 
+                   locks={&quot;north&quot;: &quot;rusted_key&quot;}),
+    &quot;treasure&quot;: Room(&quot;treasure&quot;, &quot;Treasure Room&quot;, treasure_desc, 
+                     exits={&quot;south&quot;: &quot;armory&quot;}, 
+                     items=[&quot;golden_coin&quot;]),
+    &quot;secret&quot;: Room(&quot;secret&quot;, &quot;Secret Chamber&quot;, secret_desc, 
+                   exits={&quot;east&quot;: &quot;library&quot;}, 
+                   items=[&quot;ancient_scroll&quot;]),
+    &quot;garden&quot;: Room(&quot;garden&quot;, &quot;Garden&quot;, garden_desc, 
+                   exits={&quot;north&quot;: &quot;entrance&quot;}),
+}
+
+# Special override for the Library&#x27;s secret door which is flag-based, not item-based
+def modified_move(args: List[str]) -&gt; str:
+    # This is a wrapper to handle the specific &#x27;lever&#x27; flag logic for the Secret Chamber
+    if not args: return &quot;Go where?&quot;
+    direction = GameEngine().dir_map.get(args[0].lower(), args[0].lower())
+    
+    # We access the engine instance via the GameEngine&#x27;s logic
+    # But since we are defining the world, we&#x27;ll just adjust the Room&#x27;s lock check in the engine.
+    return &quot;&quot; 
+
+# Since the requirements want a production-quality single file, 
+# I will modify the GameEngine. _cmd_move to handle flags as well as items.
+
+# Patching GameEngine._cmd_move to handle flags
+def patched_move(self, args: List[str]) -&gt; str:
+    if not args:
+        return &quot;Go where?&quot;
+    
+    direction = args[0].lower()
+    if direction not in self.dir_map:
+        return &quot;I don&#x27;t understand that direction.&quot;
+    
+    full_dir = self.dir_map[direction]
+    room = self.rooms[self.state.current_room_id]
+    
+    if full_dir not in room.exits:
+        return self._log(f&quot;You cannot go {full_dir} from here.&quot;)
+    
+    # Check for locks
+    if full_dir in room.locks:
+        lock_req = room.locks[full_dir]
+        # If the lock is actually a flag
+        if lock_req == &quot;lever_pulled_flag&quot;:
+            if not self.state.flags.get(&quot;lever_pulled&quot;):
+                return self._log(&quot;The way is blocked by a heavy bookshelf.&quot;)
+        # If the lock is an item
+        elif lock_req in self.state.inventory:
+            del room.locks[full_dir]
+            self._log(f&quot;You use the {self.items[lock_req].name} to unlock the way.&quot;)
+        else:
+            # Determine what the player needs for the error message
+            needed = self.items[lock_req].name if lock_req in self.items else &quot;something&quot;
+            return self._log(f&quot;The way {full_dir} is locked. You need {needed}.&quot;)
+            
+    target_room_id = room.exits[full_dir]
+    self.state.current_room_id = target_room_id
+    self.state.visited_rooms.add(target_room_id)
+    return self._cmd_look([])
+
+GameEngine._cmd_move = patched_move
+
+def main():
+    engine = GameEngine(rooms_data, items_data)
+    
+    banner = r&quot;&quot;&quot;
+    *************************************************
+    *                                               *
+    *          THE DUNGEON OF PYTHONIC MYSTERY       *
+    *                                               *
+    *************************************************
+    &quot;&quot;&quot;
+    print(banner)
+    print(&quot;Welcome, adventurer. Type &#x27;help&#x27; to see your options.&quot;)
+    print(&quot;-&quot; * 49)
+    
+    # Initial look
+    print(engine._cmd_look([]))
+    print(&quot;-&quot; * 49)
+
+    try:
+        while engine.state.is_running:
+            user_input = input(&quot;\n&gt; &quot;).strip()
+            if not user_input:
+                continue
+            
+            result = engine.process_input(user_input)
+            print(result)
+            print(&quot;-&quot; * 49)
+            
+            if engine.state.flags.get(&quot;won&quot;):
+                print(&quot;\nCongratulations! You have uncovered the secrets of the dungeon.&quot;)
+                engine.state.is_running = False
+
+    except (EOFError, KeyboardInterrupt):
+        print(&quot;\n\nFarewell, brave soul. Your journey ends here.&quot;)
+    
+    print(&quot;\nGame Over.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+
+<h2>llama.cpp load command</h2>
+<pre>/srv/ai/src/llama.cpp/build/bin/llama-server
+--model /srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf
+--ctx-size 131072
+--cache-type-k q8_0 --cache-type-v q8_0
+--parallel 1
+--batch-size 2048 --ubatch-size 2048
+--model-draft /srv/ai/models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf
+--spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99
+--host 127.0.0.1 --port 10010 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics</pre>
+<h2>Sampler / request</h2>
+<pre>{
+  &quot;temperature&quot;: 0.7,
+  &quot;top_p&quot;: 0.95,
+  &quot;top_k&quot;: 20,
+  &quot;max_tokens&quot;: 32000
+}</pre>
+<h2>meta.json</h2>
+<pre>{
+  &quot;test&quot;: &quot;dungeon-adventure-engine&quot;,
+  &quot;model_slot&quot;: &quot;gemma-31b&quot;,
+  &quot;label&quot;: &quot;gemma-31b&quot;,
+  &quot;model_name&quot;: &quot;gemma-4-31B-it-qat-UD-Q4_K_XL.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf&quot;,
+  &quot;endpoint&quot;: &quot;http://127.0.0.1:9090/v1/chat/completions&quot;,
+  &quot;proxy&quot;: &quot;http://localhost:10010&quot;,
+  &quot;sampler&quot;: {
+    &quot;temperature&quot;: 0.7,
+    &quot;top_p&quot;: 0.95,
+    &quot;top_k&quot;: 20,
+    &quot;max_tokens&quot;: 32000
+  },
+  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf\n--ctx-size 131072\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--model-draft /srv/ai/models/gemma-4-31b/mtp-draft/gemma4-31B-it-assistant-Q8_0.gguf\n--spec-type draft-mtp --spec-draft-n-max 3 --n-gpu-layers-draft 99\n--host 127.0.0.1 --port 10010 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
+  &quot;usage&quot;: {
+    &quot;completion_tokens&quot;: 5467,
+    &quot;prompt_tokens&quot;: 846,
+    &quot;total_tokens&quot;: 6313,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    }
+  },
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;performance&quot;: {
+    &quot;wall_secs&quot;: 217.1,
+    &quot;ttft_ms&quot;: 1423.517,
+    &quot;prefill_tps&quot;: 594.3027023913307,
+    &quot;decode_tps&quot;: 25.42044708052047,
+    &quot;prompt_tokens&quot;: 846,
+    &quot;predicted_tokens&quot;: 5467,
+    &quot;prefill_ms&quot;: 1423.517,
+    &quot;decode_ms&quot;: 215063.094
+  },
+  &quot;mtp&quot;: {
+    &quot;draft_n&quot;: 9417,
+    &quot;draft_n_accepted&quot;: 2329,
+    &quot;accept_rate&quot;: 0.247,
+    &quot;enabled&quot;: true
+  },
+  &quot;server_timings&quot;: {
+    &quot;cache_n&quot;: 0,
+    &quot;prompt_n&quot;: 846,
+    &quot;prompt_ms&quot;: 1423.517,
+    &quot;prompt_per_token_ms&quot;: 1.6826442080378252,
+    &quot;prompt_per_second&quot;: 594.3027023913307,
+    &quot;predicted_n&quot;: 5467,
+    &quot;predicted_ms&quot;: 215063.094,
+    &quot;predicted_per_token_ms&quot;: 39.33841119443937,
+    &quot;predicted_per_second&quot;: 25.42044708052047,
+    &quot;draft_n&quot;: 9417,
+    &quot;draft_n_accepted&quot;: 2329
+  },
+  &quot;extraction&quot;: {
+    &quot;extracted&quot;: true,
+    &quot;kind&quot;: &quot;fenced&quot;
+  },
+  &quot;output_file&quot;: &quot;output.py&quot;,
+  &quot;output_bytes&quot;: 15580,
+  &quot;reasoning_bytes&quot;: 3654,
+  &quot;wall_secs&quot;: 217.1,
+  &quot;created_utc&quot;: &quot;2026-07-27T09:50:13+00:00&quot;
+}</pre>
+</body></html>

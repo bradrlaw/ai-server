@@ -148,6 +148,9 @@ def main():
     ap.add_argument("--system", default=None, help="optional system prompt")
     ap.add_argument("--cmd", default=None,
                     help="record this llama.cpp launch command (standalone servers)")
+    ap.add_argument("--no-extract", action="store_true",
+                    help="save the full reply verbatim as the output (skip code-block "
+                         "extraction) — use for prose/reasoning tests")
     args = ap.parse_args()
 
     test_dir = os.path.join(REPO, "evals", args.test)
@@ -188,6 +191,8 @@ def main():
     timings = d.get("timings") or {}
 
     code, extracted, kind = extract_code(content, args.ext)
+    if args.no_extract:
+        code, extracted, kind = content, False, "full-content"
     is_html = args.ext in ("html", "htm")
     out_name = f"index.{args.ext}" if is_html else f"output.{args.ext}"
     with open(os.path.join(out_dir, out_name), "w") as f:

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>localmind-landing-page — eval summary</title>
+<title>logic-puzzle-reasoning — eval summary</title>
 <style>
 :root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
 --accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
@@ -23,7 +23,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 .trunc{color:#f87171}.foot{color:var(--muted);font-size:12px;margin-top:18px}
 </style></head>
 <body>
-<h1>localmind-landing-page</h1>
+<h1>logic-puzzle-reasoning</h1>
 <p class="sub">Model-eval comparison &middot; 8 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
@@ -33,132 +33,132 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
   </tr></thead>
   <tbody>
     <tr>
-      <td class="l"><a href="outputs/chat/run.html"><span class="model">chat</span></a>
-        <div class="name">Qwen3.6-35B-A3B-UD-Q6_K.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
-      <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">95%</span></td>
-      <td>36470 B</td>
-      <td>13455</td>
-      <td>1242.7 ms</td>
-      <td>674.3</td>
-      <td>134.5</td>
-      <td>101.5 s</td>
-      <td>stop</td>
-      <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/chat/index.html">output</a></td>
-    </tr>
-    <tr>
       <td class="l"><a href="outputs/chat-uncensored-q6/run.html"><span class="model">chat-uncensored-q6</span></a>
         <div class="name">Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">94%</span></td>
-      <td>38855 B</td>
-      <td>14167</td>
-      <td>1256.1 ms</td>
-      <td>667.2</td>
-      <td>128.0</td>
-      <td>112.1 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">79%</span></td>
+      <td>6013 B</td>
+      <td>16603</td>
+      <td>802.2 ms</td>
+      <td>488.7</td>
+      <td>114.8</td>
+      <td>145.8 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/chat-uncensored-q6/index.html">output</a></td>
+      <td class="l"><a href="outputs/chat-uncensored-q6/output.md">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/fast/run.html"><span class="model">fast</span></a>
         <div class="name">gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">84%</span></td>
-      <td>26903 B</td>
-      <td>7318</td>
-      <td>2034.5 ms</td>
-      <td>416.3</td>
-      <td>79.3</td>
-      <td>94.3 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">82%</span></td>
+      <td>6576 B</td>
+      <td>2227</td>
+      <td>1273.8 ms</td>
+      <td>312.4</td>
+      <td>81.1</td>
+      <td>29.1 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/fast/index.html">output</a></td>
+      <td class="l"><a href="outputs/fast/output.md">output</a></td>
     </tr>
     <tr>
-      <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap</span></a>
+      <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap-27b</span></a>
         <div class="name">ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">93%</span></td>
-      <td>31703 B</td>
-      <td>11266</td>
-      <td>1320.4 ms</td>
-      <td>634.6</td>
-      <td>45.7</td>
-      <td>248.1 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">73%</span></td>
+      <td>4632 B</td>
+      <td>6552</td>
+      <td>810.6 ms</td>
+      <td>483.6</td>
+      <td>38.9</td>
+      <td>170.0 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/thinkingcap-27b/index.html">output</a></td>
-    </tr>
-    <tr>
-      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
-        <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
-      <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
-      <td>35269 B</td>
-      <td>12746</td>
-      <td>1261.4 ms</td>
-      <td>664.4</td>
-      <td>44.4</td>
-      <td>289.0 s</td>
-      <td>stop</td>
-      <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/coding/index.html">output</a></td>
+      <td class="l"><a href="outputs/thinkingcap-27b/output.md">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/big/run.html"><span class="model">big</span></a>
         <div class="name">Qwen3.6-27B-UD-Q6_K_XL.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
-      <td>32613 B</td>
-      <td>11312</td>
-      <td>1475.4 ms</td>
-      <td>568.0</td>
-      <td>42.8</td>
-      <td>298.7 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">78%</span></td>
+      <td>6216 B</td>
+      <td>9559</td>
+      <td>776.5 ms</td>
+      <td>504.8</td>
+      <td>38.8</td>
+      <td>247.8 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/big/index.html">output</a></td>
+      <td class="l"><a href="outputs/big/output.md">output</a></td>
     </tr>
     <tr>
-      <td class="l"><a href="outputs/fast-uncensored/run.html"><span class="model">fast-uncensored</span></a>
-        <div class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+        <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">77%</span></td>
-      <td>24438 B</td>
-      <td>7821</td>
-      <td>3218.6 ms</td>
-      <td>263.2</td>
-      <td>30.9</td>
-      <td>270.5 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">72%</span></td>
+      <td>6549 B</td>
+      <td>9166</td>
+      <td>820.8 ms</td>
+      <td>477.6</td>
+      <td>37.7</td>
+      <td>271.4 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/fast-uncensored/index.html">output</a></td>
+      <td class="l"><a href="outputs/coding/output.md">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/gemma-31b/run.html"><span class="model">gemma-31b</span></a>
         <div class="name">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf</div></td>
-      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
-      <td><span class="pill mtp-on">on</span> <span class="name">32%</span></td>
-      <td>29927 B</td>
-      <td>8925</td>
-      <td>1465.4 ms</td>
-      <td>578.0</td>
-      <td>28.2</td>
-      <td>342.4 s</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">34%</span></td>
+      <td>2931 B</td>
+      <td>10708</td>
+      <td>929.5 ms</td>
+      <td>428.2</td>
+      <td>28.6</td>
+      <td>375.5 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/gemma-31b/index.html">output</a></td>
+      <td class="l"><a href="outputs/gemma-31b/output.md">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/fast-uncensored/run.html"><span class="model">fast-uncensored</span></a>
+        <div class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</div></td>
+      <td><span class="score">12/12</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">64%</span></td>
+      <td>13444 B</td>
+      <td>28545</td>
+      <td>2017.6 ms</td>
+      <td>197.3</td>
+      <td>24.6</td>
+      <td>1161.0 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/fast-uncensored/output.md">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/chat/run.html"><span class="model">chat</span></a>
+        <div class="name">Qwen3.6-35B-A3B-UD-Q6_K.gguf</div></td>
+      <td><span class="score">10/12</span> <span class="name">83%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">80%</span></td>
+      <td>4180 B</td>
+      <td>7842</td>
+      <td>778.7 ms</td>
+      <td>503.4</td>
+      <td>124.5</td>
+      <td>64.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/chat/output.md">output</a></td>
     </tr>
   </tbody>
 </table></div>

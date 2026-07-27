@@ -1,0 +1,63 @@
+{
+  "test": "localmind-landing-page-pro",
+  "model_slot": "thinkingcap-27b",
+  "label": "thinkingcap-27b",
+  "model_name": "ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "model_path": "/srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "endpoint": "http://127.0.0.1:8902/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server --model /srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --batch-size 2048 --ubatch-size 2048 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 8902 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 14927,
+    "prompt_tokens": 1202,
+    "total_tokens": 16129,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 348.1,
+    "ttft_ms": 1706.908,
+    "prefill_tps": 704.1972971009568,
+    "decode_tps": 43.09384809465604,
+    "prompt_tokens": 1202,
+    "predicted_tokens": 14927,
+    "prefill_ms": 1706.908,
+    "decode_ms": 346383.548
+  },
+  "mtp": {
+    "draft_n": 12387,
+    "draft_n_accepted": 10798,
+    "accept_rate": 0.872,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 1202,
+    "prompt_ms": 1706.908,
+    "prompt_per_token_ms": 1.4200565723793677,
+    "prompt_per_second": 704.1972971009568,
+    "predicted_n": 14927,
+    "predicted_ms": 346383.548,
+    "predicted_per_token_ms": 23.20516835264956,
+    "predicted_per_second": 43.09384809465604,
+    "draft_n": 12387,
+    "draft_n_accepted": 10798
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 44504,
+  "reasoning_bytes": 708,
+  "wall_secs": 348.1,
+  "created_utc": "2026-07-27T10:44:01+00:00"
+}
