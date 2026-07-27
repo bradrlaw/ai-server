@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>localmind-landing-page — eval summary</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px}
+h1{font-size:26px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 24px}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:10px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--muted);font-weight:600;font-size:12px;
+text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+td.l,th.l{text-align:left}tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(124,92,252,.06)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.model{font-weight:600}.name{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;
+border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}
+.mtp-off{color:var(--muted)}.score{color:var(--teal);font-weight:600}
+.trunc{color:#f87171}.foot{color:var(--muted);font-size:12px;margin-top:18px}
+</style></head>
+<body>
+<h1>localmind-landing-page</h1>
+<p class="sub">Model-eval comparison &middot; 1 run(s) &middot; sorted by objective score, then decode speed</p>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model / weights</th><th>Objective</th><th>MTP</th>
+    <th>Output</th><th>Compl. tok</th><th>TTFT</th><th>Prefill t/s</th>
+    <th>Decode t/s</th><th>Wall</th><th>Finish</th><th>Date</th><th class="l">Link</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+        <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
+      <td>35269 B</td>
+      <td>12746</td>
+      <td>1261.4 ms</td>
+      <td>664.4</td>
+      <td>44.4</td>
+      <td>289.0 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/coding/index.html">output</a></td>
+    </tr>
+  </tbody>
+</table></div>
+<p class="foot">Generated 2026-07-27T04:39:23+00:00 by scripts/eval-summary.py.
+TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
+</body></html>

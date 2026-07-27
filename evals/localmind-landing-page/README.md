@@ -19,9 +19,10 @@ scripts/eval-run.py --test localmind-landing-page --model thinkingcap \
     --endpoint http://127.0.0.1:8902/v1/chat/completions --label thinkingcap-27b
 ```
 
-Output lands in `outputs/<label>/` (`index.html`, `raw.txt`, `meta.json`). Open the HTML
-directly in a browser (it must work from `file://` with no network) and resize from 320px
-to 1440px+ to judge responsiveness.
+Output lands in `outputs/<label>/` (`index.html`, `raw.txt`, `meta.json`, `run.html`) and
+the run is added to `summary.html` at the test root. Open `run.html` for the metrics + a
+live preview, or open `index.html` directly in a browser (it must work from `file://` with
+no network) and resize from 320px to 1440px+ to judge responsiveness.
 
 ## Scoring
 

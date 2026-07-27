@@ -17,8 +17,10 @@ evals/
       <model-label>/            # one directory per model run
         index.html | output.*   # the model's extracted output
         raw.txt                 # full raw reply (incl. any reasoning_content)
-        meta.json               # model, endpoint, sampler, tokens, timing, timestamp
+        meta.json               # model, load command, sampler, usage, MTP, perf timings
+        run.html                # human-readable view: metrics + rendered output + raw
         check.json              # optional: objective-check results (from check.py)
+    summary.html                # auto-built comparison table across all runs
     RESULTS.md                  # optional: summary scoreboard across models
 ```
 
@@ -28,6 +30,8 @@ Conventions:
 - **One directory per model run**, named by a short model label (e.g. `coding`,
   `thinkingcap-27b`, `gemma-31b`). Re-running overwrites that model's dir.
 - **Keep raw output.** `raw.txt` + `meta.json` make every run auditable and reproducible.
+- **`summary.html` is generated, never hand-edited.** `eval-run.py` refreshes it after every
+  run; rebuild it from scratch anytime with `scripts/eval-summary.py --test <name>`.
 
 ## Running a test
 
@@ -45,10 +49,46 @@ scripts/eval-run.py --test localmind-landing-page --model thinkingcap \
 ```
 
 Key flags: `--label` (output dir name), `--endpoint`, `--temp/--top-p/--top-k`,
-`--max-tokens` (default 32000 — code output can be long), `--ext` (default `html`).
-`scripts/eval-run.py --help` for all options. Reasoning models put their thinking in
-`reasoning_content`; only the answer (`content`) is used for the output file, but the full
-reply is preserved in `raw.txt`.
+`--max-tokens` (default 32000 — code output can be long), `--ext` (default `html`),
+`--cmd` (record a standalone server's launch command). `scripts/eval-run.py --help` for
+all options. Reasoning models put their thinking in `reasoning_content`; only the answer
+(`content`) is used for the output file, but the full reply is preserved in `raw.txt`.
+
+Each run writes `outputs/<label>/` (`index.html`, `raw.txt`, `meta.json`, `run.html`) and
+refreshes the test's `summary.html`.
+
+### What gets recorded (`meta.json`)
+
+- **Identity:** `model_slot` (the llama-swap model id requested), `model_name` /
+  `model_path` (the actual GGUF served), `endpoint`, `proxy`.
+- **`load_command`** — the *exact* llama.cpp launch command (fully expanded, read from the
+  llama-swap router's `/running`; for a standalone server pass `--cmd`).
+- **`mtp`** — `enabled` plus draft-token `accept_rate` when MTP self-speculative decode is on.
+- **`sampler`** — the request-side params (temperature/top_p/top_k/max_tokens).
+- **`performance`** — server-side llama.cpp `timings` (network-independent):
+  - `ttft_ms` — time to first token = prefill (`prompt_ms`)
+  - `prefill_tps` — prompt tokens/sec (`prompt_per_second`)
+  - `decode_tps` — output tokens/sec (`predicted_per_second`)
+  - plus `wall_secs` (total run time) and the raw `server_timings`.
+
+  Runs force a **cold prefill** (`cache_prompt: false`) so TTFT / prefill numbers are real
+  and comparable across models instead of reflecting a warm KV cache.
+
+### Viewing results
+
+- **`summary.html`** (test root) — one sortable table comparing every run on objective
+  score, output size, TTFT, prefill/decode throughput, MTP, and wall time. Rows link to
+  each run's page and output. Rebuild anytime:
+
+  ```bash
+  scripts/eval-summary.py --test localmind-landing-page   # one test
+  scripts/eval-summary.py --all                           # every test
+  ```
+
+- **`outputs/<label>/run.html`** — a per-run page: metric cards, the llama.cpp load
+  command, the sampler, the full `meta.json`, and (for HTML tests) the rendered page inline.
+
+Both are plain files — browse them in Filebrowser (`:8083` → `/data/evals`) or open directly.
 
 ## Scoring
 
