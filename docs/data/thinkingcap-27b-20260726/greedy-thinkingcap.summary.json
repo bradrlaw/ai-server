@@ -1,0 +1,10 @@
+{
+  "label": "thinkingcap-27b",
+  "n": 80,
+  "accuracy": 0.9125,
+  "mean_completion_tokens": 549.5,
+  "mean_reasoning_tokens": 453.2,
+  "mean_answer_tokens": 93.3,
+  "mean_secs": 45.7,
+  "truncated_length": 0
+}
