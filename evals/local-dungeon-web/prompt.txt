@@ -1,0 +1,48 @@
+Build a single, completely self-contained HTML file for a browser-based text adventure game called "The Local Dungeon." The game must be playable immediately upon loading the page.
+
+Hard Constraints:
+
+One .html file. Zero external dependencies. No CDNs, no external fonts, no frameworks.
+Everything inline: HTML structure, CSS styling (in <style>), game logic (in <script>).
+Use system fonts only. Use inline SVG for any icons.
+No placeholder text. All game descriptions, item names, and UI labels must be specific and polished.
+Page Layout (Responsive):
+
+Header: Sticky top bar with the game title ("The Local Dungeon"), a brief tagline, and a prominent "Reset Game" button.
+Hero / Description: A brief introduction to the dungeon below the header (2–3 sentences about the lore).
+Collapsible "How to Play": An accordion section immediately after the description that lists the available commands (look, go, take, etc.).
+Main Game Dashboard: The core interactive area, split into two columns on desktop (70/30 split) and stacked on mobile:
+Left (Game Console): A scrolling terminal-like window showing the game narrative, topped with a persistent input line (prompt symbol >).
+Right (Sidebar): A dashboard containing:
+Stats: "Moves Made" and "Items Found" counters.
+Inventory: A live, dynamic list of items the player is currently holding. If empty, show "Inventory is empty."
+Game Logic (JavaScript):
+
+Use ES6 class syntax to structure the code (GameEngine, Room, Item).
+State Management: Track current room, inventory, visited rooms, and boolean flags (e.g., lever_pulled).
+Command Parser: Implement a robust parser that handles:
+Case insensitivity.
+Synonyms (e.g., "examine" = "look at", "grab" = "take").
+Partial matches (e.g., "n" = "north", "inv" = "inventory").
+Graceful error messages for unknown commands or missing items.
+Dungeon Content (Must include these rooms/items):
+Entrance Hall (Start): Contains a "rusted key". Exits: north, east.
+Library (North of Entrance): Contains a "lever". Using the lever unlocks a "secret chamber" to the west.
+Armory (East of Entrance): Contains a "torch". A locked north door requires the "rusted key".
+Treasure Room (North of Armory): Contains a "golden coin".
+Secret Chamber (West of Library): Contains an "ancient scroll".
+Garden (South of Entrance): A peaceful end-game area.
+Interactions & Polish:
+
+Typewriter Effect: Output text in the console character-by-character for a retro feel, with a "skip" button or ability to click to skip.
+Command History: Support Up/Down arrow keys in the input field to cycle through previous commands.
+Auto-Scroll: The console must automatically scroll to the bottom when new text is added.
+Input Focus: Clicking anywhere in the Game Console area should focus the input field.
+Dynamic UI Updates: The Inventory list and Stats must update immediately after every command execution.
+Reset Functionality: The "Reset Game" button must completely clear state and reload the starting room without refreshing the browser page.
+Design:
+
+Dark mode aesthetic. Dark grey backgrounds (#1a1a1a), bright green or amber text for the console (#00ff00 or #ffb000), and modern UI for the sidebar.
+Use a monospace font stack for the console text (e.g., monospace, 'Courier New').
+Use a clean sans-serif stack for the UI (e.g., system-ui, sans-serif).
+Output: Just the complete HTML code block. No explanation.
