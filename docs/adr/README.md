@@ -34,6 +34,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0015](0015-llama-swap-serving-modes.md) | llama-swap serving modes (base + overlay) | Accepted |
 | [0016](0016-personal-assistant-gateways.md) | Personal-assistant gateway layer (OpenClaw + Hermes) | Accepted |
 | [0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md) | P100 HBM2 ECC death: diagnosis + Titan X stopgap swap | Accepted |
+| [0018](0018-gpu-upgrade-eval-16-32gb.md) | GPU upgrade eval (16/24/32 GB): arch→CUDA→feature→bandwidth→fit | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
