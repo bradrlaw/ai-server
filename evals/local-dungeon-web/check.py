@@ -54,6 +54,17 @@ def typewriter(low, raw):
     return has_timer and per_char
 
 
+# Partial / abbreviated command matching (prompt: "n"=north, "inv"=inventory).
+# Accept any of the legitimate mechanisms: prefix match (startsWith), a named
+# partialMatch helper, a single-letter direction-abbreviation map ('n':'north'|
+# 'go'|'move'), or case-insensitive substring matching (toLowerCase().includes).
+def partial_match(low, raw):
+    return ("startswith" in low
+            or "partialmatch" in low or "partial match" in low
+            or bool(re.search(r"""['"]n['"]\s*:\s*['"](go|north|move)""", low))
+            or bool(re.search(r"\.tolowercase\(\)\s*\.\s*includes\(", low)))
+
+
 # Reset must NOT refresh the page: a real reset button must exist and the code
 # must not fall back to a full navigation reload.
 def reset_no_reload(low, raw):
@@ -102,8 +113,8 @@ CHECKS = [
      "Case-insensitive parsing (toLowerCase)"),
     ("synonyms", 1, lambda l, r: "examine" in l and "grab" in l,
      "Command synonyms (examine / grab)"),
-    ("partial_match", 1, lambda l, r: "startswith" in l,
-     "Partial command matching (startsWith)"),
+    ("partial_match", 1, partial_match,
+     "Partial/abbreviated command matching (startsWith / abbrev map / substring)"),
     ("flags_state", 1, lambda l, r: "lever_pulled" in l
      or ("flag" in l and "lever" in l), "Boolean state flags (lever_pulled)"),
     # --- mandated content ---------------------------------------------------
