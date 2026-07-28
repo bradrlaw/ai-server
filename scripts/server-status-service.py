@@ -23,7 +23,7 @@ Bind address/port and upstreams are configurable via environment variables:
   STATUS_HOST (default 0.0.0.0)      STATUS_PORT (default 9095)
   LLAMASWAP_URL (default http://127.0.0.1:9090)
   COMFYUI_URLS  (default "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189")
-  STATUS_DISK_PATHS (default "/", comma-separated filesystems to report)
+  STATUS_DISK_PATHS (default reports Root + bulk + secure; "label=path=kind" items)
   STATUS_CACHE_SECS (default 2)
 
 Optional background workers:
@@ -43,6 +43,7 @@ import subprocess
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import datetime as dt
 from collections import deque
@@ -61,10 +62,39 @@ BENCH_CHART = os.environ.get(
 BENCH_DOC_URL = os.environ.get(
     "BENCH_DOC_URL",
     "https://github.com/bradrlaw/ai-server/blob/dev/docs/benchmarking.md")
-# Comma-separated filesystem paths to report disk usage for (one row each).
-STATUS_DISK_PATHS = [
-    p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
-]
+# Comma-separated filesystems to report disk usage for (one row each). Each item is
+# "label=path=kind"; label and kind are optional (bare "path" also works). kind is:
+#   plain  — always report statvfs of whatever is at path (default; e.g. Root "/").
+#   mount  — an auto-mounted volume (e.g. the bulk drive): if not currently mounted,
+#            report status "offline" instead of the underlying root fs.
+#   secure — an on-demand encrypted mount (LUKS): if not mounted, report "locked".
+# Detecting the not-mounted case matters so a locked/absent volume doesn't silently
+# show the root filesystem's usage.
+def _parse_disk_specs(raw: str):
+    specs = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        parts = [x.strip() for x in item.split("=")]
+        if len(parts) == 1:
+            label, path, kind = parts[0], parts[0], "plain"
+        elif len(parts) == 2:
+            label, path, kind = parts[0], parts[1], "plain"
+        else:
+            label, path, kind = parts[0], parts[1], (parts[2] or "plain")
+        specs.append((label, path, kind.lower()))
+    return specs
+
+
+STATUS_DISK_PATHS = _parse_disk_specs(
+    os.environ.get(
+        "STATUS_DISK_PATHS",
+        "Root=/,"
+        "Bulk=/srv/ai/storage-bulk=mount,"
+        "Secure=/srv/ai/storage=secure",
+    )
+)
 COMFYUI_URLS = os.environ.get(
     "COMFYUI_URLS",
     "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189",
@@ -452,12 +482,16 @@ def collect_comfyui() -> list:
         label, url = pair.split("=", 1)
         label = label.strip()
         url = url.strip().rstrip("/")
+        try:
+            port = urllib.parse.urlsplit(url).port
+        except Exception:
+            port = None
         code, q = _http_status(f"{url}/queue")
         if code in (401, 403):
-            out.append({"label": label, "state": "locked"})
+            out.append({"label": label, "state": "locked", "port": port})
             continue
         if code is None or q is None:
-            out.append({"label": label, "state": "unreachable"})
+            out.append({"label": label, "state": "unreachable", "port": port})
             continue
         running = len(q.get("queue_running") or [])
         pending = len(q.get("queue_pending") or [])
@@ -467,6 +501,7 @@ def collect_comfyui() -> list:
                 "state": "busy" if (running or pending) else "idle",
                 "running": running,
                 "pending": pending,
+                "port": port,
             }
         )
     return out
@@ -609,19 +644,49 @@ def _mem_info():
     }
 
 
-def _disk_info(paths):
+def _disk_info(specs):
     out = []
-    for p in paths:
+    for label, path, kind in specs:
+        mounted = os.path.ismount(path)
+        # A configured mount/secure volume that isn't currently mounted: report its
+        # status rather than the underlying root fs it would otherwise resolve to.
+        if not mounted and kind in ("mount", "secure"):
+            out.append(
+                {
+                    "path": path,
+                    "label": label,
+                    "status": "locked" if kind == "secure" else "offline",
+                    "mounted": False,
+                    "total_gb": None,
+                    "used_gb": None,
+                    "used_pct": None,
+                }
+            )
+            continue
         try:
-            st = os.statvfs(p)
+            st = os.statvfs(path)
         except Exception:
+            out.append(
+                {
+                    "path": path,
+                    "label": label,
+                    "status": "unavailable",
+                    "mounted": mounted,
+                    "total_gb": None,
+                    "used_gb": None,
+                    "used_pct": None,
+                }
+            )
             continue
         total = st.f_blocks * st.f_frsize
         free = st.f_bavail * st.f_frsize
         used = total - free
         out.append(
             {
-                "path": p,
+                "path": path,
+                "label": label,
+                "status": "ok",
+                "mounted": mounted,
                 "total_gb": round(total / 1e9, 1),
                 "used_gb": round(used / 1e9, 1),
                 "used_pct": round(100.0 * used / total, 1) if total else None,
@@ -1131,7 +1196,6 @@ _HTML = """<!doctype html>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
-  <section><h2>ComfyUI</h2><div id="comfyui">…</div></section>
   <section><h2>Services</h2><div id="services">…</div></section>
   <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
     <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
@@ -1262,28 +1326,44 @@ async function refresh(){  try{
       rows.push(bar('CPU', h.cpu_pct, cpuTxt));
       if(h.mem){ rows.push(bar('RAM', h.mem.used_pct,
         `${(h.mem.used_mb/1024).toFixed(1)} / ${(h.mem.total_mb/1024).toFixed(1)} GB`)); }
-      (h.disk||[]).forEach(dk=>{ rows.push(bar('Disk '+esc(dk.path), dk.used_pct,
-        `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`)); });
+      (h.disk||[]).forEach(dk=>{
+        const nm='Disk '+esc(dk.label||dk.path);
+        if(dk.used_pct==null){
+          const st=dk.status||'n/a';
+          const cls=(st==='locked')?'busy':'bad';
+          const icon=(st==='locked')?'🔒 ':'';
+          rows.push(bar(nm, null, `<span class="pill ${cls}">${icon}${esc(st)}</span>`));
+        } else {
+          rows.push(bar(nm, dk.used_pct,
+            `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`));
+        }
+      });
       document.getElementById('host').innerHTML =
         '<table><tr><th>Resource</th><th>Usage</th><th></th></tr>'+rows.join('')+'</table>';
     } else { document.getElementById('host').innerHTML = pill('unavailable'); }
-    // comfyui
-    document.getElementById('comfyui').innerHTML = d.comfyui.length ?
-      d.comfyui.map(c=>`<div style="margin:4px 0">${esc(c.label)}: ${pill(c.state)}` +
-        (c.state==='busy'?` <span class="sub">${c.running} running, ${c.pending} queued</span>`:'') + `</div>`).join('')
-      : pill('none');
-    // services (app-tier health + click-through links built from browser host)
+    // services (app-tier health + click-through links) with ComfyUI folded in
     const svc = d.services || [];
-    document.getElementById('services').innerHTML = svc.length ?
-      '<table><tr><th>Service</th><th>State</th><th>Link</th></tr>' +
-      svc.map(s=>{
-        const p = s.up ? `<span class="pill idle">up</span>` : `<span class="pill bad">down</span>`;
-        const code = s.code!=null ? ` <span class="sub">${s.code}</span>` : '';
-        const link = s.link ? `<a href="${esc(s.link)}" target="_blank" style="color:#4b8ce0">${esc(s.link.replace('https://','').replace('http://',''))}</a>`
-          : s.port!=null ? `<a href="http://${location.hostname}:${s.port}" target="_blank" style="color:#4b8ce0">:${s.port}</a>`
-          : '<span class="sub">–</span>';
-        return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${link}</td></tr>`;
-      }).join('') + '</table>'
+    const comfy = d.comfyui || [];
+    const linkHtml = (link, port) =>
+      link ? `<a href="${esc(link)}" target="_blank" style="color:#4b8ce0">${esc(link.replace('https://','').replace('http://',''))}</a>`
+      : port!=null ? `<a href="http://${location.hostname}:${port}" target="_blank" style="color:#4b8ce0">:${port}</a>`
+      : '<span class="sub">–</span>';
+    const svcRows = svc.map(s=>{
+      const p = s.up ? `<span class="pill idle">up</span>` : `<span class="pill bad">down</span>`;
+      const code = s.code!=null ? ` <span class="sub">${s.code}</span>` : '';
+      return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${linkHtml(s.link, s.port)}</td></tr>`;
+    });
+    const comfyRows = comfy.map(c=>{
+      let state;
+      if(c.state==='busy') state = `<span class="pill busy">busy</span> <span class="sub">${c.running} running, ${c.pending} queued</span>`;
+      else if(c.state==='idle') state = `<span class="pill idle">idle</span>`;
+      else if(c.state==='locked') state = `<span class="pill busy">🔒 locked</span>`;
+      else state = `<span class="pill bad">down</span>`;
+      return `<tr><td>ComfyUI <span class="sub">${esc(c.label)}</span></td><td>${state}</td><td>${linkHtml(null, c.port)}</td></tr>`;
+    });
+    const allRows = svcRows.concat(comfyRows);
+    document.getElementById('services').innerHTML = allRows.length ?
+      '<table><tr><th>Service</th><th>State</th><th>Link</th></tr>' + allRows.join('') + '</table>'
       : pill('none');
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
