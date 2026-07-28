@@ -23,7 +23,7 @@ Bind address/port and upstreams are configurable via environment variables:
   STATUS_HOST (default 0.0.0.0)      STATUS_PORT (default 9095)
   LLAMASWAP_URL (default http://127.0.0.1:9090)
   COMFYUI_URLS  (default "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189")
-  STATUS_DISK_PATHS (default "/", comma-separated filesystems to report)
+  STATUS_DISK_PATHS (default reports Root + bulk + secure; "label=path=kind" items)
   STATUS_CACHE_SECS (default 2)
 
 Optional background workers:
@@ -61,10 +61,39 @@ BENCH_CHART = os.environ.get(
 BENCH_DOC_URL = os.environ.get(
     "BENCH_DOC_URL",
     "https://github.com/bradrlaw/ai-server/blob/dev/docs/benchmarking.md")
-# Comma-separated filesystem paths to report disk usage for (one row each).
-STATUS_DISK_PATHS = [
-    p.strip() for p in os.environ.get("STATUS_DISK_PATHS", "/").split(",") if p.strip()
-]
+# Comma-separated filesystems to report disk usage for (one row each). Each item is
+# "label=path=kind"; label and kind are optional (bare "path" also works). kind is:
+#   plain  — always report statvfs of whatever is at path (default; e.g. Root "/").
+#   mount  — an auto-mounted volume (e.g. the bulk drive): if not currently mounted,
+#            report status "offline" instead of the underlying root fs.
+#   secure — an on-demand encrypted mount (LUKS): if not mounted, report "locked".
+# Detecting the not-mounted case matters so a locked/absent volume doesn't silently
+# show the root filesystem's usage.
+def _parse_disk_specs(raw: str):
+    specs = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        parts = [x.strip() for x in item.split("=")]
+        if len(parts) == 1:
+            label, path, kind = parts[0], parts[0], "plain"
+        elif len(parts) == 2:
+            label, path, kind = parts[0], parts[1], "plain"
+        else:
+            label, path, kind = parts[0], parts[1], (parts[2] or "plain")
+        specs.append((label, path, kind.lower()))
+    return specs
+
+
+STATUS_DISK_PATHS = _parse_disk_specs(
+    os.environ.get(
+        "STATUS_DISK_PATHS",
+        "Root=/,"
+        "Bulk=/srv/ai/storage-bulk=mount,"
+        "Secure=/srv/ai/storage=secure",
+    )
+)
 COMFYUI_URLS = os.environ.get(
     "COMFYUI_URLS",
     "open=http://127.0.0.1:8188,secure=http://127.0.0.1:8189",
@@ -609,19 +638,49 @@ def _mem_info():
     }
 
 
-def _disk_info(paths):
+def _disk_info(specs):
     out = []
-    for p in paths:
+    for label, path, kind in specs:
+        mounted = os.path.ismount(path)
+        # A configured mount/secure volume that isn't currently mounted: report its
+        # status rather than the underlying root fs it would otherwise resolve to.
+        if not mounted and kind in ("mount", "secure"):
+            out.append(
+                {
+                    "path": path,
+                    "label": label,
+                    "status": "locked" if kind == "secure" else "offline",
+                    "mounted": False,
+                    "total_gb": None,
+                    "used_gb": None,
+                    "used_pct": None,
+                }
+            )
+            continue
         try:
-            st = os.statvfs(p)
+            st = os.statvfs(path)
         except Exception:
+            out.append(
+                {
+                    "path": path,
+                    "label": label,
+                    "status": "unavailable",
+                    "mounted": mounted,
+                    "total_gb": None,
+                    "used_gb": None,
+                    "used_pct": None,
+                }
+            )
             continue
         total = st.f_blocks * st.f_frsize
         free = st.f_bavail * st.f_frsize
         used = total - free
         out.append(
             {
-                "path": p,
+                "path": path,
+                "label": label,
+                "status": "ok",
+                "mounted": mounted,
                 "total_gb": round(total / 1e9, 1),
                 "used_gb": round(used / 1e9, 1),
                 "used_pct": round(100.0 * used / total, 1) if total else None,
@@ -1262,8 +1321,18 @@ async function refresh(){  try{
       rows.push(bar('CPU', h.cpu_pct, cpuTxt));
       if(h.mem){ rows.push(bar('RAM', h.mem.used_pct,
         `${(h.mem.used_mb/1024).toFixed(1)} / ${(h.mem.total_mb/1024).toFixed(1)} GB`)); }
-      (h.disk||[]).forEach(dk=>{ rows.push(bar('Disk '+esc(dk.path), dk.used_pct,
-        `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`)); });
+      (h.disk||[]).forEach(dk=>{
+        const nm='Disk '+esc(dk.label||dk.path);
+        if(dk.used_pct==null){
+          const st=dk.status||'n/a';
+          const cls=(st==='locked')?'busy':'bad';
+          const icon=(st==='locked')?'🔒 ':'';
+          rows.push(bar(nm, null, `<span class="pill ${cls}">${icon}${esc(st)}</span>`));
+        } else {
+          rows.push(bar(nm, dk.used_pct,
+            `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`));
+        }
+      });
       document.getElementById('host').innerHTML =
         '<table><tr><th>Resource</th><th>Usage</th><th></th></tr>'+rows.join('')+'</table>';
     } else { document.getElementById('host').innerHTML = pill('unavailable'); }
