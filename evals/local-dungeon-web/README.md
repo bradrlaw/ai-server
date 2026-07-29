@@ -90,6 +90,39 @@ Enter scores in each `outputs/<label>/scores.json` (a blank stub is auto-created
 then run `scripts/eval-summary.py --test local-dungeon-web` to regenerate the
 scoreboard. `RESULTS.md` and `summary.html` are generated — don't hand-edit them.
 
+### Playability (headless) — `playtest.json` → `PLAYTEST.md`
+
+`check.py` verifies that constraints are *present*, not that the game is
+*playable* — a model can score full marks yet ship a game you can't finish. The
+canonical example here is the **wall lever**: it's a fixture that opens the
+Secret Chamber, so pulling it should NOT require picking it up first. Several
+outputs get this wrong (you must `take lever` before `use lever`), and one
+(`coding`) actually *corrupts state* if you take it, sealing the Secret Chamber —
+all while scoring 41/41 objectively.
+
+To catch this, a headless [jsdom](https://github.com/jsdom/jsdom) harness loads
+each `index.html` in a fake DOM, drives the parser through real command
+sequences, and reports whether the Secret Chamber is reachable two ways:
+
+```bash
+npm --prefix scripts/eval-playtest install      # one-time (jsdom)
+node scripts/eval-playtest/playtest.js --test local-dungeon-web
+```
+
+It plays two scenarios per output — **Fixture (no take):** `north` → `use lever`
+→ `west`, and **Take-first workaround:** the same with a `take lever` inserted —
+and writes `outputs/<label>/playtest.json` plus a human-readable `PLAYTEST.md`
+with per-command milestones. This is a **separate playability signal — it is NOT
+folded into the `check.py` score.** A UI the driver genuinely can't drive shows
+`✗` without affecting the objective number.
+
+The driver is deliberately game-agnostic: it discovers the console element by
+tracking which container *grows* after each command (so it ignores inline
+`<script>` source and static lore), polyfills `innerText` (which jsdom otherwise
+doesn't reflect) for char-by-char typewriters, waits out the typewriter before
+reading, and tries alternate movement phrasings (`north` vs `go north`) only when
+a command is genuinely unrecognized.
+
 ## Notes on fairness
 
 - **Sampler:** default run uses `temp 0.7, top_p 0.95, top_k 20`. The runner

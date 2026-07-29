@@ -138,3 +138,17 @@ Each test defines its own rubric in its `README.md`. Two parts:
   metrics with your design scores — and refreshes the **Design** column in `summary.html`
   and the axis cards in each `run.html`. `RESULTS.md` and `summary.html` are generated;
   edit `scores.json`, not them.
+
+- **Playability (headless, optional)** — for interactive HTML tests, `check.py` only proves
+  constraints are *present*, not that the game is *finishable*. A test can add a
+  `playtest.json` scenario and drive each generated `index.html` in a headless
+  [jsdom](https://github.com/jsdom/jsdom) DOM via the game-agnostic harness:
+
+  ```bash
+  npm --prefix scripts/eval-playtest install     # one-time (jsdom)
+  node scripts/eval-playtest/playtest.js --test <name>
+  ```
+
+  It writes `outputs/<label>/playtest.json` + a `PLAYTEST.md` milestone report. This is a
+  **separate signal — NOT folded into the `check.py` score.** See `local-dungeon-web` for a
+  worked example (it catches games that score full marks yet seal off the Secret Chamber).

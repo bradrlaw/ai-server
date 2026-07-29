@@ -1,0 +1,78 @@
+{
+  "label": "chat",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> go northYou travel north.── The Library ──This vast chamber was once a repository of knowledge. Shelves stretch toward the ceiling, though most have collapsed"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "don't have",
+          "excerpt": "> use leverYou don't have \"lever\" to use."
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "> go westYou travel west.── The Secret Chamber ──A hidden room, revealed only by the grinding of stone against stone. The walls are covered in intricate murals "
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> go northYou travel north.── The Library ──This vast chamber was once a repository of knowledge. Shelves stretch toward the ceiling, though most have collapsed"
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "take",
+          "hitNegative": null,
+          "excerpt": "> take leverYou take the Stone Lever."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "> use leverYou pull the stone lever with all your strength. Deep within the wall, gears grind and stone shifts. A hidden passage opens to the west!"
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "> go westYou travel west.── The Secret Chamber ──A hidden room, revealed only by the grinding of stone against stone. The walls are covered in intricate murals "
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    }
+  },
+  "generated_utc": "2026-07-29T07:24:44.002Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

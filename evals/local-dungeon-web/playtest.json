@@ -1,0 +1,162 @@
+{
+  "description": "Playability scenario for The Local Dungeon. Verifies the lever-as-fixture semantics and reachability of the Secret Chamber via the natural interaction (pull the wall lever WITHOUT taking it) vs. the take-first workaround.",
+  "runs": [
+    {
+      "name": "natural_fixture",
+      "title": "Fixture (no take)",
+      "goal_label": "reach_secret",
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": [
+            "north",
+            "go north"
+          ],
+          "expect": [
+            "library",
+            "move north",
+            "head north",
+            "travel north",
+            "go north and",
+            "enter the",
+            "arrive"
+          ],
+          "expectNone": [
+            "can't go north",
+            "cannot go north",
+            "no exit",
+            "no passage that way"
+          ]
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "expect": [
+            "passage",
+            "secret",
+            "opens",
+            "grinding",
+            "slides",
+            "rumble",
+            "pull"
+          ],
+          "expectNone": [
+            "don't have",
+            "do not have",
+            "not carrying",
+            "not holding",
+            "aren't holding",
+            "you don't see",
+            "you're not carrying",
+            "need to take",
+            "pick it up first"
+          ]
+        },
+        {
+          "label": "reach_secret",
+          "send": [
+            "west",
+            "go west"
+          ],
+          "expect": [
+            "secret chamber",
+            "ancient scroll",
+            "move west",
+            "head west",
+            "travel west",
+            "go west and",
+            "arrive"
+          ],
+          "expectNone": [
+            "can't go west",
+            "cannot go west",
+            "solid",
+            "wall is solid",
+            "hidden passage",
+            "no passage that way",
+            "mechanism nearby",
+            "locked"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "with_take",
+      "title": "Take-first workaround",
+      "goal_label": "reach_secret",
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": [
+            "north",
+            "go north"
+          ],
+          "expect": [
+            "library",
+            "move north",
+            "head north",
+            "travel north",
+            "go north and",
+            "enter the",
+            "arrive"
+          ],
+          "expectNone": [
+            "can't go north",
+            "cannot go north",
+            "no exit",
+            "no passage that way"
+          ]
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "expect": [
+            "take",
+            "pick",
+            "lever",
+            "grab"
+          ]
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "expect": [
+            "passage",
+            "secret",
+            "opens",
+            "grinding",
+            "slides",
+            "rumble",
+            "pull"
+          ]
+        },
+        {
+          "label": "reach_secret",
+          "send": [
+            "west",
+            "go west"
+          ],
+          "expect": [
+            "secret chamber",
+            "ancient scroll",
+            "move west",
+            "head west",
+            "travel west",
+            "go west and",
+            "arrive"
+          ],
+          "expectNone": [
+            "can't go west",
+            "cannot go west",
+            "solid",
+            "wall is solid",
+            "hidden passage",
+            "no passage that way",
+            "mechanism nearby",
+            "locked"
+          ]
+        }
+      ]
+    }
+  ]
+}

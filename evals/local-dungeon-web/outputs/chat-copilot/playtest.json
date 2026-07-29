@@ -1,0 +1,78 @@
+{
+  "label": "chat-copilot",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> northDusty LibraryA long chamber lined with crumbling bookshelves. The air smells of old paper and mildew. Most volumes have rotted to mush, but a few leather"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "> use leverYou heave the lever down with a loud CLANK. Deep within the wall, a grinding mechanism shifts. The sealed door to the west slowly swings open, reveal"
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "> westSecret ChamberA hidden room behind a concealed passage. Faint runes glow faintly on the walls when no one is looking directly at them. A narrow slit of li"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> northDusty LibraryA long chamber lined with crumbling bookshelves. The air smells of old paper and mildew. Most volumes have rotted to mush, but a few leather"
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "take",
+          "hitNegative": null,
+          "excerpt": "> take leverYou pick up the Iron Lever."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "> use leverYou heave the lever down with a loud CLANK. Deep within the wall, a grinding mechanism shifts. The sealed door to the west slowly swings open, reveal"
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "> westSecret ChamberA hidden room behind a concealed passage. Faint runes glow faintly on the walls when no one is looking directly at them. A narrow slit of li"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    }
+  },
+  "generated_utc": "2026-07-29T07:25:16.858Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}
