@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>local-dungeon-web</h1>
-<p class="sub">Model-eval comparison &middot; 3 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub">Model-eval comparison &middot; 6 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -65,6 +65,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/coding/index.html">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/coding-copilot/run.html"><span class="model">coding</span></a>
+        <div class="name">coding (Copilot CLI)</div></td>
+      <td><span class="score">41/41</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>28592 B</td>
+      <td>—</td>
+      <td>— ms</td>
+      <td>—</td>
+      <td>—</td>
+      <td>260.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-29</td>
+      <td class="l"><a href="outputs/coding-copilot/index.html">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/fast/run.html"><span class="model">fast</span></a>
         <div class="name">gemma-4-12B-it-qat-UD-Q4_K_XL.gguf</div></td>
       <td><span class="score">40/41</span> <span class="name">98%</span></td>
@@ -80,9 +96,41 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="name">2026-07-28</td>
       <td class="l"><a href="outputs/fast/index.html">output</a></td>
     </tr>
+    <tr>
+      <td class="l"><a href="outputs/chat-copilot/run.html"><span class="model">chat</span></a>
+        <div class="name">chat (Copilot CLI)</div></td>
+      <td><span class="score">39/41</span> <span class="name">95%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>34849 B</td>
+      <td>—</td>
+      <td>— ms</td>
+      <td>—</td>
+      <td>—</td>
+      <td>131.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-29</td>
+      <td class="l"><a href="outputs/chat-copilot/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/fast-copilot/run.html"><span class="model">fast</span></a>
+        <div class="name">fast (Copilot CLI)</div></td>
+      <td><span class="score">38/41</span> <span class="name">93%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>20747 B</td>
+      <td>—</td>
+      <td>— ms</td>
+      <td>—</td>
+      <td>—</td>
+      <td>1363.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-29</td>
+      <td class="l"><a href="outputs/fast-copilot/index.html">output</a></td>
+    </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-07-28T16:35:55+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-07-29T05:33:15+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

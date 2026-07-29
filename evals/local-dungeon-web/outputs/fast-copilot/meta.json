@@ -1,0 +1,34 @@
+{
+  "test": "local-dungeon-web",
+  "model_slot": "fast",
+  "label": "fast-copilot",
+  "model_name": "fast (Copilot CLI)",
+  "model_path": null,
+  "endpoint": "http://127.0.0.1:4000/v1",
+  "proxy": "litellm",
+  "harness": "github-copilot-cli",
+  "harness_version": "GitHub Copilot CLI 1.0.75.\nRun 'copilot update' to check for updates.",
+  "sampler": {
+    "note": "sampler controlled by Copilot CLI (not set by harness)",
+    "max_prompt_tokens": 24576,
+    "max_output_tokens": 8192,
+    "reasoning_effort": null
+  },
+  "prompt_wrapped": true,
+  "usage": {},
+  "finish_reason": "stop",
+  "performance": {},
+  "mtp": {
+    "enabled": false
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "agent-file-write"
+  },
+  "output_file": "index.html",
+  "output_bytes": 20747,
+  "wall_secs": 1363.5,
+  "return_code": 0,
+  "timed_out": false,
+  "created_utc": "2026-07-29T04:53:45+00:00"
+}

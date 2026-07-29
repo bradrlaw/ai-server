@@ -1,0 +1,2 @@
+Done. The file `index.html` is ready — a complete, self-contained text adventure game with all specified features: 6 rooms, 5 items, typewriter effect, command history, dark mode UI, and zero external dependencies.
+

@@ -58,6 +58,29 @@ Key flags: `--label` (output dir name), `--endpoint`, `--temp/--top-p/--top-k`,
 all options. Reasoning models put their thinking in `reasoning_content`; only the answer
 (`content`) is used for the output file, but the full reply is preserved in `raw.txt`.
 
+### Agent-mediated runs (Copilot CLI / BYOK)
+
+`scripts/eval-run.py` measures the **raw model** (one verbatim user message, one shot).
+To instead measure the model **plus a coding-agent scaffold** — GitHub Copilot CLI's
+system prompt and multi-turn tool loop, driving the *same local weights* via BYOK
+(`copilot-byok.sh` → LiteLLM `:4000`) — use the sibling runner. It works for **any**
+test, reuses the same `prompt.txt`, `check.py`, and scoreboard, and lands under a
+distinct label (default `<model>-copilot`) so it sits beside the raw run:
+
+```bash
+scripts/eval-run-copilot.py --test local-dungeon-web --model coding   # -> coding-copilot
+scripts/eval-run-copilot.py --test dungeon-adventure-engine --model chat --ext py
+```
+
+It runs `copilot -p` headless in an isolated temp dir (`--allow-all-tools --no-ask-user
+--no-custom-instructions`), disables the plan-build MCP so the selected model stays
+pinned (no planner→coder model swap), applies the per-model token budgets from
+`copilot-byok.sh`, and captures whatever file the agent writes. Agent runs record
+`harness: github-copilot-cli` in `meta.json` and leave the perf/token columns blank
+(the endpoint metrics aren't exposed through the CLI). Compare raw vs `-copilot`
+side-by-side to isolate the harness effect; don't average the two — they answer
+different questions ("how good is the model" vs "how good is model + tool").
+
 Each run writes `outputs/<label>/` (`index.html`, `raw.txt`, `meta.json`, `run.html`) and
 refreshes the test's `summary.html`.
 

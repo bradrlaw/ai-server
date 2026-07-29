@@ -43,6 +43,9 @@ scripts/eval-run.py --test local-dungeon-web --model coding
 # A standalone candidate server:
 scripts/eval-run.py --test local-dungeon-web --model thinkingcap \
     --endpoint http://127.0.0.1:8902/v1/chat/completions --label thinkingcap-27b
+
+# Agent-mediated (same weights via GitHub Copilot CLI / BYOK, label <model>-copilot):
+scripts/eval-run-copilot.py --test local-dungeon-web --model coding
 ```
 
 Output lands in `outputs/<label>/` (`index.html`, `raw.txt`, `meta.json`,

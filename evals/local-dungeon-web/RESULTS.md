@@ -10,7 +10,10 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 41/41 | 127.7 | 1212 ms | 11256 | 37613 B | on 86% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 41/41 | 40.8 | 1222 ms | 13374 | 45599 B | on 82% | stop |
+| `coding` | coding (Copilot CLI) | 41/41 | — | — | — | 28592 B | off | stop |
 | `fast` | gemma-4-12B-it-qat-UD-Q4_K_XL.gguf | 40/41 | 18.2 | 5443 ms | 5107 | 18687 B | off | stop |
+| `chat` | chat (Copilot CLI) | 39/41 | — | — | — | 34849 B | off | stop |
+| `fast` | fast (Copilot CLI) | 38/41 | — | — | — | 20747 B | off | stop |
 
 ## Design quality (manual, 0–5 each; subtotal /25)
 
@@ -18,9 +21,12 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `coding` | · | · | · | · | · | — |  |
+| `fast` | · | · | · | · | · | — |  |
+| `chat` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Architecture, Completeness, Parser robustness, Interaction/UX, Visual polish.
 `·` = not yet scored.
 
-_Last generated 2026-07-28T16:35:55+00:00._
+_Last generated 2026-07-29T05:33:15+00:00._
