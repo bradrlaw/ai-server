@@ -29,4 +29,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Architecture, Completeness, Parser robustness, Interaction/UX, Visual polish.
 `·` = not yet scored.
 
-_Last generated 2026-07-29T05:33:15+00:00._
+_Last generated 2026-07-29T07:55:01+00:00._

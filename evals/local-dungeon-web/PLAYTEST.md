@@ -82,4 +82,4 @@ driver can't drive shows `✗`/`—` here without affecting that score.
   - ✓ `use lever` → pull_lever: You pull the lever. A grinding sound echoes, and a secret passage opens to the west.
   - ✓ `west` → reach_secret: You move west.
 
-_Last generated 2026-07-29T07:26:53.505Z._
+_Last generated 2026-07-29T07:55:01.785Z._

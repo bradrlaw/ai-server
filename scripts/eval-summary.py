@@ -343,6 +343,121 @@ def build_results_md(test_dir, runs_sorted, now, axes):
     return out_path
 
 
+def _nav_html(test_dir, active):
+    """Header nav linking the sibling generated pages (only those that exist)."""
+    pages = [("summary.html", "scoreboard"),
+             ("RESULTS.html", "results"),
+             ("PLAYTEST.html", "playtest")]
+    parts = []
+    for fn, lbl in pages:
+        if fn != active and not os.path.exists(os.path.join(test_dir, fn)):
+            continue
+        if fn == active:
+            parts.append(f'<span class="navcur">{lbl}</span>')
+        else:
+            parts.append(f'<a href="{fn}">{lbl}</a>')
+    return " &middot; ".join(parts)
+
+
+def build_results_html(test_dir, runs_sorted, now, axes):
+    """Write <test_dir>/RESULTS.html — an HTML rendering of the RESULTS.md
+    scoreboard (objective/perf + manual design), styled like summary.html."""
+    test = os.path.basename(test_dir.rstrip("/"))
+    dmax = design_max(axes)
+
+    obj_rows = []
+    for m in runs_sorted:
+        chk = m.get("_check") or {}
+        perf = m.get("performance") or {}
+        mtp = m.get("mtp") or {}
+        usage = m.get("usage") or {}
+        obj = (f'<span class="score">{chk["score"]}/{chk["max"]}</span>'
+               if chk.get("max") else "—")
+        mtp_cell = ('<span class="pill mtp-on">on</span>' if mtp.get("enabled")
+                    else '<span class="pill mtp-off">off</span>')
+        acc = mtp.get("accept_rate")
+        if mtp.get("enabled") and acc is not None:
+            mtp_cell += f' <span class="name">{acc*100:.0f}%</span>'
+        obj_rows.append(f"""    <tr>
+      <td class="l"><span class="model">{html.escape(m.get('model_slot') or m['_label'])}</span></td>
+      <td class="l"><span class="name">{html.escape(m.get('model_name') or '—')}</span></td>
+      <td>{obj}</td>
+      <td>{_fmt(perf.get('decode_tps'))}</td>
+      <td>{_fmt(perf.get('ttft_ms'))} ms</td>
+      <td>{_fmt(usage.get('completion_tokens'))}</td>
+      <td>{_fmt(m.get('output_bytes'))} B</td>
+      <td>{mtp_cell}</td>
+      <td>{html.escape(str(m.get('finish_reason')))}</td>
+    </tr>""")
+
+    des_rows = []
+    for m in runs_sorted:
+        scores = m.get("_scores") or {}
+        cells = []
+        for k, _ in axes:
+            v = scores.get(k)
+            cells.append(f"<td>{v}</td>" if isinstance(v, (int, float))
+                         else '<td><span class="name">·</span></td>')
+        sub, _ = design_subtotal(scores, axes)
+        sub_s = (f'<span class="score">{sub}/{dmax}</span>'
+                 if sub is not None else '<span class="name">—</span>')
+        note = html.escape((scores.get("notes") or "").replace("\n", " ").strip())
+        des_rows.append(f"""    <tr>
+      <td class="l"><span class="model">{html.escape(m.get('model_slot') or m['_label'])}</span></td>
+      {''.join(cells)}
+      <td>{sub_s}</td>
+      <td class="l"><span class="name">{note}</span></td>
+    </tr>""")
+
+    axis_th = "".join(f"<th>{html.escape(lbl)}</th>" for _, lbl in axes)
+    obj_body = "\n".join(obj_rows) or '    <tr><td class="l" colspan="9">no runs yet</td></tr>'
+    des_body = "\n".join(des_rows) or f'    <tr><td class="l" colspan="{len(axes)+3}">no runs yet</td></tr>'
+    nav = _nav_html(test_dir, "RESULTS.html")
+
+    doc = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(test)} — results scoreboard</title>
+<style>{ROW_CSS}
+h2{{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}}
+.navcur{{color:var(--fg);font-weight:600}}</style></head>
+<body>
+<h1>{html.escape(test)} — results scoreboard</h1>
+<p class="sub">{nav}<br>
+Objective = automated <code>check.py</code>. Design = manual 0–{AXIS_MAX} axes from each
+run's <code>scores.json</code> (subtotal /{dmax}; “—” = unscored).</p>
+
+<h2>Objective + performance (automated)</h2>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model</th><th class="l">Weights</th><th>Objective</th>
+    <th>Decode t/s</th><th>TTFT</th><th>Compl. tok</th><th>Output</th><th>MTP</th><th>Finish</th>
+  </tr></thead>
+  <tbody>
+{obj_body}
+  </tbody>
+</table></div>
+
+<h2>Design quality (manual, 0–{AXIS_MAX} each; subtotal /{dmax})</h2>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model</th>{axis_th}<th>Design</th><th class="l">Notes</th>
+  </tr></thead>
+  <tbody>
+{des_body}
+  </tbody>
+</table></div>
+
+<p class="foot">Generated {html.escape(now)} by scripts/eval-summary.py.
+<code>·</code> = not yet scored. Edit each run's <code>scores.json</code> and rerun to refresh.</p>
+</body></html>
+"""
+    out_path = os.path.join(test_dir, "RESULTS.html")
+    with open(out_path, "w") as f:
+        f.write(doc)
+    return out_path
+
+
 def build_summary(test_dir):
     """Regenerate <test_dir>/summary.html (and every outputs/<label>/run.html) from
     all recorded runs on disk. Returns the summary path."""
@@ -421,7 +536,7 @@ def build_summary(test_dir):
 <style>{ROW_CSS}</style></head>
 <body>
 <h1>{html.escape(test)}</h1>
-<p class="sub">Model-eval comparison &middot; {len(runs)} run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><!--NAV--><br>Model-eval comparison &middot; {len(runs)} run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -440,7 +555,15 @@ TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode
     out_path = os.path.join(test_dir, "summary.html")
     with open(out_path, "w") as f:
         f.write(doc)
-    build_results_md(test_dir, sorted(runs, key=sort_key), now, axes)
+    runs_sorted = sorted(runs, key=sort_key)
+    build_results_md(test_dir, runs_sorted, now, axes)
+    build_results_html(test_dir, runs_sorted, now, axes)
+    # Rewrite summary.html once RESULTS.html/PLAYTEST.html exist so the nav can
+    # link them (nav is computed from what's present on disk).
+    nav = _nav_html(test_dir, "summary.html")
+    doc = doc.replace("<!--NAV-->", nav)
+    with open(out_path, "w") as f:
+        f.write(doc)
     return out_path
 
 

@@ -23,6 +23,38 @@ const { JSDOM, VirtualConsole } = require("jsdom");
 const REPO = path.resolve(__dirname, "..", "..");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Palette matches scripts/eval-summary.py's summary.html for a consistent look.
+const PLAYTEST_CSS = `
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--red:#f87171;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 8px}
+.sub{color:var(--muted);margin:0 0 22px}.navcur{color:var(--fg);font-weight:600}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+code{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:13px}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:10px 14px;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--muted);font-weight:600;font-size:12px;
+text-transform:uppercase;letter-spacing:.04em}
+td.l,th.l{text-align:left}tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(124,92,252,.06)}
+.model{font-weight:600}.ok{color:var(--teal);font-weight:700}.no{color:var(--red);font-weight:700}
+.na{color:var(--muted)}.run{background:var(--surface);border:1px solid var(--border);
+border-radius:10px;padding:14px 18px;margin:10px 0}
+.run h3{margin:0 0 8px;font-size:14px}.step{font-size:13px;margin:3px 0;color:#d4d4d8}
+.step .cmd{color:var(--fg);font-family:ui-monospace,'Courier New',monospace}
+.step .ex{color:var(--muted)}.step.bad .cmd{color:var(--red)}
+.err{color:var(--red);font-size:12px;margin-top:6px}
+.foot{color:var(--muted);font-size:12px;margin-top:22px}
+`;
+
 function parseArgs(argv) {
   const a = { test: null, labels: null };
   for (let i = 2; i < argv.length; i++) {
@@ -278,7 +310,8 @@ async function main() {
   }
 
   writeMarkdown(testDir, args.test, scenario, summary);
-  console.log(`\n✓ wrote per-output playtest.json + ${path.relative(REPO, path.join(testDir, "PLAYTEST.md"))}`);
+  writeHtml(testDir, args.test, scenario, summary);
+  console.log(`\n✓ wrote per-output playtest.json + ${path.relative(REPO, path.join(testDir, "PLAYTEST.md"))} + PLAYTEST.html`);
 }
 
 function writeMarkdown(testDir, test, scenario, summary) {
@@ -324,6 +357,89 @@ function writeMarkdown(testDir, test, scenario, summary) {
   }
   lines.push(`_Last generated ${new Date().toISOString()}._`, "");
   fs.writeFileSync(path.join(testDir, "PLAYTEST.md"), lines.join("\n"));
+}
+
+// Header nav linking sibling generated pages that exist on disk.
+function navHtml(testDir, active) {
+  const pages = [["summary.html", "scoreboard"], ["RESULTS.html", "results"],
+    ["PLAYTEST.html", "playtest"]];
+  return pages
+    .filter(([fn]) => fn === active || fs.existsSync(path.join(testDir, fn)))
+    .map(([fn, lbl]) => fn === active
+      ? `<span class="navcur">${lbl}</span>`
+      : `<a href="${fn}">${lbl}</a>`)
+    .join(" &middot; ");
+}
+
+function writeHtml(testDir, test, scenario, summary) {
+  const runNames = scenario.runs.map((r) => r.name);
+  const titleOf = (n) => scenario.runs.find((r) => r.name === n).title || n;
+
+  const headCells = runNames.map((n) => `<th>${escapeHtml(titleOf(n))}</th>`).join("");
+  const rows = summary.map((rep) => {
+    const cells = runNames.map((n) => {
+      const r = rep.runs[n];
+      if (!r) return '<td><span class="na">—</span></td>';
+      if (!r.ok_input) return '<td><span class="na">n/a</span></td>';
+      return r.goal_reached
+        ? '<td><span class="ok">✓</span></td>'
+        : '<td><span class="no">✗</span></td>';
+    }).join("");
+    const errs = new Set();
+    for (const n of runNames) (rep.runs[n]?.jsErrors || []).forEach((e) => errs.add(e));
+    return `    <tr><td class="l"><span class="model">${escapeHtml(rep.label)}</span></td>`
+      + `${cells}<td>${errs.size || 0}</td></tr>`;
+  }).join("\n");
+
+  const milestones = summary.map((rep) => {
+    const runs = runNames.map((n) => {
+      const r = rep.runs[n];
+      if (!r) return "";
+      const head = `<h3>${escapeHtml(titleOf(n))} — `
+        + (r.goal_reached ? '<span class="ok">goal reached ✓</span>' : '<span class="no">goal NOT reached ✗</span>')
+        + (r.note ? ` <span class="ex">(${escapeHtml(r.note)})</span>` : "") + "</h3>";
+      const steps = (r.steps || []).map((s) => {
+        const mark = s.ok ? '<span class="ok">✓</span>' : '<span class="no">✗</span>';
+        const neg = s.hitNegative ? ` <span class="ex">[hit: "${escapeHtml(s.hitNegative)}"]</span>` : "";
+        return `<div class="step${s.ok ? "" : " bad"}">${mark} `
+          + `<span class="cmd">${escapeHtml(s.send)}</span> → ${escapeHtml(s.label)}${neg}`
+          + `: <span class="ex">${escapeHtml(s.excerpt || "(no output)")}</span></div>`;
+      }).join("\n      ");
+      const err = (r.jsErrors && r.jsErrors.length)
+        ? `\n      <div class="err">⚠ JS errors: ${escapeHtml(r.jsErrors.slice(0, 3).join("; "))}</div>` : "";
+      return `      ${head}\n      ${steps}${err}`;
+    }).filter(Boolean).join("\n");
+    return `  <div class="run">\n    <h2 style="margin-top:0"><code>${escapeHtml(rep.label)}</code></h2>\n${runs}\n  </div>`;
+  }).join("\n");
+
+  const nav = navHtml(testDir, "PLAYTEST.html");
+  const doc = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(test)} — playtest</title>
+<style>${PLAYTEST_CSS}</style></head>
+<body>
+<h1>${escapeHtml(test)} — playtest</h1>
+<p class="sub">${nav}<br>
+Best-effort headless <a href="https://github.com/jsdom/jsdom">jsdom</a> playthrough — a
+<b>playability</b> signal, <b>separate from and not folded into</b> the objective
+<code>check.py</code> score. A UI the driver can't drive shows ✗/— here without
+affecting that score.</p>
+
+<div class="wrap"><table>
+  <thead><tr><th class="l">Model</th>${headCells}<th>JS errors</th></tr></thead>
+  <tbody>
+${rows}
+  </tbody>
+</table></div>
+
+<h2>Per-run milestones</h2>
+${milestones}
+
+<p class="foot">Generated ${escapeHtml(new Date().toISOString())} by scripts/eval-playtest/playtest.js.</p>
+</body></html>
+`;
+  fs.writeFileSync(path.join(testDir, "PLAYTEST.html"), doc);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

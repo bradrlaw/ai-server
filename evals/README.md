@@ -149,6 +149,7 @@ Each test defines its own rubric in its `README.md`. Two parts:
   node scripts/eval-playtest/playtest.js --test <name>
   ```
 
-  It writes `outputs/<label>/playtest.json` + a `PLAYTEST.md` milestone report. This is a
-  **separate signal — NOT folded into the `check.py` score.** See `local-dungeon-web` for a
-  worked example (it catches games that score full marks yet seal off the Secret Chamber).
+  It writes `outputs/<label>/playtest.json` + a `PLAYTEST.md` milestone report (and a styled
+  `PLAYTEST.html`, cross-linked with `summary.html`/`RESULTS.html`). This is a **separate
+  signal — NOT folded into the `check.py` score.** See `local-dungeon-web` for a worked
+  example (it catches games that score full marks yet seal off the Secret Chamber).

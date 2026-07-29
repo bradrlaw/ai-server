@@ -88,9 +88,10 @@ the page:
 
 Enter scores in each `outputs/<label>/scores.json` (a blank stub is auto-created),
 then run `scripts/eval-summary.py --test local-dungeon-web` to regenerate the
-scoreboard. `RESULTS.md` and `summary.html` are generated — don't hand-edit them.
+scoreboard. `RESULTS.md` / `RESULTS.html` and `summary.html` are generated —
+don't hand-edit them.
 
-### Playability (headless) — `playtest.json` → `PLAYTEST.md`
+### Playability (headless) — `playtest.json` → `PLAYTEST.md` / `PLAYTEST.html`
 
 `check.py` verifies that constraints are *present*, not that the game is
 *playable* — a model can score full marks yet ship a game you can't finish. The
@@ -112,7 +113,8 @@ node scripts/eval-playtest/playtest.js --test local-dungeon-web
 It plays two scenarios per output — **Fixture (no take):** `north` → `use lever`
 → `west`, and **Take-first workaround:** the same with a `take lever` inserted —
 and writes `outputs/<label>/playtest.json` plus a human-readable `PLAYTEST.md`
-with per-command milestones. This is a **separate playability signal — it is NOT
+(and a styled `PLAYTEST.html`, cross-linked from `summary.html`) with per-command
+milestones. This is a **separate playability signal — it is NOT
 folded into the `check.py` score.** A UI the driver genuinely can't drive shows
 `✗` without affecting the objective number.
 
