@@ -398,6 +398,12 @@ The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) 
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.
 
+The dashboard's **Services** section has **▶ Start ComfyUI** / **⏹ Stop** buttons that
+`POST /actions/comfyui?action=start|stop` — handy for waking ComfyUI during the deep-idle
+window without SSHing in. They reuse the same scoped sudoers rule as quiet hours (so no extra
+setup once `server-status-comfyui.sudoers` is installed) and are gated by
+`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only).
+
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
 V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
