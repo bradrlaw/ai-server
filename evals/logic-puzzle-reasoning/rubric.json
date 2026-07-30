@@ -1,0 +1,9 @@
+{
+  "axes": [
+    ["correctness", "Correctness"],
+    ["rigor", "Rigor / stepwise"],
+    ["contradiction_handling", "Contradiction handling"],
+    ["clarity", "Clarity"],
+    ["verification", "Verification"]
+  ]
+}

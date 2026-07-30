@@ -160,7 +160,27 @@ services:
       # Read-write access to the ComfyUI models tree for manual model uploads
       # (checkpoints/, loras/, vae/, diffusion_models/, text_encoders/, etc.).
       - /srv/ai/comfyui/models:/data/models
+      # Read-only view of the model-eval framework so test outputs (rendered
+      # landing pages, meta/check JSON) are easy to browse/preview & download.
+      - /srv/ai/evals:/data/evals:ro
       - filebrowser-data:/database
+    networks:
+      - ai
+
+  # evals-web — tiny read-only static server that RENDERS the model-eval HTML
+  # (evals/summary.html, per-run run.html, each model's index.html). Filebrowser
+  # only shows HTML source; this serves the tree with proper text/html + directory
+  # autoindex so pages render and the run.html inline previews work. No auth
+  # (LAN/Tailscale), read-only mount — the content is non-secret eval output.
+  evals-web:
+    image: nginx:1.27-alpine
+    container_name: evals-web
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    volumes:
+      - /srv/ai/evals:/usr/share/nginx/html:ro
+      - ./evals-web/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - ai
 

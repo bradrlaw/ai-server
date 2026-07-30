@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<style>
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-deep: #07070a;
+  --bg-primary: #0c0c14;
+  --bg-card: #12121a;
+  --bg-card-hover: #16161f;
+  --accent: #7c5cfc;
+  --accent-dim: rgba(124, 92, 252, 0.15);
+  --accent-glow: rgba(124, 92, 252, 0.4);
+  --secondary: #00d4aa;
+  --secondary-dim: rgba(0, 212, 170, 0.15);
+  --text-primary: #fafafa;
+  --text-muted: #71717a;
+  --text-dim: #52525b;
+  --border: #1e1e2e;
+  --border-light: #2a2a3a;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  line-height: 1.625;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+img { max-width: 100%; }
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ===== NAV ===== */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 0 24px;
+  transition: var(--transition);
+  background: transparent;
+}
+
+.nav.scrolled {
+  background: rgba(12, 12, 20, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.nav-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+
+.nav-links a {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  transition: color var(--transition);
+  position: relative;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width var(--transition);
+  border-radius: 1px;
+}
+
+.nav-links a:hover,
+.nav-links a.active {
+  color: var(--text-primary);
+}
+
+.nav-links a:hover::after,
+.nav-links a.active::after {
+  width: 100%;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.btn:hover {
+  transform: scale(1.03);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 20px var(--accent-dim);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 30px var(--accent-glow);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-dim);
+}
+
+.btn-large {
+  padding: 14px 32px;
+  font-size: 1rem;
+  border-radius: var(--radius);
+}
+
+.btn-full {
+  width: 100%;
+}
+
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1001;
+}
+
+.hamburger span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--text-primary);
+  position: absolute;
+  transition: all var(--transition);
+  border-radius: 2px;
+}
+
+.hamburger span:nth-child(1) { transform: translateY(-7px); }
+.hamburger span:nth-child(2) { transform: translateY(0); }
+.hamburger span:nth-child(3) { transform: translateY(7px); }
+
+.hamburger.open span:nth-child(1) {
+  transform: rotate(45deg) translateY(0);
+}
+
+.hamburger.open span:nth-child(2) {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.hamburger.open span:nth-child(3) {
+  transform: rotate(-45deg) translateY(0);
+}
+
+.mobile-menu {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 7, 10, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.mobile-menu.open {
+  display: flex;
+  opacity: 1;
+}
+
+.mobile-menu a {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+
+.mobile-menu a:hover {
+  color: var(--text-primary);
+}
+
+/* ===== HERO ===== */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 24px 80px;
+  overflow: hidden;
+}
+
+.hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 800px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(124, 92, 252, 0.3);
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 24px;
+  letter-spacing: 0.02em;
+}
+
+.hero-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hero h1 {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero p {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  color: var(--text-muted);
+  max-width: 580px;
+  margin: 0 auto 40px;
+  line-height: 1.7;
+}
+
+.hero-ctas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 64px;
+  padding-top: 48px;
+  border-top: 1px solid var(--border);
+}
+
+.hero-stat {
+  text-align: center;
+}
+
+.hero-stat-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.hero-stat-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ===== SECTIONS ===== */
+section {
+  padding: 100px 0;
+}
+
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.section-label svg {
+  width: 16px;
+  height: 16px;
+}
+
+.section-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+
+.section-desc {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  max-width: 560px;
+  line-height: 1.7;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 64px;
+}
+
+.section-header .section-desc {
+  margin: 0 auto;
+}
+
+/* ===== FEATURES ===== */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  padding: 1px;
+  background: linear-gradient(135deg, transparent, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  transition: background var(--transition);
+  pointer-events: none;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 0 40px var(--accent-dim), 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.feature-card:hover::before {
+  background: linear-gradient(135deg, var(--accent), transparent, var(--accent));
+}
+
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.feature-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.feature-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.feature-card p {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+/* ===== HOW IT WORKS ===== */
+.how-it-works {
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.steps-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+}
+
+.step {
+  flex: 1;
+  text-align: center;
+  padding: 0 24px;
+  position: relative;
+}
+
+.step-number {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 2px solid var(--accent);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0 auto 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 28px;
+  right: -12px;
+  width: calc(100% - 56px);
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--border-light));
+  z-index: 1;
+}
+
+.step h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.step p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+  max-width: 260px;
+  margin: 0 auto;
+}
+
+/* ===== PRICING ===== */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.pricing-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.pricing-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-light);
+}
+
+.pricing-card.popular {
+  border-color: var(--accent);
+  box-shadow: 0 0 40px var(--accent-dim), 0 8px 32px rgba(0,0,0,0.2);
+  transform: scale(1.03);
+}
+
+.pricing-card.popular:hover {
+  transform: scale(1.03) translateY(-2px);
+  box-shadow: 0 0 60px var(--accent-glow), 0 12px 40px rgba(0,0,0,0.3);
+}
+
+.pricing-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 100px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.pricing-tier {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.pricing-price {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin-bottom: 4px;
+}
+
+.pricing-price span {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pricing-pitch {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pricing-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+.pricing-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.pricing-features li svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--secondary);
+}
+
+/* ===== DEMO ===== */
+.demo {
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: #0a0a10;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+
+.demo-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  background: #0e0e16;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.demo-dot.red { background: #ff5f57; }
+.demo-dot.yellow { background: #febc2e; }
+.demo-dot.green { background: #28c840; }
+
+.demo-title {
+  flex: 1;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.demo-body {
+  padding: 24px;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.demo-msg {
+  display: flex;
+  gap: 12px;
+  max-width: 85%;
+  animation: msgIn 0.4s ease-out both;
+}
+
+.demo-msg.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.demo-msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.demo-msg.assistant .demo-msg-avatar {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.demo-msg.user .demo-msg-avatar {
+  background: var(--secondary-dim);
+  color: var(--secondary);
+}
+
+.demo-msg-bubble {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.demo-msg.assistant .demo-msg-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-top-left-radius: 4px;
+}
+
+.demo-msg.user .demo-msg-bubble {
+  background: var(--accent);
+  color: #fff;
+  border-top-right-radius: 4px;
+}
+
+.demo-typing {
+  display: flex;
+  gap: 12px;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.demo-typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-top-left-radius: 4px;
+}
+
+.demo-typing-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: typingBounce 1.4s infinite;
+}
+
+.demo-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.demo-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+.demo-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #0e0e16;
+  border-top: 1px solid var(--border);
+}
+
+.demo-input-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.demo-input-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.demo-input-bar {
+  flex: 1;
+  height: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.demo-send-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.demo-send-btn:hover {
+  opacity: 0.85;
+}
+
+.demo-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== TESTIMONIALS ===== */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.testimonial-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  transition: all var(--transition);
+}
+
+.testimonial-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+}
+
+.testimonial-quote {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 24px;
+  font-style: italic;
+}
+
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.testimonial-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.testimonial-avatar.a1 {
+  background: linear-gradient(135deg, #7c5cfc, #5a3de6);
+}
+.testimonial-avatar.a2 {
+  background: linear-gradient(135deg, #00d4aa, #00a888);
+}
+.testimonial-avatar.a3 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.testimonial-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.testimonial-role {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ===== FAQ ===== */
+.faq-list {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.faq-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.faq-item.open {
+  border-color: var(--accent);
+}
+
+.faq-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  width: 100%;
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: color var(--transition);
+}
+
+.faq-question:hover {
+  color: var(--accent);
+}
+
+.faq-chevron {
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.faq-item.open .faq-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-answer-inner {
+  padding: 0 24px 20px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+/* ===== CTA BANNER ===== */
+.cta-banner {
+  background: linear-gradient(135deg, var(--accent-dim) 0%, rgba(0, 212, 170, 0.08) 50%, var(--accent-dim) 100%);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.cta-banner h2 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+
+.cta-banner p {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cta-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.cta-input {
+  flex: 1;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.cta-input::placeholder {
+  color: var(--text-dim);
+}
+
+.cta-input:focus {
+  border-color: var(--accent);
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  padding: 48px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.footer-brand svg {
+  width: 24px;
+  height: 24px;
+}
+
+.footer-links {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+}
+
+.footer-links a {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+
+.footer-links a:hover {
+  color: var(--text-primary);
+}
+
+.footer-copy {
+  width: 100%;
+  text-align: center;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+/* ===== ANIMATIONS ===== */
+.fade-up {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1024px) {
+  .pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .pricing-card:last-child {
+    grid-column: span 2;
+    max-width: 400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav-links {
+    display: none;
+  }
+  .hamburger {
+    display: flex;
+  }
+  .hero {
+    min-height: auto;
+    padding: 120px 24px 60px;
+  }
+  .hero-stats {
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  .steps-container {
+    flex-direction: column;
+    gap: 40px;
+  }
+  .step:not(:last-child)::after {
+    top: auto;
+    bottom: -24px;
+    right: 50%;
+    width: 2px;
+    height: 24px;
+    background: linear-gradient(180deg, var(--accent), transparent);
+  }
+  .step {
+    text-align: left;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .step-number {
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .step p {
+    max-width: none;
+    margin: 0;
+  }
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+  .pricing-card:last-child {
+    grid-column: span 1;
+    max-width: none;
+  }
+  .pricing-card.popular {
+    transform: scale(1);
+  }
+  .pricing-card.popular:hover {
+    transform: translateY(-2px);
+  }
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+  }
+  .cta-form {
+    flex-direction: column;
+  }
+  .cta-input {
+    width: 100%;
+  }
+  .footer-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+  .footer-links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  section {
+    padding: 72px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 2.25rem;
+  }
+  .hero-ctas {
+    flex-direction: column;
+    width: 100%;
+  }
+  .hero-ctas .btn {
+    width: 100%;
+  }
+  .hero-stats {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="24" height="24" rx="6" fill="#7c5cfc" fill-opacity="0.15" stroke="#7c5cfc" stroke-width="1.5"/>
+        <path d="M9 14.5C9 12.57 10.57 11 12.5 11H15.5C17.43 11 19 12.57 19 14.5V14.5C19 16.43 17.43 18 15.5 18H12.5C10.57 18 9 16.43 9 14.5V14.5Z" stroke="#7c5cfc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="11.5" cy="14.5" r="1" fill="#7c5cfc"/>
+        <circle cx="16.5" cy="14.5" r="1" fill="#7c5cfc"/>
+        <path d="M13 16.5C13 16.5 14 17.5 15 16.5" stroke="#7c5cfc" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      LocalMind
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#cta" class="btn btn-primary" style="padding:8px 18px;font-size:0.85rem;">Get Early Access</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#features" class="mobile-link">Features</a>
+  <a href="#how-it-works" class="mobile-link">How It Works</a>
+  <a href="#pricing" class="mobile-link">Pricing</a>
+  <a href="#faq" class="mobile-link">FAQ</a>
+  <a href="#cta" class="btn btn-primary btn-large mobile-link" style="margin-top:16px;">Get Early Access</a>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <canvas class="hero-canvas" id="heroCanvas"></canvas>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3" fill="currentColor"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.76 2.76l1.42 1.42M9.82 9.82l1.42 1.42M2.76 11.24l1.42-1.42M9.82 4.18l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Now in Private Beta
+    </div>
+    <h1>Run AI Locally. Own Your Data. No Limits.</h1>
+    <p>LocalMind brings state-of-the-art language models to your machine. No cloud fees, no data leaving your device, no compromises on intelligence.</p>
+    <div class="hero-ctas">
+      <a href="#cta" class="btn btn-primary btn-large">Start Free Trial</a>
+      <a href="#how-it-works" class="btn btn-secondary btn-large">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">50+</div>
+        <div class="hero-stat-label">Models Supported</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">0ms</div>
+        <div class="hero-stat-label">Network Latency</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">100%</div>
+        <div class="hero-stat-label">Offline Capable</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Features
+      </div>
+      <h2 class="section-title">Everything you need to run AI on your terms</h2>
+      <p class="section-desc">Built for developers, researchers, and privacy-conscious teams who refuse to hand their data to the cloud.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <h3>Hardware-Aware Optimization</h3>
+        <p>Automatically detects your GPU, CPU, and RAM, then selects the best model variant and quantization for your exact hardware.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Zero Data Egress</h3>
+        <p>Your prompts, context, and responses never leave your machine. Full privacy by design — no telemetry, no tracking, no exceptions.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </div>
+        <h3>50+ Models at Your Fingertips</h3>
+        <p>From Llama and Mistral to Phi and Gemma — browse, compare, and download models directly through the built-in catalog.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Sub-Second Inference</h3>
+        <p>Optimized inference engine delivers blazing-fast token generation, even on modest hardware. No waiting, no throttling.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        How It Works
+      </div>
+      <h2 class="section-title">Up and running in three minutes</h2>
+      <p class="section-desc">No complicated setup, no dependency hell. LocalMind handles the heavy lifting so you can focus on what matters.</p>
+    </div>
+    <div class="steps-container fade-up">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>Install LocalMind</h3>
+          <p>Download the installer for your platform. One click, zero configuration required. Works on macOS, Windows, and Linux.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>Choose a Model</h3>
+          <p>Browse our curated catalog of 50+ models. We recommend the best fit based on your hardware and use case.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>Chat Locally</h3>
+          <p>Start asking questions, generating text, or running analysis — all on your machine, all instant, all private.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 8h12M8 2v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Pricing
+      </div>
+      <h2 class="section-title">Simple, transparent pricing</h2>
+      <p class="section-desc">Start free. Upgrade when you need more power. No hidden fees, no usage caps on local models.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card fade-up">
+        <div class="pricing-tier">Free</div>
+        <div class="pricing-price">$0 <span>/ forever</span></div>
+        <div class="pricing-pitch">Perfect for personal use and experimentation.</div>
+        <ul class="pricing-features">
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Up to 3 models simultaneously
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Basic model catalog access
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Standard inference speed
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Community support
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            1 device license
+          </li>
+        </ul>
+        <button class="btn btn-secondary btn-full">Get Started</button>
+      </div>
+      <div class="pricing-card popular fade-up">
+        <div class="pricing-badge">Most Popular</div>
+        <div class="pricing-tier">Pro</div>
+        <div class="pricing-price">$12 <span>/ mo</span></div>
+        <div class="pricing-pitch">For professionals who need speed and flexibility.</div>
+        <ul class="pricing-features">
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Unlimited model instances
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Full model catalog + early access
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            GPU-accelerated inference
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Priority support + API access
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            3 device licenses
+          </li>
+        </ul>
+        <button class="btn btn-primary btn-full">Start Pro Trial</button>
+      </div>
+      <div class="pricing-card fade-up">
+        <div class="pricing-tier">Studio</div>
+        <div class="pricing-price">$29 <span>/ mo</span></div>
+        <div class="pricing-pitch">For teams and power users who demand everything.</div>
+        <ul class="pricing-features">
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Everything in Pro
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Multi-GPU cluster support
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Custom model fine-tuning
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Team collaboration tools
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Unlimited device licenses
+          </li>
+          <li>
+            <svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Dedicated account manager
+          </li>
+        </ul>
+        <button class="btn btn-secondary btn-full">Contact Sales</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section class="demo" id="demo">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6h2M5 8h6M5 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Live Preview
+      </div>
+      <h2 class="section-title">See LocalMind in action</h2>
+      <p class="section-desc">This is exactly what your local chat experience looks like — fast, clean, and entirely on your machine.</p>
+    </div>
+    <div class="demo-window fade-up">
+      <div class="demo-topbar">
+        <div class="demo-dot red"></div>
+        <div class="demo-dot yellow"></div>
+        <div class="demo-dot green"></div>
+        <div class="demo-title">LocalMind — llama-3.1-8b</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-msg user" style="animation-delay:0.1s">
+          <div class="demo-msg-avatar">YU</div>
+          <div class="demo-msg-bubble">Can you summarize the key differences between Llama 3.1 and Mistral 7B for a production deployment?</div>
+        </div>
+        <div class="demo-msg assistant" style="animation-delay:0.4s">
+          <div class="demo-msg-avatar">LM</div>
+          <div class="demo-msg-bubble">Llama 3.1 offers stronger reasoning benchmarks and a 128K context window, while Mistral 7B is lighter and faster on consumer GPUs. For production, I'd recommend Llama 3.1 if you have 16GB+ VRAM, otherwise Mistral 7B with 4-bit quantization gives excellent throughput on 8GB cards.</div>
+        </div>
+        <div class="demo-msg user" style="animation-delay:0.7s">
+          <div class="demo-msg-avatar">YU</div>
+          <div class="demo-msg-bubble">What quantization do you recommend for running on a MacBook M2 with 16GB RAM?</div>
+        </div>
+        <div class="demo-msg assistant" style="animation-delay:1s">
+          <div class="demo-msg-avatar">LM</div>
+          <div class="demo-msg-bubble">On an M2 with 16GB unified memory, I'd go with llama-3.1-8b-q4_K_M. It fits comfortably with room for a 32K context window, and Apple's Metal backend makes it fly. You'll see 40-60 tokens per second — more than enough for real-time interaction.</div>
+        </div>
+        <div class="demo-typing" style="animation-delay:1.3s">
+          <div class="demo-msg-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">LM</div>
+          <div class="demo-typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+      <div class="demo-input">
+        <div class="demo-input-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 10h14M10 3v14"/></svg>
+        </div>
+        <div class="demo-input-bar">Ask anything about your local model...</div>
+        <button class="demo-send-btn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8l12-5-5 12-2-5-5-2z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section id="testimonials">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        Testimonials
+      </div>
+      <h2 class="section-title">Loved by teams who value privacy</h2>
+      <p class="section-desc">See why engineers and data teams are switching to LocalMind for their daily AI workflows.</p>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card fade-up">
+        <div class="testimonial-quote">"We moved our entire LLM pipeline to LocalMind. Our clients' data never leaves our premises, and the inference speed is genuinely impressive — even on our older Mac Minis."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar a1">JM</div>
+          <div>
+            <div class="testimonial-name">Jordan Mitchell</div>
+            <div class="testimonial-role">CTO, DataVault Systems</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-up">
+        <div class="testimonial-quote">"LocalMind's hardware auto-detection is magic. I installed it on three different machines and it just worked — each one running the optimal model variant without me touching a config file."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar a2">SR</div>
+          <div>
+            <div class="testimonial-name">Sarah Rodriguez</div>
+            <div class="testimonial-role">ML Engineer, Nebula AI</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-up">
+        <div class="testimonial-quote">"The Pro plan pays for itself in one month. Unlimited model instances, GPU acceleration, and the API access means I can build custom tools on top of my local models effortlessly."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar a3">AK</div>
+          <div>
+            <div class="testimonial-name">Alex Kim</div>
+            <div class="testimonial-role">Founder, PromptCraft</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M6 6.5a2 2 0 114 0c0 1-1.5 1.5-1.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.75" fill="currentColor"/></svg>
+        FAQ
+      </div>
+      <h2 class="section-title">Frequently asked questions</h2>
+      <p class="section-desc">Everything you need to know about running AI locally with LocalMind.</p>
+    </div>
+    <div class="faq-list fade-up">
+      <div class="faq-item">
+        <button class="faq-question">
+          What hardware do I need to run LocalMind?
+          <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7l5 5 5-5"/></svg>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">LocalMind runs on any machine with at least 8GB of RAM and a modern multi-core CPU. For the best experience with larger models (70B+), we recommend a dedicated GPU with 12GB+ VRAM — NVIDIA, AMD, or Apple Silicon all work. The app automatically detects your hardware and recommends the optimal model configuration.</div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Can I use LocalMind completely offline?
+          <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7l5 5 5-5"/></svg>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">Absolutely. Once you've downloaded a model, everything runs 100% offline. The only time you need an internet connection is to download new models or check for app updates. Your chat history, custom prompts, and model configurations are stored locally on your device.</div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Which models are supported?
+          <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7l5 5 5-5"/></svg>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">LocalMind supports all major open-weight models including Llama 3.1, Mistral, Mixtral, Phi-3, Gemma, Qwen, and many more. We also support GGUF and AWQ formats. Our built-in catalog is updated weekly with new models and quantization variants. You can also import custom models via Hugging Face URLs.</div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          How does LocalMind compare to running models via API services?
+          <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7l5 5 5-5"/></svg>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">The main advantage is data privacy — your prompts never leave your machine. You also avoid per-token pricing and rate limits. While API services may have larger models available, LocalMind's inference engine is highly optimized for your specific hardware, often matching or exceeding cloud speeds for models in the 7B–70B parameter range.</div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Can I switch between models mid-session?
+          <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7l5 5 5-5"/></svg>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">Yes. LocalMind lets you switch models instantly without closing your chat. You can even run multiple models in parallel — for example, using a small model for quick replies and a larger model for deep analysis. The Pro and Studio plans support unlimited concurrent model instances.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<section class="cta-banner" id="cta">
+  <div class="container">
+    <h2 class="fade-up">Ready to take back your AI?</h2>
+    <p class="fade-up">Join thousands of professionals who've already moved their AI workloads to their own hardware.</p>
+    <form class="cta-form fade-up" id="ctaForm">
+      <input type="email" class="cta-input" placeholder="Enter your email address" required id="ctaEmail">
+      <button type="submit" class="btn btn-primary" id="ctaBtn">Join the Waitlist</button>
+    </form>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="24" height="24" rx="6" fill="#7c5cfc" fill-opacity="0.15" stroke="#7c5cfc" stroke-width="1.5"/>
+        <path d="M9 14.5C9 12.57 10.57 11 12.5 11H15.5C17.43 11 19 12.57 19 14.5V14.5C19 16.43 17.43 18 15.5 18H12.5C10.57 18 9 16.43 9 14.5V14.5Z" stroke="#7c5cfc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="11.5" cy="14.5" r="1" fill="#7c5cfc"/>
+        <circle cx="16.5" cy="14.5" r="1" fill="#7c5cfc"/>
+        <path d="M13 16.5C13 16.5 14 17.5 15 16.5" stroke="#7c5cfc" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      LocalMind
+    </div>
+    <ul class="footer-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#">Documentation</a></li>
+      <li><a href="#">Changelog</a></li>
+    </ul>
+    <div class="footer-copy">
+      &copy; <span id="year"></span> LocalMind. All rights reserved.
+    </div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== YEAR =====
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // ===== NAV SCROLL =====
+  const nav = document.getElementById('nav');
+  let lastScroll = 0;
+  window.addEventListener('scroll', function() {
+    if (window.scrollY > 50) {
+      nav.classList.add('scrolled');
+    } else {
+      nav.classList.remove('scrolled');
+    }
+  }, { passive: true });
+
+  // ===== HAMBURGER =====
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+
+  hamburger.addEventListener('click', function() {
+    hamburger.classList.toggle('open');
+    mobileMenu.classList.toggle('open');
+    document.body.style.overflow = mobileMenu.classList.contains('open') ? 'hidden' : '';
+  });
+
+  document.querySelectorAll('.mobile-link').forEach(function(link) {
+    link.addEventListener('click', function() {
+      hamburger.classList.remove('open');
+      mobileMenu.classList.remove('open');
+      document.body.style.overflow = '';
+    });
+  });
+
+  // ===== SMOOTH SCROLL =====
+  document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      var target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        var offset = 80;
+        var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      }
+    });
+  });
+
+  // ===== INTERSECTION OBSERVER - ACTIVE NAV =====
+  var sections = document.querySelectorAll('section[id]');
+  var navLinks = document.querySelectorAll('.nav-links a:not(.btn)');
+
+  var observerOptions = {
+    root: null,
+    rootMargin: '-20% 0px -60% 0px',
+    threshold: 0
+  };
+
+  var sectionObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        var id = entry.target.getAttribute('id');
+        navLinks.forEach(function(link) {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === '#' + id) {
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, observerOptions);
+
+  sections.forEach(function(section) {
+    sectionObserver.observe(section);
+  });
+
+  // ===== FADE-UP ANIMATIONS =====
+  var fadeElements = document.querySelectorAll('.fade-up');
+  var fadeObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        var delay = Array.from(fadeElements).indexOf(entry.target) * 100;
+        setTimeout(function() {
+          entry.target.classList.add('visible');
+        }, Math.min(delay, 400));
+        fadeObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+  fadeElements.forEach(function(el) {
+    fadeObserver.observe(el);
+  });
+
+  // ===== FAQ ACCORDION =====
+  var faqItems = document.querySelectorAll('.faq-item');
+  faqItems.forEach(function(item) {
+    var question = item.querySelector('.faq-question');
+    var answer = item.querySelector('.faq-answer');
+    var inner = item.querySelector('.faq-answer-inner');
+
+    question.addEventListener('click', function() {
+      var isOpen = item.classList.contains('open');
+
+      // Close all
+      faqItems.forEach(function(otherItem) {
+        otherItem.classList.remove('open');
+        otherItem.querySelector('.faq-answer').style.maxHeight = '0';
+      });
+
+      // Open clicked if it was closed
+      if (!isOpen) {
+        item.classList.add('open');
+        answer.style.maxHeight = inner.scrollHeight + 20 + 'px';
+      }
+    });
+  });
+
+  // ===== CTA FORM =====
+  var ctaForm = document.getElementById('ctaForm');
+  var ctaBtn = document.getElementById('ctaBtn');
+  var ctaEmail = document.getElementById('ctaEmail');
+
+  ctaForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    ctaBtn.textContent = "You're in! 🎉";
+    ctaBtn.style.background = '#00d4aa';
+    ctaEmail.value = '';
+    setTimeout(function() {
+      ctaBtn.textContent = "Join the Waitlist";
+      ctaBtn.style.background = '';
+    }, 3000);
+  });
+
+  // ===== CANVAS PARTICLE FIELD =====
+  var canvas = document.getElementById('heroCanvas');
+  var ctx = canvas.getContext('2d');
+  var particles = [];
+  var mouse = { x: -1000, y: -1000 };
+  var w, h;
+
+  function resizeCanvas() {
+    w = canvas.width = canvas.offsetWidth;
+    h = canvas.height = canvas.offsetHeight;
+  }
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  canvas.addEventListener('mousemove', function(e) {
+    var rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    mouse.x = -1000;
+    mouse.y = -1000;
+  });
+
+  function createParticles() {
+    particles = [];
+    var count = Math.min(Math.floor((w * h) / 12000), 120);
+    for (var i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        radius: Math.random() * 1.5 + 0.5,
+        opacity: Math.random() * 0.4 + 0.1
+      });
+    }
+  }
+
+  createParticles();
+  window.addEventListener('resize', createParticles);
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw subtle gradient background
+    var gradient = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.7);
+    gradient.addColorStop(0, 'rgba(124, 92, 252, 0.06)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Update and draw particles
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+
+      // Mouse interaction
+      var dx = mouse.x - p.x;
+      var dy = mouse.y - p.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 200) {
+        var force = (200 - dist) / 200 * 0.02;
+        p.vx -= dx * force * 0.01;
+        p.vy -= dy * force * 0.01;
+      }
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Damping
+      p.vx *= 0.999;
+      p.vy *= 0.999;
+
+      // Wrap around
+      if (p.x < -10) p.x = w + 10;
+      if (p.x > w + 10) p.x = -10;
+      if (p.y < -10) p.y = h + 10;
+      if (p.y > h + 10) p.y = -10;
+
+      // Draw particle
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(124, 92, 252, ' + p.opacity + ')';
+      ctx.fill();
+    }
+
+    // Draw connections
+    for (var i = 0; i < particles.length; i++) {
+      for (var j = i + 1; j < particles.length; j++) {
+        var p1 = particles[i];
+        var p2 = particles[j];
+        var ddx = p1.x - p2.x;
+        var ddy = p1.y - p2.y;
+        var d = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (d < 120) {
+          var alpha = (1 - d / 120) * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = 'rgba(124, 92, 252, ' + alpha + ')';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    requestAnimationFrame(drawParticles);
+  }
+
+  drawParticles();
+
+})();
+</script>
+</body>
+</html>

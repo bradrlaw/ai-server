@@ -1,0 +1,37 @@
+Build a single, completely self-contained HTML file for a fictional product called "LocalMind" — an app that lets users run large language models on their own hardware, no cloud required.
+
+Hard constraints (non-negotiable):
+
+One .html file. Zero external dependencies. No CDNs, no external fonts, no frameworks, no external images, no API calls, no <link> tags to outside resources.
+Everything inline: HTML, CSS in <style>, JS in <script>, icons as inline SVG, any "images" as CSS/SVG/Canvas art.
+No placeholder or broken interactions. Every hover, click, toggle, and transition must be real, working CSS/JS.
+No lorem ipsum. All copy must be specific, polished, and on-brand.
+Design:
+
+Dark mode exclusively. Background range #07070a–#12121a. Accent palette: primary #7c5cfc (purple), secondary #00d4aa (teal). Text: #fafafa primary, #71717a muted.
+Modern aesthetic: Linear/Vercel/Raycast energy. Generous whitespace, tight type hierarchy, subtle borders/glows, no visual clutter.
+Fully responsive at 320px, 768px, 1024px, 1440px. Mobile-first with explicit breakpoints.
+Sections:
+
+Sticky nav — Logo + name on left, section links + "Get Early Access" button on right. On mobile: hamburger icon (inline SVG) that toggles a full-screen overlay menu with a smooth slide/fade transition. Active nav link highlights as you scroll (IntersectionObserver).
+Hero — Massive headline ("Run AI Locally. Own Your Data. No Limits."), subheadline, two CTAs (primary filled, secondary outlined with border). Background: a Canvas element rendering a slow-moving, interactive particle field or gradient mesh that responds to mouse position (clamped to subtle). If Canvas is too complex, a CSS-only animated gradient orb with @keyframes pulse is acceptable.
+Features grid — 4 cards in a 2×2 grid (1 column mobile). Each card: inline SVG icon, title, 2-line description. Cards have a subtle border that glows the accent color on hover, plus a 2px lift via transform: translateY.
+How It Works — 3-step horizontal flow with connecting lines between steps. Steps: "Install" → "Choose a Model" → "Chat Locally." On mobile, this stacks vertically with lines becoming vertical. Each step has a large number in a circle, title, and description.
+Pricing — 3 cards: Free ($0), Pro ($12/mo, highlighted as "Most Popular" with a badge and accent border/glow), Studio ($29/mo). Each card: tier name, price, one-line pitch, 5–6 feature items with checkmark icons, CTA button. Hover: card lifts and border brightens. The "Pro" card should always have a subtle glow/shadow to distinguish it.
+Interactive demo section — A fake "chat terminal" built with HTML/CSS that looks like a terminal window (rounded corners, top bar with three colored dots, monospace font). It has 3 pre-written message bubbles (user + assistant alternating) about running a model locally. The last "typing" indicator animates (three bouncing dots). A fake input bar at the bottom is non-functional but styled to look real.
+Testimonials — 3 testimonial cards in a horizontal row (stacks on mobile). Each: quote text, person name, role/company, and a circle with their initials (e.g., "JM") styled with a gradient background. No images.
+FAQ — 5 accordion items. Clicking a question expands the answer with a smooth max-height transition. The chevron icon rotates 180° on open. Questions are real, specific to the product.
+CTA banner — Full-width section with a gradient background, large headline, subtext, and a "Join the Waitlist" email input + submit button. On submit (even fake), the button text changes to "You're in! 🎉" and the input clears.
+Footer — Minimal. Top border, product name, copyright year (use new Date().getFullYear() in JS), link columns, subtle.
+Interactions & polish (must all work):
+
+Smooth scroll on all nav links (behavior: smooth or JS fallback).
+Scroll-triggered fade-up entrance animations on every section below the hero (IntersectionObserver, staggered by 100ms per section).
+All buttons: hover = scale to 1.03 + shadow increase, active = scale to 0.98.
+All links: color shift + underline that animates in from the left on hover.
+FAQ accordion: only one open at a time (closing others).
+Nav background becomes semi-transparent blur (backdrop-filter: blur) on scroll past 50px.
+The hamburger menu on mobile has a smooth X transformation (the three lines morph into an X).
+Typography: System font stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif. Type scale: hero clamp(2.5rem, 6vw, 5rem), section headings 1.75rem–2.5rem, body 1rem/1.625rem line-height, small/captions 0.875rem.
+
+Output: Just the complete HTML code block. No explanation, no markdown text outside the code fence. The file must be copy-paste-runnable in any modern browser.

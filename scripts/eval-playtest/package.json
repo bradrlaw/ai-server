@@ -1,0 +1,9 @@
+{
+  "name": "eval-playtest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Best-effort headless jsdom playthrough harness for browser-game evals.",
+  "type": "commonjs",
+  "bin": { "eval-playtest": "./playtest.js" },
+  "dependencies": { "jsdom": "^24.1.0" }
+}

@@ -1,0 +1,78 @@
+{
+  "label": "fast-copilot",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "move north",
+          "hitNegative": null,
+          "excerpt": "You move north."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "You pull the lever. A grinding sound echoes, and a secret passage opens to the west."
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": true,
+          "matched": "move west",
+          "hitNegative": null,
+          "excerpt": "You move west."
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "move north",
+          "hitNegative": null,
+          "excerpt": "You move north."
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "lever",
+          "hitNegative": null,
+          "excerpt": "You took the lever."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "You pull the lever. A grinding sound echoes, and a secret passage opens to the west."
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": true,
+          "matched": "move west",
+          "hitNegative": null,
+          "excerpt": "You move west."
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    }
+  },
+  "generated_utc": "2026-07-29T07:55:01.784Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

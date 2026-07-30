@@ -1,0 +1,108 @@
+{
+  "file": "outputs/chat/output.py",
+  "score": 29,
+  "max": 29,
+  "pct": 100.0,
+  "bytes": 15036,
+  "hint_ratio": 0.96,
+  "doc_ratio": 0.8,
+  "bad_imports": [],
+  "dynamic": {
+    "runs": true,
+    "shows_room": true,
+    "inventory_ok": true,
+    "error": null
+  },
+  "checks": {
+    "parses": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Valid Python (parses)"
+    },
+    "class_GameState": {
+      "pass": true,
+      "weight": 1,
+      "desc": "GameState class"
+    },
+    "class_Room": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Room class"
+    },
+    "class_Item": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Item class"
+    },
+    "class_GameEngine": {
+      "pass": true,
+      "weight": 1,
+      "desc": "GameEngine class"
+    },
+    "stdlib_only": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Standard library only"
+    },
+    "type_hints": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Type hints on >=50% of functions"
+    },
+    "docstrings": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Docstrings on >=40% of classes/functions"
+    },
+    "main_block": {
+      "pass": true,
+      "weight": 1,
+      "desc": "__main__ block"
+    },
+    "exception_handling": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Handles EOFError and KeyboardInterrupt"
+    },
+    "command_vocab": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Command vocabulary (>=8 of look/take/drop/inventory/use/help/history/quit/go)"
+    },
+    "six_rooms": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Dungeon rooms (>=5 of entrance/library/armory/treasure/secret/garden)"
+    },
+    "four_items": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Items (>=4 of key/lever/torch/scroll/coin)"
+    },
+    "banner": {
+      "pass": true,
+      "weight": 1,
+      "desc": "ASCII banner"
+    },
+    "won_flag": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'won' flag for the secret ending"
+    },
+    "secret_logic": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Lever / secret-passage logic"
+    },
+    "dyn_runs": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Runs and prints the starting room"
+    },
+    "dyn_inventory": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Taking an item reflects in inventory"
+    }
+  }
+}

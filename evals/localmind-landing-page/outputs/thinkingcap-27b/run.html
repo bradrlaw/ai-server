@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>thinkingcap — localmind-landing-page</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
+letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .v{font-size:22px;font-weight:600;margin-top:4px}
+.card .v.teal{color:var(--teal)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
+.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
+.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
+</style></head>
+<body>
+<h1>thinkingcap</h1>
+<p class="sub">ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf &middot; localmind-landing-page
+&middot; 2026-07-27T05:01:54 UTC
+&middot; <a href="../../summary.html">← all runs</a>
+&middot; <a href="index.html">output</a>
+&middot; <a href="raw.txt">raw reply</a></p>
+<div class="grid">
+<div class="card"><div class="k">Objective</div><div class="v teal">27/27</div></div>
+<div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">1320 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">634.6 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">45.7 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">248.1 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">11266</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">31703 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 93% accept</div></div>
+<div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
+</div>
+<h2>Design scores (manual, 0–5 each)</h2>
+<div class="grid">
+<div class="card"><div class="k">Visual polish</div><div class="v">—</div></div>
+<div class="card"><div class="k">Responsiveness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Interaction</div><div class="v">—</div></div>
+<div class="card"><div class="k">Hero visual</div><div class="v">—</div></div>
+<div class="card"><div class="k">Code quality</div><div class="v">—</div></div>
+</div>
+
+<h2>Rendered output</h2>
+<iframe class="frame" src="index.html" title="rendered output"></iframe>
+
+<h2>llama.cpp load command</h2>
+<pre>/srv/ai/src/llama.cpp/build/bin/llama-server --model /srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --batch-size 2048 --ubatch-size 2048 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 8902 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics</pre>
+<h2>Sampler / request</h2>
+<pre>{
+  &quot;temperature&quot;: 0.7,
+  &quot;top_p&quot;: 0.95,
+  &quot;top_k&quot;: 20,
+  &quot;max_tokens&quot;: 32000
+}</pre>
+<h2>meta.json</h2>
+<pre>{
+  &quot;test&quot;: &quot;localmind-landing-page&quot;,
+  &quot;model_slot&quot;: &quot;thinkingcap&quot;,
+  &quot;label&quot;: &quot;thinkingcap-27b&quot;,
+  &quot;model_name&quot;: &quot;ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf&quot;,
+  &quot;endpoint&quot;: &quot;http://127.0.0.1:8902/v1/chat/completions&quot;,
+  &quot;proxy&quot;: null,
+  &quot;sampler&quot;: {
+    &quot;temperature&quot;: 0.7,
+    &quot;top_p&quot;: 0.95,
+    &quot;top_k&quot;: 20,
+    &quot;max_tokens&quot;: 32000
+  },
+  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server --model /srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --batch-size 2048 --ubatch-size 2048 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 8902 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
+  &quot;usage&quot;: {
+    &quot;completion_tokens&quot;: 11266,
+    &quot;prompt_tokens&quot;: 838,
+    &quot;total_tokens&quot;: 12104,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    }
+  },
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;performance&quot;: {
+    &quot;wall_secs&quot;: 248.1,
+    &quot;ttft_ms&quot;: 1320.42,
+    &quot;prefill_tps&quot;: 634.6465518547129,
+    &quot;decode_tps&quot;: 45.66150379049656,
+    &quot;prompt_tokens&quot;: 838,
+    &quot;predicted_tokens&quot;: 11266,
+    &quot;prefill_ms&quot;: 1320.42,
+    &quot;decode_ms&quot;: 246728.624
+  },
+  &quot;mtp&quot;: {
+    &quot;draft_n&quot;: 8925,
+    &quot;draft_n_accepted&quot;: 8290,
+    &quot;accept_rate&quot;: 0.929,
+    &quot;enabled&quot;: true
+  },
+  &quot;server_timings&quot;: {
+    &quot;cache_n&quot;: 0,
+    &quot;prompt_n&quot;: 838,
+    &quot;prompt_ms&quot;: 1320.42,
+    &quot;prompt_per_token_ms&quot;: 1.5756801909307876,
+    &quot;prompt_per_second&quot;: 634.6465518547129,
+    &quot;predicted_n&quot;: 11266,
+    &quot;predicted_ms&quot;: 246728.624,
+    &quot;predicted_per_token_ms&quot;: 21.90028617077934,
+    &quot;predicted_per_second&quot;: 45.66150379049656,
+    &quot;draft_n&quot;: 8925,
+    &quot;draft_n_accepted&quot;: 8290
+  },
+  &quot;extraction&quot;: {
+    &quot;extracted&quot;: true,
+    &quot;kind&quot;: &quot;fenced&quot;
+  },
+  &quot;output_file&quot;: &quot;index.html&quot;,
+  &quot;output_bytes&quot;: 31703,
+  &quot;reasoning_bytes&quot;: 828,
+  &quot;wall_secs&quot;: 248.1,
+  &quot;created_utc&quot;: &quot;2026-07-27T05:01:54+00:00&quot;
+}</pre>
+</body></html>

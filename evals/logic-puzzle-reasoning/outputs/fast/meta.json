@@ -1,0 +1,63 @@
+{
+  "test": "logic-puzzle-reasoning",
+  "model_slot": "fast",
+  "label": "fast",
+  "model_name": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "model_path": "/srv/ai/models/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10006",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf\n--ctx-size 32768\n--parallel 1\n--batch-size 2048 --ubatch-size 1024\n--reasoning-budget 0\n--model-draft /srv/ai/models/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf\n--spec-type draft-mtp\n--spec-draft-n-max 1\n--n-gpu-layers-draft 99\n--host 127.0.0.1 --port 10006 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 2227,
+    "prompt_tokens": 398,
+    "total_tokens": 2625,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 29.1,
+    "ttft_ms": 1273.811,
+    "prefill_tps": 312.4482360412966,
+    "decode_tps": 81.05323639895211,
+    "prompt_tokens": 398,
+    "predicted_tokens": 2227,
+    "prefill_ms": 1273.811,
+    "decode_ms": 27475.769
+  },
+  "mtp": {
+    "draft_n": 1225,
+    "draft_n_accepted": 1002,
+    "accept_rate": 0.818,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 398,
+    "prompt_ms": 1273.811,
+    "prompt_per_token_ms": 3.2005301507537687,
+    "prompt_per_second": 312.4482360412966,
+    "predicted_n": 2227,
+    "predicted_ms": 27475.769,
+    "predicted_per_token_ms": 12.33757027391109,
+    "predicted_per_second": 81.05323639895211,
+    "draft_n": 1225,
+    "draft_n_accepted": 1002
+  },
+  "extraction": {
+    "extracted": false,
+    "kind": "full-content"
+  },
+  "output_file": "output.md",
+  "output_bytes": 6576,
+  "reasoning_bytes": 0,
+  "wall_secs": 29.1,
+  "created_utc": "2026-07-27T09:53:53+00:00"
+}

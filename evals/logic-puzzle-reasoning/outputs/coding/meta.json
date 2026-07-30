@@ -1,0 +1,63 @@
+{
+  "test": "logic-puzzle-reasoning",
+  "model_slot": "coding",
+  "label": "coding",
+  "model_name": "Qwen3.6-27B-Q6_K.gguf",
+  "model_path": "/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10005",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf\n--ctx-size 184320\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 3\n--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 9166,
+    "prompt_tokens": 392,
+    "total_tokens": 9558,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 271.4,
+    "ttft_ms": 820.791,
+    "prefill_tps": 477.58808271533184,
+    "decode_tps": 37.675629379383444,
+    "prompt_tokens": 392,
+    "predicted_tokens": 9166,
+    "prefill_ms": 820.791,
+    "decode_ms": 243287.243
+  },
+  "mtp": {
+    "draft_n": 8748,
+    "draft_n_accepted": 6252,
+    "accept_rate": 0.715,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 392,
+    "prompt_ms": 820.791,
+    "prompt_per_token_ms": 2.0938545918367346,
+    "prompt_per_second": 477.58808271533184,
+    "predicted_n": 9166,
+    "predicted_ms": 243287.243,
+    "predicted_per_token_ms": 26.54235686231726,
+    "predicted_per_second": 37.675629379383444,
+    "draft_n": 8748,
+    "draft_n_accepted": 6252
+  },
+  "extraction": {
+    "extracted": false,
+    "kind": "full-content"
+  },
+  "output_file": "output.md",
+  "output_bytes": 6549,
+  "reasoning_bytes": 25788,
+  "wall_secs": 271.4,
+  "created_utc": "2026-07-27T09:02:17+00:00"
+}

@@ -1,0 +1,1157 @@
+===== reasoning_content =====
+The user wants a complete, single-file Python text-based adventure game engine.
+Let's break down the requirements:
+
+1.  **Classes**:
+    *   `GameState`: Tracks current room, inventory, visited rooms, flags, history.
+    *   `Room`: Name, description, exits, items, locked doors.
+    *   `Item`: Name, description, `on_use` callback.
+    *   `GameEngine`: Input parsing, command routing, state updates, output.
+
+2.  **Commands**:
+    *   `look`, `look at <item>`, `go <dir>`/`move <dir>`/`<dir>`, `take <item>`, `drop <item>`, `inventory`/`i`, `use <item>`, `help`, `history`, `quit`.
+    *   Input parsing: Case-insensitive, partial matches, synonyms (`examine`->`look at`, `grab`->`take`).
+    *   Graceful errors.
+
+3.  **World**:
+    *   6 Rooms: Entrance Hall, Library, Armory, Treasure Room, Secret Chamber, Garden.
+    *   4 Items: rusted key, lever, torch, ancient scroll, golden coin (that's 5 items, requirement says "at least 4", so 5 is fine).
+    *   Specific behaviors:
+        *   Key auto-uses on north from Armory.
+        *   Lever unlocks Library west.
+        *   Torch changes Armory description.
+        *   Scroll sets win flag.
+        *   Coin is cosmetic/witty.
+        *   Library description changes when lever pulled.
+        *   Locked doors need keys/items.
+
+4.  **Output**:
+    *   ASCII banner.
+    *   Separators.
+    *   Victory message.
+
+5.  **Code Quality**:
+    *   Type hints.
+    *   Docstrings.
+    *   `__main__` block.
+    *   Handle EOF/KeyboardInterrupt.
+    *   No global mutable state.
+
+Let's design the classes.
+
+`GameState`:
+```python
+class GameState:
+    def __init__(self):
+        self.current_room_id = "entrance"
+        self.inventory = []
+        self.visited_rooms = set()
+        self.flags = {}
+        self.history = []
+        # ... methods to update state
+```
+
+`Room`:
+```python
+class Room:
+    def __init__(self, name, description, exits=None, items=None, locked_exits=None):
+        self.name = name
+        self.description = description
+        self.exits = exits or {} # dir -> room_id
+        self.items = items or [] # list of item_ids
+        self.locked_exits = locked_exits or {} # dir -> condition_func or item_id
+        # ... methods
+```
+
+`Item`:
+```python
+class Item:
+    def __init__(self, name, description, on_use=None):
+        self.name = name
+        self.description = description
+        self.on_use = on_use
+```
+
+`GameEngine`:
+```python
+class GameEngine:
+    def __init__(self, rooms, items):
+        self.rooms = rooms
+        self.items = items
+        self.state = GameState()
+        # ... methods for commands
+```
+
+World Construction:
+Need to map IDs to objects.
+Rooms:
+- `entrance`: Exits N->library, E->armory, S->garden.
+- `library`: Exits S->entrance, W->secret. Locked W until lever pulled.
+- `armory`: Exits W->entrance, N->treasure. Locked N until key.
+- `treasure`: Exits S->armory.
+- `secret`: Exits E->library.
+- `garden`: Exits N->entrance.
+
+Items:
+- `rusted_key`: on_use could be None, handled by engine logic for door, or set a flag. Requirement says "auto-used". So engine checks key when moving north from armory.
+- `lever`: on_use updates library state.
+- `torch`: on_use updates armory description? Or engine checks torch in inventory and changes description dynamically. Requirement says "when taken, description changes". So engine logic for description should check inventory.
+- `ancient_scroll`: on_use sets win flag.
+- `golden_coin`: description witty.
+
+Input Parsing:
+Need a robust parser.
+Commands map to functions.
+Synonyms map to canonical commands.
+Partial matching: if input starts with command, and is unambiguous, accept.
+"inv" -> "inventory". "n" -> "north".
+Need to handle multi-word commands like "look at".
+"look at" -> "look_at".
+"grab" -> "take".
+"examine" -> "look_at".
+
+Let's refine the parser.
+Split input into tokens.
+First token is command.
+Lookup command in synonym map.
+If command is "look_at", need second token for item.
+If command is "go", need direction.
+Directions: n, s, e, w, north, south, east, west.
+Partial match on command: if user types "inv", check if any command starts with "inv". If exactly one, use it.
+Check "n" -> "north".
+Check "examine" -> "look_at".
+
+State Management:
+Flags for lever pulled? Or modify room object directly?
+Requirement: "Description changes when lever is pulled".
+If Room has a mutable description, engine can update it.
+Or Room has a method to get description based on state.
+Better to update Room description in state or have Room hold state.
+Since `GameState` tracks flags, maybe `GameState` tracks `lever_pulled`.
+But `Room` needs to know.
+Best approach: `Room` has a `description` string, but also a `get_description(state)` method?
+Or `Room` has a `description` and a `description_callback`.
+Or simply, when lever is used, update the room's description text in the world dict.
+Since the world is static, but state changes, the engine should handle dynamic descriptions.
+Actually, the requirement says "Description changes...".
+If I store descriptions in Room, I can update them.
+Or Room has a `description` and `description_on_lever_pulled`.
+Let's use a `description` that is a string, but the engine can modify it, or Room has a `get_description` method that checks flags.
+Given "No global mutable state", modifying Room objects in the world dict is fine as long as they are part of the game instance.
+So `GameEngine` holds `rooms` dict. `Room` objects can be mutated.
+When lever is pulled, `rooms['library'].description = new_desc`.
+This is clean.
+
+Item `on_use`:
+Callback receives `engine` or `state`.
+Callback can modify state, rooms, etc.
+Example: lever pulls, updates library room description, sets a flag or just mutates room.
+Key: "auto-used". Engine logic: when player tries `go north` from armory, check if key in inventory. If so, remove key? Or just allow movement?
+"auto-used" usually means the key is consumed or just used to open.
+Usually in text games, keys are not consumed. "Auto-used" might mean you don't need to type `use key`.
+Requirement: "opens the Armory's north door when the player tries to go north while holding it (auto-used)".
+This implies the check happens during `go`. If key present, open door.
+Does it consume the key? "Auto-used" could mean consumed. But usually keys are reusable.
+I'll assume it checks for key, allows movement, and maybe removes key or not.
+"Auto-used" often implies the action is performed implicitly.
+I'll implement it as: check key, if present, allow move. I'll leave key in inventory unless specified otherwise.
+Actually, "auto-used" might mean the key is used and gone.
+I'll add a parameter `consumable` to Item or handle in logic.
+For simplicity, I'll make key non-consumable but "auto-used" means no `use key` needed.
+Or I'll consume it to make "use" meaningful?
+The requirement lists `use <item>` as a command.
+If key is auto-used, `use key` might do nothing or be redundant.
+I'll make key non-consumable for better UX, but the engine handles the logic.
+Wait, "auto-used" might mean the key is removed.
+I'll check the spirit: usually auto-use means convenience.
+I'll implement: Engine checks key. If present, opens door. Key remains.
+If the user wants to consume, they can drop or I can add logic.
+I'll stick to non-consumable key, engine handles lock check.
+
+Input Parsing Details:
+Synonyms:
+`{"go": "go", "move": "go", "north": "north", "n": "north", "south": "south", "s": "south", ...}`
+`{"look": "look", "look_at": "look_at", "examine": "look_at"}`
+`{"take": "take", "grab": "take"}`
+`{"inventory": "inventory", "i": "inventory"}`
+`{"quit": "quit", "exit": "quit"}`
+`{"help": "help", "h": "help"}`
+`{"history": "history", "hist": "history"}`
+`{"use": "use", "activate": "use"}`
+`{"drop": "drop", "discard": "drop"}`
+
+Partial match:
+If input is "inv", map to "inventory".
+If input is "n", map to "north".
+Need a function `resolve_command(cmd_str)`.
+Split cmd_str.
+First word is command.
+Look up in synonym map.
+If exact match, done.
+If partial match, find candidates.
+If one candidate, use it.
+If multiple, ambiguous?
+"inv" -> "inventory".
+"n" -> "north", "south"? No, "s" is south. "n" is unique for north.
+"look" -> "look".
+"examine" -> "look_at".
+"grab" -> "take".
+"inv" -> "inventory".
+"i" -> "inventory".
+"n" -> "north".
+"s" -> "south".
+"e" -> "east".
+"w" -> "west".
+"t" -> "take"? No, "take" starts with t. "i" is inventory.
+"t" might be ambiguous if "take" and "torch" exist?
+Commands are distinct from items?
+Parser should distinguish commands from items.
+Usually, first word is command.
+If first word is command, resolve command.
+Else if first word is item, default to "take"? Or error?
+Requirement: "go <direction> / move <direction> / <direction>".
+So "<direction>" implies if input is just "north", treat as "go north".
+So parser needs to handle single word directions as "go <dir>".
+Also single word items? "look torch"? No, "look at torch".
+"take torch" -> "take torch".
+If input "torch", should it take?
+Requirement doesn't specify single word item behavior.
+I'll assume single word is command or direction.
+If direction, "go <dir>".
+If item, maybe error or "take"?
+I'll stick to explicit commands for items to avoid ambiguity.
+Except directions.
+
+Structure:
+`resolve_input(text)` returns `(command, args)`.
+`command` is canonical.
+`args` is list of strings.
+
+Implementation Plan:
+1. Define `GameState`, `Room`, `Item`.
+2. Define `GameEngine` with methods for each command.
+3. Build world in `__main__`.
+4. Run loop.
+
+Type hints everywhere.
+Docstrings.
+Good comments.
+
+Let's write the code mentally.
+
+```python
+import sys
+from typing import Dict, List, Optional, Callable, Any, Tuple
+
+class GameState:
+    # ...
+class Room:
+    # ...
+class Item:
+    # ...
+class GameEngine:
+    # ...
+```
+
+World Building:
+Rooms dict.
+Items dict.
+Engine init with rooms, items.
+Start loop.
+
+Banner:
+ASCII art.
+Maybe a simple dungeon banner.
+
+Input Loop:
+`while True:`
+`try:`
+`line = input("You > ")`
+`except EOFError, KeyboardInterrupt:`
+`break`
+`engine.process(line)`
+`engine.print_separator()`
+
+`process` method:
+Parse line.
+Execute command.
+Print result.
+Update history.
+Check win condition.
+
+Commands implementation:
+`look`: Print room desc, items.
+`look_at item`: Print item desc.
+`go dir`: Check exit. Check lock. Move. Print new room.
+`take item`: Check room items. Add to inv.
+`drop item`: Check inv. Add to room.
+`inventory`: List inv.
+`use item`: Call on_use.
+`help`: Print help.
+`history`: Print last 10.
+`quit`: Flag to exit.
+
+Parsing:
+`parse(text)`:
+`tokens = text.lower().split()`
+If not tokens, return.
+`cmd = tokens[0]`
+Map cmd to canonical.
+Handle partials.
+Handle directions as "go".
+Return `(canonical_cmd, tokens[1:])`.
+
+Mapping:
+`SYNONYMS = { ... }`
+`COMMANDS = { ... }`
+`DIRECTIONS = { ... }`
+
+Partial match logic:
+If `cmd` in `SYNONYMS`, use value.
+Else, filter `SYNONYMS` keys that start with `cmd`.
+If len==1, use that.
+Else, if `cmd` in `DIRECTIONS`, return `("go", [DIRECTIONS[cmd]])`.
+Else, error.
+
+This handles "inv"->"inventory", "n"->"go north".
+
+Item resolution:
+When command needs item, take first token from args.
+Resolve item name to item object.
+Case insensitive?
+Item names should be matched case-insensitively.
+"Take Rusty Key" -> find item with name "rusty key".
+So item lookup needs to be fuzzy or case-insensitive.
+Requirement: "items not present" error.
+So lookup should be robust.
+I'll implement a `find_item(name, context)` that searches by substring or case-insensitive match.
+Or just exact match but input is normalized?
+"take <item>" -> item name.
+If user types "take key", and item is "rusted key", should it match?
+Usually text adventures allow partial matches for items too.
+I'll implement partial match for items as well.
+"Find item where name contains token".
+If multiple, ambiguous?
+If one, use it.
+
+Flags:
+`lever_pulled` flag in GameState?
+Or Room mutates?
+I'll use `GameState.flags` for `lever_pulled`.
+Room description can depend on flag.
+Room `description` can be a string, but `get_description` checks flag.
+Or Room has `description` and `description_when_pulled`.
+I'll add `description_callback` to Room?
+Simpler: Room has `description` and `description_modifier`.
+Or just update `Room.description` string when lever pulled.
+This is mutable state in Room, which is fine.
+So `on_use` for lever updates `rooms['library'].description`.
+
+Key auto-use:
+Engine `go` method:
+If exit locked, check lock condition.
+Lock condition can be function or item_id.
+If item_id, check if item in inventory.
+If yes, allow move.
+Maybe remove item? "Auto-used" might imply consumption.
+I'll consume the key to be safe with "used".
+Or just check.
+I'll consume key. It makes "use" meaningful for other items?
+If key is consumed, `use key` might fail.
+I'll make key non-consumable. "Auto-used" just means no explicit `use` command needed.
+This is standard.
+
+Torch:
+"when taken, Armory description changes".
+Engine `take` or `go`?
+When player enters Armory, check if torch in inventory.
+If yes, use modified description.
+So Room `get_description` checks inventory?
+Room needs access to inventory?
+Engine can pass inventory to Room?
+Or Room stores description as function?
+`description_func(state)`.
+This is cleaner.
+Room `description` can be string or callable.
+If callable, call with state.
+This allows dynamic descriptions based on inventory, flags, etc.
+Excellent.
+So `Room` has `description: str | Callable[[GameState], str]`.
+This handles torch, lever, etc.
+Lever: Library desc changes.
+If desc is callable, it checks flag or room state.
+But lever pulls lever in Library.
+If desc is callable, it can check `state.flags.get('lever_pulled')`.
+Or check if lever item is in room? No, lever is used.
+So flag is best.
+So Library desc checks flag.
+This is very flexible.
+
+Scroll:
+`on_use` sets `state.flags['won'] = True`.
+Prints ending.
+
+Golden Coin:
+Cosmetic.
+
+Code Structure:
+
+```python
+"""
+Text Adventure Game Engine
+...
+"""
+import sys
+from typing import Dict, List, Optional, Callable, Any, Tuple, Union
+
+class GameState:
+    # ...
+class Room:
+    # ...
+class Item:
+    # ...
+class GameEngine:
+    # ...
+
+if __name__ == "__main__":
+    # ...
+```
+
+Let's refine types.
+`DescriptionType = Union[str, Callable[[GameState], str]]`
+`LockCondition = Union[str, Callable[[GameState], bool]]`
+Room exits: `Dict[str, Union[str, Room]]`?
+Room IDs are strings.
+Exits map direction to room ID.
+So `Dict[str, str]`.
+Locked exits: `Dict[str, LockCondition]`.
+
+Item `on_use`: `Optional[Callable[[GameState, 'Item', 'GameEngine'], None]]`.
+Actually callback should take enough context.
+`Callable[[GameState, 'GameEngine'], None]` is enough?
+Or `Callable[[GameState], None]`?
+Engine can pass itself?
+Better `Callable[[GameState, Item, GameEngine], None]`.
+Or just `Callable[[GameState], None]` and item/engine are global in closure?
+No, state is passed.
+I'll use `Callable[[GameState, 'GameEngine'], None]`.
+Item can be accessed via engine or state?
+Item is passed to callback?
+Yes, `on_use` is item method essentially.
+So `on_use(self, state, engine)`.
+I'll define `on_use` as method in Item class?
+Or attribute.
+Attribute is easier for serialization, but method is Pythonic.
+I'll use method.
+`def on_use(self, state: GameState, engine: GameEngine) -> None:`
+
+Room `on_enter`?
+Requirement doesn't ask for room events, but good for torch?
+Torch changes description.
+If description is callable, it checks inventory.
+So no `on_enter` needed.
+Just `get_description`.
+
+Parser:
+Need to handle "look at torch".
+Tokens: `['look', 'at', 'torch']`.
+Canonical: `('look_at', ['torch'])`.
+Need to handle "at" in "look at".
+Parser should strip "at" if command is "look_at".
+Or map "look at" -> "look_at".
+Synonyms map can handle "look at" -> "look_at".
+But input "look at" splits to "look", "at".
+So parser needs to handle multi-word commands?
+Or normalize input first?
+"look at" -> "look_at".
+I'll add normalization step.
+Replace " at " with "_"?
+Or handle "look" -> check next token "at"?
+If cmd is "look" and next is "at", combine?
+This is getting complex.
+Simpler: Map "look at" to "look_at" in a way that handles split.
+If cmd is "look", look ahead.
+If next is "at", command is "look_at", args are rest.
+This handles "look at torch".
+Also "examine" -> "look_at".
+So if cmd is "examine", command is "look_at", args are rest.
+This works.
+
+Directions:
+"north" -> "go north".
+If cmd is "north", command is "go", args=["north"].
+Parser needs to check if cmd is direction.
+If yes, prepend "go".
+This handles "n", "north", "s", etc.
+
+Partial matches:
+Function `resolve_command(cmd_word)`:
+Returns canonical command name.
+Checks exact, partial.
+Returns None if fail.
+
+`resolve_direction(dir_word)`:
+Returns canonical direction.
+Checks exact, partial.
+Returns None.
+
+`resolve_item(item_word, context_items)`:
+Returns item object.
+Checks partial match against context items.
+Returns None.
+
+Engine methods:
+`cmd_look(state, engine)`:
+`cmd_go(state, engine, args)`:
+`cmd_take(state, engine, args)`:
+etc.
+
+Dispatch dict:
+`COMMAND_HANDLERS = { "look": cmd_look, ... }`
+
+This is solid.
+
+Let's draft the code.
+
+
+===== content =====
+```python
+"""
+Text-Based Adventure Game Engine
+A single-file implementation of a text adventure engine with a mini-dungeon world.
+"""
+
+import sys
+from typing import Dict, List, Optional, Callable, Any, Tuple, Union, Set
+
+# Type Aliases
+DescriptionType = Union[str, Callable[['GameState'], str]]
+LockCondition = Union[str, Callable[['GameState'], bool]]
+ItemCallback = Callable[['GameState', 'GameEngine'], None]
+
+
+class GameState:
+    """
+    Tracks the current state of the game including location, inventory,
+    visited rooms, boolean flags, and event history.
+    """
+
+    def __init__(self) -> None:
+        self.current_room_id: str = "entrance"
+        self.inventory: List[str] = []
+        self.visited_rooms: Set[str] = set()
+        self.flags: Dict[str, bool] = {}
+        self.history: List[str] = []
+        self.game_over: bool = False
+
+    def log(self, message: str) -> None:
+        """Add a message to the game history."""
+        self.history.append(message)
+
+    def get_flag(self, flag_name: str, default: bool = False) -> bool:
+        """Retrieve a boolean flag, returning default if not set."""
+        return self.flags.get(flag_name, default)
+
+    def set_flag(self, flag_name: str, value: bool = True) -> None:
+        """Set a boolean flag."""
+        self.flags[flag_name] = value
+
+
+class Room:
+    """
+    Represents a location in the game world.
+    Contains name, description, exits, items, and lock conditions.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: DescriptionType,
+        exits: Optional[Dict[str, str]] = None,
+        items: Optional[List[str]] = None,
+        locked_exits: Optional[Dict[str, LockCondition]] = None,
+    ) -> None:
+        self.name: str = name
+        self.description: DescriptionType = description
+        self.exits: Dict[str, str] = exits or {}
+        self.items: List[str] = items or []
+        self.locked_exits: Dict[str, LockCondition] = locked_exits or {}
+
+    def get_description(self, state: GameState) -> str:
+        """
+        Returns the room description, evaluating if it's a callable.
+        """
+        if callable(self.description):
+            return self.description(state)
+        return self.description
+
+    def is_exit_locked(self, direction: str, state: GameState) -> bool:
+        """Checks if an exit is locked based on condition."""
+        if direction not in self.locked_exits:
+            return False
+        condition = self.locked_exits[direction]
+        if callable(condition):
+            return condition(state)
+        # If condition is a string, assume it's an item ID required
+        return state.get_flag(f"locked_{direction}_{self.name}", True)
+
+    def unlock_exit(self, direction: str) -> None:
+        """
+        Permanently unlocks an exit by removing it from locked_exits
+        or clearing the lock state.
+        """
+        if direction in self.locked_exits:
+            del self.locked_exits[direction]
+
+
+class Item:
+    """
+    Represents an item that can be picked up and used.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        on_use: Optional[ItemCallback] = None,
+    ) -> None:
+        self.name: str = name
+        self.description: str = description
+        self.on_use: Optional[ItemCallback] = on_use
+
+
+class GameEngine:
+    """
+    Core engine that manages input parsing, command execution,
+    and game state updates.
+    """
+
+    def __init__(self, rooms: Dict[str, Room], items: Dict[str, Item]) -> None:
+        self.rooms: Dict[str, Room] = rooms
+        self.items: Dict[str, Item] = items
+        self.state: GameState = GameState()
+        self.running: bool = True
+
+        # Synonym and command resolution maps
+        self.synonyms: Dict[str, str] = {
+            "go": "go", "move": "go", "travel": "go",
+            "north": "go", "n": "go",
+            "south": "go", "s": "go",
+            "east": "go", "e": "go",
+            "west": "go", "w": "go",
+            "look": "look", "examine": "look_at", "inspect": "look_at",
+            "take": "take", "grab": "take", "pick": "take",
+            "drop": "drop", "discard": "drop",
+            "inventory": "inventory", "i": "inventory", "inv": "inventory",
+            "use": "use", "activate": "use",
+            "help": "help", "h": "help",
+            "history": "history", "hist": "history",
+            "quit": "quit", "exit": "quit", "q": "quit",
+        }
+        
+        self.directions: Dict[str, str] = {
+            "north": "north", "n": "north",
+            "south": "south", "s": "south",
+            "east": "east", "e": "east",
+            "west": "west", "w": "west",
+        }
+
+        # Command handlers
+        self.handlers: Dict[str, Callable] = {
+            "look": self.cmd_look,
+            "look_at": self.cmd_look_at,
+            "go": self.cmd_go,
+            "take": self.cmd_take,
+            "drop": self.cmd_drop,
+            "inventory": self.cmd_inventory,
+            "use": self.cmd_use,
+            "help": self.cmd_help,
+            "history": self.cmd_history,
+            "quit": self.cmd_quit,
+        }
+
+    def resolve_command(self, raw_cmd: str, tokens: List[str]) -> Tuple[Optional[str], List[str]]:
+        """
+        Resolves raw command and tokens to canonical command and arguments.
+        Handles synonyms, partial matches, and implicit 'go' for directions.
+        """
+        if not tokens:
+            return None, []
+
+        cmd = tokens[0].lower()
+        args = tokens[1:]
+
+        # Check if cmd is a direction
+        if cmd in self.directions:
+            return "go", [self.directions[cmd]]
+
+        # Resolve command via synonyms/partial match
+        canonical = self._resolve_synonym(cmd)
+        if canonical:
+            return canonical, args
+
+        # If no command matched, check if it's a valid item for implicit 'take'?
+        # Requirement doesn't specify implicit take, so return error or None.
+        # We'll return None to let caller handle unknown.
+        return None, []
+
+    def _resolve_synonym(self, cmd: str) -> Optional[str]:
+        """Resolves a command word to its canonical form."""
+        if cmd in self.synonyms:
+            return self.synonyms[cmd]
+
+        # Partial match
+        matches = [k for k in self.synonyms if k.startswith(cmd)]
+        if len(matches) == 1:
+            return self.synonyms[matches[0]]
+        elif len(matches) > 1:
+            # Ambiguous, but we might accept if one is a direct command?
+            # For simplicity, return None on ambiguity or exact match preferred.
+            # However, "inv" -> "inventory" is unique.
+            # "h" -> "help" is unique.
+            # "i" -> "inventory" is unique.
+            # "l" -> "look" is unique? "look_at" also starts with l?
+            # "look" vs "look_at". "l" matches both.
+            # "look" is more specific? Or return None.
+            # Usually partial match works if unique.
+            # "look" matches "look" and "look_at".
+            # "look_" matches "look_at".
+            # "l" is ambiguous.
+            # I'll return None for ambiguity to be safe, or pick longest?
+            # Let's pick the one that is a direct command if available?
+            # No, just return None.
+            return None
+        return None
+
+    def resolve_item(self, item_name: str, context_items: List[str]) -> Optional[Item]:
+        """Finds an item by name, supporting case-insensitive partial matches."""
+        item_name_lower = item_name.lower()
+        candidates = []
+        
+        for item_id in context_items:
+            item = self.items.get(item_id)
+            if item and item.name.lower().startswith(item_name_lower):
+                candidates.append(item)
+        
+        if len(candidates) == 1:
+            return candidates[0]
+        elif len(candidates) > 1:
+            return None  # Ambiguous
+        return None
+
+    def process_input(self, text: str) -> None:
+        """Main entry point for processing player input."""
+        if self.state.game_over and text.strip().lower() not in ("quit", "exit", "q"):
+            print("The game has ended. Type 'quit' to leave.")
+            return
+
+        text = text.strip()
+        if not text:
+            return
+
+        tokens = text.split()
+        canonical_cmd, args = self.resolve_command(text, tokens)
+
+        if not canonical_cmd:
+            # Check if single token is a direction
+            if tokens[0].lower() in self.directions:
+                canonical_cmd = "go"
+                args = [self.directions[tokens[0].lower()]]
+            else:
+                print("Unknown command. Type 'help' for list.")
+                self.state.log(f"Unknown: {text}")
+                return
+
+        handler = self.handlers.get(canonical_cmd)
+        if handler:
+            handler(args)
+        else:
+            print(f"Unknown command: {canonical_cmd}")
+
+    # Command Implementations
+
+    def cmd_look(self, args: List[str]) -> None:
+        """Look at current room."""
+        room = self.rooms[self.state.current_room_id]
+        desc = room.get_description(self.state)
+        print(desc)
+        
+        # List visible items
+        if room.items:
+            print("\nYou see:")
+            for item_id in room.items:
+                item = self.items[item_id]
+                print(f"  - {item.name}")
+        else:
+            print("\nNothing of interest here.")
+        
+        self.state.log(f"Looked at {room.name}")
+
+    def cmd_look_at(self, args: List[str]) -> None:
+        """Look at a specific item."""
+        if not args:
+            print("Look at what?")
+            return
+        
+        item_name = args[0]
+        # Search in room and inventory
+        room = self.rooms[self.state.current_room_id]
+        context = room.items + self.state.inventory
+        
+        item = self.resolve_item(item_name, context)
+        if item:
+            print(item.description)
+            self.state.log(f"Examined {item.name}")
+        else:
+            print("You don't see that here.")
+
+    def cmd_go(self, args: List[str]) -> None:
+        """Move to an adjacent room."""
+        if not args:
+            print("Go where? (north, south, east, west)")
+            return
+        
+        direction = args[0].lower()
+        
+        # Resolve direction to canonical
+        dir_canon = self.directions.get(direction)
+        if not dir_canon:
+            # Try partial
+            matches = [k for k in self.directions if k.startswith(direction)]
+            if len(matches) == 1:
+                dir_canon = self.directions[matches[0]]
+            else:
+                print(f"Unknown direction: {direction}")
+                return
+
+        room = self.rooms[self.state.current_room_id]
+        
+        # Check exit exists
+        if dir_canon not in room.exits:
+            print(f"You can't go that way.")
+            return
+
+        # Check lock
+        if room.is_exit_locked(dir_canon, self.state):
+            condition = room.locked_exits.get(dir_canon)
+            if callable(condition):
+                msg = "The way is blocked."
+            else:
+                # Condition is item ID
+                req_item_id = condition
+                req_item = self.items.get(req_item_id)
+                if req_item:
+                    msg = f"The door is locked. You need the {req_item.name}."
+                else:
+                    msg = "The door is locked."
+            
+            # Check if player has item (auto-use)
+            if req_item_id and req_item_id in self.state.inventory:
+                # Auto-use: remove item and unlock
+                self.state.inventory.remove(req_item_id)
+                room.unlock_exit(dir_canon)
+                print(f"You use the {req_item.name} and unlock the door.")
+                self.state.log(f"Auto-used {req_item.name} to open {dir_canon}")
+                # Proceed to move
+            else:
+                print(msg)
+                return
+        else:
+            # Check if key is present for auto-use even if not locked?
+            # Requirement says key auto-uses on north from armory.
+            # This implies lock check handles it.
+            pass
+
+        # Move
+        target_id = room.exits[dir_canon]
+        target_room = self.rooms[target_id]
+        self.state.current_room_id = target_id
+        self.state.visited_rooms.add(target_id)
+        
+        print(f"\nYou move {dir_canon}.")
+        print(target_room.get_description(self.state))
+        self.state.log(f"Moved {dir_canon} to {target_room.name}")
+
+    def cmd_take(self, args: List[str]) -> None:
+        """Take an item from the current room."""
+        if not args:
+            print("Take what?")
+            return
+        
+        room = self.rooms[self.state.current_room_id]
+        item = self.resolve_item(args[0], room.items)
+        
+        if item:
+            room.items.remove(item.name) # Assuming name is unique key?
+            # Better use item ID.
+            # My resolve_item returns Item object.
+            # Need to remove by ID.
+            # Fix resolve_item to return ID or item.
+            # Let's assume item.name is unique for simplicity in this context?
+            # Or use item_id.
+            # I'll use item_id in resolve_item return or lookup.
+            # For now, remove item by name from list?
+            # List contains IDs.
+            # So need to find ID.
+            item_id = next((i for i in room.items if self.items[i].name == item.name), None)
+            if item_id:
+                room.items.remove(item_id)
+                self.state.inventory.append(item_id)
+                print(f"You pick up the {item.name}.")
+                self.state.log(f"Took {item.name}")
+                
+                # Torch effect: update Armory description
+                if item.name == "torch":
+                    self._update_torch_effect()
+            else:
+                print("Error taking item.")
+        else:
+            print("You don't see that here.")
+
+    def _update_torch_effect(self) -> None:
+        """Updates Armory description if torch is taken."""
+        armory = self.rooms.get("armory")
+        if armory:
+            if callable(armory.description):
+                # Already dynamic
+                pass
+            else:
+                # Replace description
+                armory.description = (
+                    "A dimly lit armory filled with old weapons. "
+                    "A flickering light from your torch illuminates the rusted swords."
+                )
+
+    def cmd_drop(self, args: List[str]) -> None:
+        """Drop an item from inventory."""
+        if not args:
+            print("Drop what?")
+            return
+        
+        item = self.resolve_item(args[0], self.state.inventory)
+        if item:
+            item_id = next((i for i in self.state.inventory if self.items[i].name == item.name), None)
+            if item_id:
+                self.state.inventory.remove(item_id)
+                self.rooms[self.state.current_room_id].items.append(item_id)
+                print(f"You drop the {item.name}.")
+                self.state.log(f"Dropped {item.name}")
+            else:
+                print("Error dropping item.")
+        else:
+            print("You aren't carrying that.")
+
+    def cmd_inventory(self, args: List[str]) -> None:
+        """List inventory."""
+        if not self.state.inventory:
+            print("You are empty-handed.")
+        else:
+            print("Inventory:")
+            for item_id in self.state.inventory:
+                item = self.items[item_id]
+                print(f"  - {item.name}")
+        self.state.log("Checked inventory")
+
+    def cmd_use(self, args: List[str]) -> None:
+        """Use an item."""
+        if not args:
+            print("Use what?")
+            return
+        
+        item = self.resolve_item(args[0], self.state.inventory)
+        if item:
+            if item.on_use:
+                item.on_use(self.state, self)
+            else:
+                print(f"The {item.name} does nothing.")
+        else:
+            print("You don't have that.")
+
+    def cmd_help(self, args: List[str]) -> None:
+        """Print help."""
+        print("""
+Available Commands:
+  look                     - Look around
+  look at <item>           - Examine an item
+  go <dir> / <dir>         - Move (n, s, e, w, north, etc.)
+  take <item>              - Pick up item
+  drop <item>              - Drop item
+  inventory / i            - Check inventory
+  use <item>               - Use item
+  help                     - Show this message
+  history                  - Show recent events
+  quit                     - Exit game
+        """)
+        self.state.log("Showed help")
+
+    def cmd_history(self, args: List[str]) -> None:
+        """Print last 10 events."""
+        if not self.state.history:
+            print("No history yet.")
+        else:
+            print("History:")
+            for event in self.state.history[-10:]:
+                print(f"  {event}")
+
+    def cmd_quit(self, args: List[str]) -> None:
+        """Quit game."""
+        self.running = False
+        print("Goodbye!")
+        self.state.log("Quit game")
+
+    def run(self) -> None:
+        """Main game loop."""
+        print("\nGame started. Type 'help' for commands.\n")
+        while self.running:
+            try:
+                text = input("You > ")
+                self.process_input(text)
+                print("-" * 40)
+            except (EOFError, KeyboardInterrupt):
+                print("\nGoodbye!")
+                self.running = False
+
+
+# World Construction
+
+def build_world() -> Tuple[Dict[str, Room], Dict[str, Item]]:
+    """Builds the mini-dungeon world."""
+    rooms: Dict[str, Room] = {}
+    items: Dict[str, Item] = {}
+
+    # Items
+    items["rusted_key"] = Item(
+        name="rusted key",
+        description="A heavy, rusted key. It looks old and worn.",
+    )
+    
+    items["lever"] = Item(
+        name="lever",
+        description="A sturdy iron lever mounted on the wall.",
+        on_use=lambda state, engine: _use_lever(state, engine),
+    )
+    
+    items["torch"] = Item(
+        name="torch",
+        description="A wooden torch, currently unlit.",
+    )
+    
+    items["golden_coin"] = Item(
+        name="golden coin",
+        description="A shimmering gold coin. 'Proof that greed has a weight.'",
+    )
+    
+    items["ancient_scroll"] = Item(
+        name="ancient scroll",
+        description="A fragile scroll with faded ink.",
+        on_use=lambda state, engine: _use_scroll(state, engine),
+    )
+
+    # Rooms
+    rooms["entrance"] = Room(
+        name="Entrance Hall",
+        description="You stand in a damp stone hall. Moss creeps up the walls. "
+                   "Exits lead north and east. A peaceful clearing is visible to the south.",
+        exits={"north": "library", "east": "armory", "south": "garden"},
+        items=["rusted_key"],
+    )
+
+    rooms["library"] = Room(
+        name="Library",
+        description=lambda state: (
+            "A dusty library filled with crumbling books. "
+            "A massive bookshelf blocks the south exit. "
+            "To the west, a narrow passage is sealed shut."
+            if not state.get_flag("lever_pulled")
+            else (
+                "A dusty library. The bookshelf has been pushed aside, "
+                "revealing a secret passage to the west."
+            )
+        ),
+        exits={"south": "entrance", "west": "secret"},
+        items=["lever"],
+        locked_exits={"west": "lever_pulled"},
+    )
+
+    rooms["armory"] = Room(
+        name="Armory",
+        description="An armory with racks of rusted weapons. "
+                   "A heavy door leads north. The west exit returns to the entrance.",
+        exits={"west": "entrance", "north": "treasure"},
+        items=["torch"],
+        locked_exits={"north": "rusted_key"},
+    )
+
+    rooms["treasure"] = Room(
+        name="Treasure Room",
+        description="A small chamber filled with gold. "
+                   "A single golden coin lies on a pedestal. "
+                   "The south door leads back to the armory.",
+        exits={"south": "armory"},
+        items=["golden_coin"],
+    )
+
+    rooms["secret"] = Room(
+        name="Secret Chamber",
+        description="A hidden chamber lit by a faint glow. "
+                   "An ancient scroll rests on a stone altar. "
+                   "The east exit leads back to the library.",
+        exits={"east": "library"},
+        items=["ancient_scroll"],
+    )
+
+    rooms["garden"] = Room(
+        name="Garden",
+        description="A peaceful garden clearing bathed in sunlight. "
+                   "Flowers bloom in the stone planters. "
+                   "You feel a sense of calm. The north exit returns to the entrance.",
+        exits={"north": "entrance"},
+        items=[],
+    )
+
+    return rooms, items
+
+
+def _use_lever(state: GameState, engine: GameEngine) -> None:
+    """Handler for using the lever."""
+    state.set_flag("lever_pulled", True)
+    # Update library description
+    lib = engine.rooms["library"]
+    lib.description = (
+        "A dusty library. The bookshelf has been pushed aside, "
+        "revealing a secret passage to the west."
+    )
+    # Remove lever from room if present?
+    # Lever is in library.
+    if "lever" in lib.items:
+        lib.items.remove("lever")
+    print("You pull the lever. With a grind of stone, the bookshelf slides open, revealing a passage to the west.")
+    state.log("Pulled lever in Library")
+
+
+def _use_scroll(state: GameState, engine: GameEngine) -> None:
+    """Handler for using the ancient scroll."""
+    state.set_flag("won", True)
+    state.game_over = True
+    print("\n*** SECRET ENDING ***")
+    print("You read the scroll: 'The true treasure is the journey itself. You have found peace.'")
+    print("Congratulations! You have discovered the secret.")
+    state.log("Used scroll, won game")
+
+
+if __name__ == "__main__":
+    # Banner
+    banner = """
+    .--------------------------------.
+    |   T E X T   A D V E N T U R E  |
+    |         G A M E   E N G I N E  |
+    '--------------------------------'
+    """
+    print(banner)
+    print("Welcome to the Small Dungeon.")
+    print("Explore, solve puzzles, and find the secret.\n")
+
+    rooms, items = build_world()
+    engine = GameEngine(rooms, items)
+    engine.run()
+```

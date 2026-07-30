@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind | Run AI Locally</title>
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #13111c;
+            --border: rgba(255, 255, 255, 0.06);
+            --primary: #7c5cfc;
+            --primary-glow: rgba(124, 92, 252, 0.3);
+            --secondary: #00d4aa;
+            --text-main: #fafafa;
+            --text-muted: #71717a;
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* --- Typography & Utilities --- */
+        h1, h2, h3 {
+            letter-spacing: -0.02em;
+        }
+
+        section {
+            padding: 100px 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            margin-left: 15px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--text-muted);
+        }
+
+        /* --- Navigation --- */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 80px;
+            background: rgba(9, 9, 11, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, #fff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-main);
+        }
+
+        .hamburger {
+            display: block;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 5px;
+            z-index: 1001;
+        }
+
+        .hamburger span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: white;
+            margin: 5px 0;
+            transition: var(--transition);
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            padding-top: 180px;
+            text-align: center;
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            line-height: 1.1;
+            margin-bottom: 30px;
+            max-width: 900px;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: clamp(1.1rem, 2vw, 1.4rem);
+            max-width: 700px;
+            margin-bottom: 40px;
+        }
+
+        /* CSS-only Animated Visual */
+        .visual-orb {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 50px auto;
+        }
+
+        .orb-main {
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            border-radius: 50%;
+            filter: blur(40px);
+            opacity: 0.6;
+            animation: pulse 8s infinite alternate ease-in-out;
+        }
+
+        .orb-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 30px var(--primary);
+        }
+
+        @keyframes pulse {
+            from { transform: scale(1); opacity: 0.4; }
+            to { transform: scale(1.4); opacity: 0.8; }
+        }
+
+        /* --- Features Grid --- */
+        .section-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 20px;
+            fill: var(--primary);
+        }
+
+        /* --- How It Works --- */
+        .how-it-works {
+            background: rgba(124, 92, 252, 0.03);
+        }
+
+        .steps-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .step {
+            text-align: center;
+            padding: 30px;
+            position: relative;
+        }
+
+        .step-number {
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--primary);
+            opacity: 0.2;
+            margin-bottom: -10px;
+        }
+
+        /* --- Pricing --- */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 50px;
+        }
+
+        .price-card {
+            background: var(--surface);
+            padding: 50px 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .price-card.popular {
+            border: 2px solid var(--primary);
+            position: relative;
+            transform: scale(1.05);
+        }
+
+        .price-card.popular::before {
+            content: "Most Popular";
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .price-card h3 { font-size: 1.5rem; margin-bottom: 10px; }
+        .price-amount { font-size: 3rem; font-weight: 800; margin: 20px 0; }
+        .price-features { list-style: none; text-align: left; margin-bottom: 30px; color: var(--text-muted); }
+        .price-features li { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .price-features li::before { content: "✓"; color: var(--secondary); font-weight: bold; }
+
+        /* --- About / Social Proof --- */
+        .about-section {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .testimonial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .testimonial {
+            background: transparent;
+            padding: 20px;
+        }
+
+        .testimonial p {
+            font-style: italic;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+
+        .user-initials {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 10px;
+        }
+
+        /* --- Footer --- */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 60px 24px;
+            background: #070709;
+        }
+
+        .footer-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 40px;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        /* --- Animations & Reveal --- */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- Mobile Adjustments --- */
+        @media (max-width: 768px) {
+            .nav-links {
+                position: fixed;
+                top: 80px;
+                left: -100%;
+                flex-direction: column;
+                background: var(--bg);
+                width: 100%;
+                height: calc(100vh - 80px);
+                padding: 40px;
+                transition: 0.4s ease;
+            }
+
+            .nav-links.open {
+                left: 0;
+            }
+
+            .hamburger span {
+                width: 20px;
+            }
+
+            .hero h1 { font-size: 3rem; }
+
+            .price-card.popular {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="logo">LocalMind</a>
+            <div class="nav-links" id="navLinks">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How it Works</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#about">About</a>
+                <a href="#" class="btn btn-primary" style="margin-left: 20px;">Join Waitlist</a>
+            </div>
+            <button class="hamburger" id="hamburgerBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1 class="reveal">Run AI Locally. <br><span style="color: var(--primary)">Own Your Data.</span> No Limits.</h1>
+            <p class="reveal" style="transition-delay: 0.2s;">Experience the power of Large Language Models without the cloud latency or privacy concerns. LocalMind brings intelligence to your hardware.</p>
+            <div class="visual-orb reveal" style="transition-delay: 0.4s;">
+                <div class="orb-main"></div>
+                <div class="orb-core"></div>
+            </div>
+            <div class="reveal" style="transition-delay: 0.6s;">
+                <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+                <a href="#how-it-works" class="btn btn-secondary">See How It Works</a>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section id="features">
+            <div class="container">
+                <h2 class="section-title reveal">Built for Power Users</h2>
+                <div class="features-grid">
+                    <div class="feature-card reveal">
+                        <svg class="feature-icon" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6V12L9,15V18H15V15L12,12V6Z"/></svg>
+                        <h3>Any Model</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Switch between Llama 3, Mistral, and others seamlessly with a single interface.</p>
+                    </div>
+                    <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                        <svg class="feature-icon" viewBox="0 0 24 24"><path d="M13,9H11V7H13L12,6L11,7V9H9V15H7V17H9V19H21V17H19V15H17V9H15V7H13V9M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>
+                        <h3>Zero Latency</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">No "waiting for cloud" spinners. Your responses are generated as fast as your hardware allows.</p>
+                    </div>
+                    <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                        <svg class="feature-icon" viewBox="0 0 24 24"><path d="M12,1L3,5V11C3,16.59 7.41,21.24 13,21.24C18.59,21.24 23,16.59 23,11V5L12,1M12,3A9,9 0 0,1 21,12A9,9 0 0,1 12,21A9,9 0 0,1 3,12A9,9 0 0,1 12,3M5,11V5L12,10L19,5V11H5Z"/></svg>
+                        <h3>Full Privacy</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Your data never leaves your machine. Perfect for sensitive documents and private thoughts.</p>
+                    </div>
+                    <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                        <svg class="feature-icon" viewBox="0 0 24 24"><path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.11,3 19,3M9,17H7V12H9V17M13,17H11V12H13V17M17,17H15V12H17V17Z"/></svg>
+                        <h3>GPU Optimized</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Intelligently utilizes your NVIDIA, AMD, or Apple Silicon cores for maximum throughput.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section id="how-it-works" class="how-it-works">
+            <div class="container">
+                <h2 class="section-title reveal">Get Started in Seconds</h2>
+                <div class="steps-container">
+                    <div class="step reveal">
+                        <div class="step-number">1</div>
+                        <h3>Install</h3>
+                        <p style="color: var(--text-muted);">Download the lightweight LocalMind core for your OS.</p>
+                    </div>
+                    <div class="step reveal" style="transition-delay: 0.2s;">
+                        <div class="step-number">2</div>
+                        <h3>Choose</h3>
+                        <p style="color: var(--text-muted);">Pick from a library of pre-configured models.</p>
+                    </div>
+                    <div class="step reveal" style="transition-delay: 0.4s;">
+                        <div class="step-number">3</div>
+                        <h3>Chat</h3>
+                        <p style="color: var(--text-muted);">Start interacting with your local brain instantly.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section id="pricing">
+            <div class="container">
+                <h2 class="section-title reveal">Simple Pricing</h2>
+                <div class="pricing-grid">
+                    <div class="price-card reveal" style="transition-delay: 0.1s;">
+                        <h3>Free</h3>
+                        <div class="price-amount">$0</div>
+                        <ul class="price-features">
+                            <li>3 Core Models</li>
+                            <li>Basic UI</li>
+                            <li>Community Support</li>
+                        </ul>
+                        <a href="#" class="btn btn-secondary" style="width: 100%;">Get Started</a>
+                    </div>
+                    <div class="price-card popular reveal" style="transition-delay: 0.2s;">
+                        <h3>Pro</h3>
+                        <div class="price-amount">$12<span>/mo</span></div>
+                        <ul class="price-features">
+                            <li>All Models</li>
+                            <li>Custom Context Window</li>
+                            <li>Priority Updates</li>
+                            <li>Advanced UI Themes</li>
+                        </ul>
+                        <a href="#" class="btn btn-primary" style="width: 100%;">Go Pro</a>
+                    </div>
+                    <div class="price-card reveal" style="transition-delay: 0.3s;">
+                        <h3>Studio</h3>
+                        <div class="price-amount">$29<span>/mo</span></div>
+                        <ul class="price-features">
+                            <li>Unlimited Models</li>
+                            <li>Multi-GPU Support</li>
+                            <li>Team Collaboration</li>
+                            <li>API Access</li>
+                        </ul>
+                        <a href="#" class="btn btn-secondary" style="width: 100%;">Go Studio</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About & Social Proof -->
+        <section id="about">
+            <div class="container about-section reveal">
+                <h2>Our Mission</h2>
+                <p style="margin: 30px 0; color: var(--text-muted);">We believe AI should be personal. By moving the heavy lifting from massive server farms to your own hardware, we make intelligence accessible, private, and infinitely customizable.</p>
+                
+                <div class="testimonial-grid">
+                    <div class="testimonial">
+                        <div class="user-initials">JD</div>
+                        <p>"The best way to experiment with LLMs without worrying about privacy."</p>
+                        <strong>John Doe</strong>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Software Engineer</span>
+                    </div>
+                    <div class="testimonial">
+                        <div class="user-initials">AS</div>
+                        <p>"LocalMind turned my old laptop into a powerful research station."</p>
+                        <strong>Alice Smith</strong>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Researcher</span>
+                    </div>
+                    <div class="testimonial">
+                        <div class="user-initials">RK</div>
+                        <p>"The UI is incredibly polished and the setup was a breeze."</p>
+                        <strong>Ryan Kim</strong>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Designer</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <a href="#" class="logo" style="font-size: 1.2rem;">LocalMind</a>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 10px;">Intelligence, locally.</p>
+                </div>
+                <div class="footer-links">
+                    <h4 style="margin-bottom: 15px; color: white;">Product</h4>
+                    <a href="#">Features</a>
+                    <a href="#">Showcase</a>
+                    <a href="#">Docs</a>
+                </div>
+                <div class="footer-links">
+                    <h4 style="margin-bottom: 15px; color: white;">Company</h4>
+                    <a href="#">About Us</a>
+                    <a href="#">Blog</a>
+                    <a href="#">Contact</a>
+                </div>
+                <div class="footer-links">
+                    <h4 style="margin-bottom: 15px; color: white;">Legal</h4>
+                    <a href="#">Privacy</a>
+                    <a href="#">Terms</a>
+                    <a href="#">Cookie Policy</a>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 60px; font-size: 0.8rem; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 20px;">
+                &copy; 2024 LocalMind AI. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // --- Navigation Logic ---
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const navLinks = document.getElementById('navLinks');
+
+        hamburgerBtn.addEventListener('click', () => {
+            navLinks.classList.toggle('open');
+            // Simple animation for hamburger lines
+            const spans = hamburgerBtn.querySelectorAll('span');
+            if (navLinks.classList.contains('open')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(5px, -5px)';
+            } else {
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            }
+        });
+
+        // Close mobile menu when clicking a link
+        const navLinks_a = document.querySelectorAll('.nav-links a');
+        navLinks_a.forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    navLinks.classList.remove('open');
+                    hamburgerBtn.querySelector('span').style.transform = 'none';
+                    hamburgerBtn.querySelectorAll('span')[1].style.opacity = '1';
+                    hamburgerBtn.querySelectorAll('span')[2].style.transform = 'none';
+                }
+            });
+        });
+
+        // --- Intersection Observer for Scroll Animations ---
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: "0px 0px -50px 0px"
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => {
+            observer.observe(el);
+        });
+
+        // --- Smooth Scroll for Nav Links ---
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    window.scrollTo({
+                        top: target.offsetTop - 80, // Adjust for fixed nav height
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // --- Simple Parallax-like effect on Orb ---
+        document.addEventListener('mousemove', (e) => {
+            const orb = document.querySelector('.visual-orb');
+            const x = (window.innerWidth / 2 - e.pageX) / 30;
+            const y = (window.innerHeight / 2 - e.pageY) / 30;
+            orb.style.transform = `translate(${x}px, ${y}px)`;
+        });
+    </script>
+</body>
+</html>

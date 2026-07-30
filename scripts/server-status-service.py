@@ -116,6 +116,7 @@ SERVICES = os.environ.get(
     "LiteLLM=http://127.0.0.1:4000/health/liveliness=,"
     "mcpo=http://127.0.0.1:8000/docs=8000,"
     "Filebrowser=http://127.0.0.1:8083/health=8083,"
+    "Evals viewer=http://127.0.0.1:8085/=8085,"
     "OpenClaw=http://127.0.0.1:18789/healthz=http://localhost:18789,"
     "Hermes dashboard=http://127.0.0.1:9119/=9119,"
     "Hermes API=http://127.0.0.1:8642/health=8642",
@@ -196,6 +197,14 @@ QUIET_COMFYUI_UNITS = [
 ]
 # Command prefix used to control the ComfyUI units (needs a scoped sudoers rule).
 QUIET_SYSTEMCTL = os.environ.get("QUIET_SYSTEMCTL", "sudo systemctl").split()
+# Allow the dashboard to POST start/stop actions for the ComfyUI units (uses the
+# same scoped sudoers rule as quiet hours). Handy for waking ComfyUI during the
+# deep-idle window without an SSH session. Set false to make the page read-only.
+STATUS_ACTIONS_ENABLED = os.environ.get("STATUS_ACTIONS_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 # Models re-warmed when the window ends (fast is handled by the keeper).
 QUIET_WARM_ON_EXIT = [
     m.strip()
@@ -751,6 +760,9 @@ def build_status() -> dict:
         "gpus": gpus,
         "host": host,
         "power_mode": _power_state["mode"],
+        "actions": {
+            "comfyui": STATUS_ACTIONS_ENABLED and bool(QUIET_COMFYUI_UNITS),
+        },
     }
 
 
@@ -1079,15 +1091,33 @@ def _unload_all_models() -> None:
         print(f"[quiet] unload-all failed: {exc}")
 
 
-def _comfyui(action: str) -> None:
-    """Start or stop the ComfyUI units via the configured systemctl prefix."""
-    if not QUIET_STOP_COMFYUI or not QUIET_COMFYUI_UNITS:
-        return
+def _comfyui_ctl(action: str) -> tuple[bool, str]:
+    """Run `systemctl <action>` on the configured ComfyUI units, capturing output.
+    Returns (ok, detail). Used by both quiet hours and the dashboard action button."""
+    if not QUIET_COMFYUI_UNITS:
+        return False, "no ComfyUI units configured"
     cmd = [*QUIET_SYSTEMCTL, action, *QUIET_COMFYUI_UNITS]
     try:
-        subprocess.run(cmd, check=False, timeout=60)
+        proc = subprocess.run(
+            cmd, check=False, timeout=90, capture_output=True, text=True
+        )
     except Exception as exc:  # noqa: BLE001 - best effort
-        print(f"[quiet] '{' '.join(cmd)}' failed: {exc}")
+        return False, str(exc)
+    ok = proc.returncode == 0
+    detail = (proc.stderr or proc.stdout or "").strip()
+    if not ok and not detail:
+        detail = f"exit {proc.returncode}"
+    return ok, detail
+
+
+def _comfyui(action: str) -> None:
+    """Quiet-hours ComfyUI control — no-op when quiet-hours ComfyUI management is
+    disabled. The dashboard button uses _comfyui_ctl directly instead."""
+    if not QUIET_STOP_COMFYUI or not QUIET_COMFYUI_UNITS:
+        return
+    ok, detail = _comfyui_ctl(action)
+    if not ok:
+        print(f"[quiet] comfyui {action} failed: {detail}")
 
 
 def _enter_deep_idle() -> None:
@@ -1188,6 +1218,11 @@ _HTML = """<!doctype html>
   .cur { display:inline-block; min-width:52px; text-align:right; font-variant-numeric:tabular-nums; margin-left:6px; color:#cdd6e4; }
   td.g { white-space:nowrap; }
   .hsub { color:#8b95a7; font-size:11px; }
+  button.act { background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f; border-radius:6px;
+    padding:3px 10px; font-size:12px; cursor:pointer; margin-left:6px; font-family:inherit; }
+  button.act:hover { background:#243247; }
+  button.act:disabled { opacity:.5; cursor:default; }
+  #svcmsg { margin-left:8px; }
 </style></head>
 <body>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
@@ -1196,7 +1231,7 @@ _HTML = """<!doctype html>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
-  <section><h2>Services</h2><div id="services">…</div></section>
+  <section><h2>Services <span class="hsub" id="svcactions"></span></h2><div id="services">…</div></section>
   <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
     <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
     <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
@@ -1365,7 +1400,30 @@ async function refresh(){  try{
     document.getElementById('services').innerHTML = allRows.length ?
       '<table><tr><th>Service</th><th>State</th><th>Link</th></tr>' + allRows.join('') + '</table>'
       : pill('none');
+    // ComfyUI start/stop controls (uses the quiet-hours sudoers rule) — handy for
+    // waking ComfyUI during the deep-idle window without SSHing in.
+    const canAct = d.actions && d.actions.comfyui;
+    const anyUp = comfy.some(c=>c.state==='idle'||c.state==='busy'||c.state==='locked');
+    const el = document.getElementById('svcactions');
+    if(canAct){
+      el.innerHTML =
+        `<button class="act" id="comfy-start" onclick="comfyAction('start')">▶ Start ComfyUI</button>`+
+        (anyUp?`<button class="act" id="comfy-stop" onclick="comfyAction('stop')">⏹ Stop</button>`:'')+
+        `<span id="svcmsg" class="hsub"></span>`;
+    } else { el.innerHTML=''; }
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
+}
+async function comfyAction(action){
+  const msg=document.getElementById('svcmsg');
+  const btns=document.querySelectorAll('#svcactions button.act');
+  btns.forEach(b=>b.disabled=true);
+  if(msg) msg.textContent = (action==='start'?'starting':'stopping')+' ComfyUI…';
+  try{
+    const r=await fetch('actions/comfyui?action='+action,{method:'POST'});
+    const d=await r.json();
+    if(msg) msg.textContent = d.ok ? ('ComfyUI '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
+  }catch(e){ if(msg) msg.textContent='error: '+e; }
+  finally{ setTimeout(refresh, 1200); }
 }
 refresh(); setInterval(refresh, 5000);
 refreshHistory(); setInterval(refreshHistory, 15000);
@@ -1402,6 +1460,42 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/":
             html = _HTML.replace("__BENCH_DOC_URL__", BENCH_DOC_URL)
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+        else:
+            self._send(404, b"not found", "text/plain")
+
+    def do_POST(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        # drain any request body so the socket stays clean
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length:
+                self.rfile.read(length)
+        except Exception:  # noqa: BLE001
+            pass
+        if path == "/actions/comfyui":
+            if not STATUS_ACTIONS_ENABLED or not QUIET_COMFYUI_UNITS:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "comfyui actions disabled"}
+                ).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            action = (qs.get("action", ["start"])[0]).lower()
+            # Only start/stop are covered by the scoped sudoers rule
+            # (/etc/sudoers.d/server-status-comfyui); restart would block on a
+            # password prompt, so reject anything else.
+            if action not in ("start", "stop"):
+                self._send(400, json.dumps(
+                    {"ok": False, "error": f"bad action {action!r}"}
+                ).encode("utf-8"), "application/json")
+                return
+            ok, detail = _comfyui_ctl(action)
+            _cache["at"] = 0.0  # force the next status poll to re-probe
+            body = json.dumps({
+                "ok": ok, "action": action,
+                "units": QUIET_COMFYUI_UNITS, "detail": detail[:500],
+            }).encode("utf-8")
+            self._send(200 if ok else 500, body, "application/json")
         else:
             self._send(404, b"not found", "text/plain")
 

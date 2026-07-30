@@ -1,0 +1,9 @@
+{
+  "axes": [
+    ["architecture", "Architecture"],
+    ["completeness", "Completeness"],
+    ["parser", "Parser robustness"],
+    ["interaction", "Interaction/UX"],
+    ["polish", "Visual polish"]
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "file": "outputs/coding-copilot/index.html",
+  "score": 41,
+  "max": 41,
+  "pct": 100.0,
+  "bytes": 28592,
+  "checks": {
+    "doctype": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Has <!DOCTYPE html>"
+    },
+    "inline_style": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <style> block"
+    },
+    "inline_script": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline <script> block"
+    },
+    "self_contained": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Zero external deps (no http(s):// or //cdn in src/href/@import/url())"
+    },
+    "no_ext_stylesheet": {
+      "pass": true,
+      "weight": 1,
+      "desc": "No external <link rel=stylesheet> (system fonts only)"
+    },
+    "inline_svg": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Inline SVG icon(s)"
+    },
+    "title": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Game title present"
+    },
+    "sticky_header": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Sticky header (position:sticky|fixed)"
+    },
+    "reset_button": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'Reset Game' button label"
+    },
+    "how_to_play": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'How to Play' section"
+    },
+    "accordion": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Collapsible/accordion mechanism"
+    },
+    "media_queries": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Responsive @media queries"
+    },
+    "two_column": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Two-column dashboard (grid/flex)"
+    },
+    "input_line": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Console input line"
+    },
+    "stats": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Stats: Moves Made + Items Found"
+    },
+    "inventory_empty": {
+      "pass": true,
+      "weight": 1,
+      "desc": "'Inventory is empty' empty-state"
+    },
+    "class_gameengine": {
+      "pass": true,
+      "weight": 2,
+      "desc": "ES6 class GameEngine"
+    },
+    "class_room": {
+      "pass": true,
+      "weight": 1,
+      "desc": "ES6 class Room"
+    },
+    "class_item": {
+      "pass": true,
+      "weight": 1,
+      "desc": "ES6 class Item"
+    },
+    "case_insensitive": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Case-insensitive parsing (toLowerCase)"
+    },
+    "synonyms": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Command synonyms (examine / grab)"
+    },
+    "partial_match": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Partial/abbreviated command matching (startsWith / abbrev map / substring)"
+    },
+    "flags_state": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Boolean state flags (lever_pulled)"
+    },
+    "rooms": {
+      "pass": true,
+      "weight": 2,
+      "desc": "All six rooms present"
+    },
+    "items": {
+      "pass": true,
+      "weight": 2,
+      "desc": "All five items present"
+    },
+    "typewriter": {
+      "pass": true,
+      "weight": 2,
+      "desc": "Typewriter char-by-char output"
+    },
+    "command_history": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Up/Down command history"
+    },
+    "auto_scroll": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Console auto-scroll (scrollHeight)"
+    },
+    "input_focus": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Click-to-focus input (.focus())"
+    },
+    "reset_no_reload": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Reset clears state without page reload"
+    },
+    "dark_bg": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Dark background #1a1a1a"
+    },
+    "console_color": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Console green/amber (#00ff00 or #ffb000)"
+    },
+    "monospace": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Monospace console font"
+    },
+    "sans_ui": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Sans-serif UI font stack"
+    }
+  }
+}

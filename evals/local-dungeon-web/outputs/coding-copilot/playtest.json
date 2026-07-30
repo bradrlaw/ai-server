@@ -1,0 +1,78 @@
+{
+  "label": "coding-copilot",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "Forgotten LibraryTall shelves of rotting books line the walls. A dusty reading desk sits in the center. A strange lever protrudes from the eastern wall.You can "
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "don't have",
+          "excerpt": "You don't have a \"lever\"."
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "solid",
+          "excerpt": "There is no passage to the west. Just a solid stone wall."
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": false
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "Forgotten LibraryTall shelves of rotting books line the walls. A dusty reading desk sits in the center. A strange lever protrudes from the eastern wall.You can "
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "Inventory is empty."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "You grip the heavy iron lever and pull with all your strength. With a deep groan of ancient stone, a hidden passage slides open in the western wall!"
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "Secret ChamberA hidden alcove behind the library walls. The air is still and perfectly dry. An ancient scroll rests on a stone pedestal, untouched for centuries"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    }
+  },
+  "generated_utc": "2026-07-29T07:54:24.600Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Local Dungeon</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --sidebar-bg: #2a2a2a;
+            --text-color: #e0e0e0;
+            --accent-color: #00ff00;
+            --header-bg: #111;
+            --border-color: #333;
+            --input-bg: #000;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--header-bg);
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+        }
+
+        header p {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        #reset-btn {
+            background-color: #8b0000;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        #reset-btn:hover {
+            background-color: #a50000;
+        }
+
+        .hero {
+            padding: 1rem 2rem;
+            text-align: center;
+            background: linear-gradient(to bottom, #222, var(--bg-color));
+        }
+
+        .hero p {
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            font-style: italic;
+        }
+
+        .accordion {
+            margin: 0 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .accordion-header {
+            padding: 1rem;
+            cursor: pointer;
+            background-color: var(--sidebar-bg);
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .accordion-content {
+            padding: 1rem;
+            display: none;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+
+        .accordion-content.active {
+            display: block;
+        }
+
+        .game-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            padding: 1rem;
+            gap: 1rem;
+            flex-direction: column;
+        }
+
+        @media (min-width: 768px) {
+            .game-container {
+                flex-direction: row;
+            }
+        }
+
+        #game-console {
+            flex: 7;
+            background-color: #000;
+            border: 1px solid var(--accent-color);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            overflow: hidden;
+        }
+
+        #output {
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--accent-color);
+            white-space: pre-wrap;
+            margin-bottom: 1rem;
+        }
+
+        #input-line {
+            display: flex;
+            align-items: center;
+            background-color: var(--input-bg);
+            padding: 0.5rem;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+
+        #input-line span {
+            margin-right: 0.5rem;
+            color: var(--accent-color);
+        }
+
+        #user-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            outline: none;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        #sidebar {
+            flex: 3;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .stat-box {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .stat-box h3 {
+            margin-bottom: 0.5rem;
+            color: var(--accent-color);
+        }
+
+        .inventory-list {
+            list-style: none;
+        }
+
+        .inventory-item {
+            padding: 0.25rem 0;
+        }
+
+        #skip-btn {
+            background: none;
+            border: 1px solid #666;
+            color: #ccc;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        #skip-btn:hover {
+            border-color: #ccc;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>The Local Dungeon</h1>
+            <p>A descent into the subterranean depths.</p>
+        </div>
+        <button id="reset-btn">Reset Game</button>
+    </header>
+
+    <section class="hero">
+        <p>Beneath the town lies a labyrinth of crumbling stone and forgotten secrets. You stand at the threshold of the entrance, a lone traveler seeking truth—or perhaps just survival.</p>
+    </section>
+
+    <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion()">
+            How to Play <span id="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-content" id="how-to-play-content">
+            <ul>
+                <li><b>go [direction]</b>: Move north, south, east, or west.</li>
+                <li><b>look / examine</b>: Describe your surroundings.</li>
+                <li><b>take [item]</b>: Pick up an object from the room.</li>
+                <li><b>use [item]</b>: Use an object in your inventory.</li>
+                <li><b>inv</b>: View your current inventory.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <main id="game-console">
+            <div id="output"></div>
+            <div id="input-line">
+                <span>&gt;</span>
+                <input type="text" id="user-input" autocomplete="off" autofocus>
+                <button id="skip-btn">Skip</button>
+            </div>
+        </main>
+
+        <aside id="sidebar">
+            <div class="stat-box">
+                <h3>Stats</h3>
+                <div>Moves Made: <span id="move-count">0</span></div>
+                <div>Items Found: <span id="item-count">0</span></div>
+            </div>
+            <div class="stat-box">
+                <h3>Inventory</h3>
+                <ul id="inventory-list" class="inventory-list">
+                    <li>Inventory is empty.</li>
+                </ul>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        class Item {
+            constructor(name, description) {
+                this.name = name;
+                this.description = description;
+            }
+        }
+
+        class Room {
+            constructor(id, name, description) {
+                this.id = id;
+                this.name = name;
+                this.description = description;
+                this.exits = {};
+                this.items = [];
+                this.flags = {};
+            }
+
+            addExit(direction, roomId) {
+                this.exits[direction.toLowerCase()] = roomId;
+            }
+
+            addItem(item) {
+                this.items.push(item);
+            }
+        }
+
+        class GameEngine {
+            constructor() {
+                this.rooms = {};
+                this.currentRoomId = 'entrance';
+                this.inventory = [];
+                this.moves = 0;
+                this.history = [];
+                this.isTyping = false;
+                this.typeIdx = 0;
+                this.currentText = "";
+                this.typeTimeout = null;
+
+                this.initRooms();
+                this.setupListeners();
+                this.renderOutput("Welcome to The Local Dungeon.\nType 'go north' or 'look' to begin your journey.");
+            }
+
+            initRooms() {
+                const entrance = new Room('entrance', 'Entrance Hall', "A cold, damp hall with moss-covered walls. Dust motes dance in the dim light.");
+                entrance.addItem(new Item("rusted key", "A heavy iron key covered in thick rust."));
+                entrance.addExit('north', 'library');
+                entrance.addExit('east', 'armory');
+                entrance.addExit('south', 'garden');
+
+                const library = new Room('library', 'Library', "Shelves of rotting books line the walls. A strange smell of parchment fills the air.");
+                library.addExit('south', 'entrance');
+                library.addExit('west', 'secret_chamber');
+                library.addItem(new Item("lever", "A large wooden lever protruding from the wall."));
+                library.flags.lever_pulled = false;
+
+                const armory = new Room('armory', 'Armory', "Racks of rusted swords and dented shields sit in the shadows.");
+                armory.addExit('west', 'entrance');
+                armory.addExit('north', 'treasure');
+                armory.addItem(new Item("torch", "A sputtering torch. It provides a small amount of light."));
+
+                const treasure = new Room('treasure', 'Treasure Room', "A small room filled with the glittering remains of a forgotten era.");
+                treasure.addExit('south', 'armory');
+                treasure.addItem(new Item("golden coin", "A shiny gold coin. It feels surprisingly warm."));
+
+                const secretChamber = new Room('secret_chamber', 'Secret Chamber', "A hidden room revealed by a mechanism. It contains ancient artifacts.");
+                secretChamber.addExit('east', 'library');
+                secretChamber.addItem(new Item("ancient scroll", "A brittle piece of vellum with mysterious markings."));
+
+                const garden = new Room('garden', 'Garden', "A miraculously peaceful outdoor space with vibrant flowers and a clear spring.");
+                garden.addExit('north', 'entrance');
+
+                this.rooms = {
+                    entrance: entrance,
+                    library: library,
+                    armory: armory,
+                    treasure: treasure,
+                    secret_chamber: secretChamber,
+                    garden: garden
+                };
+            }
+
+            setupListeners() {
+                const input = document.getElementById('user-input');
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        const cmd = input.value;
+                        input.value = '';
+                        this.handleCommand(cmd);
+                    }
+                    if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (this.history.length > 0) {
+                            let newIdx = this.history[this.history.length - 1] - 1;
+                            if (newIdx < 0) newIdx = this.history.length - 1;
+                            this.history[this.history.length - 1] = newIdx;
+                            input.value = this.history[this.history.length - 1];
+                        }
+                    }
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        let lastIdx = this.history.length - 1;
+                        if (this.history.length === 0) {
+                            this.history.push(1);
+                            input.value = this.history[0];
+                        } else if (lastIdx === 0) {
+                            this.history.pop();
+                            input.value = '';
+                        } else {
+                            this.history[lastIdx] = lastIdx + 1;
+                            input.value = this.history[this.history.length - 1];
+                        }
+                    }
+                });
+
+                document.getElementById('game-console').addEventListener('click', () => {
+                    input.focus();
+                });
+
+                document.getElementById('skip-btn').addEventListener('click', () => {
+                    if (this.isTyping) {
+                        this.currentText = "";
+                        this.typeIdx = 0;
+                        this.renderOutput(this.currentText);
+                        this.isTyping = false;
+                        clearTimeout(this.typeTimeout);
+                    }
+                });
+
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    location.reload();
+                });
+            }
+
+            renderOutput(text, clear = false) {
+                const output = document.getElementById('output');
+                if (clear) {
+                    output.innerHTML = '';
+                    this.currentText = '';
+                    this.typeIdx = 0;
+                }
+
+                if (!this.isTyping) {
+                    this.isTyping = true;
+                    this.currentText += text;
+                    this.typeText();
+                }
+            }
+
+            typeText() {
+                const output = document.getElementById('output');
+                if (this.typeIdx < this.currentText.length) {
+                    output.innerText += this.currentText[this.typeIdx];
+                    this.typeIdx++;
+                    output.scrollTop = output.scrollHeight;
+                    this.typeTimeout = setTimeout(() => this.typeText(), 15);
+                } else {
+                    this.isTyping = false;
+                    clearTimeout(this.typeTimeout);
+                }
+            }
+
+            handleCommand(inputRaw) {
+                const input = inputRaw.trim().toLowerCase();
+                if (!input) return;
+
+                if (this.history.length === 0 || this.history[this.history.length - 1] !== (this.history.length)) {
+                    this.history.push(this.history.length + 1);
+                }
+                
+                const words = input.split(/\s+/);
+                const action = words[0];
+                const target = words.slice(1).join(' ');
+
+                if (action === 'go' || ['north', 'south', 'east', 'west'].includes(action)) {
+                    const dir = action === 'go' ? words[1] : action;
+                    if (!dir) {
+                        this.renderOutput("\n> Please specify a direction (north, south, east, west).");
+                        return;
+                    }
+                    this.move(dir);
+                } else if (action === 'look' || action === 'examine' || action === 'l') {
+                    this.describeRoom();
+                } else if (action === 'take' || action === 'grab' || action === 'get') {
+                    this.takeItem(target);
+                } else if (action === 'use') {
+                    this.useItem(target);
+                } else if (action === 'inv' || action === 'inventory') {
+                    this.showInventory();
+                } else {
+                    this.renderOutput(`\n> ${inputRaw}\nUnknown command. Try 'go [direction]', 'look', 'take [item]', or 'inv'.`);
+                }
+            }
+
+            move(direction) {
+                const currentRoom = this.rooms[this.currentRoomId];
+                if (currentRoom.exits[direction]) {
+                    const nextId = currentRoom.exits[direction];
+                    
+                    if (nextId === 'treasure' && direction === 'north' && this.currentRoomId === 'armory') {
+                        const hasKey = this.inventory.some(i => i.name === 'rusted key');
+                        if (!hasKey) {
+                            this.renderOutput("\nThe door to the north is locked. It requires a key.");
+                            return;
+                        }
+                    }
+
+                    if (nextId === 'secret_chamber' && direction === 'west' && this.currentRoomId === 'library') {
+                        if (!currentRoom.flags.lever_pulled) {
+                            this.renderOutput("\nThe wall is solid. It looks like it might be a hidden passage.");
+                            return;
+                        }
+                    }
+
+                    this.currentRoomId = nextId;
+                    this.moves++;
+                    this.renderOutput(`\nYou move ${direction}.`);
+                    this.describeRoom();
+                    this.updateUI();
+                } else {
+                    this.renderOutput(`\nYou cannot go ${direction} from here.`);
+                }
+            }
+
+            describeRoom() {
+                const room = this.rooms[this.currentRoomId];
+                let desc = `\n--- ${room.name} ---\n${room.description}`;
+                
+                if (room.items.length > 0) {
+                    const itemNames = room.items.map(i => i.name).join(', ');
+                    desc += `\nItems here: ${itemNames}`;
+                } else {
+                    desc += "\nThere are no items here.";
+                }
+
+                if (room.id === 'armory' && room.exits['north']) {
+                    desc += "\nThere is a heavy iron door to the north.";
+                }
+
+                this.renderOutput(desc);
+            }
+
+            takeItem(target) {
+                const room = this.rooms[this.currentRoomId];
+                const itemIdx = room.items.findIndex(i => i.name === target);
+
+                if (itemIdx !== -1) {
+                    const item = room.items.splice(itemIdx, 1)[0];
+                    this.inventory.push(item);
+                    this.renderOutput(`\nYou took the ${item.name}.`);
+                    this.updateUI();
+                } else {
+                    this.renderOutput(`\nThere is no ${target} here.`);
+                }
+            }
+
+            useItem(target) {
+                const room = this.rooms[this.currentRoomId];
+                
+                if (target === 'lever' && room.id === 'library') {
+                    if (room.flags.lever_pulled) {
+                        this.renderOutput("\nThe lever is already pulled.");
+                    } else {
+                        room.flags.lever_pulled = true;
+                        this.renderOutput("\nYou pull the lever. A grinding sound echoes, and a secret passage opens to the west.");
+                    }
+                } else if (target === 'rusted key' && room.id === 'armory' && room.exits['north']) {
+                    this.renderOutput("\nYou use the rusted key on the north door. It clicks open.");
+                } else {
+                    this.renderOutput(`\nYou can't use ${target} here.`);
+                }
+            }
+
+            showInventory() {
+                if (this.inventory.length === 0) {
+                    this.renderOutput("\nYour inventory is empty.");
+                } else {
+                    const items = this.inventory.map(i => i.name).join(', ');
+                    this.renderOutput(`\nYou are carrying: ${items}`);
+                }
+            }
+
+            updateUI() {
+                document.getElementById('move-count').innerText = this.moves;
+                document.getElementById('item-count').innerText = this.inventory.length;
+                
+                const list = document.getElementById('inventory-list');
+                if (this.inventory.length === 0) {
+                    list.innerHTML = '<li style="color:#888;">Inventory is empty.</li>';
+                } else {
+                    list.innerHTML = this.inventory.map(i => `<li class="inventory-item" style="color:white;">${i.name}</li>`).join('');
+                }
+            }
+        }
+
+        const game = new GameEngine();
+
+        function toggleAccordion() {
+            const content = document.getElementById('how-to-play-content');
+            const arrow = document.getElementById('accordion-arrow');
+            content.classList.toggle('active');
+            arrow.innerText = content.classList.contains('active') ? '▲' : '▼';
+        }
+    </script>
+</body>
+</html>

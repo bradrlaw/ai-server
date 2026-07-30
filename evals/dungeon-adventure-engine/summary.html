@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dungeon-adventure-engine — eval summary</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px}
+h1{font-size:26px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 24px}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:10px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--muted);font-weight:600;font-size:12px;
+text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+td.l,th.l{text-align:left}tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(124,92,252,.06)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.model{font-weight:600}.name{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;
+border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}
+.mtp-off{color:var(--muted)}.score{color:var(--teal);font-weight:600}
+.trunc{color:#f87171}.foot{color:var(--muted);font-size:12px;margin-top:18px}
+</style></head>
+<body>
+<h1>dungeon-adventure-engine</h1>
+<p class="sub">Model-eval comparison &middot; 8 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
+    <th>Output</th><th>Compl. tok</th><th>TTFT</th><th>Prefill t/s</th>
+    <th>Decode t/s</th><th>Wall</th><th>Finish</th><th>Date</th><th class="l">Link</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="l"><a href="outputs/chat/run.html"><span class="model">chat</span></a>
+        <div class="name">Qwen3.6-35B-A3B-UD-Q6_K.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">86%</span></td>
+      <td>15036 B</td>
+      <td>16189</td>
+      <td>1139.7 ms</td>
+      <td>730.0</td>
+      <td>126.4</td>
+      <td>129.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/chat/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/big/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.6-27B-UD-Q6_K_XL.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">83%</span></td>
+      <td>16218 B</td>
+      <td>14078</td>
+      <td>1365.9 ms</td>
+      <td>609.1</td>
+      <td>39.9</td>
+      <td>355.3 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/big/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap-27b</span></a>
+        <div class="name">ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">77%</span></td>
+      <td>15851 B</td>
+      <td>13259</td>
+      <td>1265.9 ms</td>
+      <td>657.3</td>
+      <td>39.8</td>
+      <td>335.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/thinkingcap-27b/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+        <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">78%</span></td>
+      <td>16491 B</td>
+      <td>14318</td>
+      <td>1251.3 ms</td>
+      <td>664.9</td>
+      <td>39.5</td>
+      <td>364.6 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/coding/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/chat-uncensored-q6/run.html"><span class="model">chat-uncensored-q6</span></a>
+        <div class="name">Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf</div></td>
+      <td><span class="score">27/29</span> <span class="name">93%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">74%</span></td>
+      <td>22389 B</td>
+      <td>10240</td>
+      <td>1183.3 ms</td>
+      <td>703.1</td>
+      <td>112.8</td>
+      <td>92.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/chat-uncensored-q6/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/fast-uncensored/run.html"><span class="model">fast-uncensored</span></a>
+        <div class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</div></td>
+      <td><span class="score">27/29</span> <span class="name">93%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">68%</span></td>
+      <td>14104 B</td>
+      <td>5002</td>
+      <td>3210.5 ms</td>
+      <td>263.5</td>
+      <td>27.3</td>
+      <td>187.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/fast-uncensored/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/gemma-31b/run.html"><span class="model">gemma-31b</span></a>
+        <div class="name">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf</div></td>
+      <td><span class="score">27/29</span> <span class="name">93%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">25%</span></td>
+      <td>15580 B</td>
+      <td>5467</td>
+      <td>1423.5 ms</td>
+      <td>594.3</td>
+      <td>25.4</td>
+      <td>217.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/gemma-31b/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/fast/run.html"><span class="model">fast</span></a>
+        <div class="name">gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf</div></td>
+      <td><span class="score">24/29</span> <span class="name">83%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">82%</span></td>
+      <td>19071 B</td>
+      <td>5295</td>
+      <td>1989.2 ms</td>
+      <td>425.3</td>
+      <td>77.9</td>
+      <td>70.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/fast/output.py">output</a></td>
+    </tr>
+  </tbody>
+</table></div>
+<p class="foot">Generated 2026-07-27T11:06:50+00:00 by scripts/eval-summary.py.
+Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
+TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
+</body></html>

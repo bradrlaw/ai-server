@@ -1,0 +1,9 @@
+{
+  "axes": [
+    ["architecture", "Architecture"],
+    ["code_quality", "Code quality"],
+    ["completeness", "Completeness"],
+    ["robustness", "Robustness"],
+    ["polish", "Output polish"]
+  ]
+}

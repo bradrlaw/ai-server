@@ -1,0 +1,78 @@
+{
+  "label": "fast",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> go northYou move north.You are now in the Library.Towering shelves filled with rotting books line the walls. A large mechanical lever sits in the center.You s"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "don't have",
+          "excerpt": "> use leverYou don't have that in your inventory."
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "solid",
+          "excerpt": "> go westThe wall to the west is solid stone. There seems to be a mechanism nearby."
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": false
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "> go northYou move north.You are now in the Library.Towering shelves filled with rotting books line the walls. A large mechanical lever sits in the center.You s"
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "take",
+          "hitNegative": null,
+          "excerpt": "> take leverYou took the lever."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "> use leverYou pull the lever. A heavy grinding sound echoes through the walls. A secret passage opens to the west!"
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "> go westYou move west.You are now in the Secret Chamber.A hidden room filled with ancient artifacts. An ancient scroll lies on a stone table.You see: ancient s"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    }
+  },
+  "generated_utc": "2026-07-29T07:54:49.750Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

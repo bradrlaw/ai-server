@@ -12,6 +12,7 @@
 !/scripts/
 !/docker/
 !/config/
+!/evals/
 
 # --- drop generated/cache files inside tracked dirs ---
 __pycache__/
@@ -47,3 +48,6 @@ __pycache__/
 !/config/comfyui-mcp/workflows/generate_song.json
 !/config/comfyui-mcp/workflows/z_image_turbo.json
 !/config/comfyui-mcp/workflows/z_image_turbo.meta.json
+
+# --- Node tooling deps (eval playtest harness) ---
+node_modules/

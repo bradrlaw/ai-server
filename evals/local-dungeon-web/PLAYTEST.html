@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>local-dungeon-web — playtest</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--red:#f87171;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:15px;margin:30px 0 8px}
+.sub{color:var(--muted);margin:0 0 22px}.navcur{color:var(--fg);font-weight:600}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+code{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:13px}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:10px 14px;text-align:center;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--muted);font-weight:600;font-size:12px;
+text-transform:uppercase;letter-spacing:.04em}
+td.l,th.l{text-align:left}tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(124,92,252,.06)}
+.model{font-weight:600}.ok{color:var(--teal);font-weight:700}.no{color:var(--red);font-weight:700}
+.na{color:var(--muted)}.run{background:var(--surface);border:1px solid var(--border);
+border-radius:10px;padding:14px 18px;margin:10px 0}
+.run h3{margin:0 0 8px;font-size:14px}.step{font-size:13px;margin:3px 0;color:#d4d4d8}
+.step .cmd{color:var(--fg);font-family:ui-monospace,'Courier New',monospace}
+.step .ex{color:var(--muted)}.step.bad .cmd{color:var(--red)}
+.err{color:var(--red);font-size:12px;margin-top:6px}
+.foot{color:var(--muted);font-size:12px;margin-top:22px}
+</style></head>
+<body>
+<h1>local-dungeon-web — playtest</h1>
+<p class="sub"><a href="summary.html">scoreboard</a> &middot; <a href="RESULTS.html">results</a> &middot; <span class="navcur">playtest</span><br>
+Best-effort headless <a href="https://github.com/jsdom/jsdom">jsdom</a> playthrough — a
+<b>playability</b> signal, <b>separate from and not folded into</b> the objective
+<code>check.py</code> score. A UI the driver can't drive shows ✗/— here without
+affecting that score.</p>
+
+<div class="wrap"><table>
+  <thead><tr><th class="l">Model</th><th>Fixture (no take)</th><th>Take-first workaround</th><th>JS errors</th></tr></thead>
+  <tbody>
+    <tr><td class="l"><span class="model">chat</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">chat-copilot</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">coding</span></td><td><span class="ok">✓</span></td><td><span class="no">✗</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">coding-copilot</span></td><td><span class="no">✗</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">fast</span></td><td><span class="no">✗</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">fast-copilot</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Per-run milestones</h2>
+  <div class="run">
+    <h2 style="margin-top:0"><code>chat</code></h2>
+      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&gt; go northYou travel north.── The Library ──This vast chamber was once a repository of knowledge. Shelves stretch toward the ceiling, though most have collapsed</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever <span class="ex">[hit: "don&#39;t have"]</span>: <span class="ex">&gt; use leverYou don&#39;t have &quot;lever&quot; to use.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&gt; go westYou travel west.── The Secret Chamber ──A hidden room, revealed only by the grinding of stone against stone. The walls are covered in intricate murals </span></div>
+      <h3>Take-first workaround — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&gt; go northYou travel north.── The Library ──This vast chamber was once a repository of knowledge. Shelves stretch toward the ceiling, though most have collapsed</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">&gt; take leverYou take the Stone Lever.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use leverYou pull the stone lever with all your strength. Deep within the wall, gears grind and stone shifts. A hidden passage opens to the west!</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&gt; go westYou travel west.── The Secret Chamber ──A hidden room, revealed only by the grinding of stone against stone. The walls are covered in intricate murals </span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>chat-copilot</code></h2>
+      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; northDusty LibraryA long chamber lined with crumbling bookshelves. The air smells of old paper and mildew. Most volumes have rotted to mush, but a few leather</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use leverYou heave the lever down with a loud CLANK. Deep within the wall, a grinding mechanism shifts. The sealed door to the west slowly swings open, reveal</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">&gt; westSecret ChamberA hidden room behind a concealed passage. Faint runes glow faintly on the walls when no one is looking directly at them. A narrow slit of li</span></div>
+      <h3>Take-first workaround — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; northDusty LibraryA long chamber lined with crumbling bookshelves. The air smells of old paper and mildew. Most volumes have rotted to mush, but a few leather</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">&gt; take leverYou pick up the Iron Lever.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use leverYou heave the lever down with a loud CLANK. Deep within the wall, a grinding mechanism shifts. The sealed door to the west slowly swings open, reveal</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">&gt; westSecret ChamberA hidden room behind a concealed passage. Faint runes glow faintly on the walls when no one is looking directly at them. A narrow slit of li</span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>coding</code></h2>
+      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&amp;gt; go west You head west and arrive at the Secret Chamber.You can see: &lt;span class=&quot;item-name&quot;&gt;ancient scroll&lt;/span&gt;</span></div>
+      <h3>Take-first workaround — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">lever Inventory is empty.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou already have the lever. You&#39;d need to be in the library to put it back and pull it.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">go west</span> → reach_secret <span class="ex">[hit: "can&#39;t go west"]</span>: <span class="ex">&amp;gt; go westYou can&#39;t go west from here.</span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>coding-copilot</code></h2>
+      <h3>Fixture (no take) — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">Forgotten LibraryTall shelves of rotting books line the walls. A dusty reading desk sits in the center. A strange lever protrudes from the eastern wall.You can </span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever <span class="ex">[hit: "don&#39;t have"]</span>: <span class="ex">You don&#39;t have a &quot;lever&quot;.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">west</span> → reach_secret <span class="ex">[hit: "solid"]</span>: <span class="ex">There is no passage to the west. Just a solid stone wall.</span></div>
+      <h3>Take-first workaround — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">Forgotten LibraryTall shelves of rotting books line the walls. A dusty reading desk sits in the center. A strange lever protrudes from the eastern wall.You can </span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">Inventory is empty.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">You grip the heavy iron lever and pull with all your strength. With a deep groan of ancient stone, a hidden passage slides open in the western wall!</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">Secret ChamberA hidden alcove behind the library walls. The air is still and perfectly dry. An ancient scroll rests on a stone pedestal, untouched for centuries</span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>fast</code></h2>
+      <h3>Fixture (no take) — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&gt; go northYou move north.You are now in the Library.Towering shelves filled with rotting books line the walls. A large mechanical lever sits in the center.You s</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever <span class="ex">[hit: "don&#39;t have"]</span>: <span class="ex">&gt; use leverYou don&#39;t have that in your inventory.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">go west</span> → reach_secret <span class="ex">[hit: "solid"]</span>: <span class="ex">&gt; go westThe wall to the west is solid stone. There seems to be a mechanism nearby.</span></div>
+      <h3>Take-first workaround — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&gt; go northYou move north.You are now in the Library.Towering shelves filled with rotting books line the walls. A large mechanical lever sits in the center.You s</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">&gt; take leverYou took the lever.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use leverYou pull the lever. A heavy grinding sound echoes through the walls. A secret passage opens to the west!</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&gt; go westYou move west.You are now in the Secret Chamber.A hidden room filled with ancient artifacts. An ancient scroll lies on a stone table.You see: ancient s</span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>fast-copilot</code></h2>
+      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">You move north.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">You pull the lever. A grinding sound echoes, and a secret passage opens to the west.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">You move west.</span></div>
+      <h3>Take-first workaround — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">You move north.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">You took the lever.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">You pull the lever. A grinding sound echoes, and a secret passage opens to the west.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">You move west.</span></div>
+  </div>
+
+<p class="foot">Generated 2026-07-29T07:55:01.787Z by scripts/eval-playtest/playtest.js.</p>
+</body></html>

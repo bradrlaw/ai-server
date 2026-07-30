@@ -1,0 +1,14 @@
+Created `index.html` — a fully self-contained text adventure game with:
+
+- **All inline**: HTML, CSS, JS in a single file, zero external dependencies
+- **6 rooms**: Entrance Hall, Library, Armory, Treasure Room, Secret Chamber, Underground Garden
+- **5 collectible items**: rusted key, lever, torch, golden coin, ancient scroll, compass rose
+- **Robust command parser** with case insensitivity, synonyms, partial matches, direction shortcuts
+- **Typewriter effect** with a Skip button
+- **Command history** via Up/Down arrow keys
+- **Auto-scroll**, click-to-focus console, dynamic inventory/stats sidebar
+- **Dark mode** aesthetic with green console text and amber accents
+- **ES6 class architecture** (`GameEngine`, `Room`, `Item`)
+- **Reset button** that clears all state without page reload
+- **End-game**: collecting all treasures unlocks the Garden
+

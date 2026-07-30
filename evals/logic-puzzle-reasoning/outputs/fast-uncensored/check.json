@@ -1,0 +1,44 @@
+{
+  "file": "outputs/fast-uncensored/output.md",
+  "score": 12,
+  "max": 12,
+  "pct": 100.0,
+  "bytes": 13444,
+  "checks": {
+    "contradiction_flagged": {
+      "pass": true,
+      "weight": 4,
+      "desc": "Explicitly declares the puzzle has no solution / is contradictory"
+    },
+    "conflict_pinpointed": {
+      "pass": true,
+      "weight": 3,
+      "desc": "Identifies the specific clash (Ben\u2192ICML=March vs Aug, or ICLR=Robotics vs Ben=RL)"
+    },
+    "ben_is_rl": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Deduces Ben's subfield is Reinforcement Learning"
+    },
+    "clara_june": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Deduces Clara (NLP) is in June"
+    },
+    "stepwise": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Shows stepwise reasoning (not just an answer)"
+    },
+    "cites_clues": {
+      "pass": true,
+      "weight": 1,
+      "desc": "References the clues explicitly while reasoning"
+    },
+    "verifies": {
+      "pass": true,
+      "weight": 1,
+      "desc": "Attempts to verify against the clues"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "test": "localmind-landing-page",
+  "model_slot": "thinkingcap",
+  "label": "thinkingcap-27b",
+  "model_name": "ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "model_path": "/srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf",
+  "endpoint": "http://127.0.0.1:8902/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server --model /srv/ai/models/thinkingcap-27b/ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf --ctx-size 184320 --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --batch-size 2048 --ubatch-size 2048 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 8902 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 11266,
+    "prompt_tokens": 838,
+    "total_tokens": 12104,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 248.1,
+    "ttft_ms": 1320.42,
+    "prefill_tps": 634.6465518547129,
+    "decode_tps": 45.66150379049656,
+    "prompt_tokens": 838,
+    "predicted_tokens": 11266,
+    "prefill_ms": 1320.42,
+    "decode_ms": 246728.624
+  },
+  "mtp": {
+    "draft_n": 8925,
+    "draft_n_accepted": 8290,
+    "accept_rate": 0.929,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 838,
+    "prompt_ms": 1320.42,
+    "prompt_per_token_ms": 1.5756801909307876,
+    "prompt_per_second": 634.6465518547129,
+    "predicted_n": 11266,
+    "predicted_ms": 246728.624,
+    "predicted_per_token_ms": 21.90028617077934,
+    "predicted_per_second": 45.66150379049656,
+    "draft_n": 8925,
+    "draft_n_accepted": 8290
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 31703,
+  "reasoning_bytes": 828,
+  "wall_secs": 248.1,
+  "created_utc": "2026-07-27T05:01:54+00:00"
+}

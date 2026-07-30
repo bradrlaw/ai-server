@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind | Run AI Locally. Own Your Data.</title>
+    <style>
+        :root {
+            --bg-dark: #07070a;
+            --bg-card: #12121a;
+            --accent-primary: #7c5cfc;
+            --accent-secondary: #00d4aa;
+            --text-primary: #fafafa;
+            --text-muted: #71717a;
+            --border: rgba(255, 255, 255, 0.1);
+            --nav-height: 72px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.625;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3 {
+            line-height: 1.1;
+            font-weight: 700;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition);
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        button, .btn {
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            text-decoration: none;
+            font-size: 1rem;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Utils */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+            padding: 12px 28px;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 20px rgba(124, 92, 252, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 12px 28px;
+        }
+
+        .btn-secondary:hover {
+            transform: scale(1.03);
+            border-color: var(--text-primary);
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: var(--nav-height);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            transition: background 0.3s ease;
+        }
+
+        nav.scrolled {
+            background: rgba(7, 7, 10, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-content {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-primary);
+            border-radius: 8px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-primary);
+        }
+
+        .mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 1100;
+        }
+
+        .hamburger {
+            width: 24px;
+            height: 2px;
+            background: var(--text-primary);
+            position: relative;
+            transition: 0.3s;
+        }
+
+        .hamburger::before, .hamburger::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 2px;
+            background: var(--text-primary);
+            left: 0;
+            transition: 0.3s;
+        }
+
+        .hamburger::before { top: -8px; }
+        .hamburger::after { bottom: -8px; }
+
+        .mobile-toggle.open .hamburger { background: transparent; }
+        .mobile-toggle.open .hamburger::before { transform: rotate(45deg) translate(5px, 6px); }
+        .mobile-toggle.open .hamburger::after { transform: rotate(-45deg) translate(5px, -6px); }
+
+        .mobile-menu {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 100%;
+            height: 100vh;
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            transition: 0.5s cubic-bezier(0.77, 0, 0.175, 1);
+            z-index: 1050;
+        }
+
+        .mobile-menu.open { right: 0; }
+
+        .mobile-menu a {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        /* Hero Section */
+        #hero {
+            position: relative;
+            padding-top: calc(var(--nav-height) + 80px);
+            padding-bottom: 120px;
+            overflow: hidden;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+
+        #hero-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            text-align: center;
+            margin: 0 auto;
+        }
+
+        .hero-headline {
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-subheadline {
+            font-size: clamp(1.1rem, 2vw, 1.5rem);
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-ctas {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        /* Features Grid */
+        #features {
+            padding: 120px 0;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 32px;
+        }
+
+        .features-grid {
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+
+        .card {
+            background: var(--bg-card);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 10px 30px rgba(124, 92, 252, 0.1);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 24px;
+            color: var(--accent-primary);
+        }
+
+        .card h3 {
+            margin-bottom: 12px;
+            font-size: 1.5rem;
+        }
+
+        .card p {
+            color: var(--text-muted);
+        }
+
+        /* How It Works */
+        #how-it-works {
+            padding: 120px 0;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .steps-container {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            gap: 40px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--accent-primary);
+        }
+
+        .step-line {
+            position: absolute;
+            top: 30px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--border);
+            z-index: -1;
+        }
+
+        .step:last-child .step-line { display: none; }
+
+        /* Demo Section */
+        #demo {
+            padding: 120px 0;
+        }
+
+        .terminal {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        .terminal-header {
+            background: #1a1a2e;
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27c93e; }
+
+        .terminal-body {
+            padding: 30px;
+            font-family: 'Courier New', Courier, monospace;
+            min-height: 300px;
+            font-size: 0.95rem;
+        }
+
+        .msg {
+            margin-bottom: 20px;
+            max-width: 85%;
+            padding: 12px 18px;
+            border-radius: 12px;
+            line-height: 1.5;
+        }
+
+        .msg.user {
+            background: #2d2d3a;
+            margin-left: auto;
+            color: var(--text-primary);
+        }
+
+        .msg.ai {
+            background: rgba(124, 92, 252, 0.1);
+            color: var(--text-primary);
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+
+        .dot-anim {
+            width: 6px;
+            height: 6px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .dot-anim:nth-child(2) { animation-delay: 0.2s; }
+        .dot-anim:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .terminal-input {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            color: var(--text-muted);
+        }
+
+        .cursor {
+            width: 8px;
+            height: 18px;
+            background: var(--accent-primary);
+            display: inline-block;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Pricing */
+        #pricing {
+            padding: 120px 0;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            background: var(--bg-card);
+            padding: 48px 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            text-align: center;
+            position: relative;
+        }
+
+        .pricing-card.popular {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 40px rgba(124, 92, 252, 0.15);
+            transform: scale(1.05);
+        }
+
+        .badge {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent-primary);
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .price {
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 20px 0;
+        }
+
+        .price span {
+            font-size: 1rem;
+            color: var(--text-muted);
+        }
+
+        .pricing-features {
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .feature-item svg {
+            color: var(--accent-secondary);
+            flex-shrink: 0;
+        }
+
+        /* Testimonials */
+        #testimonials {
+            padding: 120px 0;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+        }
+
+        .testimonial-card {
+            background: var(--bg-card);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            margin-bottom: 24px;
+            color: var(--text-primary);
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .author-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, var(--accent-primary), var(--accent-secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .author-info h4 { font-size: 1rem; }
+        .author-info p { font-size: 0.85rem; color: var(--text-muted); }
+
+        /* FAQ */
+        #faq {
+            padding: 120px 0;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .faq-question {
+            width: 100%;
+            padding: 24px 0;
+            background: none;
+            border: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            color: var(--text-muted);
+        }
+
+        .faq-answer p {
+            padding-bottom: 24px;
+        }
+
+        .faq-chevron {
+            width: 20px;
+            height: 20px;
+            transition: transform 0.3s;
+        }
+
+        .faq-item.open .faq-chevron {
+            transform: rotate(180deg);
+        }
+
+        /* CTA Banner */
+        #cta {
+            padding: 100px 0;
+            margin: 60px 24px;
+            border-radius: 30px;
+            background: linear-gradient(135deg, #1e1e3f 0%, #07070a 100%);
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .cta-content h2 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            margin-bottom: 20px;
+        }
+
+        .cta-content p {
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            font-size: 1.2rem;
+        }
+
+        .cta-form {
+            display: flex;
+            max-width: 500px;
+            margin: 0 auto;
+            gap: 12px;
+        }
+
+        .cta-form input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            padding: 16px 24px;
+            border-radius: 10px;
+            color: white;
+            outline: none;
+        }
+
+        .cta-form input:focus { border-color: var(--accent-primary); }
+
+        /* Footer */
+        footer {
+            padding: 80px 0 40px;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 60px;
+            margin-bottom: 60px;
+        }
+
+        .footer-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+
+        .footer-links h5 {
+            margin-bottom: 20px;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+
+        .footer-links ul li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links ul li a {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .footer-links ul li a:hover {
+            color: var(--accent-primary);
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .pricing-card.popular { transform: scale(1); }
+            .steps-container { flex-direction: column; gap: 60px; }
+            .step-line { width: 2px; height: 100%; left: 30px; top: 0; }
+            .step:last-child .step-line { display: none; }
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links, .mobile-menu { display: none; }
+            .mobile-toggle { display: block; }
+            .hero-ctas { flex-direction: column; }
+            .footer-grid { grid-template-columns: 1fr; gap: 40px; }
+            .cta-form { flex-direction: column; }
+            .testimonials-grid { grid-template-columns: 1fr; }
+            .footer-bottom { flex-direction: column; gap: 20px; text-align: center; }
+            .footer-grid { text-align: center; }
+            .testimonial-author { justify-content: center; }
+        }
+
+        @media (min-width: 1440px) {
+            .container { max-width: 1400px; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav id="navbar">
+        <div class="container nav-content">
+            <a href="#" class="logo">
+                <div class="logo-icon"></div>
+                LocalMind
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+                <a href="#cta" class="btn btn-primary">Get Early Access</a>
+            </div>
+            <button class="mobile-toggle" id="mobile-toggle" aria-label="Toggle Menu">
+                <div class="hamburger"></div>
+            </button>
+        </div>
+    </nav>
+
+    <div class="mobile-menu" id="mobile-menu">
+        <a href="#features" class="mobile-link">Features</a>
+        <a href="#how-it-works" class="mobile-link">How It Works</a>
+        <a href="#pricing" class="mobile-link">Pricing</a>
+        <a href="#faq" class="mobile-link">FAQ</a>
+        <a href="#cta" class="btn btn-primary">Get Early Access</a>
+    </div>
+
+    <section id="hero">
+        <canvas id="hero-canvas"></canvas>
+        <div class="container hero-content reveal">
+            <h1 class="hero-headline">Run AI Locally. Own Your Data. No Limits.</h1>
+            <p class="hero-subheadline">Deploy powerful LLMs on your own hardware. Privacy-first, lightning-fast, and completely offline. No subscriptions, no cloud, no tracking.</p>
+            <div class="hero-ctas">
+                <a href="#cta" class="btn btn-primary">Join the Waitlist</a>
+                <a href="#features" class="btn btn-secondary">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features">
+        <div class="container">
+            <h2 class="section-title reveal">Engineered for Privacy</h2>
+            <div class="grid features-grid">
+                <div class="card reveal">
+                    <div class="card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04c0 4.908 3.23 9.12 7.618 10.545a11.956 11.956 0 018.618-10.545z"></path></svg>
+                    </div>
+                    <h3>Zero Cloud Dependency</h3>
+                    <p>Your data never leaves your machine. No API calls, no logs, no external exposure.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3>Lightning Fast</h3>
+                    <p>Optimized for Apple Silicon and NVIDIA GPUs. Experience sub-second latency.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0 -2.21 3.582 -4 8 -4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                    </div>
+                    <h3>Model Library</h3>
+                    <p>One-click access to Llama 3, Mistral, Phi-3, and more from the community.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    </div>
+                    <h3>Infinite Customization</h3>
+                    <p>Fine-tune parameters like temperature and top-p to match your exact workflow.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works">
+        <div class="container">
+            <h2 class="section-title reveal">Simple as 1, 2, 3</h2>
+            <div class="steps-container">
+                <div class="step-line"></div>
+                <div class="step reveal">
+                    <div class="step-number">1</div>
+                    <h3>Install</h3>
+                    <p>Download the LocalMind desktop app for your OS.</p>
+                </div>
+                <div class="step reveal">
+                    <div class="step-number">2</div>
+                    <h3>Choose a Model</h3>
+                    <p>Select from our curated library of open-source models.</p>
+                </div>
+                <div class="step reveal">
+                    <div class="step-number">3</div>
+                    <h3>Chat Locally</h3>
+                    <p>Start interacting with AI instantly, offline and private.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="demo">
+        <div class="container">
+            <h2 class="section-title reveal">Experience the Speed</h2>
+            <div class="terminal reveal">
+                <div class="terminal-header">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <div class="terminal-body">
+                    <div class="msg user">Can you explain why running models locally is better for privacy?</div>
+                    <div class="msg ai">Running models locally ensures your prompts and data never leave your hardware. No third-party company can see your sensitive information or use your data to train future models.</div>
+                    <div class="msg user">How much VRAM do I need for Llama 3?</div>
+                    <div class="msg ai">For the 8B model, 8GB of VRAM is recommended for smooth performance.</div>
+                    <div class="msg ai">
+                        <div class="typing">
+                            <div class="dot-anim"></div>
+                            <div class="dot-anim"></div>
+                            <div class="dot-anim"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="terminal-input">
+                    <span><span class="cursor"></span></span>
+                    <span style="color: var(--text-muted)">localmind_user: </span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing">
+        <div class="container">
+            <h2 class="section-title reveal">Simple Pricing</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card reveal">
+                    <h3>Free</h3>
+                    <div class="price">$0<span>/mo</span></div>
+                    <p>For hobbyists and explorers.</p>
+                    <ul class="pricing-features">
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> 3 Base Models</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Local Storage</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Community Support</li>
+                    </ul>
+                    <a href="#cta" class="btn btn-secondary" style="width: 100%;">Get Started</a>
+                </div>
+                <div class="pricing-card popular reveal">
+                    <div class="badge">Most Popular</div>
+                    <h3>Pro</h3>
+                    <div class="price">$12<span>/mo</span></div>
+                    <p>For power users and devs.</p>
+                    <ul class="pricing-features">
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Unlimited Models</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Advanced Tuning</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> API Access</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Early Feature Access</li>
+                    </ul>
+                    <a href="#cta" class="btn btn-primary" style="width: 100%;">Go Pro</a>
+                </div>
+                <div class="pricing-card reveal">
+                    <h3>Studio</h3>
+                    <div class="price">$29<span>/mo</span></div>
+                    <p>For enterprise teams.</p>
+                    <ul class="pricing-features">
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Multi-User Sync</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Dedicated Support</li>
+                        <li class="feature-item"><svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 10.586V4a1 1 0 011-1h2a1 1 0 011 1v6.586l2.293-2.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Custom Fine-tuning</li>
+                    </ul>
+                    <a href="#cta" class="btn btn-secondary" style="width: 100%;">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testimonials">
+        <div class="container">
+            <h2 class="section-title reveal">Trusted by Builders</h2>
+            <div class="testimonials-grid">
+                <div class="testimonial-card reveal">
+                    <p class="testimonial-text">"The fastest way to test new models without worrying about API costs or data leaks."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">JD</div>
+                        <div class="author-info">
+                            <h4>James Dalton</h4>
+                            <p>Lead Engineer, TechFlow</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card reveal">
+                    <p class="testimonial-text">"LocalMind changed how we handle sensitive customer queries. Absolute game changer."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">SC</div>
+                        <div class="author-info">
+                            <h4>Sarah Chen</h4>
+                            <p>CTO, SecureAI</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card reveal">
+                    <p class="testimonial-text">"Finally, a seamless way to run Llama 3 on my MacBook Pro without the headache."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">MK</div>
+                        <div class="author-info">
+                            <h4>Marcus Knight</h4>
+                            <p>Independent Researcher</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq">
+        <div class="container">
+            <h2 class="section-title reveal">Frequently Asked Questions</h2>
+            <div class="faq-list">
+                <div class="faq-item reveal">
+                    <button class="faq-question">
+                        Does it work offline?
+                        <svg class="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes, once models are downloaded, you can disconnect from the internet entirely and LocalMind will continue to function perfectly.</p>
+                    </div>
+                </div>
+                <div class="faq-item reveal">
+                    <button class="faq-question">
+                        Which GPUs are supported?
+                        <svg class="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>We support NVIDIA RTX series, Apple M-series chips, and AMD Radeon GPUs via Metal/Vulkan.</p>
+                    </div>
+                </div>
+                <div class="faq-item reveal">
+                    <button class="faq-question">
+                        Is my data stored anywhere?
+                        <svg class="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Never. LocalMind is architected so that all processing and data storage happen on your local drive.</p>
+                    </div>
+                </div>
+                <div class="faq-item reveal">
+                    <button class="faq-question">
+                        Can I use my own models?
+                        <svg class="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Absolutely. You can import any GGUF or Safetensors format model directly into the app.</p>
+                    </div>
+                </div>
+                <div class="faq-item reveal">
+                    <button class="faq-question">
+                        What is the minimum RAM required?
+                        <svg class="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>For basic models, 8GB is sufficient. For larger models, we recommend 16GB or 32GB of unified/dedicated memory.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="cta">
+        <div class="container">
+            <div class="cta-content reveal">
+                <h2>Ready to take control?</h2>
+                <p>Join 10,000+ developers running private AI.</p>
+                <form class="cta-form" id="waitlist-form">
+                    <input type="email" placeholder="Enter your email" required>
+                    <button type="submit" class="btn btn-primary">Join the Waitlist</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <div class="footer-logo">LocalMind</div>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Empowering the next generation of private intelligence.</p>
+                </div>
+                <div class="footer-links">
+                    <h5>Product</h5>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#how-it-works">How it Works</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h5>Legal</h5>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Cookie Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; <span id="year"></span> LocalMind AI. All rights reserved.</p>
+                <p>Built with privacy in mind.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Year update
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Canvas Background (Particles)
+        const canvas = document.getElementById('hero-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let mouse = { x: null, y: null };
+
+        function initCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', initCanvas);
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.color = Math.random() > 0.5 ? '#7c5cfc' : '#00d4aa';
+                this.opacity = Math.random() * 0.5;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+
+                // Mouse interaction
+                const dx = mouse.x - this.x;
+                const dy = mouse.y - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 150) {
+                    this.x -= dx/50;
+                    this.y -= dy/50;
+                }
+            }
+            draw() {
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < 100; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        initCanvas();
+        initParticles();
+        animate();
+
+        // Mobile Menu Toggle
+        const mobileToggle = document.getElementById('mobile-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileLinks = document.querySelectorAll('.mobile-link');
+
+        mobileToggle.addEventListener('click', () => {
+            mobileToggle.classList.toggle('open');
+            mobileMenu.classList.toggle('open');
+        });
+
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileToggle.classList.remove('open');
+                mobileMenu.classList.remove('open');
+            });
+        });
+
+        // Navbar Scroll Effect
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // Intersection Observer for Reveal Animations
+        const observerOptions = {
+            threshold: 0.15
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // FAQ Accordion
+        const faqItems = document.querySelectorAll('.faq-item');
+        faqItems.forEach(item => {
+            const question = item.querySelector('.faq-question');
+            question.addEventListener('click', () => {
+                const isOpen = item.classList.contains('open');
+                
+                // Close all
+                faqItems.forEach(i => {
+                    i.classList.remove('open');
+                    i.querySelector('.faq-answer').style.maxHeight = null;
+                });
+
+                // If was closed, open it
+                if (!isOpen) {
+                    item.classList.add('open');
+                    const answer = item.querySelector('.faq-answer');
+                    answer.style.maxHeight = answer.scrollHeight + "px";
+                }
+            });
+        });
+
+        // Form Submission
+        const form = document.getElementById('waitlist-form');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const btn = form.querySelector('button');
+            const input = form.querySelector('input');
+            
+            btn.textContent = "You're in! 🎉";
+            btn.style.background = "#00d4aa";
+            input.value = "";
+            input.disabled = true;
+        });
+
+        // Smooth Scroll for Nav Links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    window.scrollTo({
+                        top: target.offsetTop - 72,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

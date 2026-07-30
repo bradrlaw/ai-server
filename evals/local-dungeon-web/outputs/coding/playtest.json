@@ -1,0 +1,78 @@
+{
+  "label": "coding",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "&gt; go north You head north and arrive at the Forgotten Library.You can see: <span class=\"item-name\">lever</span>"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "passage",
+          "hitNegative": null,
+          "excerpt": "&gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes"
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": true,
+          "matched": "secret chamber",
+          "hitNegative": null,
+          "excerpt": "&gt; go west You head west and arrive at the Secret Chamber.You can see: <span class=\"item-name\">ancient scroll</span>"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": true
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "go north",
+          "ok": true,
+          "matched": "library",
+          "hitNegative": null,
+          "excerpt": "&gt; go north You head north and arrive at the Forgotten Library.You can see: <span class=\"item-name\">lever</span>"
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "lever",
+          "hitNegative": null,
+          "excerpt": "lever Inventory is empty."
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": true,
+          "matched": "pull",
+          "hitNegative": null,
+          "excerpt": "&gt; use leverYou already have the lever. You'd need to be in the library to put it back and pull it."
+        },
+        {
+          "label": "reach_secret",
+          "send": "go west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "can't go west",
+          "excerpt": "&gt; go westYou can't go west from here."
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": false
+    }
+  },
+  "generated_utc": "2026-07-29T07:54:11.021Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

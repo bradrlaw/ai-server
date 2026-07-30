@@ -1,0 +1,63 @@
+{
+  "test": "localmind-landing-page-pro",
+  "model_slot": "chat",
+  "label": "chat",
+  "model_name": "Qwen3.6-35B-A3B-UD-Q6_K.gguf",
+  "model_path": "/srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10002",
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf\n--ctx-size 98304\n--cache-type-k q8_0\n--cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 2\n--host 127.0.0.1 --port 10002 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 15570,
+    "prompt_tokens": 1202,
+    "total_tokens": 16772,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 140.6,
+    "ttft_ms": 1551.695,
+    "prefill_tps": 774.6367681793135,
+    "decode_tps": 129.77661610249083,
+    "prompt_tokens": 1202,
+    "predicted_tokens": 15570,
+    "prefill_ms": 1551.695,
+    "decode_ms": 119975.389
+  },
+  "mtp": {
+    "draft_n": 11104,
+    "draft_n_accepted": 10019,
+    "accept_rate": 0.902,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 1202,
+    "prompt_ms": 1551.695,
+    "prompt_per_token_ms": 1.2909276206322795,
+    "prompt_per_second": 774.6367681793135,
+    "predicted_n": 15570,
+    "predicted_ms": 119975.389,
+    "predicted_per_token_ms": 7.705548426461143,
+    "predicted_per_second": 129.77661610249083,
+    "draft_n": 11104,
+    "draft_n_accepted": 10019
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 45898,
+  "reasoning_bytes": 882,
+  "wall_secs": 140.6,
+  "created_utc": "2026-07-27T09:28:08+00:00"
+}
