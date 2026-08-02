@@ -105,6 +105,23 @@ cmd_unlock() {
     fi
   fi
 
+  # Start the secure ComfyUI instance now that the encrypted volume is present.
+  # comfyui-secure.service has RequiresMountsFor=/srv/ai/storage, so at boot (when
+  # the volume is still locked) its start job fails on the missing mount and systemd
+  # does NOT auto-retry — it stays dead even after a later unlock. Starting it here
+  # closes that gap. Best-effort: never fail the unlock over this (comfyui-open has
+  # no encrypted dependency and comes up at boot on its own).
+  if command -v systemctl >/dev/null 2>&1 \
+     && systemctl list-unit-files comfyui-secure.service >/dev/null 2>&1; then
+    if systemctl is-active --quiet comfyui-secure.service; then
+      echo ">> comfyui-secure already running"
+    else
+      echo ">> starting comfyui-secure (encrypted volume now available)"
+      systemctl start comfyui-secure.service \
+        || echo "   warning: comfyui-secure start failed (start it manually)" >&2
+    fi
+  fi
+
   echo "unlocked."
   cmd_status
 }
