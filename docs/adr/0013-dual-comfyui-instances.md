@@ -79,6 +79,15 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
 * ComfyUI-Login is "basic protection" (its own words) — a shared password, not
   per-user isolation. If true per-user asset separation is later needed, revisit
   ComfyUI-Usgromana or one-instance-per-user.
+* **`comfyui-secure` will not come up on its own after a reboot.** Its drop-in
+  `RequiresMountsFor=/srv/ai/storage` means that at boot — while the encrypted
+  volume is still locked (manual passphrase, ADR: `storage-crypt.sh`) — its start
+  job fails on the missing mount, and systemd does **not** auto-retry once the
+  volume is later unlocked. `scripts/storage-crypt.sh unlock` therefore starts
+  `comfyui-secure` as its final step (best-effort, same as its filebrowser
+  recreate), so unlocking the volume also brings the secure instance up. The
+  dashboard's "▶ Start ComfyUI" button is the manual equivalent. `comfyui-open`
+  has no encrypted dependency and comes up at boot normally.
 
 ## Files
 
