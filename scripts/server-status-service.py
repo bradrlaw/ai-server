@@ -211,6 +211,18 @@ QUIET_WARM_ON_EXIT = [
     for m in os.environ.get("QUIET_WARM_ON_EXIT", "coding,chat").split(",")
     if m.strip()
 ]
+# Warm these on service start when the box boots OUTSIDE the quiet window. The
+# llama-swap `on_startup` hook only preloads `fast`, and _exit_window (which warms
+# the daily trio) only fires on an in->out window transition — which never happens
+# when the machine boots already outside quiet hours. Without this, a daytime
+# reboot leaves coding/chat cold until first use. Defaults to QUIET_WARM_ON_EXIT.
+QUIET_WARM_ON_START = [
+    m.strip()
+    for m in os.environ.get(
+        "QUIET_WARM_ON_START", ",".join(QUIET_WARM_ON_EXIT)
+    ).split(",")
+    if m.strip()
+]
 # While "woken", re-idle once GPU SM utilization stays below this %% for the grace
 # period. Loaded-but-idle models sit at ~0%%, so this distinguishes "in use" from
 # "just resident" (coding/chat have no ttl and never self-unload).
@@ -1155,6 +1167,18 @@ def _quiet_hours_loop():
     #        | "woken" (in window, ComfyUI up because a client is active)
     phase = "active"
     last_activity = 0.0
+    # On a fresh boot / service restart OUTSIDE the quiet window, warm the daily
+    # models once. Nothing else does: the llama-swap on_startup hook only preloads
+    # `fast`, and _exit_window (which warms coding/chat) only fires on an in->out
+    # transition that never happens when we boot already outside the window. If we
+    # boot INSIDE the window, leave them cold — the loop enters deep idle below.
+    if QUIET_WARM_ON_START and not _in_window(_quiet_now(), start, end):
+        print(
+            "[quiet] booted outside quiet window — warming "
+            f"{', '.join(QUIET_WARM_ON_START)}"
+        )
+        for m in QUIET_WARM_ON_START:
+            _warm_model(m)
     while True:
         try:
             in_window = _in_window(_quiet_now(), start, end)
