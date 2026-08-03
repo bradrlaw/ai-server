@@ -143,11 +143,30 @@ chown root:"$NUT_GROUP" "$NUTDIR"/nut.conf "$NUTDIR"/ups.conf "$NUTDIR"/upsd.con
 chmod 640 "$NUTDIR"/nut.conf "$NUTDIR"/ups.conf "$NUTDIR"/upsd.conf \
     "$NUTDIR"/upsd.users "$NUTDIR"/upsmon.conf
 
+echo "==> 5c   Applying NUT udev rules to the (already-plugged) UPS…"
+# NUT ships /usr/lib/udev/rules.d/62-nut-usbups.rules which chgrps the USB node
+# to group 'nut'. Those rules only fire on a plug event, so if the UPS was
+# already connected before NUT installed, the existing /dev/bus/usb node stays
+# root:root and the driver fails with "insufficient permissions on everything".
+# Reload + re-trigger for this vendor to fix it without a replug/reboot.
+udevadm control --reload-rules || true
+udevadm trigger --action=add --subsystem-match=usb \
+    --attr-match=idVendor="$VENDORID" || true
+sleep 1
+UPSNODE="$(lsusb | awk -v v="$VENDORID" -v p="$PRODUCTID" \
+    'tolower($6)==(v":"p){printf "/dev/bus/usb/%s/%s",$2,substr($4,1,3)}')"
+if [[ -n "${UPSNODE:-}" ]]; then
+    echo "    UPS USB node: $UPSNODE ($(stat -c '%U:%G %a' "$UPSNODE" 2>/dev/null))"
+fi
+
 echo "==> 6/6  Enabling + (re)starting NUT services…"
 # nut-driver-enumerator turns ups.conf sections into nut-driver@ instances.
 systemctl daemon-reload
 systemctl enable nut-driver-enumerator.service nut-server.service nut-monitor.service >/dev/null 2>&1 || true
 systemctl restart nut-driver-enumerator.service || true
+# Restart the per-UPS driver instance so it re-opens the (now group-nut) node.
+systemctl reset-failed "nut-driver@$UPS_NAME.service" 2>/dev/null || true
+systemctl restart "nut-driver@$UPS_NAME.service" || true
 systemctl restart nut-server.service
 systemctl restart nut-monitor.service
 
