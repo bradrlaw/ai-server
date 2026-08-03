@@ -118,7 +118,7 @@ MINSUPPLIES 1
 # On a fatal condition (UPS on battery AND low battery, i.e. "OB LB"),
 # upsmon runs this to bring the box down cleanly. Give a short grace so
 # systemd can stop containers, unload GPUs and flush disks.
-SHUTDOWNCMD "/sbin/shutdown -h +0 'UPS low battery — graceful shutdown'"
+SHUTDOWNCMD "/sbin/shutdown -h +0 'UPS low battery - graceful shutdown'"
 
 POLLFREQ 5
 POLLFREQALERT 5
