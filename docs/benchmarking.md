@@ -25,6 +25,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [Output-quality benchmark — GSM8K across the served roster (2026-07-24)](#output-quality-benchmark--gsm8k-across-the-served-roster-2026-07-24)
 - [Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)](#candidate-eval--ternary-bonsai-27b-ternary-q2_0-on-the-p100-2026-07-26)
 - [Candidate eval — ThinkingCap-Qwen3.6-27B (token-efficient fine-tune) vs the `coding` base (2026-07-26)](#candidate-eval--thinkingcap-qwen36-27b-token-efficient-fine-tune-vs-the-coding-base-2026-07-26)
+- [ComfyUI V100 power-cap sweep — does generation benefit from more watts? (2026-08-04)](#comfyui-v100-power-cap-sweep--does-generation-benefit-from-more-watts-2026-08-04)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -1214,3 +1215,47 @@ Data + reproducible harness: `docs/data/thinkingcap-27b-20260726/` (`harness.py`
 > both. Accuracy is measured on GSM8K only at modest n — treat the parity claim as "no regression
 > detected on math reasoning," not blanket equivalence. The thinking-token reduction is the robust,
 > reproducible result across both samplers.
+
+## ComfyUI V100 power-cap sweep — does generation benefit from more watts? (2026-08-04)
+
+The V100s are capped at **175 W** at boot (`gpu-fan-control.config.json`), a limit chosen from the
+*LLM-decode* thermal sweep (`power-cap-sweep.sh`, 2026-07-01): decode is memory-bandwidth-bound, so the
+HBM2 pegs ~85 °C and soft-throttles, and 175 W was the point that held ~83-84 °C at ~91 % of full decode
+throughput. Question: does **ComfyUI diffusion** — a very different, compute-bound workload — leave
+performance on the table at 175 W?
+
+Sweep on the `comfyui-open` V100 (idx1), SDXL `sd_xl_base_1.0` 1024×1024, 30 steps, euler/normal, 3 warm
+runs per cap. The card was run clean (llama-swap unloaded), and each cap was **held by the fan daemon
+itself** (the harness writes the cap into the daemon config and restarts it, so fans keep cooling and the
+cap isn't reverted mid-run):
+
+| cap | warm avg | speedup | peak HBM | core | peak W | min SM clk | SM % |
+|----:|---------:|--------:|---------:|-----:|-------:|-----------:|-----:|
+| 175 W | 10.63 s | — (base) | 65 °C | 61 °C | 191 | 1065 MHz | 82 % |
+| 200 W | 10.09 s | 1.05× | 77 °C | 67 °C | 218 | 1147 MHz | 90 % |
+| 250 W | **9.37 s** | **1.13×** | 76 °C | 74 °C | 253 | 1252 MHz | 87 % |
+
+**Diffusion is power/clock-limited, not thermally limited.** Lifting the cap raises the sustained SM clock
+(1065 → 1260 MHz) and cuts wall time ~13 % (175 → 250 W), and — unlike LLM decode — **HBM never approaches
+the 85 °C throttle**, topping out at 76-77 °C while pulling the full 253 W. So the thermal reason the 175 W
+cap exists (HBM-bound decode) simply doesn't apply to ComfyUI: the compute-bound diffusion kernels keep the
+HBM cool even at 250 W.
+
+**Caveats before acting on this:**
+- Single card, **idx2 idle**. Two V100s under simultaneous load share the side-fan airflow and will run
+  hotter; re-measure a dual-card (or diffusion + LLM) mix before trusting these thermals.
+- The power cap is **global per-card, applied at boot** by the fan daemon — you can't raise it for ComfyUI
+  without also raising it for LLM serving, which *is* the HBM-throttle-prone workload. Any permanent change
+  needs the 175 W-vs-higher LLM-decode thermal check repeating at the new cap.
+- Short T2I is a brief burst; sustained **video** generation gives HBM more time to climb and is the more
+  decisive throttle test (see the video row when captured).
+
+Harness: `scripts/comfyui-power-sweep.py` (requires sudo — restarts `gpu-fan-control` to apply caps).
+Data: `docs/data/comfyui-power-sweep-t2i-20260804.csv`.
+
+```bash
+sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py --label t2i --runs 3
+# video leg: export a working workflow from the UI as API format, then
+sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py \
+  --label video --workflow ~/your_video_api.json --runs 2
+```

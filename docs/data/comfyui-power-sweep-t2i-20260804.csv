@@ -1,0 +1,4 @@
+label,cap_w,runs,cold_s,warm_avg_s,warm_best_s,peak_hbm_c,peak_core_c,peak_power_w,min_sm_mhz,mean_sm_pct,aborted
+t2i,175,3,10.58,10.63,10.61,65,61,191,1065,82,0
+t2i,200,3,10.06,10.09,10.09,77,67,218,1147,90,0
+t2i,250,3,9.47,9.37,9.32,76,74,253,1252,87,0
