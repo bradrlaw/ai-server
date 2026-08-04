@@ -1248,10 +1248,40 @@ HBM cool even at 250 W.
   without also raising it for LLM serving, which *is* the HBM-throttle-prone workload. Any permanent change
   needs the 175 W-vs-higher LLM-decode thermal check repeating at the new cap.
 - Short T2I is a brief burst; sustained **video** generation gives HBM more time to climb and is the more
-  decisive throttle test (see the video row when captured).
+  decisive throttle test — see the video sweep below, which reverses the conclusion entirely.
+
+### Video leg — MiniMax-H3 text-to-video (~23 min/clip): the opposite result
+
+Same harness, an exported MiniMax-H3 t2v workflow (17 nodes, nvfp4 text encoder), 2 warm runs per cap on
+the same V100 (idx1). The `--hbm-ceiling 90` safety abort fired on the 250 W run:
+
+| cap | warm avg | speedup | peak HBM | core | peak W | min SM clk | SM % |
+|----:|---------:|--------:|---------:|-----:|-------:|-----------:|-----:|
+| 175 W | 1416 s | — (base) | 86 °C | 70 °C | 205 | 847 MHz | 100 % |
+| 200 W | 1370 s | 1.03× | 87 °C | 73 °C | 221 | 675 MHz | 100 % |
+| 250 W | 1370 s | **ABORTED** | **93 °C** | 78 °C | 264 | 570 MHz | 100 % |
+
+**Sustained video is HBM-thermal-limited, not power-limited — the exact opposite of T2I.** The tells:
+
+- **SM sits at 100 %** the whole run (vs 82-90 % for T2I): this genuinely saturates the card for ~23 min.
+- **Sustained clock *falls* as the cap rises** — 847 → 675 → 570 MHz. That is the HBM throttle clawing back
+  clocks: more watts → more heat → *lower* held clock, so wall time doesn't improve (200 W ≈ 3 % ≈ noise,
+  250 W buys nothing).
+- **HBM is already at/over its ~85 °C throttle at 175 W** (86 °C), and runs away to **93 °C at 250 W** — over
+  comfort for the HBM2, which is why the safety ceiling aborted it. The power cap isn't even the binding
+  limit: at 175 W the card only pulls 205 W peak; it's thermally capped, not power-capped.
+
+**Combined verdict (both workloads):** short compute-bound work (T2I) is power/clock-limited and benefits
+from more watts while HBM stays cool; long sustained work (video, and by extension LLM decode) is
+HBM-thermal-limited and more watts only add heat + throttle. **Keep the 175 W cap** — the workloads that
+actually stress the box are cooling-bound, and 175 W already sits right at the 85 °C HBM edge. The lever for
+faster video is **cooling** (more/faster airflow over the V100 HBM, lower ambient), not power. Two side
+notes: this workflow used the **nvfp4** text encoder, which on Volta (sm_70, no native fp4) is likely
+dequantized/emulated and may be inflating the ~23 min runtime — worth an A/B against the int8 encoder; and
+the 93 °C excursion is a longevity concern the abort correctly caught.
 
 Harness: `scripts/comfyui-power-sweep.py` (requires sudo — restarts `gpu-fan-control` to apply caps).
-Data: `docs/data/comfyui-power-sweep-t2i-20260804.csv`.
+Data: `docs/data/comfyui-power-sweep-t2i-20260804.csv`, `docs/data/comfyui-power-sweep-video-20260804.csv`.
 
 ```bash
 sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py --label t2i --runs 3

@@ -1,0 +1,4 @@
+label,cap_w,runs,cold_s,warm_avg_s,warm_best_s,peak_hbm_c,peak_core_c,peak_power_w,min_sm_mhz,mean_sm_pct,aborted
+video,175,2,1454.24,1415.99,1415.38,86,70,205,847,100,0
+video,200,2,1371.0,1370.2,1367.17,87,73,221,675,100,0
+video,250,1,1369.88,1370.36,1370.36,93,78,264,570,100,1
