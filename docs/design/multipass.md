@@ -188,7 +188,98 @@ This is what keeps multipass from being "5× slower for 5% better everywhere."
 | **Swap thrash on single-slot GPUs** | Pin an ensemble mode; adapt roster to what's resident. |
 | **Non-determinism muddies A/B** | Fixed seeds where possible; report distributions, not single runs. |
 
-## 12. Integration surfaces & interoperability (multi-harness)
+## 12. Observability, provenance & execution control
+
+If models are checking each other's work, **the trace *is* the product** — you
+must be able to follow any final line of code back through every arbitration to
+the initial prompt, and see *why* each decision was made. This also underpins the
+statistics that tell us whether multipass is actually working. Split into three
+concerns: (a) provenance trace, (b) per-model execution control (timeouts / loop
+detection / tool-call tracking), (c) derived statistics.
+
+### 12.1 Full provenance trace (initial prompt → final output)
+
+Everything is an **append-only event log** keyed by a stable ID hierarchy:
+`job_id → node_id (DAG step, §9) → attempt_id (one model's try) → event`. Nothing
+is overwritten; the log is the source of truth and is linked to the git artifacts
+(each attempt = a worktree/commit, §8).
+
+Per **model request** we record:
+- **Inputs:** exact rendered prompt/messages, system prompt, the model name
+  (`coding`/`chat`/`fast`/…), sampling params, the token/time **budget** granted,
+  and the context it was given (which prior artifacts/files).
+- **Outcome:** raw output, token counts (prompt/completion, plus thinking tokens
+  for reasoning models), wall-time, tokens/sec, and the **finish reason**
+  (stop / length / timeout / loop-killed / tool-error / cancelled).
+- **Tool calls made during the attempt** (see §12.2c).
+
+Per **arbitration** (the "check each other's work" step) we record:
+- The candidates considered, the **method** (objective gate / critic / LLM-judge /
+  merge — §5), the judge's model + rationale (with position-swap to control for
+  order bias), and the **decision + why** in structured form.
+- **Provenance of the winning artifact:** whether a candidate was taken **whole**,
+  or a **merge** — and if merged, a **hunk/line-level attribution map** (which
+  span came from which candidate). This is what makes "X% of model M's output was
+  used" a real, computed number, not a guess.
+
+Result: a **replayable trace tree** — expand the final diff and drill into the
+node that produced each file, its competing candidates, and the arbitration
+verdict, all the way back to the prompt.
+
+### 12.2 Per-model execution control
+
+**(a) Timeouts sized to the model, not a flat number.** A fast Gemma and a
+reasoning Qwen have very different honest latencies. Derive each step's budget
+from the model's **known throughput** (t/s from the roster / a rolling measured
+estimate) × the step's **expected output size**, with a **floor** (don't kill a
+model mid-legit-answer) and a **ceiling**. Reasoning models (most of the Qwen3.6
+roster) get an explicit, larger **thinking-token allowance** — but still bounded.
+Budgets are expressed in *both* tokens and wall-time so a slow-clocked (thermal)
+GPU doesn't cause false timeouts.
+
+**(b) Stuck / reasoning-loop detection.** Reasoning models can spin without
+converging. Detect and kill early on signals like: repeated n-gram / paragraph
+cycles in the thinking stream, thinking-phase exceeding its allowance with no
+transition to an answer, output-entropy collapse (same tokens repeating), or
+simply no progress toward a closing/answer marker within budget. On trip: **kill,
+log `finish_reason=loop-killed`, and fall back** (retry with a tightened prompt,
+hand the step to another model, or drop the candidate). Every kill is recorded so
+we can tune thresholds and spot models/prompts that loop often.
+
+**(c) Tool-call tracking.** Every tool call an attempt makes is logged: tool
+name, arguments, result/exit code, duration, and **success/failure** (with the
+error on failure). Failed tool calls are first-class — surfaced in the trace,
+counted in the stats, and available to the controller (§10) as a signal (a
+candidate whose build/test tool-calls failed is weaker). Retries are linked to
+the original call so we can see flakiness vs hard failure.
+
+### 12.3 Derived statistics (is it actually working?)
+
+From the event log we compute, per job and rolled up across jobs:
+- **Per-model acceptance rate** — of the steps model M competed in, what % of the
+  time was its work chosen (whole or in part).
+- **Whole vs merged split** — for accepted work, what % was adopted **whole**
+  vs **partially merged**, and the **average merge share** (from the §12.1 hunk
+  attribution) — e.g. "`coding` contributed 62% of merged lines."
+- **Win rate by node type** (planning vs implementation vs test-writing vs
+  refactor) — models specialize; this shows where each earns its slot.
+- **Loop/timeout/tool-failure rates per model**, and **cost** (tokens, wall-time,
+  GPU-seconds) per accepted contribution — the quality-per-cost knee (§10, §15).
+
+These stats double as the **measurement signal** (§15) and as live input to the
+**adaptive controller** (§10): a model that keeps losing or looping on a node type
+gets down-weighted or dropped from that step's ensemble.
+
+### 12.4 Storage & surfacing
+
+- **On disk:** append-only **JSONL event stream** per job + a **SQLite index** for
+  queries/stats (mirrors the §9 checkpoint store). Immutable, greppable, diffable.
+- **Live:** the same events feed the `stream(job_id)` progress channel (§13.3), so
+  a harness or chat UI shows the trace as it happens.
+- **After:** a rendered **run report** (trace tree + the §12.3 scoreboard) as an
+  HTML/JSON artifact — reuse the eval-report styling we already have.
+
+## 13. Integration surfaces & interoperability (multi-harness)
 
 **Requirement:** multipass must be usable from *agent harnesses* (GitHub Copilot,
 Claude Code, pi.dev) **and** *general chat UIs* (Open WebUI). This is the single
@@ -196,7 +287,7 @@ biggest architectural driver — it flips multipass from "an app" into **a headl
 engine with thin transport adapters**, because those front-ends speak different
 protocols and have very different execution models.
 
-### 12.1 The two protocol families
+### 13.1 The two protocol families
 
 - **Agent harnesses → speak MCP.** Copilot CLI, Claude Code, and pi.dev are all
   MCP clients. So *one well-designed MCP server* reaches all three at once — MCP is
@@ -225,7 +316,7 @@ matter which front-end you enter from.
    (and Open WebUI via mcpo)        chat client          other services
 ```
 
-### 12.2 "Tool" vs "model" — support both, they serve different patterns
+### 13.2 "Tool" vs "model" — support both, they serve different patterns
 
 - **As an MCP tool:** host agent stays in control and calls multipass for a
   bounded sub-task ("implement this module with multipass"). Task-in, result-out.
@@ -234,7 +325,7 @@ matter which front-end you enter from.
   `multipass-build` to make the whole harness multipass-powered (powerful, but the
   explicit-tool path keeps roles cleaner).
 
-### 12.3 Long-running work ⇒ an async **job model** (not a single request)
+### 13.3 Long-running work ⇒ an async **job model** (not a single request)
 
 A plan/build cycle runs minutes→hours; that doesn't fit one blocking call or a
 chat UI's response window. So the core exposes a **job abstraction** that every
@@ -252,7 +343,7 @@ adapter maps onto:
 - A single **job store** means a job started in Open WebUI can be checked from the
   CLI or an MCP call — one durable `job_id` across all transports.
 
-### 12.4 Execution locus — the deepest fork
+### 13.4 Execution locus — the deepest fork
 
 *Where does the code actually get built and tested?* Front-ends differ hugely:
 
@@ -299,7 +390,7 @@ it's returned* (PR/patch-against-origin vs new-repo bundle/remote). The envelope
 just needs `repo` (optional), `base_ref` (optional), and a `mode`/inference:
 absent `repo` ⇒ greenfield.
 
-### 12.5 What this forces on the core
+### 13.5 What this forces on the core
 
 - **API-first & fully non-interactive.** No blocking human prompts; every
   human-in-the-loop gate becomes an **optional async approval** (`approve(job,
@@ -314,7 +405,7 @@ absent `repo` ⇒ greenfield.
 - **Capability parity.** Expose the same verbs everywhere; don't let one adapter
   grow features the others lack.
 
-### 12.6 Adapter cheat-sheet
+### 13.6 Adapter cheat-sheet
 
 | Front-end | Protocol | Multipass appears as | Repo mode → hand-off |
 |---|---|---|---|
@@ -324,9 +415,9 @@ absent `repo` ⇒ greenfield.
 | Open WebUI | OpenAI `/v1` (or MCP via mcpo) | `multipass-build` model | greenfield → new repo (bundle / pushed remote) |
 | CLI / cron / services | REST/CLI | `multipass` command | either (repo ref ⇒ branch, none ⇒ init) |
 
-## 13. Implementation options (build-on-what)
+## 14. Implementation options (build-on-what)
 
-Given §12, the shape is settled at a high level — **a headless core + thin
+Given §13, the shape is settled at a high level — **a headless core + thin
 adapters** — so these options are really about *how we build the core* and *what
 we reuse for the adapters*:
 
@@ -346,11 +437,11 @@ we reuse for the adapters*:
   thin **CLI/REST** over the same job API.
 
 A likely path: build the **core** with (i), expose it through the **MCP + OpenAI
-adapters** (§12) first (that's what unlocks Copilot/Claude Code/pi.dev *and* Open
+adapters** (§13) first (that's what unlocks Copilot/Claude Code/pi.dev *and* Open
 WebUI at once), reuse (ii)'s eval harness for measurement, and treat delegated
-client-side execution (§12.4b) as a later opt-in.
+client-side execution (§13.4b) as a later opt-in.
 
-## 14. How we prove the thesis (measurement plan)
+## 15. How we prove the thesis (measurement plan)
 
 We already have the machinery to A/B this honestly:
 
@@ -366,7 +457,7 @@ We already have the machinery to A/B this honestly:
 - The Copilot-BYOK runner already does model-vs-model A/B — extend it with a
   `--multipass` target.
 
-## 15. Phased roadmap (proposal)
+## 16. Phased roadmap (proposal)
 
 1. **P0 — spike:** single task, 2 co-resident models (coding + chat), best-of-N
    with an *objective-only* gate (compile + existing test). No judge yet. Prove
@@ -380,12 +471,12 @@ We already have the machinery to A/B this honestly:
 4. **P3 — adaptive controller:** confidence-gating + disagreement escalation +
    budget caps; add a `multipass` serving mode.
 5. **P3.5 — expose it:** wrap the core in the **job API** + **MCP adapter** and
-   **OpenAI `/v1` adapter** (§12) so Copilot/Claude Code/pi.dev and Open WebUI can
+   **OpenAI `/v1` adapter** (§13) so Copilot/Claude Code/pi.dev and Open WebUI can
    all drive it; server-side clone → PR/patch hand-off.
 6. **P4 — measure & iterate:** full eval-suite A/B vs solo and vs a frontier
    baseline; publish the cost/quality curves; write the ADR(s).
 
-## 16. Open questions (need @bradrlaw's steer)
+## 17. Open questions (need @bradrlaw's steer)
 
 - **Scope of first target:** general software tasks, or narrow to the kind of
   web/coding tasks our evals already cover (so we can measure immediately)?
@@ -397,8 +488,8 @@ We already have the machinery to A/B this honestly:
 - **Interface priority:** MCP adapter first (covers Copilot/Claude Code/pi.dev in
   one shot) then the OpenAI `/v1` adapter for Open WebUI — or build both together
   behind the job API from day one?
-- **Execution locus:** is **server-side clone → PR/patch** (§12.4a) the right
-  universal default, or do you want delegated client-side execution (§12.4b) for
+- **Execution locus:** is **server-side clone → PR/patch** (§13.4a) the right
+  universal default, or do you want delegated client-side execution (§13.4b) for
   harnesses sooner (work landing directly in the user's checkout)?
 - **Greenfield hand-off:** *(decided — local bundle default; optional auto
   `gh repo create` + push, with account/org and visibility as parameters)*.
