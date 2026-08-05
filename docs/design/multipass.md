@@ -275,6 +275,29 @@ PR** plus a **structured JSON summary** (plan, per-node decisions, verifier
 output, cost). A patch/PR is the one format *every* harness and a human can
 consume — it keeps the interface transport-agnostic.
 
+**Two repo modes (a `repo` field on the task envelope).** Independent of the
+front-end, the *source* of the workspace has two shapes:
+
+- **(1) Existing repo → new branch.** Task carries a repo ref (local path on the
+  box, a git URL, or the CWD the harness is sitting in). Multipass clones/uses it,
+  cuts a fresh **`multipass/<slug>` branch** off the caller's base (default the
+  current HEAD/`main`), does all work in isolated worktrees on that branch, and
+  hands back a branch/patch/PR against the original. Never commits to the base
+  branch; the caller reviews and merges. This is the "improve/extend my project"
+  path.
+- **(2) Greenfield → brand-new repo.** No repo ref — just a prompt. Multipass
+  **`git init`s a fresh repo** in a server-side workspace, scaffolds from scratch,
+  and the whole build history lives on `main` (or a `multipass/init` branch) in
+  that new repo. Hand-off is the repo itself: a bundle/tarball, an initial patch,
+  or (opt-in) a **pushed new remote** (`gh repo create`) with a PR-less `main`.
+  This is the "one-shot me a new project" path chat UIs will lean on.
+
+Both modes share the same worktree/verify/checkpoint machinery (§8, §9); they
+differ only in *how the workspace is seeded* (`clone+branch` vs `init`) and *how
+it's returned* (PR/patch-against-origin vs new-repo bundle/remote). The envelope
+just needs `repo` (optional), `base_ref` (optional), and a `mode`/inference:
+absent `repo` ⇒ greenfield.
+
 ### 12.5 What this forces on the core
 
 - **API-first & fully non-interactive.** No blocking human prompts; every
@@ -292,13 +315,13 @@ consume — it keeps the interface transport-agnostic.
 
 ### 12.6 Adapter cheat-sheet
 
-| Front-end | Protocol | Multipass appears as | Execution locus |
+| Front-end | Protocol | Multipass appears as | Repo mode → hand-off |
 |---|---|---|---|
-| GitHub Copilot CLI | MCP tool | `multipass.*` tools (async job) | server-side clone → PR/patch |
-| Claude Code | MCP tool | `multipass.*` tools (async job) | server-side clone → PR/patch |
-| pi.dev | MCP tool (or OpenAI) | `multipass.*` tools / model | server-side clone → PR/patch |
-| Open WebUI | OpenAI `/v1` (or MCP via mcpo) | `multipass-build` model | server-side sandbox workspace |
-| CLI / cron / services | REST/CLI | `multipass` command | server-side workspace |
+| GitHub Copilot CLI | MCP tool | `multipass.*` tools (async job) | existing repo → `multipass/*` branch / PR |
+| Claude Code | MCP tool | `multipass.*` tools (async job) | existing repo → `multipass/*` branch / PR |
+| pi.dev | MCP tool (or OpenAI) | `multipass.*` tools / model | existing repo → branch / PR |
+| Open WebUI | OpenAI `/v1` (or MCP via mcpo) | `multipass-build` model | greenfield → new repo (bundle / pushed remote) |
+| CLI / cron / services | REST/CLI | `multipass` command | either (repo ref ⇒ branch, none ⇒ init) |
 
 ## 13. Implementation options (build-on-what)
 
@@ -346,7 +369,9 @@ We already have the machinery to A/B this honestly:
 
 1. **P0 — spike:** single task, 2 co-resident models (coding + chat), best-of-N
    with an *objective-only* gate (compile + existing test). No judge yet. Prove
-   the worktree + arbitration plumbing end-to-end on one `evals/` task.
+   the worktree + arbitration plumbing end-to-end on one `evals/` task. Support
+   both repo modes from the start (existing-repo→branch and greenfield→`git init`)
+   since they're cheap and shape the workspace/hand-off code.
 2. **P1 — planner + DAG + checkpoints:** decompose a real prompt into a task DAG;
    run the loop node-by-node with per-node commits and resumability.
 3. **P2 — arbitration depth:** add critic/merge patterns + LLM-judge tie-break
@@ -374,6 +399,9 @@ We already have the machinery to A/B this honestly:
 - **Execution locus:** is **server-side clone → PR/patch** (§12.4a) the right
   universal default, or do you want delegated client-side execution (§12.4b) for
   harnesses sooner (work landing directly in the user's checkout)?
+- **Greenfield hand-off:** for brand-new projects (§12.4 mode 2), default to a
+  local **bundle/tarball**, or auto **`gh repo create` + push** a new remote? Under
+  which account/org, and public or private?
 - **Tool vs model exposure:** expose multipass primarily as an MCP *tool*, as an
   OpenAI *model* (`multipass-build`), or both?
 - **Multi-tenancy expectations:** just you, or family/other clients too? Drives how
