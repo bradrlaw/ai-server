@@ -188,26 +188,145 @@ This is what keeps multipass from being "5× slower for 5% better everywhere."
 | **Swap thrash on single-slot GPUs** | Pin an ensemble mode; adapt roster to what's resident. |
 | **Non-determinism muddies A/B** | Fixed seeds where possible; report distributions, not single runs. |
 
-## 12. Implementation options (build-on-what)
+## 12. Integration surfaces & interoperability (multi-harness)
+
+**Requirement:** multipass must be usable from *agent harnesses* (GitHub Copilot,
+Claude Code, pi.dev) **and** *general chat UIs* (Open WebUI). This is the single
+biggest architectural driver — it flips multipass from "an app" into **a headless
+engine with thin transport adapters**, because those front-ends speak different
+protocols and have very different execution models.
+
+### 12.1 The two protocol families
+
+- **Agent harnesses → speak MCP.** Copilot CLI, Claude Code, and pi.dev are all
+  MCP clients. So *one well-designed MCP server* reaches all three at once — MCP is
+  the lingua franca. Multipass is exposed there as a **tool**, not a chat model:
+  the host agent decides to hand a task to multipass and gets a result back.
+- **Chat UIs → speak the OpenAI `/v1/chat/completions` API.** Open WebUI (and any
+  chat client, incl. harnesses in "pick a model" mode) just want a model endpoint.
+  So multipass also ships an **OpenAI-compatible adapter** and appears in the model
+  dropdown as e.g. `multipass-build`. Bonus: our stack already runs **mcpo**
+  (MCP→OpenAPI bridge) and **LiteLLM :4000**, so an MCP tool *also* reaches Open
+  WebUI via mcpo, and the OpenAI adapter can register in LiteLLM like any model.
+
+**Design rule:** the **core engine owns all policy** (planning, ensemble, gating,
+arbitration); adapters only translate transport. Behaviour must be identical no
+matter which front-end you enter from.
+
+```
+                 ┌──────────────── multipass CORE (headless) ───────────────┐
+                 │  planner · workers · objective gate · arbiter · verifier  │
+                 │  job store (SQLite) · worktrees · checkpoints · policy     │
+                 └───────▲───────────────▲───────────────▲───────────────────┘
+                         │               │               │
+      MCP server adapter │  OpenAI /v1 adapter │   CLI / REST job API
+                         │               │               │
+   Copilot / Claude Code / pi.dev   Open WebUI / any     scripts, cron,
+   (and Open WebUI via mcpo)        chat client          other services
+```
+
+### 12.2 "Tool" vs "model" — support both, they serve different patterns
+
+- **As an MCP tool:** host agent stays in control and calls multipass for a
+  bounded sub-task ("implement this module with multipass"). Task-in, result-out.
+- **As an OpenAI model:** multipass owns the *entire* turn — ideal for chat UIs and
+  "one-shot this whole thing." You could even point a harness's BYOK model at
+  `multipass-build` to make the whole harness multipass-powered (powerful, but the
+  explicit-tool path keeps roles cleaner).
+
+### 12.3 Long-running work ⇒ an async **job model** (not a single request)
+
+A plan/build cycle runs minutes→hours; that doesn't fit one blocking call or a
+chat UI's response window. So the core exposes a **job abstraction** that every
+adapter maps onto:
+
+`start(task) → job_id` · `status(job_id)` · `stream(job_id)` (progress events) ·
+`result(job_id)` (branch/patch/summary) · `cancel(job_id)` · `approve(job_id, gate)`.
+
+- **MCP:** `multipass.start` returns a `job_id` immediately; `multipass.status` /
+  `multipass.logs` / `multipass.result` poll it (MCP progress notifications can
+  stream too). Non-blocking so the host agent isn't frozen for an hour.
+- **OpenAI chat:** map the job to a **streamed** response — emit the plan, then
+  per-step candidate/winner/verifier lines as they happen (markdown), ending with
+  the final diff/PR link. The chat window becomes a live build log.
+- A single **job store** means a job started in Open WebUI can be checked from the
+  CLI or an MCP call — one durable `job_id` across all transports.
+
+### 12.4 Execution locus — the deepest fork
+
+*Where does the code actually get built and tested?* Front-ends differ hugely:
+
+- **Chat UIs have no execution environment** → the only option is a **server-side
+  sandbox workspace**: multipass clones/creates the repo on the AI server, runs the
+  whole loop (worktrees + build + tests) there, and returns artifacts. This is the
+  **universal baseline** and the only thing that works for Open WebUI.
+- **Agent harnesses already have hands** (shell + file tools in the user's repo).
+  Two sub-options:
+  - **(a) Server-side, bring-your-own-repo:** the harness passes a repo ref / URL /
+    uploaded context; multipass operates on a **server-side clone** and returns a
+    **branch, patch, or PR**. Simple, uniform, safe. *Recommended default.*
+  - **(b) Delegated execution:** multipass acts as the *brain* and delegates edits/
+    commands back through the host's own tools so work lands directly in the user's
+    checkout. Most seamless, but hard — MCP tools can't easily call back into the
+    host's toolset, and it couples us to each harness. Treat as a later, opt-in mode.
+
+**Universal hand-off = git artifacts.** Return results as a **branch / patch /
+PR** plus a **structured JSON summary** (plan, per-node decisions, verifier
+output, cost). A patch/PR is the one format *every* harness and a human can
+consume — it keeps the interface transport-agnostic.
+
+### 12.5 What this forces on the core
+
+- **API-first & fully non-interactive.** No blocking human prompts; every
+  human-in-the-loop gate becomes an **optional async approval** (`approve(job,
+  gate)`) that a UI/harness can surface or auto-skip. (Reinforces §9/§10.)
+- **A task envelope that degrades gracefully.** Accept anything from a bare prompt
+  (chat UI) up to a rich spec (repo ref + files + constraints + test command) from
+  an agent harness. Same schema, optional fields.
+- **Multi-tenancy & sandboxing become first-class.** Multiple harnesses/users hit
+  one server with limited GPUs → per-job isolated worktrees, a **job queue** with
+  concurrency/resource caps, and **sandboxed build/test** (container, resource +
+  network-egress limits) since prompts are now semi-untrusted.
+- **Capability parity.** Expose the same verbs everywhere; don't let one adapter
+  grow features the others lack.
+
+### 12.6 Adapter cheat-sheet
+
+| Front-end | Protocol | Multipass appears as | Execution locus |
+|---|---|---|---|
+| GitHub Copilot CLI | MCP tool | `multipass.*` tools (async job) | server-side clone → PR/patch |
+| Claude Code | MCP tool | `multipass.*` tools (async job) | server-side clone → PR/patch |
+| pi.dev | MCP tool (or OpenAI) | `multipass.*` tools / model | server-side clone → PR/patch |
+| Open WebUI | OpenAI `/v1` (or MCP via mcpo) | `multipass-build` model | server-side sandbox workspace |
+| CLI / cron / services | REST/CLI | `multipass` command | server-side workspace |
+
+## 13. Implementation options (build-on-what)
+
+Given §12, the shape is settled at a high level — **a headless core + thin
+adapters** — so these options are really about *how we build the core* and *what
+we reuse for the adapters*:
 
 - **(i) Thin custom orchestrator (Python) over LiteLLM `:4000`.** Max control,
-  minimal deps; we own the loop, the worktrees, the SQLite state. Best for
-  experimenting with arbitration strategies. *Leading candidate for a prototype.*
-- **(ii) Extend the Copilot CLI (BYOK).** It already talks to our models, has
-  sub-agents + a rubber-duck reviewer, and we already run agent-mediated evals
-  through it (`scripts/eval-run-copilot.py`). Could express multipass as an
-  orchestration layer that *drives* Copilot workers — less loop code, but less
-  control over the per-step ensemble.
+  minimal deps; we own the loop, the worktrees, the SQLite job store. Best for
+  experimenting with arbitration strategies. *Leading candidate for the core.*
+- **(ii) Reuse the Copilot CLI (BYOK) as a *worker*.** It already talks to our
+  models, has sub-agents + a rubber-duck reviewer, and we already drive it
+  headlessly for evals (`scripts/eval-run-copilot.py`). Handy as one worker
+  implementation behind the core — not as the core itself.
 - **(iii) Adopt an existing agent (Aider / OpenHands / etc.) as the "worker"** and
   wrap N of them with our arbitration layer. Fastest to a working build loop;
   we'd be integrating, not inventing.
-- **(iv) Expose it as an MCP tool / serving mode** so any client (Open WebUI,
-  Copilot) can invoke a "multipass build" — consistent with our MCP-heavy stack.
+- **Adapters to build on:** the **MCP server** (reuse patterns from our existing
+  MCP servers + the **mcpo** bridge for Open WebUI), an **OpenAI `/v1` shim** that
+  registers in **LiteLLM :4000** so `multipass-build` shows up as a model, and a
+  thin **CLI/REST** over the same job API.
 
-A likely path: prototype with **(i)** to nail the arbitration/verification core,
-reuse **(ii)**'s eval harness for measurement, and later surface via **(iv)**.
+A likely path: build the **core** with (i), expose it through the **MCP + OpenAI
+adapters** (§12) first (that's what unlocks Copilot/Claude Code/pi.dev *and* Open
+WebUI at once), reuse (ii)'s eval harness for measurement, and treat delegated
+client-side execution (§12.4b) as a later opt-in.
 
-## 13. How we prove the thesis (measurement plan)
+## 14. How we prove the thesis (measurement plan)
 
 We already have the machinery to A/B this honestly:
 
@@ -223,7 +342,7 @@ We already have the machinery to A/B this honestly:
 - The Copilot-BYOK runner already does model-vs-model A/B — extend it with a
   `--multipass` target.
 
-## 14. Phased roadmap (proposal)
+## 15. Phased roadmap (proposal)
 
 1. **P0 — spike:** single task, 2 co-resident models (coding + chat), best-of-N
    with an *objective-only* gate (compile + existing test). No judge yet. Prove
@@ -234,10 +353,13 @@ We already have the machinery to A/B this honestly:
    (with position-swap); add generated/mutated tests written by a *different* model.
 4. **P3 — adaptive controller:** confidence-gating + disagreement escalation +
    budget caps; add a `multipass` serving mode.
-5. **P4 — measure & iterate:** full eval-suite A/B vs solo and vs a frontier
+5. **P3.5 — expose it:** wrap the core in the **job API** + **MCP adapter** and
+   **OpenAI `/v1` adapter** (§12) so Copilot/Claude Code/pi.dev and Open WebUI can
+   all drive it; server-side clone → PR/patch hand-off.
+6. **P4 — measure & iterate:** full eval-suite A/B vs solo and vs a frontier
    baseline; publish the cost/quality curves; write the ADR(s).
 
-## 15. Open questions (need @bradrlaw's steer)
+## 16. Open questions (need @bradrlaw's steer)
 
 - **Scope of first target:** general software tasks, or narrow to the kind of
   web/coding tasks our evals already cover (so we can measure immediately)?
@@ -246,9 +368,19 @@ We already have the machinery to A/B this honestly:
 - **Build on Copilot CLI vs. a standalone orchestrator** for the prototype?
 - **How much to lean on generated tests** as the objective signal (powerful but
   needs a trustworthy test author)?
-- **Interface:** CLI tool, MCP tool, an Open WebUI "build" button, or all three
-  eventually?
-- **Human-in-the-loop:** fully autonomous long runs, or checkpoint gates where a
-  human can approve/redirect at plan boundaries?
+- **Interface priority:** MCP adapter first (covers Copilot/Claude Code/pi.dev in
+  one shot) then the OpenAI `/v1` adapter for Open WebUI — or build both together
+  behind the job API from day one?
+- **Execution locus:** is **server-side clone → PR/patch** (§12.4a) the right
+  universal default, or do you want delegated client-side execution (§12.4b) for
+  harnesses sooner (work landing directly in the user's checkout)?
+- **Tool vs model exposure:** expose multipass primarily as an MCP *tool*, as an
+  OpenAI *model* (`multipass-build`), or both?
+- **Multi-tenancy expectations:** just you, or family/other clients too? Drives how
+  hard we push job queueing, per-user isolation, and build sandboxing early.
+- **How much to lean on generated tests** as the objective signal (powerful but
+  needs a trustworthy test author)?
+- **Human-in-the-loop:** fully autonomous long runs, or async approval gates at
+  plan boundaries (surfaced through whichever front-end started the job)?
 - **Naming/roles:** Planner / Worker / Critic / Synthesizer / Verifier /
   Orchestrator — agree on the vocabulary before we start coding.
