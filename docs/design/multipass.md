@@ -286,11 +286,12 @@ front-end, the *source* of the workspace has two shapes:
   branch; the caller reviews and merges. This is the "improve/extend my project"
   path.
 - **(2) Greenfield → brand-new repo.** No repo ref — just a prompt. Multipass
-  **`git init`s a fresh repo** in a server-side workspace, scaffolds from scratch,
+  **`git init`s** a fresh repo in a server-side workspace, scaffolds from scratch,
   and the whole build history lives on `main` (or a `multipass/init` branch) in
-  that new repo. Hand-off is the repo itself: a bundle/tarball, an initial patch,
-  or (opt-in) a **pushed new remote** (`gh repo create`) with a PR-less `main`.
-  This is the "one-shot me a new project" path chat UIs will lean on.
+  that new repo. **Default hand-off is a local bundle/tarball**; optionally it can
+  **auto-create + push a GitHub remote** (`gh repo create`), taking the target
+  **account/org** and **visibility** (public/private) as parameters. This is the
+  "one-shot me a new project" path chat UIs will lean on.
 
 Both modes share the same worktree/verify/checkpoint machinery (§8, §9); they
 differ only in *how the workspace is seeded* (`clone+branch` vs `init`) and *how
@@ -399,9 +400,8 @@ We already have the machinery to A/B this honestly:
 - **Execution locus:** is **server-side clone → PR/patch** (§12.4a) the right
   universal default, or do you want delegated client-side execution (§12.4b) for
   harnesses sooner (work landing directly in the user's checkout)?
-- **Greenfield hand-off:** for brand-new projects (§12.4 mode 2), default to a
-  local **bundle/tarball**, or auto **`gh repo create` + push** a new remote? Under
-  which account/org, and public or private?
+- **Greenfield hand-off:** *(decided — local bundle default; optional auto
+  `gh repo create` + push, with account/org and visibility as parameters)*.
 - **Tool vs model exposure:** expose multipass primarily as an MCP *tool*, as an
   OpenAI *model* (`multipass-build`), or both?
 - **Multi-tenancy expectations:** just you, or family/other clients too? Drives how
