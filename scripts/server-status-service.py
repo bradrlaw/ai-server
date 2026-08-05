@@ -205,6 +205,24 @@ STATUS_ACTIONS_ENABLED = os.environ.get("STATUS_ACTIONS_ENABLED", "true").lower(
     "true",
     "yes",
 )
+# Allow the dashboard to adjust per-GPU sustained power caps. The chosen watts are
+# written into the gpu-fan-control config, which the daemon treats as the live
+# source of truth: it re-reads power_limits every power_recheck_sec and applies any
+# change with `nvidia-smi -pl` (a live cap adjustment that does NOT interrupt running
+# jobs). No root/daemon restart needed — the service just rewrites the file it owns,
+# and the change survives reboots. Set false to make the GPU power column read-only.
+GPU_POWER_ACTIONS_ENABLED = os.environ.get(
+    "GPU_POWER_ACTIONS_ENABLED", "true"
+).lower() in ("1", "true", "yes")
+# The gpu-fan-control config the daemon reads its per-GPU power_limits from, and the
+# daemon's reconcile cadence (only used to tell the user how soon a change applies).
+FAN_CONFIG = os.environ.get("FAN_CONFIG", "/srv/ai/scripts/gpu-fan-control.config.json")
+FAN_RECHECK_SEC = int(os.environ.get("FAN_RECHECK_SEC", "30"))
+# Dropdown range offered on the dashboard (watts). Clamped per-card to the GPU's
+# own nvidia-smi min/max power limits before rendering.
+GPU_POWER_MIN_W = int(os.environ.get("GPU_POWER_MIN_W", "150"))
+GPU_POWER_MAX_W = int(os.environ.get("GPU_POWER_MAX_W", "250"))
+GPU_POWER_STEP_W = int(os.environ.get("GPU_POWER_STEP_W", "25"))
 # Models re-warmed when the window ends (fast is handled by the keeper).
 QUIET_WARM_ON_EXIT = [
     m.strip()
@@ -568,6 +586,9 @@ _GPU_FIELDS = [
     "memory.total",
     "power.draw",
     "temperature.gpu",
+    "power.limit",
+    "power.min_limit",
+    "power.max_limit",
 ]
 
 
@@ -612,9 +633,36 @@ def collect_gpus() -> list:
                 "mem_total": _num(parts[4], int),
                 "power": _num(parts[5], int),
                 "temp": _num(parts[6], int),
+                "power_limit": _num(parts[7], int),
+                "power_min": _num(parts[8], int),
+                "power_max": _num(parts[9], int),
             }
         )
+    # Attach the *configured* cap (the gpu-fan-control target the daemon converges
+    # to) so the dashboard dropdown reflects the user's setting immediately, rather
+    # than snapping back to the still-enforced value during the ~30s convergence.
+    targets = _configured_power_limits()
+    for g in gpus:
+        g["power_limit_target"] = targets.get(g.get("index"))
     return gpus
+
+
+def _configured_power_limits() -> dict:
+    """{gpu_index(int): watts} from the gpu-fan-control config's power_limits, or {}
+    if unreadable. This is the target the fan daemon enforces (and reboots restore),
+    so the dashboard treats it as the source of truth for the power dropdown."""
+    try:
+        with open(FAN_CONFIG, encoding="utf-8") as f:
+            raw = json.load(f).get("power_limits") or {}
+    except Exception:  # noqa: BLE001 - best effort; fall back to enforced value
+        return {}
+    out = {}
+    for k, v in raw.items():
+        try:
+            out[int(k)] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 _cpu_prev = {"total": None, "idle": None}
@@ -774,6 +822,8 @@ def build_status() -> dict:
         "power_mode": _power_state["mode"],
         "actions": {
             "comfyui": STATUS_ACTIONS_ENABLED and bool(QUIET_COMFYUI_UNITS),
+            "gpu_power": GPU_POWER_ACTIONS_ENABLED,
+            "gpu_power_range": [GPU_POWER_MIN_W, GPU_POWER_MAX_W, GPU_POWER_STEP_W],
         },
     }
 
@@ -1122,6 +1172,75 @@ def _comfyui_ctl(action: str) -> tuple[bool, str]:
     return ok, detail
 
 
+def _set_gpu_power_limit(index: int, watts: int) -> tuple[bool, str]:
+    """Persist a per-GPU sustained power cap.
+
+    The gpu-fan-control daemon treats its config as the live source of truth: it
+    re-reads `power_limits` every `power_recheck_sec` (30s) and applies any change
+    with `nvidia-smi -pl`, which adjusts the cap on the fly WITHOUT resetting the
+    GPU or interrupting running jobs. So we just rewrite the config here (the
+    service owns the file — no root, no daemon restart needed); the new cap takes
+    effect within ~30s and survives reboots.
+
+    We do a surgical text edit of just the target line inside the `power_limits`
+    block (no full JSON round-trip) to avoid churning the hand-formatted config, and
+    write atomically so the daemon never sees a torn file. Returns (ok, detail)."""
+    if not GPU_POWER_ACTIONS_ENABLED:
+        return False, "gpu power actions disabled"
+    # Validate against the live card: index must exist, watts must fall within the
+    # GPU's own reported min/max power limits (falling back to the dropdown range).
+    gpus = collect_gpus()
+    gpu = next((g for g in gpus if g.get("index") == index), None)
+    if gpu is None:
+        return False, f"no GPU with index {index}"
+    lo = gpu.get("power_min") or GPU_POWER_MIN_W
+    hi = gpu.get("power_max") or GPU_POWER_MAX_W
+    if not (lo <= watts <= hi):
+        return False, f"{watts}W out of range for GPU{index} ({lo}-{hi}W)"
+
+    try:
+        with open(FAN_CONFIG, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as exc:
+        return False, f"read {FAN_CONFIG}: {exc}"
+
+    # Isolate the `power_limits` object so we only touch its keys (indices could
+    # collide with numeric keys elsewhere in the config).
+    m = re.search(r'"power_limits"\s*:\s*\{', text)
+    if not m:
+        return False, "power_limits block not found in config"
+    start = m.end() - 1  # position of the opening brace
+    depth, end = 0, None
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end is None:
+        return False, "malformed power_limits block"
+    block = text[start:end]
+    key_re = re.compile(r'("%d"\s*:\s*)\d+' % index)
+    if key_re.search(block):
+        new_block = key_re.sub(lambda mm: f"{mm.group(1)}{watts}", block, count=1)
+    else:
+        # Index not yet present — insert it after the opening brace.
+        new_block = block.replace("{", '{\n    "%d": %d,' % (index, watts), 1)
+    new_text = text[:start] + new_block + text[end:]
+
+    tmp = FAN_CONFIG + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        os.replace(tmp, FAN_CONFIG)  # atomic — daemon never reads a torn file
+    except OSError as exc:
+        return False, f"write {FAN_CONFIG}: {exc}"
+
+    return True, f"GPU{index} cap set to {watts}W (applies within ~{FAN_RECHECK_SEC}s)"
+
+
 def _comfyui(action: str) -> None:
     """Quiet-hours ComfyUI control — no-op when quiet-hours ComfyUI management is
     disabled. The dashboard button uses _comfyui_ctl directly instead."""
@@ -1246,9 +1365,21 @@ _HTML = """<!doctype html>
     padding:3px 10px; font-size:12px; cursor:pointer; margin-left:6px; font-family:inherit; }
   button.act:hover { background:#243247; }
   button.act:disabled { opacity:.5; cursor:default; }
+  select.plim { background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f; border-radius:6px;
+    padding:2px 6px; font-size:12px; font-family:inherit; cursor:pointer; }
+  select.plim:disabled { opacity:.5; cursor:default; }
   #svcmsg { margin-left:8px; }
+  #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column;
+    gap:8px; z-index:1000; pointer-events:none; }
+  .toast { background:#1c2635; color:#e6e6e6; border:1px solid #2c3a4f; border-left:3px solid #4b8ce0;
+    border-radius:8px; padding:10px 14px; font-size:13px; max-width:320px;
+    box-shadow:0 4px 14px rgba(0,0,0,.4); opacity:0; transform:translateY(8px);
+    transition:opacity .25s ease, transform .25s ease; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .toast.bad { border-left-color:#e07f7f; }
 </style></head>
 <body>
+<div id="toasts"></div>
 <header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
   <section><h2>Models (llama-swap) <span class="hsub" id="modebadge"></span></h2><div id="models">…</div></section>
@@ -1290,6 +1421,57 @@ function activityHtml(a){
     if(a.deferred) sub.push(`${a.deferred} queued`);
   }
   return head + (sub.length? `<div class="sub" style="margin-top:4px">${sub.join(' · ')}</div>`:'');
+}
+function gpuLimitCell(g, canSet, range){
+  const enforced = g.power_limit;
+  const cur = (g.power_limit_target!=null)? g.power_limit_target : enforced;
+  if(!canSet || cur==null){
+    return `<td>${cur!=null? cur+' W':'–'}</td>`;
+  }
+  const step = range[2]||25;
+  const lo = Math.max(range[0], g.power_min!=null? g.power_min : range[0]);
+  const hi = Math.min(range[1], g.power_max!=null? g.power_max : range[1]);
+  const opts = [];
+  for(let w=Math.ceil(lo/step)*step; w<=hi; w+=step){ opts.push(w); }
+  if(!opts.includes(cur)) { opts.push(cur); opts.sort((a,b)=>a-b); }
+  const sel = opts.map(w=>`<option value="${w}"${w===cur?' selected':''}>${w} W</option>`).join('');
+  // Note when the enforced cap is still converging to the chosen target (~30s).
+  const pend = (enforced!=null && enforced!==cur)? ` <span class="hsub">→ ${enforced} W…</span>`:'';
+  return `<td class="g"><select class="plim" onchange="setGpuPower(this, ${g.index})">${sel}</select>`+
+    `${pend} <span class="hsub" id="gpumsg-${g.index}"></span></td>`;
+}
+async function setGpuPower(el, index){
+  const watts = el.value;
+  const msg = document.getElementById('gpumsg-'+index);
+  el.disabled = true;
+  if(msg) msg.textContent = '…';
+  try{
+    const r = await fetch('actions/gpu-power?index='+index+'&watts='+encodeURIComponent(watts), {method:'POST'});
+    const d = await r.json();
+    if(d.ok){
+      if(msg) msg.textContent = esc(d.detail || ('set '+watts+' W'));
+      toast('GPU'+index+' power limit set to '+watts+' W — may take up to 30 seconds to take effect.');
+    } else {
+      const why = esc(d.detail||d.error||String(r.status));
+      if(msg) msg.textContent = 'failed: '+why;
+      toast('GPU'+index+' power limit change failed: '+why, true);
+    }
+  }catch(e){
+    if(msg) msg.textContent = 'error: '+esc(String(e));
+    toast('GPU'+index+' power limit error: '+esc(String(e)), true);
+  }
+  finally{ el.disabled=false; setTimeout(refresh, 1500); }
+}
+function toast(text, bad){
+  const box = document.getElementById('toasts');
+  if(!box) return;
+  const t = document.createElement('div');
+  t.className = 'toast' + (bad? ' bad':'');
+  t.textContent = text;
+  box.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  const dwell = bad? 6000 : 4000;
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 300); }, dwell);
 }
 function bar(label, pct, txt){
   const p = (pct!=null)? Math.max(0, Math.min(100, pct)) : 0;
@@ -1365,13 +1547,16 @@ async function refresh(){  try{
         `</table><div class="sub" style="margin-top:8px">${m.available} available</div>`;
     }
     // gpus
+    const gpuAct = d.actions && d.actions.gpu_power;
+    const plimRange = (d.actions && d.actions.gpu_power_range) || [150,250,25];
     document.getElementById('gpus').innerHTML = d.gpus.length ?
-      '<table><tr><th>#</th><th>Name</th><th>Util</th><th>VRAM</th><th>Power</th><th>Temp</th></tr>' +
+      '<table><tr><th>#</th><th>Name</th><th>Util</th><th>VRAM</th><th>Limit</th><th>Power</th><th>Temp</th></tr>' +
       d.gpus.map(g=>{
         const memPct = (g.mem_used!=null&&g.mem_total)? Math.round(100*g.mem_used/g.mem_total):0;
         return `<tr><td>${g.index}</td><td>${esc(g.name)}</td>`+
         `<td>${g.util!=null?g.util+'%':'–'}</td>`+
         `<td><span class="bar"><i style="width:${memPct}%"></i></span> ${g.mem_used??'–'}/${g.mem_total??'–'} MB</td>`+
+        gpuLimitCell(g, gpuAct, plimRange)+
         `<td>${g.power!=null?g.power+' W':'–'}</td>`+
         `<td>${g.temp!=null?g.temp+'°C':'–'}</td></tr>`;
       }).join('') + '</table>'
@@ -1518,6 +1703,28 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps({
                 "ok": ok, "action": action,
                 "units": QUIET_COMFYUI_UNITS, "detail": detail[:500],
+            }).encode("utf-8")
+            self._send(200 if ok else 500, body, "application/json")
+        elif path == "/actions/gpu-power":
+            if not GPU_POWER_ACTIONS_ENABLED:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "gpu power actions disabled"}
+                ).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            try:
+                index = int(qs.get("index", [""])[0])
+                watts = int(qs.get("watts", [""])[0])
+            except (ValueError, IndexError):
+                self._send(400, json.dumps(
+                    {"ok": False, "error": "index and watts must be integers"}
+                ).encode("utf-8"), "application/json")
+                return
+            ok, detail = _set_gpu_power_limit(index, watts)
+            _cache["at"] = 0.0  # force the next status poll to re-probe the limit
+            body = json.dumps({
+                "ok": ok, "index": index, "watts": watts, "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
         else:

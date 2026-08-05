@@ -133,6 +133,24 @@ def wait_for_gpus(expected, timeout_sec):
         time.sleep(2)
 
 
+def read_power_limits(fallback=None):
+    """Re-read just `power_limits` from the config file.
+
+    Called every reconcile pass so the config is the LIVE source of truth: an
+    external editor (e.g. the status dashboard's per-GPU power dropdown) can change
+    a cap by rewriting the file atomically, and this daemon picks it up on the next
+    pass and applies it via `nvidia-smi -pl` — a live adjustment that does NOT reset
+    the GPU or interrupt running work. On any read/parse error we keep the last
+    known-good limits so a mid-write or transient failure never drops the caps.
+    """
+    try:
+        with open(CONFIG) as f:
+            return json.load(f).get("power_limits") or fallback
+    except Exception as e:  # noqa: BLE001 - never let a bad read stop the daemon
+        log(f"power_limits re-read failed ({e}); keeping last-known values")
+        return fallback
+
+
 def reconcile_power_limits(power_limits, quiet=False):
     """Idempotently enforce per-GPU power caps (W) + persistence mode.
 
@@ -322,7 +340,11 @@ def main():
         while not stop["flag"]:
             # Periodically re-enforce power caps so a GPU that was missing at
             # boot or fell off the bus and returned gets capped automatically.
+            # Also re-read the config each pass so an external edit to power_limits
+            # (e.g. the status dashboard's per-GPU power dropdown) is applied live —
+            # nvidia-smi -pl adjusts the cap without interrupting running jobs.
             if time.time() - last_power_check >= power_recheck:
+                power_limits = read_power_limits(fallback=power_limits)
                 reconcile_power_limits(power_limits)
                 last_power_check = time.time()
             try:
