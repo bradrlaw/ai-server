@@ -261,6 +261,46 @@ HISTORY_POINTS = int(os.environ.get("HISTORY_POINTS", "240"))
 # Set while quiet hours has the box in deep idle — the fast keeper honours this
 # and stops re-warming so it doesn't fight the quiet-hours loop.
 _QUIET_SUPPRESS_KEEPER = threading.Event()
+
+# Runtime pause switch for quiet hours, toggled from the dashboard. When SET, the
+# deep-idle loop treats the window as if it never begins (and restores the box if
+# it was already idle) — handy for keeping a long ComfyUI/LLM job alive through the
+# window without editing the unit or SSHing in. Persisted to QUIET_STATE_FILE so
+# the choice survives a service restart; you must toggle it back on (or it stays
+# paused) — it is NOT auto-cleared at the window's end.
+_QUIET_PAUSED = threading.Event()
+QUIET_STATE_FILE = os.environ.get(
+    "QUIET_STATE_FILE", "/srv/ai/var/status-service/quiet-paused"
+)
+
+
+def _load_quiet_paused() -> None:
+    """Restore the persisted pause state on startup (best effort)."""
+    try:
+        if os.path.exists(QUIET_STATE_FILE):
+            _QUIET_PAUSED.set()
+    except OSError:
+        pass
+
+
+def _set_quiet_paused(paused: bool) -> tuple[bool, str]:
+    """Toggle the quiet-hours pause switch and persist it. Returns (ok, detail)."""
+    try:
+        if paused:
+            os.makedirs(os.path.dirname(QUIET_STATE_FILE), exist_ok=True)
+            with open(QUIET_STATE_FILE, "w", encoding="utf-8") as f:
+                f.write(str(int(time.time())))
+            _QUIET_PAUSED.set()
+        else:
+            _QUIET_PAUSED.clear()
+            try:
+                os.remove(QUIET_STATE_FILE)
+            except FileNotFoundError:
+                pass
+    except OSError as exc:
+        return False, f"persist {QUIET_STATE_FILE}: {exc}"
+    return True, "paused" if paused else "resumed"
+
 # Reported in status.json so the dashboard/banner can show the current mode.
 _power_state = {"mode": "active", "since": time.time(), "detail": ""}
 
@@ -819,8 +859,25 @@ def build_status() -> dict:
         "gpus": gpus,
         "host": host,
         "power_mode": _power_state["mode"],
+        "quiet": {
+            "enabled": QUIET_HOURS_ENABLED,
+            "paused": _QUIET_PAUSED.is_set(),
+            "in_window": (
+                _in_window(
+                    _quiet_now(),
+                    _parse_hhmm(QUIET_HOURS_START),
+                    _parse_hhmm(QUIET_HOURS_END),
+                )
+                if QUIET_HOURS_ENABLED
+                else False
+            ),
+            "start": QUIET_HOURS_START,
+            "end": QUIET_HOURS_END,
+            "tz": QUIET_TZ or "system local",
+        },
         "actions": {
             "comfyui": STATUS_ACTIONS_ENABLED and bool(QUIET_COMFYUI_UNITS),
+            "quiet": STATUS_ACTIONS_ENABLED and QUIET_HOURS_ENABLED,
             "gpu_power": GPU_POWER_ACTIONS_ENABLED,
             "gpu_power_range": [GPU_POWER_MIN_W, GPU_POWER_MAX_W, GPU_POWER_STEP_W],
         },
@@ -1241,22 +1298,33 @@ def _exit_window() -> None:
 def _quiet_hours_loop():
     start = _parse_hhmm(QUIET_HOURS_START)
     end = _parse_hhmm(QUIET_HOURS_END)
+    _load_quiet_paused()
     print(
         f"[quiet] deep-idle window {QUIET_HOURS_START}–{QUIET_HOURS_END} "
         f"({QUIET_TZ or 'system local'}); load-once, restore at window end"
+        + (" — currently PAUSED" if _QUIET_PAUSED.is_set() else "")
     )
     # phase: "active" (outside window) | "idle" (inside window, deep idle entered).
     # We act ONLY on the window boundaries: unload + stop ComfyUI once when it
     # begins, restore once when it ends. During the window we don't poll activity,
     # wake, or re-idle — a model loaded on demand stays resident until the window
     # ends. This avoids the ComfyUI-restart GPU contention that emptied responses.
+    #
+    # The runtime pause switch (_QUIET_PAUSED, toggled from the dashboard) folds
+    # into the same boundary machine: while paused the effective window is never
+    # "in", so we never enter deep idle, and if we were already idle when it's
+    # paused the next tick trips the in->out transition and restores the box.
     phase = "active"
+
+    def effective_in_window() -> bool:
+        return _in_window(_quiet_now(), start, end) and not _QUIET_PAUSED.is_set()
+
     # On a fresh boot / service restart OUTSIDE the quiet window, warm the daily
     # models once. Nothing else does: the llama-swap on_startup hook only preloads
     # `fast`, and _exit_window (which warms coding/chat) only fires on an in->out
     # transition that never happens when we boot already outside the window. If we
     # boot INSIDE the window, leave them cold — the loop enters deep idle below.
-    if QUIET_WARM_ON_START and not _in_window(_quiet_now(), start, end):
+    if QUIET_WARM_ON_START and not effective_in_window():
         print(
             "[quiet] booted outside quiet window — warming "
             f"{', '.join(QUIET_WARM_ON_START)}"
@@ -1265,7 +1333,7 @@ def _quiet_hours_loop():
             _warm_model(m)
     while True:
         try:
-            in_window = _in_window(_quiet_now(), start, end)
+            in_window = effective_in_window()
             if in_window and phase == "active":
                 _enter_deep_idle()
                 phase = "idle"
@@ -1311,6 +1379,15 @@ _HTML = """<!doctype html>
     padding:3px 10px; font-size:12px; cursor:pointer; margin-left:6px; font-family:inherit; }
   button.act:hover { background:#243247; }
   button.act:disabled { opacity:.5; cursor:default; }
+  .switch { position:relative; display:inline-block; width:42px; height:22px; vertical-align:middle; }
+  .switch input { opacity:0; width:0; height:0; }
+  .switch .slider { position:absolute; inset:0; cursor:pointer; background:#3a2a2a; border:1px solid #5a3a3a;
+    border-radius:999px; transition:.2s; }
+  .switch .slider:before { content:""; position:absolute; height:16px; width:16px; left:2px; top:2px;
+    background:#e6e6e6; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider { background:#1e2a1e; border-color:#2e4a2e; }
+  .switch input:checked + .slider:before { transform:translateX(20px); }
+  .switch input:disabled + .slider { opacity:.5; cursor:default; }
   select.plim { background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f; border-radius:6px;
     padding:2px 6px; font-size:12px; font-family:inherit; cursor:pointer; }
   select.plim:disabled { opacity:.5; cursor:default; }
@@ -1333,6 +1410,10 @@ _HTML = """<!doctype html>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>Services <span class="hsub" id="svcactions"></span></h2><div id="services">…</div></section>
+  <section id="quietsec" style="display:none"><h2>Quiet hours <span class="hsub" id="quietstate"></span></h2>
+    <div id="quietctl">…</div>
+    <div class="sub" id="quiethint" style="margin-top:8px"></div>
+  </section>
   <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
     <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
     <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
@@ -1566,7 +1647,52 @@ async function refresh(){  try{
         (anyUp?`<button class="act" id="comfy-stop" onclick="comfyAction('stop')">⏹ Stop</button>`:'')+
         `<span id="svcmsg" class="hsub"></span>`;
     } else { el.innerHTML=''; }
+    // Quiet-hours toggle: pause/resume the nightly deep-idle window at runtime so a
+    // long ComfyUI/LLM job can run through it without editing the unit.
+    renderQuiet(d);
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
+}
+function renderQuiet(d){
+  const sec = document.getElementById('quietsec');
+  const q = d.quiet;
+  const canAct = d.actions && d.actions.quiet;
+  if(!q || !q.enabled){ sec.style.display='none'; return; }
+  sec.style.display='';
+  // "on" (checked) = quiet hours armed; "off" (unchecked) = paused.
+  const armed = !q.paused;
+  const stateEl = document.getElementById('quietstate');
+  if(q.paused) stateEl.innerHTML = `· <span class="pill bad">paused</span>`;
+  else if(q.in_window) stateEl.innerHTML = `· <span class="pill busy">active now</span>`;
+  else stateEl.innerHTML = `· <span class="pill idle">armed</span>`;
+  const dis = canAct ? '' : ' disabled';
+  document.getElementById('quietctl').innerHTML =
+    `<label class="switch"><input type="checkbox" id="quietsw"${armed?' checked':''}${dis} onchange="toggleQuiet(this)"><span class="slider"></span></label>`+
+    `<span style="margin-left:10px">Nightly deep-idle window <b>${esc(q.start)}–${esc(q.end)}</b> <span class="hsub">(${esc(q.tz)})</span></span>`+
+    `<span id="quietmsg" class="hsub" style="margin-left:8px"></span>`;
+  document.getElementById('quiethint').textContent = q.paused
+    ? 'Paused — models & ComfyUI will stay up through tonight’s window. Toggle on to re-arm (stays paused until you do).'
+    : (q.in_window
+        ? 'Window is active now: turning this off will restore models & ComfyUI immediately.'
+        : 'Armed: at the window start, models unload and ComfyUI stops until the window ends. Turn off to keep a long job alive through it.');
+}
+async function toggleQuiet(el){
+  const paused = !el.checked;  // unchecked = paused
+  const msg=document.getElementById('quietmsg');
+  el.disabled=true;
+  if(msg) msg.textContent='…';
+  try{
+    const r=await fetch('actions/quiet?paused='+paused,{method:'POST'});
+    const dd=await r.json();
+    if(dd.ok){
+      toast(dd.paused? 'Quiet hours paused — the box will stay awake through tonight’s window.'
+                     : 'Quiet hours re-armed.');
+    } else {
+      const why = esc(dd.detail||dd.error||String(r.status));
+      if(msg) msg.textContent='failed: '+why;
+      toast('Quiet-hours toggle failed: '+why, true);
+    }
+  }catch(e){ if(msg) msg.textContent='error: '+esc(String(e)); toast('Quiet-hours toggle error: '+esc(String(e)), true); }
+  finally{ el.disabled=false; setTimeout(refresh, 800); }
 }
 async function comfyAction(action){
   const msg=document.getElementById('svcmsg');
@@ -1649,6 +1775,22 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps({
                 "ok": ok, "action": action,
                 "units": QUIET_COMFYUI_UNITS, "detail": detail[:500],
+            }).encode("utf-8")
+            self._send(200 if ok else 500, body, "application/json")
+        elif path == "/actions/quiet":
+            if not STATUS_ACTIONS_ENABLED or not QUIET_HOURS_ENABLED:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "quiet-hours actions disabled"}
+                ).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            # `paused=true` pauses (disables) quiet hours; `paused=false` resumes it.
+            paused = (qs.get("paused", ["true"])[0]).lower() in ("1", "true", "yes")
+            ok, detail = _set_quiet_paused(paused)
+            _cache["at"] = 0.0  # force the next status poll to reflect the change
+            body = json.dumps({
+                "ok": ok, "paused": _QUIET_PAUSED.is_set(), "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
         elif path == "/actions/gpu-power":

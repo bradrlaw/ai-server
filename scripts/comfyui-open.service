@@ -15,6 +15,11 @@ Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 # OPEN instance: pin to V100 #1 (idx1 = the `coding` card). This instance serves
 # the MCP / Open WebUI image-gen and the open (no-login) canvas.
 Environment=CUDA_VISIBLE_DEVICES=1
+# Reduce allocator fragmentation so large activation spikes (e.g. MiniMax-H3 DiT
+# attention on longer clips) can reuse reserved-but-unallocated VRAM instead of
+# OOMing. See the H3 OOM analysis (2.44 GiB alloc failed with ~2.76 GiB reserved
+# but unallocated on the 32 GB V100).
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
 # Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
 # keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
