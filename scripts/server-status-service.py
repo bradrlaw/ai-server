@@ -162,10 +162,14 @@ FAST_KEEPER_INTERVAL = float(os.environ.get("FAST_KEEPER_INTERVAL", "60"))
 FAST_KEEPER_TIMEOUT = float(os.environ.get("FAST_KEEPER_TIMEOUT", "120"))
 
 # --- Quiet hours (deep-idle window) -----------------------------------------
-# During the window the daily models are unloaded and ComfyUI is stopped so the
-# V100s can drop out of P0 to true cold idle. Any client LLM request still wakes
-# llama-swap on demand; when that happens we restart ComfyUI so the box is fully
-# ready, then re-idle after it has been quiet for QUIET_ACTIVITY_GRACE seconds.
+# Boundary-triggered, load-once semantics: when the window BEGINS we unload the
+# daily models and stop ComfyUI once so the V100s drop out of P0 to true cold
+# idle; when it ENDS we start ComfyUI and re-warm the daily models once. DURING
+# the window we do nothing — a client LLM request loads its model on demand via
+# llama-swap and it simply stays resident until the window ends. We deliberately
+# do NOT poll activity, wake ComfyUI, or re-idle mid-window: restarting ComfyUI
+# on the coding/chat cards while a model was cold-loading contended for the same
+# GPUs and left client requests returning empty responses.
 QUIET_HOURS_ENABLED = os.environ.get("QUIET_HOURS_ENABLED", "false").lower() in (
     "1",
     "true",
@@ -177,7 +181,6 @@ QUIET_HOURS_END = os.environ.get("QUIET_HOURS_END", "09:00")
 # time. Set this if the machine's clock runs in UTC but you want a wall-clock window.
 QUIET_TZ = os.environ.get("QUIET_TZ", "").strip()
 QUIET_CHECK_INTERVAL = float(os.environ.get("QUIET_CHECK_INTERVAL", "30"))
-QUIET_ACTIVITY_GRACE = float(os.environ.get("QUIET_ACTIVITY_GRACE", "600"))
 QUIET_UNLOAD_MODELS = os.environ.get("QUIET_UNLOAD_MODELS", "true").lower() in (
     "1",
     "true",
@@ -241,10 +244,6 @@ QUIET_WARM_ON_START = [
     ).split(",")
     if m.strip()
 ]
-# While "woken", re-idle once GPU SM utilization stays below this %% for the grace
-# period. Loaded-but-idle models sit at ~0%%, so this distinguishes "in use" from
-# "just resident" (coding/chat have no ttl and never self-unload).
-QUIET_ACTIVE_SM_PCT = float(os.environ.get("QUIET_ACTIVE_SM_PCT", "5"))
 
 # --- History (in-memory time series for the dashboard sparklines) -------------
 # A background thread snapshots per-GPU util/power/temp/VRAM and host CPU/RAM %
@@ -1109,36 +1108,6 @@ def _in_window(now: dt.time, start: dt.time, end: dt.time) -> bool:
     return now >= start or now < end  # wraps past midnight
 
 
-def _loaded_models() -> set:
-    running = _get_json(f"{LLAMASWAP_URL}/running")
-    if not running:
-        return set()
-    return {
-        m.get("model")
-        for m in (running.get("running") or [])
-        if isinstance(m, dict)
-    }
-
-
-def _max_gpu_util() -> int:
-    """Highest SM utilization %% across all GPUs (0 if unavailable). Used to detect
-    real inference activity — a loaded-but-idle model sits at ~0%%."""
-    try:
-        proc = subprocess.run(
-            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=HTTP_TIMEOUT,
-            env={**os.environ, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"},
-        )
-        if proc.returncode != 0:
-            return 0
-        vals = [int(x.strip()) for x in proc.stdout.split() if x.strip().isdigit()]
-        return max(vals) if vals else 0
-    except Exception:  # noqa: BLE001 - best effort
-        return 0
-
-
 def _unload_all_models() -> None:
     try:
         req = urllib.request.Request(
@@ -1260,12 +1229,6 @@ def _enter_deep_idle() -> None:
     _set_power_state("deep-idle", "quiet hours")
 
 
-def _wake_for_activity() -> None:
-    print("[quiet] client activity — restarting ComfyUI (staying in window)")
-    _comfyui("start")
-    _set_power_state("woken", "quiet hours (activity)")
-
-
 def _exit_window() -> None:
     print("[quiet] window ended — restoring active state")
     _QUIET_SUPPRESS_KEEPER.clear()
@@ -1280,12 +1243,14 @@ def _quiet_hours_loop():
     end = _parse_hhmm(QUIET_HOURS_END)
     print(
         f"[quiet] deep-idle window {QUIET_HOURS_START}–{QUIET_HOURS_END} "
-        f"({QUIET_TZ or 'system local'}); activity grace {QUIET_ACTIVITY_GRACE:.0f}s"
+        f"({QUIET_TZ or 'system local'}); load-once, restore at window end"
     )
-    # phase: "active" (outside window) | "idle" (in window, deep idle)
-    #        | "woken" (in window, ComfyUI up because a client is active)
+    # phase: "active" (outside window) | "idle" (inside window, deep idle entered).
+    # We act ONLY on the window boundaries: unload + stop ComfyUI once when it
+    # begins, restore once when it ends. During the window we don't poll activity,
+    # wake, or re-idle — a model loaded on demand stays resident until the window
+    # ends. This avoids the ComfyUI-restart GPU contention that emptied responses.
     phase = "active"
-    last_activity = 0.0
     # On a fresh boot / service restart OUTSIDE the quiet window, warm the daily
     # models once. Nothing else does: the llama-swap on_startup hook only preloads
     # `fast`, and _exit_window (which warms coding/chat) only fires on an in->out
@@ -1301,31 +1266,12 @@ def _quiet_hours_loop():
     while True:
         try:
             in_window = _in_window(_quiet_now(), start, end)
-            models_loaded = bool(_loaded_models())
-            # Real inference (LLM tokens or a ComfyUI render) spikes SM utilization;
-            # a loaded-but-idle model sits near 0%%. Use that to time the re-idle so
-            # the no-ttl models (coding/chat) don't pin the box "woken" all window.
-            busy = _max_gpu_util() >= QUIET_ACTIVE_SM_PCT
-            if busy:
-                last_activity = time.time()
-
-            if not in_window:
-                if phase != "active":
-                    _exit_window()
-                    phase = "active"
-            elif phase == "active":
+            if in_window and phase == "active":
                 _enter_deep_idle()
                 phase = "idle"
-            elif phase == "idle":
-                # A client loaded a model on demand → wake so the box is fully ready.
-                if models_loaded:
-                    _wake_for_activity()
-                    last_activity = time.time()
-                    phase = "woken"
-            elif phase == "woken":
-                if (time.time() - last_activity) > QUIET_ACTIVITY_GRACE:
-                    _enter_deep_idle()
-                    phase = "idle"
+            elif not in_window and phase == "idle":
+                _exit_window()
+                phase = "active"
         except Exception as exc:  # noqa: BLE001 - loop must never crash the service
             print(f"[quiet] loop error: {exc}")
         time.sleep(QUIET_CHECK_INTERVAL)
