@@ -28,7 +28,7 @@ services:
   # LiteLLM gateway (host :4000, reached via host.docker.internal). Web search
   # via the SearXNG service; MCP tools via the mcpo service.
   open-webui:
-    image: ghcr.io/open-webui/open-webui:v0.10.2
+    image: ghcr.io/open-webui/open-webui:v0.11.0
     container_name: open-webui
     restart: unless-stopped
     depends_on:
