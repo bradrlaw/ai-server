@@ -21,7 +21,7 @@ Environment=HF_HUB_ENABLE_HF_TRANSFER=1
 # skips its torch==2.1.0 reinstall. Belt-and-suspenders: pin the cu124 index and
 # torch line in case a future edit trips the reinstall path.
 Environment=TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
-Environment=TORCH_COMMAND=pip install torch==2.6.0 torchvision==0.21.0 --extra-index-url https://download.pytorch.org/whl/cu124
+Environment="TORCH_COMMAND=pip install torch==2.6.0 torchvision==0.21.0 --extra-index-url https://download.pytorch.org/whl/cu124"
 # Optional secrets / overrides (never committed):
 #   HF_TOKEN=<hf_read_token>  -> for gated model downloads.
 EnvironmentFile=-/srv/ai/Fooocus/fooocus.env
