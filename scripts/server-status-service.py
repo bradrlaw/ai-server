@@ -119,7 +119,8 @@ SERVICES = os.environ.get(
     "Evals viewer=http://127.0.0.1:8085/=8085,"
     "OpenClaw=http://127.0.0.1:18789/healthz=http://localhost:18789,"
     "Hermes dashboard=http://127.0.0.1:9119/=9119,"
-    "Hermes API=http://127.0.0.1:8642/health=8642",
+    "Hermes API=http://127.0.0.1:8642/health=8642,"
+    "AI Toolkit=http://127.0.0.1:8675/=8675",
 )
 CACHE_SECS = float(os.environ.get("STATUS_CACHE_SECS", "2"))
 HTTP_TIMEOUT = float(os.environ.get("STATUS_HTTP_TIMEOUT", "2.5"))
