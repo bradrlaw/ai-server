@@ -9,9 +9,16 @@ Type=simple
 User=brad
 Group=brad
 WorkingDirectory=/srv/ai/Fooocus
-# Deterministic GPU numbering so nvidia-smi and torch agree (idx0=P100/Titan,
+# Deterministic GPU numbering so nvidia-smi and torch agree (idx0=Titan X,
 # idx1/2=V100). Fooocus otherwise grabs the "fastest" visible card.
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Pin to GPU 1 — a Tesla V100-32GB (idx0 is the slow 12GB Titan X, which Fooocus
+# would otherwise pick). CUDA_VISIBLE_DEVICES is interpreted in PCI_BUS_ID order,
+# so "1" == nvidia-smi's GPU 1; the process sees only that V100 as its cuda:0.
+# NOTE: this is the same card the `coding` LLM uses in daily mode — SDXL loads
+# ~7GB, so heavy concurrent LLM + image gen can pressure the 32GB. Change to 2 to
+# use the other V100 if you'd rather isolate them.
+Environment=CUDA_VISIBLE_DEVICES=1
 # Reduce allocator fragmentation for SDXL activation spikes (same rationale as
 # the ComfyUI units).
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True

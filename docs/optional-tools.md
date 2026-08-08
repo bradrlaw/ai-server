@@ -188,10 +188,14 @@ small LoRAs/VAEs. Pass `--disable-preset-download` to skip that (e.g. a headless
 smoke test). Sharing checkpoints/LoRAs with ComfyUI is a **later** step (see
 ADR-0020) — for now Fooocus keeps its own model dirs.
 
-**GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID`. Fooocus otherwise
-grabs the "fastest" visible card; with SDXL it comfortably fits a single V100
-(32 GB) or the Titan X (12 GB). sm_70 has no fp8/FlashAttention-2, so Fooocus uses
-PyTorch cross-attention (sdpa) here — the correct path for Volta.
+**GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID` **and pins
+Fooocus to GPU 1 (a Tesla V100-32GB) via `CUDA_VISIBLE_DEVICES=1`** — left to its
+own devices Fooocus grabs whichever card it deems "fastest" and had been landing on
+the slow 12 GB Titan X (idx0). To use the other V100 instead, change that to `2`.
+Note GPU 1 is also the `coding` LLM's card in daily mode; SDXL loads ~7 GB, so
+isolate them on separate V100s if you run heavy image gen and LLM inference at
+once. sm_70 has no fp8/FlashAttention-2, so Fooocus uses PyTorch cross-attention
+(sdpa) here — the correct path for Volta.
 
 **Attribution.** Fooocus © lllyasviel (Lvmin Zhang) and contributors, GPL-3.0 —
 <https://github.com/lllyasviel/Fooocus>.
