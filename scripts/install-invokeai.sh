@@ -64,6 +64,12 @@ if [[ ! -f "${CONSTRAINTS_SRC}" ]]; then
 fi
 "${VENV}/bin/pip" install --no-cache-dir "invokeai==${INVOKE_VERSION}" -c "${CONSTRAINTS_SRC}"
 
+# hf_transfer: the service sets HF_HUB_ENABLE_HF_TRANSFER=1 to accelerate InvokeAI's
+# on-demand model/dependency downloads from the Hub. That flag REQUIRES this package
+# or InvokeAI raises "hf_transfer package is not available" at model-load time. It is
+# a self-contained Rust wheel with no Python deps (won't disturb the torch-2.6 pins).
+"${VENV}/bin/pip" install --no-cache-dir "hf_transfer==0.1.9"
+
 echo "==> 4/5 create the runtime root + config (host 0.0.0.0, port 9091, sdpa attn)"
 mkdir -p "${ROOT}"
 cp -f "${CONSTRAINTS_SRC}" "${ROOT}/constraints_v100.txt"
