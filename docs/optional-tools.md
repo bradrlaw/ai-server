@@ -447,6 +447,28 @@ comfy single-file FLUX/Krea transformers in `diffusion_models/`. Non-SD/SDXL/FLU
 architectures (Wan video, Qwen image, MiniMax) aren't InvokeAI model types, so
 expect them to be skipped. See [ADR-0020](adr/0020-additional-oss-creative-tools.md).
 
+**Single-file loaders still fetch a little config from the Hub (this is normal).**
+A `.safetensors` checkpoint holds only tensor **weights** — not the diffusers
+pipeline layout (`model_index.json`, per-submodel `config.json`) or the **tokenizer**
+vocab/merges. So the first time you generate with an imported single-file model,
+diffusers' single-file loader downloads those **small config/tokenizer files** from
+the canonical HF repo (e.g. `stabilityai/stable-diffusion-xl-base-1.0`) and then
+reads the **actual weights from the local ComfyUI file** — the multi-GB weights are
+*not* re-downloaded. It caches under `~/.cache/huggingface` (user `brad`) and is
+reused thereafter, so it needs outbound network **once per architecture** (SD1.5 /
+SDXL / FLUX each have their own tiny config repo), then works offline.
+
+Two consequences on this box:
+
+- The service sets `HF_HUB_ENABLE_HF_TRANSFER=1`, which **requires** the
+  `hf_transfer` package or the fetch aborts with *"'hf_transfer' package is not
+  available"*. It's installed in the venv (and pinned in `install-invokeai.sh`).
+- For **FLUX/Krea** single-file checkpoints the fetch is **larger** — the comfy file
+  is only the transformer, so diffusers pulls the FLUX text-encoder/VAE config stack
+  (T5 can be sizeable). We already have `t5xxl`, `clip_l`, and `ae.safetensors` in
+  `comfyui/models`, but InvokeAI won't auto-associate them with an imported
+  single-file FLUX model — the model-sharing limitation noted above.
+
 **GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID` and pins InvokeAI
 to **GPU 1 (a Tesla V100-32GB)** via `CUDA_VISIBLE_DEVICES=1` (idx0 is the slow
 12 GB Titan X). Verified it loads onto `Tesla V100-PCIE-32GB`. Change to `2` to use
