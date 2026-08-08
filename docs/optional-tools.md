@@ -152,7 +152,7 @@ requirements, and verifies the `ldm_patched` backend imports on torch 2.6.
 ```bash
 # one-off, foreground
 cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
-  /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 127.0.0.1
+  /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 0.0.0.0
 ```
 
 > **Port gotcha:** `ldm_patched`'s default port is **8188 — the same as ComfyUI**.

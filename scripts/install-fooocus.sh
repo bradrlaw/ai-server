@@ -94,7 +94,7 @@ cat <<'EOF'
 
 Done. To run the UI (port 7865, loopback only):
   cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
-    /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 127.0.0.1
+    /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 0.0.0.0
 
   as a service (needs sudo):
       sudo cp /srv/ai/scripts/fooocus.service /etc/systemd/system/

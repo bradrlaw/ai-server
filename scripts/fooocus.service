@@ -26,13 +26,15 @@ Environment="TORCH_COMMAND=pip install torch==2.6.0 torchvision==0.21.0 --extra-
 #   HF_TOKEN=<hf_read_token>  -> for gated model downloads.
 EnvironmentFile=-/srv/ai/Fooocus/fooocus.env
 # --port 7865: ldm_patched's default is 8188 (== ComfyUI), so we MUST override it.
-# --listen 127.0.0.1: loopback only; the status page / a reverse proxy front it.
+# --listen 0.0.0.0: bind all interfaces so the LAN (aipcub.local:7865) can reach
+#   it, matching the ComfyUI / Open WebUI / AI Toolkit units on this box. The box
+#   sits on a trusted LAN/Tailscale; there is no auth on the Fooocus UI itself.
 # FIRST START IS SLOW: with an empty models/checkpoints/, launch.py downloads the
 # default SDXL checkpoint (~7GB) BEFORE it binds :7865, so the port stays closed
 # (status page shows "down") until the download finishes — minutes on a slow link.
 # Subsequent starts are fast. (Type=simple means systemd marks the unit active on
 # exec, not on port-bind, so the download never trips a start timeout.)
-ExecStart=/srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 127.0.0.1 --disable-analytics
+ExecStart=/srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 0.0.0.0 --disable-analytics
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30
