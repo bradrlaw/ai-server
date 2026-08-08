@@ -96,7 +96,8 @@ a tight budget by using previous-generation datacenter GPUs and a used base PC.
 | Rolling tower stand | 1 | $45 |
 | GPU support bracket | 1 | $16 |
 | Smart power plug | 1 | $23 |
-| **Total (all taxes and shipping included)** | | **$2,886** |
+| CyberPower CP1500PFCLCD PFC Sinewave UPS | 1 | $258 |
+| **Total (all taxes and shipping included)** | | **$3,144** |
 
 † The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC and are no
 longer used.
