@@ -1,0 +1,37 @@
+[Unit]
+Description=AI Toolkit UI (ostris) — diffusion-model training web UI, :8675
+Documentation=https://github.com/ostris/ai-toolkit
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/ai-toolkit/ui
+# Deterministic GPU numbering so a training job's `device: cuda:N` maps to the
+# same physical card as nvidia-smi (idx0=P100, idx1/2=V100). The UI worker spawns
+# run.py which inherits this env.
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Reduce allocator fragmentation for large training activation spikes on the 32GB
+# V100s (same rationale as the ComfyUI units).
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# Faster HF downloads (hf_transfer is installed in the venv).
+Environment=HF_HUB_ENABLE_HF_TRANSFER=1
+# Optional secrets / overrides (never committed):
+#   AI_TOOLKIT_AUTH=<token>   -> require a token to reach the UI (recommended if
+#                                exposed beyond loopback; the /api/* routes 401
+#                                without it, pages stay open).
+#   HF_TOKEN=<hf_read_token>  -> for gated models (FLUX.1-dev etc.).
+EnvironmentFile=-/srv/ai/ai-toolkit/ui.env
+# `npm run start` = concurrently { worker (cron/worker.js) + Next.js on :8675 }.
+# node/npm are system installs in /usr/bin (on systemd's default PATH); npm adds
+# node_modules/.bin so `concurrently` resolves.
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

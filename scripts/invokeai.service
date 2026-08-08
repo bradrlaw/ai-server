@@ -1,0 +1,41 @@
+[Unit]
+Description=InvokeAI — full-featured image-gen studio (canvas/workflows), :9091
+Documentation=https://github.com/invoke-ai/InvokeAI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/invokeai
+# Deterministic GPU numbering so nvidia-smi and torch agree (idx0=Titan X,
+# idx1/2=V100). InvokeAI's device=auto otherwise picks the "fastest" card.
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Pin to GPU 1 — a Tesla V100-32GB (idx0 is the slow 12GB Titan X). Interpreted in
+# PCI_BUS_ID order, so "1" == nvidia-smi's GPU 1; InvokeAI sees only that V100 and
+# device=auto resolves to it. NOTE: this is also the `coding` LLM's card in daily
+# mode; change to 2 to isolate onto the other V100 for heavy concurrent use.
+Environment=CUDA_VISIBLE_DEVICES=1
+# Reduce allocator fragmentation for model activation spikes (same rationale as
+# the ComfyUI / Fooocus units).
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# Faster HF downloads when the user imports models via the InvokeAI model manager.
+Environment=HF_HUB_ENABLE_HF_TRANSFER=1
+# Runtime root: models DB, generated images, invokeai.yaml (host/port live there).
+Environment=INVOKEAI_ROOT=/srv/ai/invokeai
+# Optional secrets / overrides (never committed):
+#   HF_TOKEN=<hf_read_token>  -> for gated model imports.
+EnvironmentFile=-/srv/ai/invokeai/invokeai.env
+# Host (0.0.0.0) and port (9091) are set in invokeai.yaml so the LAN
+# (aipcub.local:9091) can reach it, matching the other creative-tool UIs. Port
+# 9091 avoids 9090 (llama-swap management endpoint). The box sits on a trusted
+# LAN/Tailscale; InvokeAI's own optional auth is off by default.
+ExecStart=/srv/ai/venvs/invokeai/bin/invokeai-web --root /srv/ai/invokeai
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

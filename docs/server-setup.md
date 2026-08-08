@@ -402,11 +402,43 @@ The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) 
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.
 
-The dashboard's **Services** section has **▶ Start ComfyUI** / **⏹ Stop** buttons that
-`POST /actions/comfyui?action=start|stop` — handy for waking ComfyUI during the deep-idle
-window without SSHing in. They reuse the same scoped sudoers rule as quiet hours (so no extra
-setup once `server-status-comfyui.sudoers` is installed) and are gated by
-`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only).
+The dashboard's **Services** section gives every controllable row its own **▶ Start** /
+**⏹ Stop** button in the **Action** column. For ComfyUI, `comfyui-open` and `comfyui-secure`
+are listed as separate rows and can be started/stopped **independently**
+(`POST /actions/comfyui?action=start|stop&unit=comfyui-open`) — handy for waking one
+instance during the deep-idle window without SSHing in. Omitting `unit` still controls both
+together (what quiet hours uses). These reuse the scoped sudoers rule and are gated by
+`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only). The
+sudoers file grants both the pair command (quiet hours) and the single-unit commands
+(independent buttons).
+
+#### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
+The optional image-gen tools each hold VRAM on a V100 while running and can OOM the
+LLM/ComfyUI tiers if left up, so they are **not enabled at boot** — you start/stop them
+per-service from the dashboard. Each row in the **Services** table gets its own
+**▶ Start** / **⏹ Stop** button (`POST /actions/service?name=<Name>&action=start|stop`),
+driven by `MANAGED_SERVICES` (default `Fooocus=fooocus,SwarmUI=swarmui,InvokeAI=invokeai`,
+display-name→systemd-unit). Quiet hours also **stops** any that are still running when the
+window begins (`QUIET_STOP_MANAGED=true`); it does **not** restart them at window end (they
+stay opt-in). Because they're controlled one unit at a time, each needs its own line in the
+sudoers file — the updated `server-status-comfyui.sudoers` already includes them.
+
+One-time setup:
+```bash
+# 1) refresh the scoped sudoers rule (now covers fooocus/swarmui/invokeai too):
+sudo install -m 0440 -o root -g root \
+  scripts/server-status-comfyui.sudoers /etc/sudoers.d/server-status-comfyui
+sudo visudo -cf /etc/sudoers.d/server-status-comfyui        # syntax check
+
+# 2) make the creative tools default-OFF (don't auto-start at boot), and stop them now:
+sudo systemctl disable --now fooocus swarmui invokeai
+
+# 3) pick up the new dashboard buttons:
+sudo systemctl restart server-status
+```
+After this they're launched only when you click **▶ Start** on the status page (first launch
+of a tool can take a while if it downloads dependencies). Setting `STATUS_ACTIONS_ENABLED=false`
+or clearing `MANAGED_SERVICES` hides the buttons.
 
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the

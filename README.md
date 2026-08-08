@@ -286,6 +286,8 @@ Things others running older multi-GPU boxes may find reusable:
   VRAM budget, model→backend routing, component matrix, phased rollout.
 - **[docs/adr/](docs/adr/README.md)** — Architecture Decision Records (the *why*
   behind settled choices).
+- **[docs/optional-tools.md](docs/optional-tools.md)** — optional add-on tools
+  (ai-toolkit training UI + alternative image-gen front-ends), install + attribution.
 
 ## Conventions
 
