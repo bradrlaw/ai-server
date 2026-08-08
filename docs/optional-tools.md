@@ -215,7 +215,7 @@ web server that drives a Python **ComfyUI backend** under the hood. It gives a
 friendly tabbed "Generate" UI (SDXL/Flux/etc.) on top of Comfy's power, a
 raw-workflow Comfy tab for power users, and — the reason we picked it for the
 family — **real multi-user accounts with per-user permissions and separate image
-history**. Licensed **GPL-3.0**.
+history**. Licensed **MIT**.
 
 **Architecture note.** Unlike the other tools this is *not* a Python app in its
 own venv — it's a .NET server that spawns a self-managed ComfyUI child. So the
@@ -350,7 +350,7 @@ same physical card in torch (idx0=Titan X, idx1/2=V100). sm_70 has no
 fp8/FlashAttention-2, so the backend uses PyTorch cross-attention (sdpa) — the
 correct path for Volta.
 
-**Attribution.** SwarmUI © Alex "mcmonkey" Goodwin and contributors, GPL-3.0 —
+**Attribution.** SwarmUI © Alex "mcmonkey" Goodwin and contributors, MIT License —
 <https://github.com/mcmonkeyprojects/SwarmUI>. Contributions to SwarmUI itself are
 governed by its own `AGENTS.md`; we only *deploy* it and keep its tree pristine,
 putting all customization in this repo's scripts.

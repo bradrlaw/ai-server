@@ -323,6 +323,18 @@ separately by their respective creators and are not redistributed here.)
 | SearXNG | https://github.com/searxng/searxng | Self-hosted metasearch engine used for web-search tooling. |
 | Filebrowser | https://github.com/filebrowser/filebrowser | Web file manager for browsing/downloading generated assets and models. |
 
+### Optional add-on tools (alternative image-gen UIs + training)
+
+Optional, installed alongside — not replacing — ComfyUI. Install + full attribution in
+[docs/optional-tools.md](docs/optional-tools.md).
+
+| Project | Link | License | How it's used |
+|---------|------|---------|---------------|
+| ai-toolkit | https://github.com/ostris/ai-toolkit | MIT | LoRA / fine-tune **training** UI (Ostris, LLC), on `:8675`. |
+| Fooocus | https://github.com/lllyasviel/Fooocus | GPL-3.0 | Simple, opinionated image-gen UI (lllyasviel / Lvmin Zhang), on `:7865`. |
+| SwarmUI | https://github.com/mcmonkeyprojects/SwarmUI | MIT | Multi-user, ComfyUI-backed image-gen front-end (Alex "mcmonkey" Goodwin), on `:7801`. |
+| InvokeAI | https://github.com/invoke-ai/InvokeAI | Apache-2.0 | Unified-canvas "pro" image-gen studio (Invoke, Inc.), on `:9091`. |
+
 ### ComfyUI custom nodes
 
 | Project | Link | How it's used |
