@@ -202,6 +202,15 @@ QUIET_COMFYUI_UNITS = [
     ).split(",")
     if u.strip()
 ]
+# Map each ComfyUI instance label (as it appears in COMFYUI_URLS, e.g. open/secure)
+# to its systemd unit, so the dashboard can start/stop the two instances
+# independently from the per-row Action buttons. Derived from QUIET_COMFYUI_UNITS by
+# stripping the "comfyui-" prefix (comfyui-open -> label "open"); only units listed
+# there (and thus covered by the sudoers rule) get buttons.
+COMFYUI_UNIT_BY_LABEL = {
+    (u[len("comfyui-"):] if u.startswith("comfyui-") else u): u
+    for u in QUIET_COMFYUI_UNITS
+}
 # Optional creative-tool services (Fooocus/SwarmUI/InvokeAI) that are managed
 # on-demand: they are NOT enabled at boot (default off) and are started/stopped
 # from the dashboard via per-service buttons. Each holds VRAM on the V100s while
@@ -594,11 +603,14 @@ def collect_comfyui() -> list:
         except Exception:
             port = None
         code, q = _http_status(f"{url}/queue")
+        unit = COMFYUI_UNIT_BY_LABEL.get(label)
         if code in (401, 403):
-            out.append({"label": label, "state": "locked", "port": port})
+            out.append({"label": label, "state": "locked", "port": port, "unit": unit})
             continue
         if code is None or q is None:
-            out.append({"label": label, "state": "unreachable", "port": port})
+            out.append(
+                {"label": label, "state": "unreachable", "port": port, "unit": unit}
+            )
             continue
         running = len(q.get("queue_running") or [])
         pending = len(q.get("queue_pending") or [])
@@ -609,6 +621,7 @@ def collect_comfyui() -> list:
                 "running": running,
                 "pending": pending,
                 "port": port,
+                "unit": unit,
             }
         )
     return out
@@ -1697,6 +1710,7 @@ async function refresh(){  try{
       : port!=null ? `<a href="http://${location.hostname}:${port}" target="_blank" style="color:#4b8ce0">:${port}</a>`
       : '<span class="sub">–</span>';
     const canServiceAct = d.actions && d.actions.services;
+    const canComfyAct = d.actions && d.actions.comfyui;
     const svcRows = svc.map(s=>{
       const p = s.up ? `<span class="pill idle">up</span>` : `<span class="pill bad">down</span>`;
       const code = s.code!=null ? ` <span class="sub">${s.code}</span>` : '';
@@ -1714,23 +1728,25 @@ async function refresh(){  try{
       else if(c.state==='idle') state = `<span class="pill idle">idle</span>`;
       else if(c.state==='locked') state = `<span class="pill busy">🔒 locked</span>`;
       else state = `<span class="pill bad">down</span>`;
-      return `<tr><td>ComfyUI <span class="sub">${esc(c.label)}</span></td><td>${state}</td><td>${linkHtml(null, c.port)}</td><td></td></tr>`;
+      const up = (c.state==='idle'||c.state==='busy'||c.state==='locked');
+      let act = '';
+      if(canComfyAct && c.unit){
+        act = up
+          ? `<button class="act" onclick="comfyAction('stop','${esc(c.unit)}')">⏹ Stop</button>`
+          : `<button class="act" onclick="comfyAction('start','${esc(c.unit)}')">▶ Start</button>`;
+      }
+      return `<tr><td>ComfyUI <span class="sub">${esc(c.label)}</span></td><td>${state}</td><td>${linkHtml(null, c.port)}</td><td>${act}</td></tr>`;
     });
     const allRows = svcRows.concat(comfyRows);
     document.getElementById('services').innerHTML = allRows.length ?
       '<table><tr><th>Service</th><th>State</th><th>Link</th><th>Action</th></tr>' + allRows.join('') + '</table>'
       : pill('none');
-    // ComfyUI start/stop controls (uses the quiet-hours sudoers rule) — handy for
-    // waking ComfyUI during the deep-idle window without SSHing in.
-    const canAct = d.actions && d.actions.comfyui;
-    const anyUp = comfy.some(c=>c.state==='idle'||c.state==='busy'||c.state==='locked');
+    // Per-row Start/Stop buttons live in the Action column above (ComfyUI open/secure
+    // controlled independently, and the managed creative tools). The header just
+    // carries the shared status message for those actions.
     const el = document.getElementById('svcactions');
-    if(canAct){
-      el.innerHTML =
-        `<button class="act" id="comfy-start" onclick="comfyAction('start')">▶ Start ComfyUI</button>`+
-        (anyUp?`<button class="act" id="comfy-stop" onclick="comfyAction('stop')">⏹ Stop</button>`:'')+
-        `<span id="svcmsg" class="hsub"></span>`;
-    } else { el.innerHTML=''; }
+    el.innerHTML = (canComfyAct || canServiceAct)
+      ? `<span id="svcmsg" class="hsub"></span>` : '';
     // Quiet-hours toggle: pause/resume the nightly deep-idle window at runtime so a
     // long ComfyUI/LLM job can run through it without editing the unit.
     renderQuiet(d);
@@ -1778,15 +1794,16 @@ async function toggleQuiet(el){
   }catch(e){ if(msg) msg.textContent='error: '+esc(String(e)); toast('Quiet-hours toggle error: '+esc(String(e)), true); }
   finally{ el.disabled=false; setTimeout(refresh, 800); }
 }
-async function comfyAction(action){
+async function comfyAction(action, unit){
   const msg=document.getElementById('svcmsg');
-  const btns=document.querySelectorAll('#svcactions button.act');
-  btns.forEach(b=>b.disabled=true);
-  if(msg) msg.textContent = (action==='start'?'starting':'stopping')+' ComfyUI…';
+  document.querySelectorAll('#services button.act').forEach(b=>b.disabled=true);
+  const label = unit ? unit.replace('comfyui-','') : 'all';
+  if(msg) msg.textContent = (action==='start'?'starting ':'stopping ')+'ComfyUI '+label+'…';
   try{
-    const r=await fetch('actions/comfyui?action='+action,{method:'POST'});
+    const q='actions/comfyui?action='+action+(unit?('&unit='+encodeURIComponent(unit)):'');
+    const r=await fetch(q,{method:'POST'});
     const d=await r.json();
-    if(msg) msg.textContent = d.ok ? ('ComfyUI '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
+    if(msg) msg.textContent = d.ok ? ('ComfyUI '+label+' '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
   }catch(e){ if(msg) msg.textContent='error: '+e; }
   finally{ setTimeout(refresh, 1200); }
 }
@@ -1866,11 +1883,26 @@ class Handler(BaseHTTPRequestHandler):
                     {"ok": False, "error": f"bad action {action!r}"}
                 ).encode("utf-8"), "application/json")
                 return
-            ok, detail = _comfyui_ctl(action)
+            # Optional `unit` selects a single ComfyUI instance (comfyui-open /
+            # comfyui-secure) so open and secure can be controlled independently.
+            # Must be one of the configured units (also what the sudoers rule allows).
+            # Omitted -> act on all units together (back-compat).
+            unit = (qs.get("unit", [""])[0]).strip()
+            if unit:
+                if unit not in QUIET_COMFYUI_UNITS:
+                    self._send(400, json.dumps(
+                        {"ok": False, "error": f"unknown ComfyUI unit {unit!r}"}
+                    ).encode("utf-8"), "application/json")
+                    return
+                units = [unit]
+                ok, detail = _systemctl_units(units, action)
+            else:
+                units = QUIET_COMFYUI_UNITS
+                ok, detail = _comfyui_ctl(action)
             _cache["at"] = 0.0  # force the next status poll to re-probe
             body = json.dumps({
                 "ok": ok, "action": action,
-                "units": QUIET_COMFYUI_UNITS, "detail": detail[:500],
+                "units": units, "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
         elif path == "/actions/service":

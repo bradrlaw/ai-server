@@ -4,8 +4,10 @@
 # The server-status service runs as `brad` and needs passwordless sudo for EXACTLY
 # these systemctl start/stop commands and nothing else:
 #   * ComfyUI (comfyui-open/comfyui-secure) — stopped during quiet hours to release
-#     the V100 CUDA contexts, restarted at window end; also the dashboard
-#     "Start ComfyUI"/"Stop" buttons (POST /actions/comfyui).
+#     the V100 CUDA contexts, restarted at window end; also the dashboard per-row
+#     Start/Stop buttons (POST /actions/comfyui). Quiet hours controls both units
+#     together (the pair line); the dashboard can also control each instance
+#     independently (the single-unit lines).
 #   * The optional creative-tool services (Fooocus/SwarmUI/InvokeAI) — NOT enabled
 #     at boot; started/stopped from the per-service dashboard buttons
 #     (POST /actions/service) and stopped by quiet hours if left running (they hold
@@ -23,6 +25,8 @@
 # argument vector).
 
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open comfyui-secure, /usr/bin/systemctl stop comfyui-open comfyui-secure
+brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open, /usr/bin/systemctl stop comfyui-open
+brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-secure, /usr/bin/systemctl stop comfyui-secure
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start fooocus, /usr/bin/systemctl stop fooocus
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start swarmui, /usr/bin/systemctl stop swarmui
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start invokeai, /usr/bin/systemctl stop invokeai

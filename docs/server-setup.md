@@ -402,11 +402,15 @@ The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) 
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.
 
-The dashboard's **Services** section has **▶ Start ComfyUI** / **⏹ Stop** buttons that
-`POST /actions/comfyui?action=start|stop` — handy for waking ComfyUI during the deep-idle
-window without SSHing in. They reuse the same scoped sudoers rule as quiet hours (so no extra
-setup once `server-status-comfyui.sudoers` is installed) and are gated by
-`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only).
+The dashboard's **Services** section gives every controllable row its own **▶ Start** /
+**⏹ Stop** button in the **Action** column. For ComfyUI, `comfyui-open` and `comfyui-secure`
+are listed as separate rows and can be started/stopped **independently**
+(`POST /actions/comfyui?action=start|stop&unit=comfyui-open`) — handy for waking one
+instance during the deep-idle window without SSHing in. Omitting `unit` still controls both
+together (what quiet hours uses). These reuse the scoped sudoers rule and are gated by
+`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only). The
+sudoers file grants both the pair command (quiet hours) and the single-unit commands
+(independent buttons).
 
 #### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
 The optional image-gen tools each hold VRAM on a V100 while running and can OOM the
