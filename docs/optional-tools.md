@@ -21,7 +21,7 @@ on them.
 |------|---------|------|--------|
 | [ai-toolkit](#ai-toolkit-training) | model **training** (LoRA/fine-tune) | 8675 | installed |
 | Fooocus | simple image gen | 7865 | installed |
-| SwarmUI | image gen (ComfyUI-backed) | 7801 | planned |
+| SwarmUI | image gen (ComfyUI-backed) | 7801 | installed |
 | InvokeAI | image gen (canvas/pro) | 9091 | planned |
 
 ---
@@ -202,7 +202,88 @@ once. sm_70 has no fp8/FlashAttention-2, so Fooocus uses PyTorch cross-attention
 
 ---
 
-## SwarmUI, InvokeAI
+## SwarmUI (image gen — ComfyUI-backed, multi-user)
 
-Planned — will be documented here as each is installed (same pattern: own venv,
+**What it is.** [**SwarmUI**](https://github.com/mcmonkeyprojects/SwarmUI) by
+**Alex "mcmonkey" Goodwin** (of Stability AI's Swarm lineage) — a modular C#/.NET
+web server that drives a Python **ComfyUI backend** under the hood. It gives a
+friendly tabbed "Generate" UI (SDXL/Flux/etc.) on top of Comfy's power, a
+raw-workflow Comfy tab for power users, and — the reason we picked it for the
+family — **real multi-user accounts with per-user permissions and separate image
+history**. Licensed **GPL-3.0**.
+
+**Architecture note.** Unlike the other tools this is *not* a Python app in its
+own venv — it's a .NET server that spawns a self-managed ComfyUI child. So the
+"venv" here belongs to that backend at `/srv/ai/SwarmUI/dlbackend/ComfyUI/venv`,
+and the .NET 10 SDK installs **user-local** to `~/.dotnet` (no sudo, no
+system-wide runtime).
+
+**Why these versions (the Volta caveats).** Two stock-install traps on this
+V100/P100 box, both handled by the installer **without editing any SwarmUI file**
+(so a future `git pull` of SwarmUI stays clean — see their `AGENTS.md`):
+
+| Upstream default | Installed here | Why |
+|---|---|---|
+| backend `torch` from **cu130** index (`comfy-install-linux.sh`) | pre-staged `torch 2.6.0+cu124` in the backend venv | cu130 drops sm_70/sm_60 → "no kernel image". Comfy's installer installs torch **without `-U`**, so if the trio is already present it reports "already satisfied" and skips the cu130 pull |
+| backend ComfyUI @ **master** (`comfy-kitchen ≥0.2.28`) | pinned to **v0.30.1** (`comfy-kitchen 0.2.26`) | 0.2.28's `na3d` custom op uses `list[int]` typing that torch 2.6's `infer_schema` rejects (needs torch ≥2.7, no sm_70). v0.30.1 imports clean on torch 2.6 — same tag our native ComfyUI runs |
+
+> **Pre-stage all three wheels.** The cu130-skip only works if `torch`,
+> `torchvision` **and** `torchaudio` are all already present — a partial pre-stage
+> lets pip pull a cu130 `torchaudio` and you get an ABI mismatch. The installer
+> stages the full cu124 trio. SwarmUI's backend `AutoUpdate` defaults `false` and
+> we sit on a detached tag, so it won't drift back to master.
+
+**Install (reproducible).** Codified in
+[`scripts/install-swarmui.sh`](../scripts/install-swarmui.sh):
+
+```bash
+/srv/ai/scripts/install-swarmui.sh
+```
+
+It clones to `/srv/ai/SwarmUI`, installs user-local .NET 10, builds SwarmUI
+(Release), pre-stages `dlbackend/ComfyUI` @ `v0.30.1` with the cu124 torch trio +
+its requirements, and verifies the backend boots on a V100.
+
+**Run it (port 7801).** As a service (needs sudo):
+
+```bash
+sudo cp /srv/ai/scripts/swarmui.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now swarmui
+sudo systemctl restart server-status   # pick up the new status-page entry
+# logs: journalctl -u swarmui -f
+```
+
+The UI is then at `http://<server>:7801` and appears on the
+[status page](server-setup.md) Services panel ("SwarmUI").
+
+> **First launch = one-time web install wizard.** SwarmUI opens an install page on
+> first run. Because the installer has already **pre-warmed the ComfyUI backend**
+> (cu124/v0.30.1), the wizard's backend step is fast and Volta-safe. Pick
+> **Backend = ComfyUI (self-starting)** and **Models = None** (we share existing
+> weights, not the wizard's downloads); theme / network / multi-user + auth are
+> genuine product choices left to you. SwarmUI restarts itself (exit code 42,
+> which `Restart=always` handles) to apply the config.
+
+**Models.** Backend generation uses SwarmUI's own model dirs under
+`/srv/ai/SwarmUI/Models/`. Sharing checkpoints/LoRAs with ComfyUI is a **later**
+step (see ADR-0020) — for now it keeps its own dirs.
+
+**GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID`. At install
+SwarmUI picks the **highest-VRAM card** (a V100-32GB) for the backend and passes
+its ComfyUI child `--cuda-device <N>`; PCI_BUS_ID order makes that N map to the
+same physical card in torch (idx0=Titan X, idx1/2=V100). sm_70 has no
+fp8/FlashAttention-2, so the backend uses PyTorch cross-attention (sdpa) — the
+correct path for Volta.
+
+**Attribution.** SwarmUI © Alex "mcmonkey" Goodwin and contributors, GPL-3.0 —
+<https://github.com/mcmonkeyprojects/SwarmUI>. Contributions to SwarmUI itself are
+governed by its own `AGENTS.md`; we only *deploy* it and keep its tree pristine,
+putting all customization in this repo's scripts.
+
+---
+
+## InvokeAI
+
+Planned — will be documented here as it is installed (same pattern: own venv,
 own port, cu124/torch-2.6 build, systemd unit, status-page entry).

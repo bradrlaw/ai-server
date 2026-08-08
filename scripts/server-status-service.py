@@ -121,7 +121,8 @@ SERVICES = os.environ.get(
     "Hermes dashboard=http://127.0.0.1:9119/=9119,"
     "Hermes API=http://127.0.0.1:8642/health=8642,"
     "AI Toolkit=http://127.0.0.1:8675/=8675,"
-    "Fooocus=http://127.0.0.1:7865/=7865",
+    "Fooocus=http://127.0.0.1:7865/=7865,"
+    "SwarmUI=http://127.0.0.1:7801/=7801",
 )
 CACHE_SECS = float(os.environ.get("STATUS_CACHE_SECS", "2"))
 HTTP_TIMEOUT = float(os.environ.get("STATUS_HTTP_TIMEOUT", "2.5"))

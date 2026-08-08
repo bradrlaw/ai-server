@@ -1,0 +1,35 @@
+[Unit]
+Description=SwarmUI — multi-user AI image-gen UI (ComfyUI-backed), :7801
+Documentation=https://github.com/mcmonkeyprojects/SwarmUI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/SwarmUI
+# Deterministic GPU numbering: SwarmUI launches its ComfyUI backend as a child and
+# passes it --cuda-device <N> where N is the nvidia-smi GPU id chosen at install
+# (the highest-VRAM card = a V100). PCI_BUS_ID order makes that N map to the same
+# physical card in torch (idx0=Titan X, idx1/2=V100). The child inherits this env.
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Reduce allocator fragmentation for SDXL/large-model spikes on the V100s.
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment=HF_HUB_ENABLE_HF_TRANSFER=1
+# launch-linux.sh sources launchtools/linux-path-fix.sh, which locates the
+# user-local dotnet 10 (~/.dotnet) and exports DOTNET_ROOT/PATH — so we don't have
+# to hardcode them here. It also rebuilds only if the source changed.
+#   --host 0.0.0.0 : bind all interfaces for LAN access (aipcub.local:7801), like
+#                    the ComfyUI / Fooocus units. Overrides the settings-file host.
+#   --launch_mode none : headless server, never try to open a desktop browser.
+# NOTE: SwarmUI requests a restart by exiting 42 (e.g. after settings/backports
+# changes); Restart=always lets systemd bring it back.
+ExecStart=/srv/ai/SwarmUI/launch-linux.sh --host 0.0.0.0 --port 7801 --launch_mode none
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
