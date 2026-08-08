@@ -101,8 +101,6 @@ a tight budget by using previous-generation datacenter GPUs and a used base PC.
 † The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC and are no
 longer used.
 
-> **Power usage & running costs:** to be added after real-world power measurement.
-
 ## Power usage
 
 Measured with `nvidia-smi dmon`. These are **GPU-only** figures — whole-system draw at
@@ -160,8 +158,30 @@ conversion losses. Running costs under sustained inference load will be higher.
 > V100s fall to the ~73 W cold-idle floor, then auto-wakes on the first client request.
 > Disabled by default — see [docs/server-setup.md](docs/server-setup.md#quiet-hours-deep-idle-window).
 
-> **Load draw:** whole-system wall power and $/month under sustained inference to be
-> added after measurement.
+### Measured whole-month usage (July 2026)
+
+Real-world whole-system energy at the wall (smart plug, mixed use — mostly idle-with-daily-
+models-loaded plus intermittent inference and ComfyUI image/video runs over the month):
+
+![July 2026 whole-system energy: 135.73 kWh for the month](docs/img/power-july2026-monthly-kwh.jpeg)
+
+| Metric | Value |
+|--------|-------|
+| Energy for the month (31 days) | **135.73 kWh** |
+| Average daily | ~4.38 kWh/day |
+| Average continuous draw | **~182 W** (135.73 kWh ÷ 744 h) |
+| Line voltage | ~119.4 V |
+| Electricity rate | $0.105 / kWh |
+| Cost for July | **~$14.25** |
+| Annualized (~1,629 kWh/yr) | ~$171/yr |
+
+The measured ~182 W average sits just above the ~170 W daily-models-loaded idle figure
+above — i.e. real usage this month was mostly idle, with inference/ComfyUI bursts adding
+only ~12 W on average across the whole month.
+
+> **Load draw:** a dedicated *sustained*-inference stress figure (both V100s pinned at the
+> 175 W cap) is still to be measured; expect a peak nearer ~500–600 W at the wall while all
+> three GPUs run flat out.
 
 ### Why not full sleep / hibernate / Wake-on-LAN?
 
