@@ -257,6 +257,16 @@ sudo systemctl restart server-status   # pick up the new status-page entry
 The UI is then at `http://<server>:7801` and appears on the
 [status page](server-setup.md) Services panel ("SwarmUI").
 
+> **Install wizard "Python Warning" (`pip is missing`).** SwarmUI's first-run
+> wizard checks the **system** `python3 -m pip` and warns if it's absent. On this
+> box the system Python 3.12 is deliberately pip-less (we build venvs with
+> `--without-pip`), so the wizard shows *"You have Python installed, but 'pip' is
+> missing"*. The backend install itself doesn't need system pip — it runs inside
+> the pre-staged `dlbackend/ComfyUI/venv` (which has its own pip) — but clear the
+> warning the way it suggests: `sudo apt install python3-pip`. This is isolated and
+> won't touch any existing venv or the pre-staged cu124 backend. Then reload the
+> install page and proceed (Backend = ComfyUI self-starting, Models = None).
+
 > **First launch = one-time web install wizard.** SwarmUI opens an install page on
 > first run. Because the installer has already **pre-warmed the ComfyUI backend**
 > (cu124/v0.30.1), the wizard's backend step is fast and Volta-safe. Pick
