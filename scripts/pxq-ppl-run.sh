@@ -19,7 +19,7 @@ CHUNKS="${1:-100}"; shift || true
 
 declare -A M=(
   [q8]="models/pxq/Qwen3.6-35B-A3B-Q8_0.gguf|Q8_0|reference (near-lossless)"
-  [q6k]="models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf|Q6_K|standard ~6.5bpw"
+  [q6k]="models/cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf|Q6_K|standard ~6.5bpw"
   [pxq6]="models/pxq/Qwen3.6-35B-A3B-PXQ6.gguf|PXQ6|fork ~5.3bpw"
   [q4km]="models/pxq/Qwen3.6-35B-A3B-Q4_K_M.gguf|Q4_K_M|standard ~4.8bpw"
   [pxq4]="models/pxq/Qwen3.6-35B-A3B-PXQ4.gguf|PXQ4|fork ~4.5bpw"
