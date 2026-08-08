@@ -20,7 +20,7 @@ on them.
 | Tool | Purpose | Port | Status |
 |------|---------|------|--------|
 | [ai-toolkit](#ai-toolkit-training) | model **training** (LoRA/fine-tune) | 8675 | installed |
-| Fooocus | simple image gen | 7865 | planned |
+| Fooocus | simple image gen | 7865 | installed |
 | SwarmUI | image gen (ComfyUI-backed) | 7801 | planned |
 | InvokeAI | image gen (canvas/pro) | 9091 | planned |
 
@@ -112,7 +112,82 @@ small for most modern training.
 
 ---
 
-## Fooocus, SwarmUI, InvokeAI
+## Fooocus (image gen)
+
+**What it is.** [**Fooocus**](https://github.com/lllyasviel/Fooocus) by
+**lllyasviel** (Lvmin Zhang, author of ControlNet/Forge) — a deliberately
+minimal, "just type a prompt" SDXL image generator. No node graph, few knobs:
+the opposite of ComfyUI, aimed at family members who want good SDXL images with
+zero setup. Under the hood it's a vendored 2024 ComfyUI fork (`ldm_patched`).
+Licensed **GPL-3.0**.
+
+**Why these versions (the Volta + web-stack caveats).** Two stock-install traps on
+this box, both fixed by the installer:
+
+| Upstream default | Installed here | Why |
+|---|---|---|
+| `torch==2.1.0` (launch.py) | `torch 2.6.0+cu124` | 2.1.0 has no cp312 wheels (we're on Py 3.12); cu124/2.6.0 keeps sm_70/sm_60 |
+| `torchvision` (implicit) | `torchvision==0.21.0` | matches the torch-2.6 line |
+| `fastapi`/`starlette` *(unpinned)* | `fastapi==0.103.2`, `starlette==0.27.0`, `anyio==3.7.1` | a 2026 index resolves these to starlette ≥1.x, which breaks gradio 3.41.2 with *"Jinja2Templates unhashable type: dict"* at UI launch |
+| `pydantic` *(unpinned)* | `pydantic==2.4.2`, `pydantic-core==2.10.1` | pydantic ≥2.5 breaks fastapi 0.103 with *"FieldInfo has no attribute in_"* |
+
+Fooocus ships `gradio==3.41.2` (2023) but leaves the FastAPI web stack unpinned;
+on a 2026 package index pip pulls the latest, which is incompatible. The pins above
+are the era-correct 2023 combo that matches gradio 3.41.2. They live in
+`/srv/ai/Fooocus/constraints_v100.txt`.
+
+**Install (reproducible).** Codified in
+[`scripts/install-fooocus.sh`](../scripts/install-fooocus.sh):
+
+```bash
+/srv/ai/scripts/install-fooocus.sh
+```
+
+It clones to `/srv/ai/Fooocus`, creates `/srv/ai/venvs/fooocus`
+(`--without-pip` + get-pip.py), installs the cu124 torch and the constrained
+requirements, and verifies the `ldm_patched` backend imports on torch 2.6.
+
+**Run it (port 7865).**
+
+```bash
+# one-off, foreground
+cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
+  /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 127.0.0.1
+```
+
+> **Port gotcha:** `ldm_patched`'s default port is **8188 — the same as ComfyUI**.
+> Always pass `--port 7865` (the service and one-liner above do). Omitting it
+> collides with the running ComfyUI.
+
+As a service (needs sudo):
+
+```bash
+sudo cp /srv/ai/scripts/fooocus.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fooocus
+# logs: journalctl -u fooocus -f
+```
+
+The UI is then at `http://<server>:7865` and appears on the
+[status page](server-setup.md) Services panel ("Fooocus").
+
+**Models.** On the first real generation Fooocus downloads its default SDXL
+checkpoint (JuggernautXL, ~7 GB) into `Fooocus/models/checkpoints/`, plus a few
+small LoRAs/VAEs. Pass `--disable-preset-download` to skip that (e.g. a headless
+smoke test). Sharing checkpoints/LoRAs with ComfyUI is a **later** step (see
+ADR-0020) — for now Fooocus keeps its own model dirs.
+
+**GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID`. Fooocus otherwise
+grabs the "fastest" visible card; with SDXL it comfortably fits a single V100
+(32 GB) or the Titan X (12 GB). sm_70 has no fp8/FlashAttention-2, so Fooocus uses
+PyTorch cross-attention (sdpa) here — the correct path for Volta.
+
+**Attribution.** Fooocus © lllyasviel (Lvmin Zhang) and contributors, GPL-3.0 —
+<https://github.com/lllyasviel/Fooocus>.
+
+---
+
+## SwarmUI, InvokeAI
 
 Planned — will be documented here as each is installed (same pattern: own venv,
 own port, cu124/torch-2.6 build, systemd unit, status-page entry).

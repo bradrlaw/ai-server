@@ -1,0 +1,37 @@
+[Unit]
+Description=Fooocus — simple SDXL image-generation web UI, :7865
+Documentation=https://github.com/lllyasviel/Fooocus
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/Fooocus
+# Deterministic GPU numbering so nvidia-smi and torch agree (idx0=P100/Titan,
+# idx1/2=V100). Fooocus otherwise grabs the "fastest" visible card.
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Reduce allocator fragmentation for SDXL activation spikes (same rationale as
+# the ComfyUI units).
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# Faster HF downloads for the default-model fetch on first generation.
+Environment=HF_HUB_ENABLE_HF_TRANSFER=1
+# torch is already installed in the venv, so launch.py's prepare_environment()
+# skips its torch==2.1.0 reinstall. Belt-and-suspenders: pin the cu124 index and
+# torch line in case a future edit trips the reinstall path.
+Environment=TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
+Environment=TORCH_COMMAND=pip install torch==2.6.0 torchvision==0.21.0 --extra-index-url https://download.pytorch.org/whl/cu124
+# Optional secrets / overrides (never committed):
+#   HF_TOKEN=<hf_read_token>  -> for gated model downloads.
+EnvironmentFile=-/srv/ai/Fooocus/fooocus.env
+# --port 7865: ldm_patched's default is 8188 (== ComfyUI), so we MUST override it.
+# --listen 127.0.0.1: loopback only; the status page / a reverse proxy front it.
+ExecStart=/srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 127.0.0.1 --disable-analytics
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
