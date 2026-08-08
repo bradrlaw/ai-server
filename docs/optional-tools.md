@@ -16,6 +16,11 @@ on them.
   ADR-0003.
 - Services are native systemd units under `scripts/`. The agent can't `sudo`, so
   **you install/enable them by hand** (commands below).
+- The three **image-gen** tools (Fooocus/SwarmUI/InvokeAI) each hold VRAM on a V100
+  while running and can OOM the LLM/ComfyUI tiers, so they are run **on demand**:
+  keep their units **disabled at boot** and start/stop them from the status
+  dashboard's per-service **▶ Start / ⏹ Stop** buttons. Quiet hours stops any left
+  running. See [server-setup.md](server-setup.md#on-demand-creative-tool-services-fooocus--swarmui--invokeai).
 
 | Tool | Purpose | Port | Status |
 |------|---------|------|--------|
