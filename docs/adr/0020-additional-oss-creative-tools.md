@@ -49,8 +49,23 @@ collides with the llama-swap management port):
 | InvokeAI | image gen (canvas/pro) | 9091 |
 
 **Model sharing with ComfyUI** (checkpoints/LoRAs/VAEs) is desirable to avoid
-duplicating tens of GB, but is deliberately **deferred**: get each tool running on
-its own first, then wire shared model paths. Tracked as a follow-up.
+duplicating tens of GB. Approach: get each tool running standalone first, then
+point it at ComfyUI's existing `models/` tree. **Done for SwarmUI** — it adds
+`/srv/ai/comfyui/models` as a second `ModelRoot` (+ three folder-name aliases) in
+`Data/Settings.fds`, which makes SwarmUI emit a ComfyUI `extra_model_paths` file
+for its self-started backend; weights are read in place, downloads stay in
+SwarmUI's own dir (`DownloadToRootID=0`). See `docs/optional-tools.md` (SwarmUI ›
+Models). Remaining tools tracked as follow-ups.
+
+We use SwarmUI's **self-starting** ComfyUI backend (isolated process/venv/nodes,
+pinned v0.30.1) rather than the **"ComfyUI API By URL"** backend pointed at our
+primary ComfyUI. The API route auto-discovers models but (a) requires SwarmUI's
+`Swarm*` custom nodes installed in our ComfyUI or core features break, (b) couples
+the two instances' lifecycle and GPU/VRAM (no start/stop/restart control over an
+external URL), (c) couples node/ComfyUI versions, and (d) still needs the
+`ModelRoot` mapping for SwarmUI's model browser anyway — so it is more ongoing
+maintenance, not less. `Swarm-API-Backend`/API-by-URL is reserved for adding a
+**second GPU/machine** (horizontal scaling), not reusing one local ComfyUI.
 
 ## Consequences
 - Positive: non-technical users get approachable UIs; the repo becomes a
@@ -62,7 +77,8 @@ its own first, then wire shared model paths. Tracked as a follow-up.
   fights the current of being built for newer GPUs, so some install pins must be
   hand-reconciled to the torch-2.6 line and the newest models may not run on Volta.
 - Follow-ups / things to watch:
-  - Configure shared model dirs with ComfyUI (deferred).
+  - Configure shared model dirs with ComfyUI (done for SwarmUI; Fooocus/InvokeAI
+    pending).
   - `ffmpeg` is not installed system-wide — needed for ai-toolkit **video/audio**
     training (torchcodec) and possibly other tools; hand to owner as `apt install`.
   - Each tool's own auto-updater may reintroduce a cu130 torch; pin/verify on update.
@@ -74,3 +90,9 @@ its own first, then wire shared model paths. Tracked as a follow-up.
   users/followers choose.
 - **Use each tool's bundled installer as-is** — rejected: they pull cu130/torch-2.13
   wheels with no sm_70 kernels, which cannot run on this hardware.
+- **SwarmUI "ComfyUI API By URL" → our primary ComfyUI** (instead of its
+  self-starting backend) — rejected: needs SwarmUI's `Swarm*` custom nodes in our
+  ComfyUI or features break, couples lifecycle/GPU/version between the two
+  instances, and still needs the model-path mapping for the browser. Self-start +
+  shared model paths keeps them isolated while sharing weights. (Details in
+  Consequences and `docs/optional-tools.md`.)

@@ -275,9 +275,68 @@ The UI is then at `http://<server>:7801` and appears on the
 > genuine product choices left to you. SwarmUI restarts itself (exit code 42,
 > which `Restart=always` handles) to apply the config.
 
-**Models.** Backend generation uses SwarmUI's own model dirs under
-`/srv/ai/SwarmUI/Models/`. Sharing checkpoints/LoRAs with ComfyUI is a **later**
-step (see ADR-0020) — for now it keeps its own dirs.
+**Models — shared with ComfyUI (no duplicate downloads).** SwarmUI reads our
+existing ComfyUI weights directly, so nothing is re-downloaded. It auto-generates
+a ComfyUI `extra_model_paths` file (`Data/comfy-auto-model.yaml`) for its managed
+backend from its own **Paths** settings — one `base_path` block per `ModelRoot`,
+mapping each SwarmUI folder onto ComfyUI's category names. We add
+`/srv/ai/comfyui/models` as a **second `ModelRoot`** and extend three folder
+settings so the ComfyUI-style names resolve (the rest already match). Set in
+`/srv/ai/SwarmUI/Data/Settings.fds` under `Paths:`:
+
+| Setting | Value | Note |
+|---|---|---|
+| `ModelRoot` | `Models;/srv/ai/comfyui/models` | 2nd root = the ComfyUI models tree |
+| `SDModelFolder` | `Stable-Diffusion;checkpoints` | ComfyUI uses `checkpoints/` |
+| `SDLoraFolder` | `Lora;loras` | ComfyUI uses `loras/` |
+| `SDVAEFolder` | `VAE;vae` | ComfyUI uses `vae/` |
+
+The other categories need no change — SwarmUI's defaults already include
+ComfyUI-compatible names: `embeddings`, `controlnet`, `text_encoders;clip`,
+`clip_vision`, and `unet` / `diffusion_models` (Flux, big models) /
+`upscale_models` / `style_models` are forwarded verbatim. Edit `Settings.fds`
+**while the service is loaded is fine** — SwarmUI re-saves settings on *startup*
+(not shutdown), so a plain `sudo systemctl restart swarmui` reads the edits and
+re-emits `comfy-auto-model.yaml` (a second `base_path` block appears). Verified:
+generations with `flux1-dev-fp8` (checkpoints) and `krea2_turbo_bf16` (26 GB, from
+`diffusion_models/`) both served straight from `/srv/ai/comfyui/models` — SwarmUI's
+own `Models/Stable-Diffusion/` stays empty.
+
+New SwarmUI downloads are **non-destructive** to ComfyUI: `DownloadToRootID=0`
+means anything SwarmUI fetches lands in its *own* `Models/` (root 0), never in the
+ComfyUI tree. (Heads-up: a model definition may still pull a companion file it
+can't find — e.g. it grabbed a bf16 `qwen3vl_4b` text encoder even though ComfyUI
+has the `fp8_scaled` variant — but that goes into SwarmUI's dir, not ComfyUI's.)
+
+> **Why we use the self-starting backend, not "ComfyUI API By URL" → our main
+> ComfyUI.** SwarmUI can instead point at an already-running ComfyUI over its API,
+> which auto-discovers models from that instance's `object_info` (no path mapping
+> needed). We deliberately **don't** do that:
+> - **It needs SwarmUI's custom nodes inside *your* ComfyUI.** Every SwarmUI
+>   workflow is built from `Swarm*` nodes (`SwarmKSampler`, `SwarmSaveImageWS` for
+>   websocket image return, `SwarmLoadImageB64` for img2img/inpaint upload,
+>   `SwarmEmbedLoaderListProvider`, plus DLNodes: IPAdapter, controlnet_aux, VFI,
+>   segment-anything, GGUF…). Without them the backend logs *"missing the Swarm
+>   core nodes! Core functionalities will be missing."* SwarmUI's own docs warn:
+>   *"if you use ComfyUI API By URL … properly load in the Swarm custom node set
+>   and all."* Self-start installs & version-matches these automatically.
+> - **Lifecycle coupling + GPU contention.** Over API, SwarmUI can't
+>   start/stop/restart or free-VRAM-manage the instance — it just talks to a URL.
+>   Family image-gen would queue behind (and fight for VRAM with) our interactive
+>   ComfyUI and the LLM on that card. Self-start runs an **isolated** ComfyUI
+>   process SwarmUI fully controls.
+> - **Version coupling.** Swarm's nodes must match SwarmUI's version; a ComfyUI
+>   update on our side could break them. Self-start keeps its own pinned v0.30.1 +
+>   matched nodes.
+> - **You don't even escape mapping.** SwarmUI's Models tab (thumbnails, metadata,
+>   ratings, downloads) is driven by scanning `ModelRoot`, so you'd still want the
+>   mapping above for a good browser — `object_info` only feeds the backend's
+>   usable list, not the catalog UI.
+>
+> Net: self-start + the 4-line path mapping gives shared weights (no duplicate
+> downloads) **and** isolation. "ComfyUI API By URL" / `Swarm-API-Backend` is meant
+> for adding a **second GPU/machine** (horizontal scaling), not reusing one local
+> ComfyUI.
 
 **GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID`. At install
 SwarmUI picks the **highest-VRAM card** (a V100-32GB) for the backend and passes
