@@ -107,6 +107,10 @@ NOTES
   - First real generation downloads the default SDXL model (~7GB) into
     Fooocus/models/checkpoints/. Pass --disable-preset-download to skip it,
     e.g. for a headless smoke test. Model-sharing with ComfyUI is a later step.
+  - FIRST START IS SLOW: on the very first launch (empty models/checkpoints/)
+    launch.py downloads that ~7GB checkpoint BEFORE it binds :7865, so the port
+    stays closed and the status page shows Fooocus "down" until it finishes —
+    minutes on a slow link. Subsequent starts are fast (model cached).
   - sm_70 has no fp8/FlashAttention-2; Fooocus uses pytorch cross attention
     (sdpa) on this box, which is the correct/only path for Volta.
 EOF

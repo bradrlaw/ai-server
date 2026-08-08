@@ -171,6 +171,17 @@ sudo systemctl enable --now fooocus
 The UI is then at `http://<server>:7865` and appears on the
 [status page](server-setup.md) Services panel ("Fooocus").
 
+> **First start is slow — this is expected.** On its **very first** launch (with
+> an empty `models/checkpoints/`), `launch.py` downloads the default SDXL
+> checkpoint (JuggernautXL, **~7 GB**) plus a few small LoRAs/VAEs **before it
+> binds port 7865**. Until that finishes the port is closed, so the **status page
+> will show Fooocus as *down*** and `journalctl -u fooocus -f` shows a
+> `Downloading:` line. On a slow link this can take several minutes (or longer);
+> just wait for the download to complete — the UI comes up and the status flips
+> to *up* automatically. Subsequent starts are fast (model already cached). To
+> skip the download entirely (e.g. a headless smoke test), add
+> `--disable-preset-download` to the launch args.
+
 **Models.** On the first real generation Fooocus downloads its default SDXL
 checkpoint (JuggernautXL, ~7 GB) into `Fooocus/models/checkpoints/`, plus a few
 small LoRAs/VAEs. Pass `--disable-preset-download` to skip that (e.g. a headless
