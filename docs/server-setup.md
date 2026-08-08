@@ -249,11 +249,15 @@ less fragile and engines independently upgradable.
    `/srv/ai/storage-bulk/models` — hot/served model dirs stay directly under
    `/srv/ai/models/`; rarely-used, base-weight, or superseded-quant dirs (e.g. the plain
    `qwen3.6-27b/` BF16 + `Q4_K_M`/`UD-Q6_K_XL`/`UD-Q8_K_XL` quants, `pxq-fusion4/`,
-   `qwen3.5-9b/`) live under `/srv/ai/models/cold/` on the 1TB. **Gotcha:** check the mode
-   overlays (`config/modes/*.yaml`), not just `llama-swap.base.yaml`, before cold-moving a
-   file — the `agentic` overlay pins `coding` to the non-MTP `qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf`,
-   so that one file is kept hot (only the base/superseded quants above go cold). Nothing in
-   `llama-swap.base.yaml` references `cold/`.
+   `qwen3.5-9b/`) live under `/srv/ai/models/cold/` on the 1TB. The non-MTP swap files used
+   only by the parallel-pool modes are also cold (loaded on demand): `agentic` pins `coding`
+   to `cold/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf` and `heavy-coding` pins `chat` to
+   `cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf` — first switch into those modes pays a
+   one-time ~21–28 GB HDD load (~150 MB/s). **Gotcha:** check the mode overlays
+   (`config/modes/*.yaml`), not just `llama-swap.base.yaml`, before moving a file — a slot's
+   file may differ per mode. Only the daily/base served slots (`coding`+`chat`+`fast` MTP
+   files, uncensored-heretic, etc.) stay on the hot NVMe tier; `llama-swap.base.yaml` itself
+   references no `cold/` paths.
 
 ---
 

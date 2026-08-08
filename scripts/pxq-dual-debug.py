@@ -28,7 +28,7 @@ FORK2_LD = ":".join([f"{FORK2}/bin", f"{FORK2}/src", f"{FORK2}/ggml/src",
                      f"{FORK2}/examples/mtmd", "/usr/local/cuda/lib64", NCCL])
 FORK2_BIN = f"{FORK2}/bin/llama-server"
 PXQ4 = f"{MODELS}/pxq/Qwen3.6-35B-A3B-PXQ4.gguf"
-Q6K = f"{MODELS}/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
+Q6K = f"{MODELS}/cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
 PORT = 8971
 GPUS = "1,2"           # both V100s, PCI_BUS_ID order
 LOGDIR = "/tmp/pxq-dual-debug"
