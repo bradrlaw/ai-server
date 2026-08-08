@@ -412,11 +412,40 @@ scaled-dot-product attention — sm_70 has no fp8/FlashAttention, so sdpa is the
 correct/only Volta path. `device: auto` resolves to the single V100 the service
 makes visible.
 
-**Models.** InvokeAI uses its **own model manager and database** under
-`/srv/ai/invokeai/` — unlike SwarmUI it imports/indexes models into its own store
-rather than reading a shared folder in place. Sharing weights with ComfyUI is a
-**later** step (see ADR-0020); it will likely be done by *installing* (registering)
-existing checkpoints into InvokeAI's manager rather than a path alias.
+**Models — shared with ComfyUI (in-place, no duplicate downloads).** InvokeAI has
+its **own model manager and SQLite database** under `/srv/ai/invokeai/`, but it can
+**register existing files in place** instead of copying them — so we reuse the
+ComfyUI weights in `/srv/ai/comfyui/models` without duplicating tens of GB.
+
+Use the model manager's **Scan Folder** workflow:
+
+1. UI → **Model Manager** → **Scan Folder** tab.
+2. Point it at `/srv/ai/comfyui/models/checkpoints` (and optionally
+   `/srv/ai/comfyui/models/diffusion_models`).
+3. Leave **"install in place"** enabled (the default) — this records the file's
+   current path rather than copying it into InvokeAI's store.
+4. Install the models it recognises (individually or all).
+
+Registered models point straight at the ComfyUI path (e.g.
+`/srv/ai/comfyui/models/checkpoints/sd_xl_base_1.0.safetensors`) and
+`/srv/ai/invokeai/models/` stays ~empty (a few MB of thumbnails). Because it's
+in-place, **don't move/delete those files from the ComfyUI tree** or InvokeAI loses
+them.
+
+**What imports vs. what doesn't.** Scan Folder lists *every* file it finds as
+"installable", but the actual install probes each one and **only keeps the types
+InvokeAI understands**; the rest fail with **"unable to determine model type"** and
+are skipped automatically (harmless — it proceeds with the recognised ones):
+
+| Recognised (installs in-place) | Skipped ("unable to determine model type") |
+|---|---|
+| **SD 1.5** + **SDXL** all-in-one checkpoints (DreamShaper, Juggernaut XL, Pony V6/Realism, RealVisXL, SDXL base/refiner) | Wan 2.x, Qwen-Image / Qwen-Image-Edit, MiniMax-H3 diffusion files |
+| **FLUX**-based single-file checkpoints InvokeAI's FLUX probe accepts (e.g. **flux1-dev-fp8**, **Krea** variants) | Standalone VAEs, text-encoders/CLIP/T5, and GGUF-quantised transformers |
+
+InvokeAI's FLUX support is stronger than expected — it picks up several of the
+comfy single-file FLUX/Krea transformers in `diffusion_models/`. Non-SD/SDXL/FLUX
+architectures (Wan video, Qwen image, MiniMax) aren't InvokeAI model types, so
+expect them to be skipped. See [ADR-0020](adr/0020-additional-oss-creative-tools.md).
 
 **GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID` and pins InvokeAI
 to **GPU 1 (a Tesla V100-32GB)** via `CUDA_VISIBLE_DEVICES=1` (idx0 is the slow

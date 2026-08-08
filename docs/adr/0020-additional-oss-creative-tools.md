@@ -67,6 +67,19 @@ external URL), (c) couples node/ComfyUI versions, and (d) still needs the
 maintenance, not less. `Swarm-API-Backend`/API-by-URL is reserved for adding a
 **second GPU/machine** (horizontal scaling), not reusing one local ComfyUI.
 
+**Done for InvokeAI** too, by a different mechanism: InvokeAI keeps its own model
+manager DB, but its **Scan Folder** import registers files **in place**
+(`inplace=true` — records the path, no copy). Pointing it at
+`/srv/ai/comfyui/models/checkpoints` (and `diffusion_models`) reuses the ComfyUI
+weights; InvokeAI's own `models/` dir stays ~empty. Only the architectures InvokeAI
+supports probe successfully — **SD 1.5 / SDXL** checkpoints and several **FLUX**
+single-file checkpoints (incl. Krea); non-SD/SDXL/FLUX comfy files (Wan, Qwen-Image,
+MiniMax-H3, standalone VAEs/encoders, GGUF) fail probing with "unable to determine
+model type" and are skipped. Trade-off vs. SwarmUI: it's a **one-time import per
+model** (re-scan when new checkpoints are added) rather than a live folder view, and
+the referenced files must not be moved out of the ComfyUI tree. See
+`docs/optional-tools.md` (InvokeAI › Models).
+
 ## Consequences
 - Positive: non-technical users get approachable UIs; the repo becomes a
   pick-and-choose guide; on-box LoRA training becomes possible.
@@ -77,8 +90,8 @@ maintenance, not less. `Swarm-API-Backend`/API-by-URL is reserved for adding a
   fights the current of being built for newer GPUs, so some install pins must be
   hand-reconciled to the torch-2.6 line and the newest models may not run on Volta.
 - Follow-ups / things to watch:
-  - Configure shared model dirs with ComfyUI (done for SwarmUI; Fooocus/InvokeAI
-    pending).
+  - Configure shared model dirs with ComfyUI (done for SwarmUI via `ModelRoot`
+    and for InvokeAI via in-place Scan Folder import; Fooocus pending).
   - `ffmpeg` is not installed system-wide — needed for ai-toolkit **video/audio**
     training (torchcodec) and possibly other tools; hand to owner as `apt install`.
   - Each tool's own auto-updater may reintroduce a cu130 torch; pin/verify on update.
