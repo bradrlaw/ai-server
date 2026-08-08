@@ -22,7 +22,7 @@ on them.
 | [ai-toolkit](#ai-toolkit-training) | model **training** (LoRA/fine-tune) | 8675 | installed |
 | Fooocus | simple image gen | 7865 | installed |
 | SwarmUI | image gen (ComfyUI-backed) | 7801 | installed |
-| InvokeAI | image gen (canvas/pro) | 9091 | planned |
+| InvokeAI | image gen (canvas/pro) | 9091 | installed |
 
 ---
 
@@ -352,7 +352,76 @@ putting all customization in this repo's scripts.
 
 ---
 
-## InvokeAI
+## InvokeAI (image gen — canvas/pro studio)
 
-Planned — will be documented here as it is installed (same pattern: own venv,
-own port, cu124/torch-2.6 build, systemd unit, status-page entry).
+**What it is.** [**InvokeAI**](https://github.com/invoke-ai/InvokeAI) by **Invoke,
+Inc.** and contributors — a polished, "professional" image-generation studio: a
+unified canvas with layers/inpainting/outpainting, a node **workflow** editor, and
+a first-class **model manager** with its own model database. More approachable than
+ComfyUI's raw graph, more capable than Fooocus. Licensed **Apache-2.0** (the most
+permissive of the four tools here).
+
+**Why this version (the Volta caveats).** Two stock-install traps on this box, both
+handled by the installer:
+
+| Upstream default | Installed here | Why |
+|---|---|---|
+| InvokeAI **main** requires `torch>=2.7`, `cuda` extra pins `torch==2.7.1+cu128` | InvokeAI **v5.11.0** + `torch 2.6.0+cu124` | cu128 / torch≥2.7 drop sm_70 → "no kernel image" on the V100s. v5.11.0 is the newest release targeting `torch~=2.6.0`, which keeps sm_70 |
+| `transformers`/`pydantic`/`fastapi`/… loosely pinned | pinned via a constraints file from v5.11.0's own `uv.lock` | a 2026 index resolves them to future majors (transformers 5.x, numpy 2.x) that break InvokeAI 5.11.0 |
+
+The constraints file ([`scripts/invokeai-constraints.txt`](../scripts/invokeai-constraints.txt),
+216 pins) is generated from InvokeAI's **v5.11.0 `uv.lock`** — the exact set they
+tested (transformers 4.50.3, diffusers 0.33.0, numpy 1.26.4, pydantic 2.11.1,
+fastapi 0.115.12, …). The one lock pin unavailable on PyPI, `pypatchmatch==1.0.1`
+(yanked), is bumped to `1.0.2`. Because torch 2.6.0+cu124 is pre-installed and
+satisfies `torch~=2.6.0`, pip leaves it untouched (no cu-agnostic re-fetch).
+
+> **Do NOT `pip install -U invokeai`.** An upgrade past v5.11.0 pulls torch≥2.7
+> (cu128), which has no sm_70 kernels and will break generation on the V100s. Pin
+> stays at v5.11.0 until the hardware changes.
+
+**Install (reproducible).** Codified in
+[`scripts/install-invokeai.sh`](../scripts/install-invokeai.sh):
+
+```bash
+/srv/ai/scripts/install-invokeai.sh
+```
+
+It creates `/srv/ai/venvs/invokeai`, installs the cu124 torch, installs
+`invokeai==5.11.0` against the lock constraints, writes the runtime root
+`/srv/ai/invokeai` + `invokeai.yaml` (host `0.0.0.0`, port `9091`, `attention_type:
+torch-sdp`), and verifies `invokeai-web` answers on `:9091`.
+
+**Run it (port 9091).** As a service (needs sudo):
+
+```bash
+sudo cp /srv/ai/scripts/invokeai.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now invokeai
+sudo systemctl restart server-status   # pick up the new status-page entry
+# logs: journalctl -u invokeai -f
+```
+
+The UI is then at `http://<server>:9091` and appears on the
+[status page](server-setup.md) Services panel ("InvokeAI"). Port **9091** is used
+(not 9090) to avoid the llama-swap management endpoint.
+
+**Config.** Host/port and attention live in `/srv/ai/invokeai/invokeai.yaml`
+(`schema_version: 4.0.2`). `attention_type: torch-sdp` forces PyTorch
+scaled-dot-product attention — sm_70 has no fp8/FlashAttention, so sdpa is the
+correct/only Volta path. `device: auto` resolves to the single V100 the service
+makes visible.
+
+**Models.** InvokeAI uses its **own model manager and database** under
+`/srv/ai/invokeai/` — unlike SwarmUI it imports/indexes models into its own store
+rather than reading a shared folder in place. Sharing weights with ComfyUI is a
+**later** step (see ADR-0020); it will likely be done by *installing* (registering)
+existing checkpoints into InvokeAI's manager rather than a path alias.
+
+**GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID` and pins InvokeAI
+to **GPU 1 (a Tesla V100-32GB)** via `CUDA_VISIBLE_DEVICES=1` (idx0 is the slow
+12 GB Titan X). Verified it loads onto `Tesla V100-PCIE-32GB`. Change to `2` to use
+the other V100.
+
+**Attribution.** InvokeAI © Invoke, Inc. and contributors, Apache-2.0 —
+<https://github.com/invoke-ai/InvokeAI>.
