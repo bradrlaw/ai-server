@@ -4,6 +4,26 @@
 - **Date:** 2026-08-03
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
+## Update 2026-08-08 — UPS hardware swapped (CP1500AVRLCD → CP1500PFCLCD)
+The original **CP1500AVRLCD** (and a warranty replacement of the same model)
+turned out to be **electrically incompatible** with the server's active-PFC PSU.
+Both units use a **stepped / simulated sine wave** on battery, which the PFC
+front-end rejects: on mains loss the server would not ride through, and it could
+not **cold-start** while the UPS was running on battery — the fans would try to
+spin, then the PSU folded back and shut off (PFC-reject + GPU inrush). Load was
+not the issue (~200 W idle); the **output waveform shape** was.
+
+Replaced with a **CyberPower CP1500PFCLCD** (PFC **Sinewave**, 1500 VA / **1000 W**;
+reports `device.model = CP1500PFCLCDa`). It produces a true sine wave the
+active-PFC PSU accepts: the server now rides through mains loss **and cold-starts
+on battery** (verified 2026-08-08). The new unit enumerates with the **same USB
+VID:PID `0764:0601`**, so NUT's `usbhid-ups` bound with **no config change** —
+`scripts/ups-setup.sh` and everything below still apply as-is. First live reading:
+`OL CHRG`, battery 96 %, ~41 min runtime.
+
+**Takeaway for any future UPS on this box: it must be a pure/true sine-wave unit
+(active-PFC PSU requirement); avoid "simulated/stepped sine" AVR models.**
+
 ## Context
 A CyberPower **CP1500AVRLCD** UPS (1500 VA / ~900 W, USB HID Power Device,
 VID:PID `0764:0601`, enumerates as `CPS CP1500AVRLCD3` on hidraw) was connected
