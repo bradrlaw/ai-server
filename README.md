@@ -350,6 +350,7 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 | ComfyUI_Text_Translation | https://github.com/TFL-TFL/ComfyUI_Text_Translation | In-graph prompt translation. |
 | ComfyUI-llama-cpp_vlm | https://github.com/mickeylan/ComfyUI-llama-cpp_vlm | Runs local VLM (GGUF + mmproj) inference inside ComfyUI for image captioning/analysis. |
 | ComfyUI-Login | https://github.com/liusida/ComfyUI-Login | Password authentication for the locked ComfyUI instance. |
+| ComfyUI-MultiGPU | https://github.com/pollockjj/ComfyUI-MultiGPU | Per-loader device selection so a big model's components can be split across both V100s (e.g. MiniMax-H3: text encoder + VAEs on idx1, diffusion model resident on idx2 — no PCIe offload). |
 | llama-cpp-python (JamePeng fork) | https://github.com/JamePeng/llama-cpp-python | Python bindings backing the VLM node; built from source (v0.3.40) for sm_60/sm_70. |
 
 ### Tooling & infrastructure
