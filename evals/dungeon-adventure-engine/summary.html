@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>dungeon-adventure-engine</h1>
-<p class="sub">Model-eval comparison &middot; 8 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 10 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -50,6 +50,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
     </tr>
     <tr>
       <td class="l"><a href="outputs/big/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.8-27B-UD-Q6_K_XL.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">80%</span></td>
+      <td>35232 B</td>
+      <td>9377</td>
+      <td>1352.1 ms</td>
+      <td>615.4</td>
+      <td>41.9</td>
+      <td>225.8 s</td>
+      <td>stop</td>
+      <td class="name">2026-08-15</td>
+      <td class="l"><a href="outputs/big/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/big-qwen3.6/run.html"><span class="model">big</span></a>
         <div class="name">Qwen3.6-27B-UD-Q6_K_XL.gguf</div></td>
       <td><span class="score">29/29</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
@@ -62,7 +78,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>355.3 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/big/output.py">output</a></td>
+      <td class="l"><a href="outputs/big-qwen3.6/output.py">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap-27b</span></a>
@@ -81,7 +97,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/thinkingcap-27b/output.py">output</a></td>
     </tr>
     <tr>
-      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+      <td class="l"><a href="outputs/coding-qwen3.6/run.html"><span class="model">coding</span></a>
         <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
       <td><span class="score">29/29</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
@@ -94,6 +110,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>364.6 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/coding-qwen3.6/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+        <div class="name">Qwen3.8-27B-Q6_K.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">74%</span></td>
+      <td>38806 B</td>
+      <td>9565</td>
+      <td>1281.8 ms</td>
+      <td>649.1</td>
+      <td>38.5</td>
+      <td>250.4 s</td>
+      <td>stop</td>
+      <td class="name">2026-08-15</td>
       <td class="l"><a href="outputs/coding/output.py">output</a></td>
     </tr>
     <tr>
@@ -162,7 +194,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
     </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-07-27T11:06:50+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-08-15T06:22:40+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

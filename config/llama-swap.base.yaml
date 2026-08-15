@@ -65,6 +65,7 @@ models:
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       --spec-type draft-mtp --spec-draft-n-max 3
+      --chat-template-kwargs '{"reasoning_effort":"medium"}'
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K + MTP on V100 #2 (idx2) -------------
@@ -136,6 +137,7 @@ models:
       --parallel 1
       --spec-type draft-mtp
       --spec-draft-n-max 2
+      --chat-template-kwargs '{"reasoning_effort":"medium"}'
       ${common}
 
   # --- coder-next: Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) dual-V100 --------

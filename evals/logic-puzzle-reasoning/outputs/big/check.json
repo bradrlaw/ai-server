@@ -1,9 +1,9 @@
 {
-  "file": "outputs/big/output.md",
+  "file": "outputs/big/index.html",
   "score": 12,
   "max": 12,
   "pct": 100.0,
-  "bytes": 6216,
+  "bytes": 4080,
   "checks": {
     "contradiction_flagged": {
       "pass": true,

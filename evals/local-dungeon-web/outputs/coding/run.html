@@ -24,21 +24,21 @@ padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-w
 </style></head>
 <body>
 <h1>coding</h1>
-<p class="sub">Qwen3.6-27B-Q6_K.gguf &middot; local-dungeon-web
-&middot; 2026-07-28T16:19:32 UTC
+<p class="sub">Qwen3.8-27B-Q6_K.gguf &middot; local-dungeon-web
+&middot; 2026-08-15T05:40:08 UTC
 &middot; <a href="../../summary.html">← all runs</a>
 &middot; <a href="index.html">output</a>
 &middot; <a href="raw.txt">raw reply</a></p>
 <div class="grid">
 <div class="card"><div class="k">Objective</div><div class="v teal">41/41</div></div>
 <div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
-<div class="card"><div class="k">TTFT</div><div class="v">1222 ms</div></div>
-<div class="card"><div class="k">Prefill</div><div class="v">655.6 t/s</div></div>
-<div class="card"><div class="k">Decode</div><div class="v teal">40.8 t/s</div></div>
-<div class="card"><div class="k">Wall time</div><div class="v">329.0 s</div></div>
-<div class="card"><div class="k">Completion tok</div><div class="v">13374</div></div>
-<div class="card"><div class="k">Output size</div><div class="v">45599 B</div></div>
-<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 82% accept</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">1251 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">640.5 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">33.8 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">486.2 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">16372</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">29847 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 62% accept</div></div>
 <div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
 </div>
 <h2>Design scores (manual, 0–5 each)</h2>
@@ -55,82 +55,87 @@ padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-w
 
 <h2>llama.cpp load command</h2>
 <pre>/srv/ai/src/llama.cpp/build/bin/llama-server
---model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
---ctx-size 184320
+--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf
+--ctx-size 163840
 --cache-type-k q8_0 --cache-type-v q8_0
 --parallel 1
 --batch-size 2048 --ubatch-size 2048
 --spec-type draft-mtp --spec-draft-n-max 3
+--chat-template-kwargs &#x27;{&quot;reasoning_effort&quot;:&quot;medium&quot;}&#x27;
 --host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics</pre>
 <h2>Sampler / request</h2>
 <pre>{
-  &quot;temperature&quot;: 0.7,
+  &quot;temperature&quot;: 1.0,
   &quot;top_p&quot;: 0.95,
   &quot;top_k&quot;: 20,
-  &quot;max_tokens&quot;: 32000
+  &quot;max_tokens&quot;: 32000,
+  &quot;min_p&quot;: 0.0,
+  &quot;presence_penalty&quot;: null
 }</pre>
 <h2>meta.json</h2>
 <pre>{
   &quot;test&quot;: &quot;local-dungeon-web&quot;,
   &quot;model_slot&quot;: &quot;coding&quot;,
   &quot;label&quot;: &quot;coding&quot;,
-  &quot;model_name&quot;: &quot;Qwen3.6-27B-Q6_K.gguf&quot;,
-  &quot;model_path&quot;: &quot;/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf&quot;,
+  &quot;model_name&quot;: &quot;Qwen3.8-27B-Q6_K.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf&quot;,
   &quot;endpoint&quot;: &quot;http://127.0.0.1:9090/v1/chat/completions&quot;,
   &quot;proxy&quot;: &quot;http://localhost:10005&quot;,
   &quot;sampler&quot;: {
-    &quot;temperature&quot;: 0.7,
+    &quot;temperature&quot;: 1.0,
     &quot;top_p&quot;: 0.95,
     &quot;top_k&quot;: 20,
-    &quot;max_tokens&quot;: 32000
+    &quot;max_tokens&quot;: 32000,
+    &quot;min_p&quot;: 0.0,
+    &quot;presence_penalty&quot;: null
   },
-  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf\n--ctx-size 184320\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 3\n--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
+  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf\n--ctx-size 163840\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 3\n--chat-template-kwargs &#x27;{\&quot;reasoning_effort\&quot;:\&quot;medium\&quot;}&#x27;\n--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
   &quot;usage&quot;: {
-    &quot;completion_tokens&quot;: 13374,
+    &quot;completion_tokens&quot;: 16372,
     &quot;prompt_tokens&quot;: 801,
-    &quot;total_tokens&quot;: 14175,
+    &quot;total_tokens&quot;: 17173,
     &quot;prompt_tokens_details&quot;: {
       &quot;cached_tokens&quot;: 0
     }
   },
   &quot;finish_reason&quot;: &quot;stop&quot;,
   &quot;performance&quot;: {
-    &quot;wall_secs&quot;: 329.0,
-    &quot;ttft_ms&quot;: 1221.7,
-    &quot;prefill_tps&quot;: 655.6437750675288,
-    &quot;decode_tps&quot;: 40.8463161234636,
+    &quot;wall_secs&quot;: 486.2,
+    &quot;ttft_ms&quot;: 1250.512,
+    &quot;prefill_tps&quot;: 640.5376357843828,
+    &quot;decode_tps&quot;: 33.79234624286892,
     &quot;prompt_tokens&quot;: 801,
-    &quot;predicted_tokens&quot;: 13374,
-    &quot;prefill_ms&quot;: 1221.7,
-    &quot;decode_ms&quot;: 327422.428
+    &quot;predicted_tokens&quot;: 16372,
+    &quot;prefill_ms&quot;: 1250.512,
+    &quot;decode_ms&quot;: 484488.407
   },
   &quot;mtp&quot;: {
-    &quot;draft_n&quot;: 11592,
-    &quot;draft_n_accepted&quot;: 9510,
-    &quot;accept_rate&quot;: 0.82,
+    &quot;draft_n&quot;: 17103,
+    &quot;draft_n_accepted&quot;: 10672,
+    &quot;accept_rate&quot;: 0.624,
     &quot;enabled&quot;: true
   },
   &quot;server_timings&quot;: {
     &quot;cache_n&quot;: 0,
     &quot;prompt_n&quot;: 801,
-    &quot;prompt_ms&quot;: 1221.7,
-    &quot;prompt_per_token_ms&quot;: 1.5252184769038701,
-    &quot;prompt_per_second&quot;: 655.6437750675288,
-    &quot;predicted_n&quot;: 13374,
-    &quot;predicted_ms&quot;: 327422.428,
-    &quot;predicted_per_token_ms&quot;: 24.48201196351129,
-    &quot;predicted_per_second&quot;: 40.8463161234636,
-    &quot;draft_n&quot;: 11592,
-    &quot;draft_n_accepted&quot;: 9510
+    &quot;prompt_ms&quot;: 1250.512,
+    &quot;prompt_per_token_ms&quot;: 1.5611885143570536,
+    &quot;prompt_per_second&quot;: 640.5376357843828,
+    &quot;predicted_n&quot;: 16372,
+    &quot;predicted_ms&quot;: 484488.407,
+    &quot;predicted_per_token_ms&quot;: 29.592499816760323,
+    &quot;predicted_per_second&quot;: 33.79234624286892,
+    &quot;draft_n&quot;: 17103,
+    &quot;draft_n_accepted&quot;: 10672
   },
   &quot;extraction&quot;: {
     &quot;extracted&quot;: true,
     &quot;kind&quot;: &quot;fenced&quot;
   },
   &quot;output_file&quot;: &quot;index.html&quot;,
-  &quot;output_bytes&quot;: 45599,
-  &quot;reasoning_bytes&quot;: 1679,
-  &quot;wall_secs&quot;: 329.0,
-  &quot;created_utc&quot;: &quot;2026-07-28T16:19:32+00:00&quot;
+  &quot;output_bytes&quot;: 29847,
+  &quot;reasoning_bytes&quot;: 27390,
+  &quot;wall_secs&quot;: 486.2,
+  &quot;created_utc&quot;: &quot;2026-08-15T05:40:08+00:00&quot;
 }</pre>
 </body></html>

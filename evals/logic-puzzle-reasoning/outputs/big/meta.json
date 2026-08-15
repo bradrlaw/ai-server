@@ -2,62 +2,64 @@
   "test": "logic-puzzle-reasoning",
   "model_slot": "big",
   "label": "big",
-  "model_name": "Qwen3.6-27B-UD-Q6_K_XL.gguf",
-  "model_path": "/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf",
+  "model_name": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf",
   "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
   "proxy": "http://localhost:10001",
   "sampler": {
-    "temperature": 0.7,
+    "temperature": 1.0,
     "top_p": 0.95,
     "top_k": 20,
-    "max_tokens": 32000
+    "max_tokens": 32000,
+    "min_p": 0.0,
+    "presence_penalty": null
   },
-  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--host 127.0.0.1 --port 10001 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--chat-template-kwargs '{\"reasoning_effort\":\"medium\"}'\n--host 127.0.0.1 --port 10001 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
   "usage": {
-    "completion_tokens": 9559,
+    "completion_tokens": 3732,
     "prompt_tokens": 392,
-    "total_tokens": 9951,
+    "total_tokens": 4124,
     "prompt_tokens_details": {
       "cached_tokens": 0
     }
   },
   "finish_reason": "stop",
   "performance": {
-    "wall_secs": 247.8,
-    "ttft_ms": 776.538,
-    "prefill_tps": 504.8046586258496,
-    "decode_tps": 38.835007150309316,
+    "wall_secs": 89.2,
+    "ttft_ms": 771.15,
+    "prefill_tps": 508.33171237761786,
+    "decode_tps": 42.71630560819996,
     "prompt_tokens": 392,
-    "predicted_tokens": 9559,
-    "prefill_ms": 776.538,
-    "decode_ms": 246143.897
+    "predicted_tokens": 3732,
+    "prefill_ms": 771.15,
+    "decode_ms": 87367.106
   },
   "mtp": {
-    "draft_n": 7446,
-    "draft_n_accepted": 5835,
-    "accept_rate": 0.784,
+    "draft_n": 2860,
+    "draft_n_accepted": 2303,
+    "accept_rate": 0.805,
     "enabled": true
   },
   "server_timings": {
     "cache_n": 0,
     "prompt_n": 392,
-    "prompt_ms": 776.538,
-    "prompt_per_token_ms": 1.9809642857142857,
-    "prompt_per_second": 504.8046586258496,
-    "predicted_n": 9559,
-    "predicted_ms": 246143.897,
-    "predicted_per_token_ms": 25.74996307145099,
-    "predicted_per_second": 38.835007150309316,
-    "draft_n": 7446,
-    "draft_n_accepted": 5835
+    "prompt_ms": 771.15,
+    "prompt_per_token_ms": 1.967219387755102,
+    "prompt_per_second": 508.33171237761786,
+    "predicted_n": 3732,
+    "predicted_ms": 87367.106,
+    "predicted_per_token_ms": 23.410264201500535,
+    "predicted_per_second": 42.71630560819996,
+    "draft_n": 2860,
+    "draft_n_accepted": 2303
   },
   "extraction": {
     "extracted": false,
-    "kind": "full-content"
+    "kind": "raw"
   },
-  "output_file": "output.md",
-  "output_bytes": 6216,
-  "reasoning_bytes": 26528,
-  "wall_secs": 247.8,
-  "created_utc": "2026-07-27T09:19:40+00:00"
+  "output_file": "index.html",
+  "output_bytes": 4080,
+  "reasoning_bytes": 8921,
+  "wall_secs": 89.2,
+  "created_utc": "2026-08-15T06:18:45+00:00"
 }

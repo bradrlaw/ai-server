@@ -58,6 +58,8 @@ Read this first, then the detailed docs:
   ctx, idx2), `big` (Qwen3.8-27B UD-Q6_K_XL **+ MTP**, dual-V100, 256k), `fast`
   (Gemma-4-26B-A4B MoE, P100, non-reasoning), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
   Most Qwen3 models are **reasoning** models (thinking phase) — give generous `max_tokens`.
+  The Qwen3.8 `coding`/`big` slots are pinned to `reasoning_effort=medium` in the base config
+  (the template default `xhigh` balloons to 40k+ reasoning tokens on codegen and truncates).
 
 ## Testing a config change
 - llama-swap runs with `-watch-config` (auto-reloads YAML). Edit `config/llama-swap.base.yaml`,

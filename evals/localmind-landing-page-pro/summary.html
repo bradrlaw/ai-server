@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>localmind-landing-page-pro</h1>
-<p class="sub">Model-eval comparison &middot; 8 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 10 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -81,6 +81,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/fast/index.html">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/big/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.8-27B-UD-Q6_K_XL.gguf</div></td>
+      <td><span class="score">41/41</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
+      <td>54311 B</td>
+      <td>19265</td>
+      <td>1714.0 ms</td>
+      <td>701.3</td>
+      <td>44.5</td>
+      <td>435.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-08-15</td>
+      <td class="l"><a href="outputs/big/index.html">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap-27b</span></a>
         <div class="name">ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf</div></td>
       <td><span class="score">41/41</span> <span class="name">100%</span></td>
@@ -97,7 +113,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/thinkingcap-27b/index.html">output</a></td>
     </tr>
     <tr>
-      <td class="l"><a href="outputs/big/run.html"><span class="model">big</span></a>
+      <td class="l"><a href="outputs/big-qwen3.6/run.html"><span class="model">big</span></a>
         <div class="name">Qwen3.6-27B-UD-Q6_K_XL.gguf</div></td>
       <td><span class="score">41/41</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
@@ -110,10 +126,10 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>378.4 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
-      <td class="l"><a href="outputs/big/index.html">output</a></td>
+      <td class="l"><a href="outputs/big-qwen3.6/index.html">output</a></td>
     </tr>
     <tr>
-      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+      <td class="l"><a href="outputs/coding-qwen3.6/run.html"><span class="model">coding</span></a>
         <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
       <td><span class="score">41/41</span> <span class="name">100%</span></td>
       <td><span class="name">—</span></td>
@@ -126,6 +142,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>449.6 s</td>
       <td>stop</td>
       <td class="name">2026-07-27</td>
+      <td class="l"><a href="outputs/coding-qwen3.6/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/coding/run.html"><span class="model">coding</span></a>
+        <div class="name">Qwen3.8-27B-Q6_K.gguf</div></td>
+      <td><span class="score">41/41</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">81%</span></td>
+      <td>52361 B</td>
+      <td>19104</td>
+      <td>1666.1 ms</td>
+      <td>721.4</td>
+      <td>39.9</td>
+      <td>481.4 s</td>
+      <td>stop</td>
+      <td class="name">2026-08-15</td>
       <td class="l"><a href="outputs/coding/index.html">output</a></td>
     </tr>
     <tr>
@@ -162,7 +194,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
     </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-07-27T11:06:50+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-08-15T06:17:16+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

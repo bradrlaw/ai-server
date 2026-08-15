@@ -7,72 +7,72 @@
       "steps": [
         {
           "label": "reach_library",
-          "send": "go north",
+          "send": "north",
           "ok": true,
           "matched": "library",
           "hitNegative": null,
-          "excerpt": "&gt; go north You head north and arrive at the Forgotten Library.You can see: <span class=\"item-name\">lever</span>"
+          "excerpt": "> northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o"
         },
         {
           "label": "pull_lever",
           "send": "use lever",
-          "ok": true,
-          "matched": "passage",
-          "hitNegative": null,
-          "excerpt": "&gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes"
+          "ok": false,
+          "matched": null,
+          "hitNegative": "don't have",
+          "excerpt": "> use leverYou don't have a \"lever\" to use."
         },
         {
           "label": "reach_secret",
-          "send": "go west",
-          "ok": true,
-          "matched": "secret chamber",
-          "hitNegative": null,
-          "excerpt": "&gt; go west You head west and arrive at the Secret Chamber.You can see: <span class=\"item-name\">ancient scroll</span>"
+          "send": "west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": "can't go west",
+          "excerpt": "> westYou can't go west from here."
         }
       ],
       "jsErrors": [],
-      "goal_reached": true
+      "goal_reached": false
     },
     "with_take": {
       "ok_input": true,
       "steps": [
         {
           "label": "reach_library",
-          "send": "go north",
+          "send": "north",
           "ok": true,
           "matched": "library",
           "hitNegative": null,
-          "excerpt": "&gt; go north You head north and arrive at the Forgotten Library.You can see: <span class=\"item-name\">lever</span>"
+          "excerpt": "> northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o"
         },
         {
           "label": "take_lever",
           "send": "take lever",
           "ok": true,
-          "matched": "lever",
+          "matched": "take",
           "hitNegative": null,
-          "excerpt": "lever Inventory is empty."
+          "excerpt": "> take leverThe lever is bolted to the wall. You can pull it, but you can't take it."
         },
         {
           "label": "pull_lever",
           "send": "use lever",
-          "ok": true,
-          "matched": "pull",
+          "ok": false,
+          "matched": null,
           "hitNegative": null,
-          "excerpt": "&gt; use leverYou already have the lever. You'd need to be in the library to put it back and pull it."
+          "excerpt": "> use leverYou don't have a \"lever\" to use."
         },
         {
           "label": "reach_secret",
-          "send": "go west",
+          "send": "west",
           "ok": false,
           "matched": null,
           "hitNegative": "can't go west",
-          "excerpt": "&gt; go westYou can't go west from here."
+          "excerpt": "> westYou can't go west from here."
         }
       ],
       "jsErrors": [],
       "goal_reached": false
     }
   },
-  "generated_utc": "2026-07-29T07:54:11.021Z",
+  "generated_utc": "2026-08-15T03:15:06.995Z",
   "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
 }
