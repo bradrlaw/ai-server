@@ -37,33 +37,30 @@ models:
   # OOM on large prompts (f16 KV @160k left <1GB free, so the prefill compute
   # buffer couldn't allocate and the server crashed) AND frees room for a large
   # context. (Pre-MTP this slot ran non-MTP Q6_K at 200k, ~29.8/32GB.)
-  # --- coding: Qwen3.6-27B Q6_K + MTP on V100 #1 (idx1) ------------------
-  # MTP build (unsloth/Qwen3.6-27B-MTP-GGUF) — same Q6_K weights plus the model's
-  # built-in multi-token-prediction head (embedded blk.64.nextn.*, +0.35GB),
-  # enabled with --spec-type draft-mtp. Lossless self-speculative decode: this
-  # dense 27B is bandwidth-bound (~23 t/s baseline) with very high draft acceptance
-  # (~87%), so MTP is a BIG win — measured +81% decode (22.9 -> ~41 t/s at n_max=2)
-  # at identical weights, ~2-5% prefill cost. See docs/benchmarking.md
-  # "MTP speculative decode" (2026-07-23).
-  # n_max=3 (2026-07-25): a full 500->32k sweep showed n_max=3 beats n_max=2 in every
-  # cell (no regressions), avg +6-9% single-stream decode, for +150MB. n_max=4 is a bit
-  # faster on average but regresses at some sizes (draft over-shoot) and halves the
-  # headroom, so n=3 is the robust default. See "Chaining ngram-mod..." + the n_max sweep.
-  # VRAM: MTP's extra ~1GB compute buffer means 200k no longer fits (OOM), so ctx is
-  # capped at 180k (184320) — a near-full prefill peaks ~32.17GB/32GB at n=3 (~0.6GB
-  # headroom, measured n2=32.02 / n4=32.32). This trades 20k of context for the speedup.
+  # --- coding: Qwen3.8-27B Q6_K + MTP on V100 #1 (idx1) ------------------
+  # Qwen3.8-27B (unsloth/Qwen3.8-27B-GGUF, general.architecture=qwen35) — the MTP
+  # head is embedded in the MAIN GGUF (nextn_predict_layers=1, block_count 65), so
+  # no separate -MTP repo is needed; enabled with --spec-type draft-mtp as before.
+  # MIGRATED from Qwen3.6-27B on 2026-08-15. It is a genuine drop-in: same qwen35
+  # arch, so our llama.cpp build 9850 (4f31eedb0) loads it with NO rebuild.
+  # VRAM: 3.8 Q6_K weights (~22GB) are larger than 3.6's, so 180k no longer leaves
+  # safe headroom (loaded 31.68GB/32GB, ~1GB free — a full prefill would OOM). Ctx
+  # trimmed 180k -> 160k (163840): measured load 30.68GB/32GB (~2GB headroom) at
+  # n_max=3, q8_0 KV. MTP verified live on idx1 (draft acceptance ~0.55 @ temp 0.6,
+  # mean len 2.66), coherent output. NB: Qwen3.8 is a REASONING model (thinking ON
+  # by default) — give generous max_tokens or empty content comes back mid-think.
   # coding runs alone on idx1 (comfyui-open evicts it before image gen via the
   # free_gpu hook), so the full-card peak is the real ceiling.
   "coding":
-    name: "Qwen3.6-27B (Q6_K + MTP) — coding"
-    description: "Daily-driver coding model, single V100, MTP self-speculative decode. 180k ctx, q8_0 KV."
+    name: "Qwen3.8-27B (Q6_K + MTP) — coding"
+    description: "Daily-driver coding model, single V100, MTP self-speculative decode. 160k ctx, q8_0 KV."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
-      --ctx-size 184320
+      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf
+      --ctx-size 163840
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
@@ -98,11 +95,15 @@ models:
       --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
-  # --- big: Qwen3.6-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------
+  # --- big: Qwen3.8-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------
+  # MIGRATED from Qwen3.6-27B on 2026-08-15 (unsloth/Qwen3.8-27B-GGUF, arch=qwen35,
+  # drop-in — MTP nextn head embedded in the main GGUF). The design rationale below
+  # (Q6 vs BF16, ubatch, f16 KV) carries over; the 3.6 throughput/VRAM numbers are
+  # historical and should be re-benchmarked for 3.8 (weights ~1GB larger).
   # Highest-quality dense model, tuned for OVERNIGHT long-context planning where
   # accuracy/precision matter more than speed. Occasional use; auto-unloads
   # after 5 min idle so coding+chat can reclaim the cards.
-  # WEIGHTS: UD-Q6_K_XL (Unsloth Dynamic, imatrix-calibrated ~24GB) at FULL f16
+  # WEIGHTS: UD-Q6_K_XL (Unsloth Dynamic, imatrix-calibrated ~25GB) at FULL f16
   # KV — chosen over BF16/Q8 after a 256k head-to-head (Tarjan SCC @ temp 0):
   # UD-Q6_K_XL+f16 gave the most VRAM headroom, the fastest decode, full KV
   # precision (best long-context recall), and 5/5 correct code. Q8 weights added
@@ -111,17 +112,15 @@ models:
   # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
   # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
   # sync overhead of the layer split. Do not add --ubatch-size.
-  # Verified 2026-07-03: ctx 262144 (256k NATIVE, no RoPE scaling) with f16 KV and
-  # a 104k-token prefill peaks at ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
+  # (3.6 baseline) ctx 262144 (256k NATIVE, no RoPE scaling) with f16 KV and a
+  # 104k-token prefill peaked ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
   # card; decode ~22.6 t/s (layer-split limits GPU util ~47%). Deep 256k fills are
   # slow (~8+ min) — acceptable for unattended overnight passes.
-  # MTP (2026-07-23): switched to unsloth/Qwen3.6-27B-MTP-GGUF (same UD-Q6_K_XL,
-  # +380MB embedded nextn head) with self-spec draft-mtp n_max=2. Apples-to-apples
-  # dual-V100 split @32k f16 KV: decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance,
-  # lossless (main model verifies). The dual-card split-mode MTP path works. VRAM
-  # only +~1.8GB (~31GB total across both cards @32k) so 256k ctx headroom is fine.
+  # MTP: self-spec draft-mtp n_max=2. On 3.6 the dual-V100 split @32k f16 KV gave
+  # decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance, lossless (main model verifies);
+  # VRAM only +~1.8GB. The dual-card split-mode MTP path works on our llama.cpp build.
   "big":
-    name: "Qwen3.6-27B (UD-Q6_K_XL, MTP) — max quality, dual-V100, 256k"
+    name: "Qwen3.8-27B (UD-Q6_K_XL, MTP) — max quality, dual-V100, 256k"
     description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
     ttl: 300
     env:
@@ -129,7 +128,7 @@ models:
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf
+      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16

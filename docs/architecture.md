@@ -79,7 +79,7 @@ Power caps (ADR-0009): V100 175W, P100 200W. Caps don't affect VRAM.
 
 | GPU | Idx / bus | Primary role | Resident VRAM (typical) | Spare |
 |-----|-----------|--------------|-------------------------|-------|
-| V100 #1 | 1 / bus03 | Qwen3.6-27B **coding** (Q6_K + MTP, 180k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.75 GB |
+| V100 #1 | 1 / bus03 | Qwen3.8-27B **coding** (Q6_K + MTP, 160k ctx) | ~30.7 GB (q8_0 KV, MTP) | ~1.3 GB |
 | V100 #2 | 2 / bus04 | Qwen3.6-35B-A3B **chat** (UD-Q6_K + MTP, 96k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.9 GB |
 | both V100 | 1+2 | *Occasional* big/high-quant (TP=2 `-sm layer`) | preempts the two above | — |
 | P100 | 0 / bus01 | **Gemma-4-12B `fast`** (always-on) + aux mix (co-resident) | ~10.8 GB + aux, see below | — |
@@ -110,7 +110,7 @@ Notes:
 
 | Client-facing model name | Backend | GPU | Notes |
 |--------------------------|---------|-----|-------|
-| `coding` (→ Qwen3.6-27B) | llama-swap → llama-server | V100 #1 | default for VS Code/CLI/opencode |
+| `coding` (→ Qwen3.8-27B) | llama-swap → llama-server | V100 #1 | default for VS Code/CLI/opencode |
 | `chat` (→ Qwen3.6-35B-A3B) | llama-swap → llama-server | V100 #2 | fast MoE; reasoning model |
 | `big` (→ high-quant/large) | llama-swap **TP profile** | both V100 | preempts `coding`+`chat` |
 | `fast` (→ Gemma-4-12B) | llama-swap → llama-server | P100 | always-on, non-reasoning snappy chat |
