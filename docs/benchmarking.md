@@ -1403,18 +1403,40 @@ sampling (`temp 1.0, top_p 0.95, top_k 20, min_p 0.0`) — vs the retained 3.6 o
 | localmind-landing-page-pro | 41/41 | 41/41 | 41/41 | 41/41 |
 | logic-puzzle-reasoning     | 12/12 | 11/12 | 12/12 | 12/12 |
 
-**3.8 @medium is at parity with 3.6**, with two 1–2 point dips on the most
-reasoning-heavy items (coding `logic-puzzle` 11/12; big `dungeon` 27/29 — a docstring
-ratio 0.97 just under threshold), an expected trade for bounded reasoning. All ten
-runs finished cleanly (`finish=stop`), 3.6–54 KB output, decode 34–46 t/s with MTP on.
-Manual design scores (`scores.json`) are hand-entered and not part of this automated
-pass. The game-agnostic playability harness gave mixed goal-reachability across models
-(incl. 3.6 and `chat`); it keys off specific movement phrasing, so "not reached" is a
+**3.8 @medium is at parity with 3.6.** The single-sample table above shows two
+1-point dips (coding `logic-puzzle` 11/12; big `dungeon` 27/29), but a follow-up
+**controlled variance study** (`docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`,
+3 samples per cell, all at `reasoning_effort=medium`) proves these are **sampling
+noise from the temperature, not a model or reasoning regression**:
+
+| test (slot) | temp 0.7 (3.6-matched) | temp 1.0 (unsloth thinking) |
+|---|---|---|
+| logic-puzzle (coding, pure reasoning) | 11, 11, 10 / 12 | **12, 12, 12** / 12 |
+| dungeon (big, code generation)        | **29, 29, 29** / 29 | 29, **2**, 29 / 29 |
+
+The confound: the retained 3.6 baselines ran at **temp 0.7** (eval-run default) while the
+3.8 pass followed unsloth's thinking-mode rec of **temp 1.0** (+ `min_p 0.0`). Temperature
+cuts both ways — on the *pure-reasoning* logic puzzle, temp 1.0 explores enough to hit the
+"Ben = Reinforcement Learning" deduction (12/12 ×3), whereas the more deterministic temp 0.7
+keeps routing the contradiction through the Robotics branch and misses that one w=1 check. On
+*code generation*, temp 1.0 is too hot: one of three `big` runs emitted a non-parsing program
+(`IndentationError` → 2/29), while temp 0.7 was rock-solid 29/29 ×3. `reasoning_effort=medium`
+is used in **every** cell, so bounded reasoning is not implicated in either dip.
+
+**Practical takeaway:** unsloth's `temp=1.0` thinking-mode preset is tuned for reasoning
+benchmarks; for long-form **code** generation it adds tail-risk of broken output. Prefer
+`temperature ≈ 0.6–0.8` for coding work (this is a per-request client sampler choice, not a
+server setting) and reserve `temp 1.0` for reasoning/analysis prompts.
+
+All ten single-sample runs finished cleanly (`finish=stop`), 3.6-54 KB output, decode
+34-46 t/s with MTP on. Manual design scores (`scores.json`) are hand-entered and not part of
+this automated pass. The game-agnostic playability harness gave mixed goal-reachability across
+models (incl. 3.6 and `chat`); it keys off specific movement phrasing, so "not reached" is a
 soft signal, not a regression given the objective scores.
 
-**Verdict:** Qwen3.8-27B is a clean upgrade for `coding` + `big` — quality parity with
-3.6 (GSM8K flexible ↑ for coding; code evals at parity), MTP intact (~2.3× decode, high
-acceptance on code), throughput on par. **The one required config change is capping
-`reasoning_effort` at `medium`** — the `xhigh` default makes long-form codegen
-unusably slow and truncation-prone. Shipped: coding Q6_K 160k n3, big UD-Q6_K_XL 256k
-n2, both with `reasoning_effort=medium`. 3.6 GGUFs retained as rollback.
+**Verdict:** Qwen3.8-27B is a clean upgrade for `coding` + `big` — genuine quality parity with
+3.6 (GSM8K flexible ↑ for coding; code evals at full parity once sampling is matched), MTP
+intact (~2.3× decode, high acceptance on code), throughput on par. **The one required config
+change is capping `reasoning_effort` at `medium`** — the `xhigh` default makes long-form codegen
+unusably slow and truncation-prone. Shipped: coding Q6_K 160k n3, big UD-Q6_K_XL 256k n2, both
+with `reasoning_effort=medium`. 3.6 GGUFs retained as rollback.

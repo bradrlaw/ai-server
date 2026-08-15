@@ -1,0 +1,13 @@
+test,slot,model,reasoning_effort,temp,top_p,top_k,min_p,run,score,max,note
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,0.7,0.95,20,default,a,11,12,misses ben_is_rl
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,0.7,0.95,20,default,b,11,12,misses ben_is_rl
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,0.7,0.95,20,default,c,10,12,misses ben_is_rl + verify
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,1.0,0.95,20,0.0,a,12,12,full
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,1.0,0.95,20,0.0,b,12,12,full
+logic-puzzle-reasoning,coding,Qwen3.8-27B-Q6_K,medium,1.0,0.95,20,0.0,c,12,12,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,0.7,0.95,20,default,a,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,0.7,0.95,20,default,b,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,0.7,0.95,20,default,c,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,a,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,b,2,29,IndentationError non-parsing program
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,c,29,29,full

@@ -9,12 +9,12 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 29/29 | 126.4 | 1140 ms | 16189 | 15036 B | on 86% | stop |
-| `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 29/29 | 41.9 | 1352 ms | 9377 | 35232 B | on 80% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 29/29 | 39.9 | 1366 ms | 14078 | 16218 B | on 83% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 29/29 | 39.8 | 1266 ms | 13259 | 15851 B | on 77% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 29/29 | 39.5 | 1251 ms | 14318 | 16491 B | on 78% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 29/29 | 38.5 | 1282 ms | 9565 | 38806 B | on 74% | stop |
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 27/29 | 112.8 | 1183 ms | 10240 | 22389 B | on 74% | stop |
+| `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 27/29 | 41.9 | 1352 ms | 9377 | 35232 B | on 80% | stop |
 | `fast-uncensored` | Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf | 27/29 | 27.3 | 3211 ms | 5002 | 14104 B | on 68% | stop |
 | `gemma-31b` | gemma-4-31B-it-qat-UD-Q4_K_XL.gguf | 27/29 | 25.4 | 1424 ms | 5467 | 15580 B | on 25% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 24/29 | 77.9 | 1989 ms | 5295 | 19071 B | on 82% | stop |
@@ -25,11 +25,11 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
-| `big` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `fast-uncensored` | · | · | · | · | · | — |  |
 | `gemma-31b` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
@@ -37,4 +37,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Architecture, Code quality, Completeness, Robustness, Output polish.
 `·` = not yet scored.
 
-_Last generated 2026-08-15T06:22:40+00:00._
+_Last generated 2026-08-15T07:29:20+00:00._
