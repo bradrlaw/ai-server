@@ -643,7 +643,7 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 |----------|------------------------------------|-------------|-------|--------|
 | `coding` | Qwen3.8-27B **Q6_K + MTP**         | idx1        | 163840 | ~30.7 GB (q8_0 KV, MTP self-spec) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
-| `big`    | Qwen3.8-27B **UD-Q6_K_XL + MTP** (split) | idx1+idx2   | 262144 | ~46 GB (22+25), f16 KV, ttl 300s |
+| `big`    | Qwen3.8-27B **UD-Q8_K_XL + MTP** (split) | idx1+idx2   | 262144 | ~51 GB (23+28), f16 KV, ttl 300s |
 | `fast`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
 | `fast-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `fast` |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
@@ -659,7 +659,7 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 |--------------------|-------------------------|
 | `coding`           | `coding (Qwen3.8-27B)` |
 | `chat`             | `chat (Qwen3.6-35B-A3B MoE)` |
-| `big`              | `big (Qwen3.8-27B UD-Q6_K_XL)` |
+| `big`              | `big (Qwen3.8-27B UD-Q8_K_XL)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
 | `fast`             | `fast (Gemma-4-26B-A4B MoE)` |
 | `fast-12b`         | `fast-12b (Gemma-4-12B dense)` |

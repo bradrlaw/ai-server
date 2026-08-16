@@ -1438,5 +1438,32 @@ soft signal, not a regression given the objective scores.
 3.6 (GSM8K flexible ↑ for coding; code evals at full parity once sampling is matched), MTP
 intact (~2.3× decode, high acceptance on code), throughput on par. **The one required config
 change is capping `reasoning_effort` at `medium`** — the `xhigh` default makes long-form codegen
-unusably slow and truncation-prone. Shipped: coding Q6_K 160k n3, big UD-Q6_K_XL 256k n2, both
-with `reasoning_effort=medium`. 3.6 GGUFs retained as rollback.
+unusably slow and truncation-prone. Shipped: coding Q6_K 160k n3, big **UD-Q8_K_XL** 256k n2
+(see the Q6-vs-Q8 A/B below), both with `reasoning_effort=medium`. 3.6 GGUFs retained as rollback.
+
+### `big` slot: UD-Q6_K_XL vs UD-Q8_K_XL A/B (2026-08-15)
+
+The `big` slot is the "max quality" slot, so we A/B'd the Q8 dynamic quant against the Q6 it
+shipped on. Both dual-V100 `-sm layer`, 256k f16 KV, MTP n2, `reasoning_effort=medium`, unsloth
+thinking-mode sampling.
+
+| | UD-Q6_K_XL | UD-Q8_K_XL |
+|---|---|---|
+| weights on disk | 25.9 GB | 31.5 GB |
+| VRAM @256k (idx1 / idx2) | ~21.7 / 24.9 GB (~47 total) | ~23.2 / 27.7 GB (~51 total) |
+| decode (avg across 5 evals) | ~43 t/s | ~41 t/s (**−5%**) |
+| MTP acceptance | 0.76–0.93 | 0.79–0.93 (unchanged) |
+
+**Eval scores (single sample, temp 1.0):** identical — dungeon 27→29/29, local-dungeon-web
+41/41, localmind 27/27, localmind-pro 41/41, logic-puzzle 12/12. **No measurable quality gain.**
+
+**Same temperature tail-risk:** re-running `dungeon` 3× on Q8 at temp 1.0 reproduced the exact
+Q6 failure — 29/29, **2/29** (`IndentationError`, non-parsing), 29/29. So the code-break is
+**sampling-driven, not quantization** — Q8 does not fix it (lowering temp to ~0.7 does). BF16
+was ruled out: ~55 GB weights + KV overflow 64 GB at 256k.
+
+**Decision:** shipped **UD-Q8_K_XL** as the `big` default — it fits 256k comfortably, keeps MTP
+(acceptance unchanged), and costs only ~5% decode, which is acceptable for the occasional
+max-quality slot. The quality delta over Q6 is below eval noise, so this is precision insurance
+rather than a measured win. (Raw study: `docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`
+for the temperature effect; llama-bench numbers in the section above were taken on Q6_K_XL.)

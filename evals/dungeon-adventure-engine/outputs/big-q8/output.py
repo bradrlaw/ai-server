@@ -1,0 +1,925 @@
+#!/usr/bin/env python3
+"""
+A text-based adventure game engine.
+
+This module implements a complete, self-contained dungeon-crawling game
+using only the Python standard library.  The architecture is split into
+four core classes:
+
+    Item       – A game object the player can carry, examine, or use.
+    Room       – A location in the world with exits, items, and locked doors.
+    GameState  – Mutable player/world state (inventory, flags, history, etc.).
+    GameEngine – Ties everything together: parses input, routes commands,
+                 mutates state, and produces formatted output.
+
+Run the file directly to start the game:
+
+    python dungeon.py
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import Callable, Optional
+
+
+# ---------------------------------------------------------------------------
+# Item
+# ---------------------------------------------------------------------------
+
+class Item:
+    """A game object that can be picked up, examined, or used.
+
+    Attributes:
+        name:            Short identifier (also used for matching).
+        description:     Text shown when the player examines the item.
+        on_use:          Optional callback invoked when the player types
+                         ``use <name>``.  Receives the current ``GameState``
+                         and returns a human-readable message (or ``None``
+                         for silence).
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        on_use: Optional[Callable[["GameState"], Optional[str]]] = None,
+    ) -> None:
+        self.name = name
+        self.description = description
+        self.on_use = on_use
+
+    def __repr__(self) -> str:
+        return f"Item({self.name!r})"
+
+
+# ---------------------------------------------------------------------------
+# Room
+# ---------------------------------------------------------------------------
+
+class Room:
+    """A location in the game world.
+
+    Attributes:
+        id:                Unique identifier string (used as a key).
+        name:              Display name shown to the player.
+        description:       Static description text.
+        dynamic_description:
+            Optional callable ``GameState -> str`` that overrides
+            ``description`` when set (used for rooms whose text changes
+            based on game flags).
+        exits:             Mapping of direction → target room id.
+        items:             List of ``Item`` instances currently on the floor.
+        locked_doors:      Mapping of direction → item name required to
+                           pass.  A direction present in ``exits`` but also
+                           in this dict is *locked* until the condition is
+                           met.
+        locked_door_message:
+            Optional mapping of direction → message shown when the player
+            tries to pass through a locked door.
+    """
+
+    def __init__(
+        self,
+        room_id: str,
+        name: str,
+        description: str,
+        exits: Optional[dict[str, str]] = None,
+        items: Optional[list[Item]] = None,
+        locked_doors: Optional[dict[str, str]] = None,
+        locked_door_message: Optional[dict[str, str]] = None,
+        dynamic_description: Optional[Callable[["GameState"], str]] = None,
+    ) -> None:
+        self.id = room_id
+        self.name = name
+        self.description = description
+        self.exits: dict[str, str] = exits or {}
+        self.items: list[Item] = items or []
+        self.locked_doors: dict[str, str] = locked_doors or {}
+        self.locked_door_message: dict[str, str] = locked_door_message or {}
+        self.dynamic_description = dynamic_description
+
+    def get_description(self, state: "GameState") -> str:
+        """Return the room's description, honouring dynamic overrides."""
+        if self.dynamic_description is not None:
+            return self.dynamic_description(state)
+        return self.description
+
+    def item_names(self) -> list[str]:
+        """Return a list of item names currently visible in the room."""
+        return [item.name for item in self.items]
+
+    def find_item(self, partial_name: str) -> Optional[Item]:
+        """Find an item in this room by (case-insensitive) prefix match."""
+        partial = partial_name.lower()
+        for item in self.items:
+            if item.name.lower().startswith(partial):
+                return item
+        return None
+
+    def __repr__(self) -> str:
+        return f"Room({self.id!r})"
+
+
+# ---------------------------------------------------------------------------
+# GameState
+# ---------------------------------------------------------------------------
+
+class GameState:
+    """Holds all mutable game state for a single play-through.
+
+    Attributes:
+        current_room:  Id of the room the player is in.
+        inventory:     Items currently carried by the player.
+        visited_rooms: Set of room ids the player has entered.
+        flags:         Arbitrary boolean flags (e.g. ``"lever_pulled"``).
+        history:       Chronological log of every event/message shown.
+        won:           True once the secret ending has been triggered.
+    """
+
+    def __init__(self, starting_room: str) -> None:
+        self.current_room: str = starting_room
+        self.inventory: list[Item] = []
+        self.visited_rooms: set[str] = {starting_room}
+        self.flags: dict[str, bool] = {}
+        self.history: list[str] = []
+        self.won: bool = False
+
+    # -- convenience helpers ------------------------------------------------
+
+    def add_flag(self, name: str) -> None:
+        """Set a boolean flag to ``True``."""
+        self.flags[name] = True
+
+    def has_flag(self, name: str) -> bool:
+        """Return ``True`` if the named flag is set."""
+        return self.flags.get(name, False)
+
+    def add_to_history(self, message: str) -> None:
+        """Append a message to the game history log."""
+        self.history.append(message)
+
+    def has_item(self, partial_name: str) -> Optional[Item]:
+        """Search the inventory for an item by prefix match.
+
+        Returns the ``Item`` if found, otherwise ``None``.
+        """
+        partial = partial_name.lower()
+        for item in self.inventory:
+            if item.name.lower().startswith(partial):
+                return item
+        return None
+
+    def __repr__(self) -> str:
+        return (
+            f"GameState(room={self.current_room!r}, "
+            f"inventory={[i.name for i in self.inventory]}, "
+            f"won={self.won})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# GameEngine
+# ---------------------------------------------------------------------------
+
+class GameEngine:
+    """Core game loop: parses commands, mutates state, prints output.
+
+    The engine owns every ``Room`` and ``Item`` instance and mediates all
+    interaction between the player and the world.
+
+    Args:
+        rooms:  Mapping of room-id → ``Room``.
+        state:  The ``GameState`` to drive.
+    """
+
+    # --- command & direction synonym tables (immutable, class-level) ------
+
+    COMMAND_MAP: dict[str, str] = {
+        "look": "look",
+        "l": "look",
+        "look at": "look_at",
+        "examine": "look_at",
+        "exam": "look_at",
+        "go": "go",
+        "move": "go",
+        "g": "go",
+        "m": "go",
+        "take": "take",
+        "grab": "take",
+        "get": "take",
+        "t": "take",
+        "drop": "drop",
+        "d": "drop",
+        "inventory": "inventory",
+        "i": "inventory",
+        "inv": "inventory",
+        "use": "use",
+        "u": "use",
+        "help": "help",
+        "h": "help",
+        "?": "help",
+        "history": "history",
+        "hist": "history",
+        "quit": "quit",
+        "q": "quit",
+        "exit": "quit",
+    }
+
+    DIRECTION_MAP: dict[str, str] = {
+        "north": "north",
+        "n": "north",
+        "south": "south",
+        "s": "south",
+        "east": "east",
+        "e": "east",
+        "west": "west",
+        "w": "west",
+    }
+
+    # ------------------------------------------------------------------ #
+    # Construction / world-building
+    # ------------------------------------------------------------------ #
+
+    def __init__(self, rooms: dict[str, Room], state: GameState) -> None:
+        self.rooms: dict[str, Room] = rooms
+        self.state: GameState = state
+
+    # ------------------------------------------------------------------ #
+    # Public API – the main loop
+    # ------------------------------------------------------------------ #
+
+    def run(self) -> None:
+        """Enter the interactive command loop until the player quits.
+
+        Handles ``EOFError`` and ``KeyboardInterrupt`` gracefully.
+        """
+        self._print_separator()
+        self.state.add_to_history("You wake in a dim stone corridor…")
+        self._print("You wake in a dim stone corridor…")
+        self.state.add_to_history("Type 'help' to see available commands.")
+        self._print("Type 'help' to see available commands.")
+        self._print_separator()
+
+        while True:
+            try:
+                raw = input("\n> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                self._print_goodbye()
+                return
+
+            if not raw:
+                continue
+
+            self._process_input(raw)
+            self._print_separator()
+
+            if self.state.has_flag("quit_requested"):
+                self._print_goodbye()
+                return
+
+    # ------------------------------------------------------------------ #
+    # Input parsing & command dispatch
+    # ------------------------------------------------------------------ #
+
+    def _process_input(self, raw: str) -> None:
+        """Parse a raw input string and dispatch to the matching handler."""
+        tokens = raw.lower().split()
+        if not tokens:
+            return
+
+        # --- bare direction (e.g. just "n") ------------------------------
+        if tokens[0] in self.DIRECTION_MAP:
+            self.cmd_go(self.DIRECTION_MAP[tokens[0]])
+            return
+
+        # --- command matching (try two-word, then one-word) ---------------
+        if len(tokens) >= 2 and " ".join(tokens[:2]) in self.COMMAND_MAP:
+            command = self.COMMAND_MAP[" ".join(tokens[:2])]
+            args = tokens[2:]
+        elif tokens[0] in self.COMMAND_MAP:
+            command = self.COMMAND_MAP[tokens[0]]
+            args = tokens[1:]
+        else:
+            self._print(f"Unknown command: {raw!r}. Type 'help' for a list.")
+            self.state.add_to_history(f"[?] Unknown command: {raw}")
+            return
+
+        # --- dispatch -----------------------------------------------------
+        dispatch: dict[str, Callable[..., None]] = {
+            "look": self.cmd_look,
+            "look_at": self.cmd_look_at,
+            "go": self.cmd_go,
+            "take": self.cmd_take,
+            "drop": self.cmd_drop,
+            "inventory": self.cmd_inventory,
+            "use": self.cmd_use,
+            "help": self.cmd_help,
+            "history": self.cmd_history,
+            "quit": self.cmd_quit,
+        }
+
+        handler = dispatch.get(command)
+        if handler is not None:
+            handler(" ".join(args) if args else "")
+
+    # ------------------------------------------------------------------ #
+    # Command implementations
+    # ------------------------------------------------------------------ #
+
+    def cmd_look(self, _args: str) -> None:
+        """Print the current room description and visible items."""
+        room = self.rooms[self.state.current_room]
+        desc = room.get_description(self.state)
+        self._print(f"\n** {room.name} **\n{desc}")
+
+        if room.items:
+            visible = ", ".join(f"a {i.name}" for i in room.items)
+            self._print(f"You see: {visible}.")
+
+        # List available exits
+        exit_desc = self._describe_exits(room)
+        if exit_desc:
+            self._print(f"Exits: {exit_desc}")
+
+        self.state.add_to_history(f"[Look] {room.name}")
+
+    def cmd_look_at(self, arg: str) -> None:
+        """Print the description of an item (in room or inventory)."""
+        if not arg:
+            self._print("Look at what? Try 'look at <item>'.")
+            return
+
+        # Search room first, then inventory
+        room = self.rooms[self.state.current_room]
+        item = room.find_item(arg)
+        if item is None:
+            item = self.state.has_item(arg)
+
+        if item is None:
+            self._print(f"You don't see anything resembling {arg!r} here.")
+            self.state.add_to_history(f"[Look at] {arg} – not found")
+        else:
+            self._print(f"{item.name}: {item.description}")
+            self.state.add_to_history(f"[Look at] {item.name}")
+
+    def cmd_go(self, direction: str) -> None:
+        """Attempt to move in the given direction.
+
+        Handles locked doors and the rusted-key auto-use mechanic.
+        """
+        direction = self.DIRECTION_MAP.get(direction, direction)
+        room = self.rooms[self.state.current_room]
+
+        if direction not in room.exits:
+            self._print(f"You can't go {direction} from here.")
+            self.state.add_to_history(f"[Go] {direction} – no exit")
+            return
+
+        # --- locked door check -------------------------------------------
+        if direction in room.locked_doors:
+            required_item_name = room.locked_doors[direction]
+
+            # Auto-use: rusted key in Armory → unlocks the door
+            if required_item_name == "rusted key":
+                key = self.state.has_item("rusted")
+                if key is not None:
+                    # Unlock permanently
+                    del room.locked_doors[direction]
+                    self._print(
+                        "You turn the rusted key in the lock. "
+                        "With a groan, the heavy door swings open."
+                    )
+                    self.state.add_to_history(
+                        "[Key] Unlocked the Armory north door."
+                    )
+                    # Fall through to actually move
+                else:
+                    msg = room.locked_door_message.get(
+                        direction,
+                        f"That door is locked. You'd need a {required_item_name}.",
+                    )
+                    self._print(msg)
+                    self.state.add_to_history(
+                        f"[Go] {direction} – locked (need {required_item_name})"
+                    )
+                    return
+            else:
+                # Generic locked door (shouldn't happen in this dungeon,
+                # but kept for extensibility)
+                msg = room.locked_door_message.get(
+                    direction,
+                    f"That door is locked. You'd need a {required_item_name}.",
+                )
+                self._print(msg)
+                self.state.add_to_history(f"[Go] {direction} – locked")
+                return
+
+        # --- perform the move --------------------------------------------
+        target_id = room.exits[direction]
+        target_room = self.rooms[target_id]
+        self.state.current_room = target_id
+        self.state.visited_rooms.add(target_id)
+
+        self._print(f"\nYou move {direction} into the {target_room.name}.")
+        self.cmd_look("")
+        self.state.add_to_history(f"[Go] {direction} → {target_room.name}")
+
+    def cmd_take(self, arg: str) -> None:
+        """Pick up an item from the current room."""
+        if not arg:
+            self._print("Take what? Try 'take <item>'.")
+            return
+
+        room = self.rooms[self.state.current_room]
+        item = room.find_item(arg)
+
+        if item is None:
+            self._print(f"There's no {arg!r} here to take.")
+            self.state.add_to_history(f"[Take] {arg} – not found")
+            return
+
+        room.items.remove(item)
+        self.state.inventory.append(item)
+        self._print(f"You pick up the {item.name}.")
+        self.state.add_to_history(f"[Take] {item.name}")
+
+        # Torch side-effect: Armory description changes
+        if item.name == "torch" and not self.state.has_flag("torch_lit"):
+            self.state.add_flag("torch_lit")
+            self._print("A warm flickering light pushes back the darkness.")
+
+    def cmd_drop(self, arg: str) -> None:
+        """Drop an item from inventory onto the current room floor."""
+        if not arg:
+            self._print("Drop what? Try 'drop <item>'.")
+            return
+
+        item = self.state.has_item(arg)
+        if item is None:
+            self._print(f"You aren't carrying a {arg!r}.")
+            self.state.add_to_history(f"[Drop] {arg} – not in inventory")
+            return
+
+        self.state.inventory.remove(item)
+        room = self.rooms[self.state.current_room]
+        room.items.append(item)
+        self._print(f"You set down the {item.name}.")
+        self.state.add_to_history(f"[Drop] {item.name}")
+
+        # Torch side-effect reversed
+        if item.name == "torch" and not any(
+            i.name == "torch" for i in self.state.inventory
+        ):
+            self.state.flags["torch_lit"] = False
+
+    def cmd_inventory(self, _args: str) -> None:
+        """List all items in the player's inventory."""
+        if not self.state.inventory:
+            self._print("Your inventory is empty.")
+        else:
+            self._print("You are carrying:")
+            for item in self.state.inventory:
+                self._print(f"  • {item.name} – {item.description}")
+        self.state.add_to_history("[Inventory]")
+
+    def cmd_use(self, arg: str) -> None:
+        """Activate an item's on_use effect (must be in inventory)."""
+        if not arg:
+            self._print("Use what? Try 'use <item>'.")
+            return
+
+        item = self.state.has_item(arg)
+        if item is None:
+            self._print(f"You don't have a {arg!r} to use.")
+            self.state.add_to_history(f"[Use] {arg} – not in inventory")
+            return
+
+        if item.on_use is None:
+            self._print(f"You fiddle with the {item.name}, but nothing happens.")
+            self.state.add_to_history(f"[Use] {item.name} – no effect")
+            return
+
+        message = item.on_use(self.state)
+        if message:
+            self._print(message)
+            self.state.add_to_history(f"[Use] {item.name}")
+        else:
+            self.state.add_to_history(f"[Use] {item.name}")
+
+    def cmd_help(self, _args: str) -> None:
+        """Print the full command reference."""
+        lines = [
+            "Available commands:",
+            "  look                  – Describe the current room",
+            "  look at <item>        – Examine an item (alias: examine)",
+            "  go <direction>        – Move (n/s/e/w or full name)",
+            "  take <item>           – Pick up an item (alias: grab, get)",
+            "  drop <item>           – Set an item down",
+            "  use <item>            – Activate an item's effect",
+            "  inventory (i/inv)     – List carried items",
+            "  history (hist)        – Show the last 10 events",
+            "  help (h/?)            – Show this message",
+            "  quit (q/exit)         – End the game",
+            "",
+            "You can also type a bare direction (n, s, e, w) to move.",
+        ]
+        for line in lines:
+            self._print(line)
+        self.state.add_to_history("[Help]")
+
+    def cmd_history(self, _args: str) -> None:
+        """Print the last 10 events from the game history log."""
+        if not self.state.history:
+            self._print("Nothing has happened yet.")
+            return
+        recent = self.state.history[-10:]
+        self._print("Recent events:")
+        for i, entry in enumerate(recent, 1):
+            self._print(f"  {i:2d}. {entry}")
+
+    def cmd_quit(self, _args: str) -> None:
+        """Request a graceful game exit."""
+        self.state.add_flag("quit_requested")
+        self.state.add_to_history("[Quit]")
+
+    # ------------------------------------------------------------------ #
+    # Output helpers
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _print(message: str) -> None:
+        """Print a line to stdout."""
+        print(message)
+
+    @staticmethod
+    def _print_separator() -> None:
+        """Print a visual separator line."""
+        print("─" * 56)
+
+    def _print_goodbye(self) -> None:
+        """Print a farewell message and final stats."""
+        self._print_separator()
+        self._print("\n  Goodbye, adventurer. The dungeon awaits your return.")
+        rooms_visited = len(self.state.visited_rooms)
+        total_rooms = len(self.rooms)
+        self._print(
+            f"  Rooms explored: {rooms_visited}/{total_rooms}"
+        )
+        if self.state.won:
+            self._print("  ★ Secret ending achieved! ★")
+        self._print()
+
+    def _describe_exits(self, room: Room) -> str:
+        """Build a human-readable string of available exits.
+
+        Locked doors are annotated with a padlock symbol.
+        """
+        parts: list[str] = []
+        for direction in ("north", "south", "east", "west"):
+            if direction in room.exits:
+                label = direction.capitalize()
+                if direction in room.locked_doors:
+                    label += " 🔒"
+                parts.append(label)
+        return ", ".join(parts) if parts else "None"
+
+    # ------------------------------------------------------------------ #
+    # World construction (factory)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def build_dungeon() -> tuple[dict[str, Room], GameState]:
+        """Construct and return the mini-dungeon world and initial state.
+
+        Returns:
+            A tuple of ``(rooms_dict, initial_state)``.
+        """
+
+        # -- Items ---------------------------------------------------------
+
+        rusted_key = Item(
+            name="rusted key",
+            description=(
+                "A small, pitted iron key. Rust flakes onto your palm "
+                "as you turn it over. It looks like it might fit an "
+                "old, heavy lock."
+            ),
+        )
+
+        lever = Item(
+            name="lever",
+            description=(
+                "A cold iron lever set into the bookshelf. It's stuck "
+                "in the 'down' position. A faint grinding sound comes "
+                "from behind the shelves."
+            ),
+            on_use=lambda state: _lever_use(state),
+        )
+
+        torch = Item(
+            name="torch",
+            description=(
+                "A sturdy torch with a stub of tallow. It hasn't been "
+                "lit yet, but the wick is dry enough to catch a spark."
+            ),
+        )
+
+        golden_coin = Item(
+            name="golden coin",
+            description=(
+                "A gleaming gold coin, stamped with the face of a long-"
+                "dead king. You pocket it, but it weighs suspiciously "
+                "little. Probably worth a fortune. Or maybe just a "
+                "really fancy doorstop."
+            ),
+        )
+
+        ancient_scroll = Item(
+            name="ancient scroll",
+            description=(
+                "A brittle vellum scroll sealed with a cracked wax "
+                "bloom. The ink is faded, but you can make out elegant "
+                "script and a single glowing sigil."
+            ),
+            on_use=lambda state: _scroll_use(state),
+        )
+
+        # -- Dynamic description helpers -----------------------------------
+
+        def _library_description(state: GameState) -> str:
+            if state.has_flag("lever_pulled"):
+                return (
+                    "The great bookshelf has groaned aside, revealing a "
+                    "narrow stone passage to the west. Dust motes dance "
+                    "in the cold draft. The air smells of old paper and "
+                    "secrets."
+                )
+            return (
+                "Candlelight gutters among towering shelves of forgotten "
+                "tomes. A heavy oak bookshelf blocks the way to the south. "
+                "Somewhere behind the shelves, you hear the faint hum of "
+                "machinery. A small iron lever is mounted on the side of "
+                "the bookshelf."
+            )
+
+        def _armory_description(state: GameState) -> str:
+            base = (
+                "Racks of dull swords and dented shields line the walls. "
+                "The air is thick with the smell of oiled steel. A heavy "
+                "iron door blocks the passage to the north, its lock "
+                "caked in rust."
+            )
+            if state.has_flag("torch_lit"):
+                base += (
+                    " Your torch casts a warm flickering light across the "
+                    "racks, making the weapons seem almost alive."
+                )
+            return base
+
+        # -- Rooms ----------------------------------------------------------
+
+        entrance = Room(
+            room_id="entrance",
+            name="Entrance Hall",
+            description=(
+                "A low-ceilinged stone hall. Moss creeps up the walls, "
+                "and a cold draft stirs dead leaves at your feet. A "
+                "rusted key lies on the cracked flagstones. The air "
+                "smells of rain and old iron."
+            ),
+            exits={"north": "library", "east": "armory", "south": "garden"},
+            items=[rusted_key],
+        )
+
+        library = Room(
+            room_id="library",
+            name="Library",
+            description="",  # dynamic_description will be used
+            dynamic_description=_library_description,
+            exits={"south": "entrance", "west": "secret_chamber"},
+            items=[lever],
+            locked_doors={"west": "lever"},
+            locked_door_message={
+                "west": (
+                    "The passage to the west is sealed behind the "
+                    "bookshelf. You need to pull the lever first."
+                )
+            },
+        )
+
+        armory = Room(
+            room_id="armory",
+            name="Armory",
+            description="",  # dynamic_description will be used
+            dynamic_description=_armory_description,
+            exits={"west": "entrance", "north": "treasure"},
+            items=[torch],
+            locked_doors={"north": "rusted key"},
+            locked_door_message={
+                "north": (
+                    "The iron door is shut fast. The lock is thick with "
+                    "rust—you'd need a rusted key to open it."
+                )
+            },
+        )
+
+        treasure = Room(
+            room_id="treasure",
+            name="Treasure Room",
+            description=(
+                "A vaulted chamber lit by pale phosphorescent moss. On a "
+                "pedestal of black marble rests a single golden coin. "
+                "Carved into the wall in flowing script is an inscription:"
+                "\n"
+                '    "What key opens no door, yet unlocks the mind?\n'
+                '     What lock needs no key, yet binds the wise?"'
+            ),
+            exits={"south": "armory"},
+            items=[golden_coin],
+        )
+
+        secret_chamber = Room(
+            room_id="secret_chamber",
+            name="Secret Chamber",
+            description=(
+                "A tiny, circular room hidden behind the library shelves. "
+                "The walls are covered in intricate carvings of spirals "
+                "and stars. On a stone shelf rests an ancient scroll, "
+                "its wax seal cracked open."
+            ),
+            exits={"east": "library"},
+            items=[ancient_scroll],
+        )
+
+        garden = Room(
+            room_id="garden",
+            name="Garden",
+            description=(
+                "A peaceful clearing breaks through the stone above. "
+                "Pale moonlight filters through leaves you didn't know "
+                "could grow here. A stream murmurs softly over smooth "
+                "pebbles. For a moment, the weight of the dungeon lifts.\n"
+                "\n    You've found peace."
+            ),
+            exits={"north": "entrance"},
+            items=[],
+        )
+
+        rooms: dict[str, Room] = {
+            "entrance": entrance,
+            "library": library,
+            "armory": armory,
+            "treasure": treasure,
+            "secret_chamber": secret_chamber,
+            "garden": garden,
+        }
+
+        state = GameState(starting_room="entrance")
+        return rooms, state
+
+    # ------------------------------------------------------------------ #
+    # Banner
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def print_banner() -> None:
+        """Print the styled ASCII banner at game start."""
+        banner: str = r"""
+    ╔══════════════════════════════════════════════════════════╗
+    ║                                                          ║
+    ║        ▄▄·  ·▄▄   ·  ▄·  ▄▄·   ▄▄·   ▄▄·       ▄▄·      ║
+    ║        ▐█ ·█▌     ▐█ ▌▪ ██▪  ▐█ ▌▪ ▐█ ▌▪   ·· ▐█ ▌▪     ║
+    ║         ▌·▌▪ ▐█▌  ▌░·└▌ ▐█·  ▌░·└▌ ▌░·└▌ ▐█▌▐█ ·████▄   ║
+    ║         ·▌▀░· ▐█▌   ▐█▌░▐█▌▐█▌  ▐█▌░▐█▌░▐█▌██.  ·██▌   ║
+    ║         ▀▀ ▀  ▀▀▀   ▀ ▀ ▀▀░  ▀▀░  ▀▀░  ▀▀░ ▀█▄▄▄▄ ·█▀▀  ║
+    ║                                                          ║
+    ║          A  T E X T - B A S E D   A D V E N T U R E      ║
+    ║                                                          ║
+    ╚══════════════════════════════════════════════════════════╝
+"""
+        print(banner)
+
+
+# ---------------------------------------------------------------------------
+# Item on_use callbacks (module-level functions to avoid circular refs)
+# ---------------------------------------------------------------------------
+
+def _lever_use(state: GameState) -> str:
+    """Called when the player uses the lever in the Library."""
+    if state.has_flag("lever_pulled"):
+        return "The lever is already up. The bookshelf stands aside."
+
+    state.add_flag("lever_pulled")
+
+    # Remove the lever from the Library room (it's in the player's
+    # inventory at this point, so we just need to ensure the west door
+    # in the Library is unlocked permanently).
+    # The locked_doors dict is mutated via the engine's room reference,
+    # but since we only have GameState here, we use a flag-based check
+    # in the go command.  However, to be safe, we note the flag.
+    #
+    # Actually, the cleanest approach: the engine checks the flag in
+    # cmd_go before consulting locked_doors.  We set the flag and the
+    # engine's cmd_go will skip the lock check for that direction.
+
+    return (
+        "You heave the lever upward.  A deep grinding shudder runs "
+        "through the bookshelf, and the heavy shelves groan sideways, "
+        "revealing a dark passage to the west.  The lever clicks into "
+        "its new position and will not move again."
+    )
+
+
+def _scroll_use(state: GameState) -> str:
+    """Called when the player reads the ancient scroll."""
+    if state.won:
+        return "You've already read the scroll. Its words still echo in your mind."
+
+    state.add_flag("won")
+    state.won = True
+
+    return (
+        "\n"
+        "  You unroll the ancient scroll. The faded ink seems to "
+        "brighten under your gaze, the words rearranging themselves "
+        "into clarity:\n"
+        "\n"
+        '      "To the one who finds this truth in secret:\n'
+        '       The dungeon was never a prison. It was a *mirror*.\n'
+        '       Every locked door you opened was a doubt you overcame.\n'
+        '       Every dark corridor you walked was a fear you faced.\n'
+        '       The key was never the key.\n'
+        '       The lever was never the lever.\n'
+        '       You were.\n'
+        '\n'
+        '       The treasure was the finding.\n'
+        '       The coin was the choice to keep walking.\n'
+        '       The garden was the rest you earned.\n'
+        '\n'
+        '       Go in peace, and know: the dungeon ends where you begin."\n'
+        "\n"
+        "  The scroll crumbles to golden dust in your hands, and for a "
+        "brief, perfect moment, every room in the dungeon is filled with "
+        "warm light.\n"
+        "\n"
+        "  ★ ★ ★  S E C R E T   E N D I N G   A C H I E V E D  ★ ★ ★\n"
+        "\n"
+        "  You may continue exploring, or type 'quit' to leave."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Monkey-patch: make the engine aware of the lever flag for locked doors
+# ---------------------------------------------------------------------------
+# We override GameEngine.cmd_go to check the "lever_pulled" flag before
+# consulting locked_doors.  Rather than subclassing, we wrap the original.
+
+_original_cmd_go = GameEngine.cmd_go
+
+
+def _patched_cmd_go(self: GameEngine, direction: str) -> None:
+    """Enhanced go command that respects the lever_pulled flag."""
+    direction = GameEngine.DIRECTION_MAP.get(direction, direction)
+    room = self.rooms[self.state.current_room]
+
+    if direction not in room.exits:
+        self._print(f"You can't go {direction} from here.")
+        self.state.add_to_history(f"[Go] {direction} – no exit")
+        return
+
+    # --- lever flag override ---------------------------------------------
+    if (
+        direction in room.locked_doors
+        and room.locked_doors[direction] == "lever"
+        and self.state.has_flag("lever_pulled")
+    ):
+        # Lever already pulled → remove the lock permanently
+        del room.locked_doors[direction]
+
+    # Delegate to the original implementation for all other logic
+    _original_cmd_go(self, direction)
+
+
+GameEngine.cmd_go = _patched_cmd_go  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# __main__
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    """Instantiate the dungeon, print the banner, and start the game loop."""
+
+    rooms, state = GameEngine.build_dungeon()
+    engine = GameEngine(rooms=rooms, state=state)
+
+    GameEngine.print_banner()
+    print("  You are in the ** Entrance Hall **.\n")
+
+    try:
+        engine.run()
+    except KeyboardInterrupt:
+        engine._print_goodbye()
+    except EOFError:
+        engine._print_goodbye()

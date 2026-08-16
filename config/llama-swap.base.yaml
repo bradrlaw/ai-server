@@ -104,12 +104,15 @@ models:
   # Highest-quality dense model, tuned for OVERNIGHT long-context planning where
   # accuracy/precision matter more than speed. Occasional use; auto-unloads
   # after 5 min idle so coding+chat can reclaim the cards.
-  # WEIGHTS: UD-Q6_K_XL (Unsloth Dynamic, imatrix-calibrated ~25GB) at FULL f16
-  # KV — chosen over BF16/Q8 after a 256k head-to-head (Tarjan SCC @ temp 0):
-  # UD-Q6_K_XL+f16 gave the most VRAM headroom, the fastest decode, full KV
-  # precision (best long-context recall), and 5/5 correct code. Q8 weights added
-  # no correctness (also 5/5) but cost ~6GB headroom; BF16+q8_0 KV was razor-thin
-  # at 256k (idx2 <1GB free).
+  # WEIGHTS: UD-Q8_K_XL (Unsloth Dynamic Q8, imatrix-calibrated ~31.5GB) at FULL
+  # f16 KV. Adopted 2026-08-15 as the max-quality default after a Q6-vs-Q8 A/B on
+  # the 3.8 code evals: Q8 fits 256k comfortably (idx1 23.2GB / idx2 27.7GB =
+  # ~51GB of 64GB), decode only ~5% slower than UD-Q6_K_XL (MTP masks the extra
+  # weight bandwidth — acceptance unchanged ~0.79-0.93), and scored at parity.
+  # (Earlier the slot ran UD-Q6_K_XL; a prior 256k head-to-head found Q8 added no
+  # correctness at temp 0, but this is the "max quality" slot so we spend the ~5%
+  # for the higher-precision weights. BF16 does NOT fit at 256k — ~55GB weights +
+  # KV overflows 64GB.)
   # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
   # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
   # sync overhead of the layer split. Do not add --ubatch-size.
@@ -121,15 +124,15 @@ models:
   # decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance, lossless (main model verifies);
   # VRAM only +~1.8GB. The dual-card split-mode MTP path works on our llama.cpp build.
   "big":
-    name: "Qwen3.8-27B (UD-Q6_K_XL, MTP) — max quality, dual-V100, 256k"
-    description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
+    name: "Qwen3.8-27B (UD-Q8_K_XL, MTP) — max quality, dual-V100, 256k"
+    description: "Q8 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
     ttl: 300
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf
+      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16

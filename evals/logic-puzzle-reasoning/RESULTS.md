@@ -11,6 +11,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 12/12 | 114.8 | 802 ms | 16603 | 6013 B | on 79% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 12/12 | 81.1 | 1274 ms | 2227 | 6576 B | on 82% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 12/12 | 42.7 | 771 ms | 3732 | 4080 B | on 80% | stop |
+| `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 39.0 | 861 ms | 21820 | 6620 B | on 80% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 12/12 | 38.9 | 811 ms | 6552 | 4632 B | on 73% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 12/12 | 38.8 | 777 ms | 9559 | 6216 B | on 78% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 12/12 | 37.7 | 821 ms | 9166 | 6549 B | on 72% | stop |
@@ -26,6 +27,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `big-q8` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
@@ -37,4 +39,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Correctness, Rigor / stepwise, Contradiction handling, Clarity, Verification.
 `·` = not yet scored.
 
-_Last generated 2026-08-15T07:29:20+00:00._
+_Last generated 2026-08-16T04:36:37+00:00._

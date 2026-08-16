@@ -55,7 +55,7 @@ Read this first, then the detailed docs:
   `llama-swap-mode` MCP (`set_mode`). `list` / `current` / `show <mode>` to inspect.
 - **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.8-27B Q6_K
   **+ MTP** self-spec decode, 160k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE UD-Q6_K **+ MTP**, 96k
-  ctx, idx2), `big` (Qwen3.8-27B UD-Q6_K_XL **+ MTP**, dual-V100, 256k), `fast`
+  ctx, idx2), `big` (Qwen3.8-27B UD-Q8_K_XL **+ MTP**, dual-V100, 256k), `fast`
   (Gemma-4-26B-A4B MoE, P100, non-reasoning), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
   Most Qwen3 models are **reasoning** models (thinking phase) — give generous `max_tokens`.
   The Qwen3.8 `coding`/`big` slots are pinned to `reasoning_effort=medium` in the base config

@@ -11,3 +11,6 @@ dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,0.7,0.95,20,default,c
 dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,a,29,29,full
 dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,b,2,29,IndentationError non-parsing program
 dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q6_K_XL,medium,1.0,0.95,20,0.0,c,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q8_K_XL,medium,1.0,0.95,20,0.0,a,29,29,full
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q8_K_XL,medium,1.0,0.95,20,0.0,b,2,29,IndentationError non-parsing program (same failure as Q6 at temp 1.0)
+dungeon-adventure-engine,big,Qwen3.8-27B-UD-Q8_K_XL,medium,1.0,0.95,20,0.0,c,29,29,full

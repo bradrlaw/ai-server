@@ -1,0 +1,65 @@
+{
+  "test": "dungeon-adventure-engine",
+  "model_slot": "big-q8",
+  "label": "big-q8",
+  "model_name": "Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10002",
+  "sampler": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": 0.0,
+    "presence_penalty": null
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--chat-template-kwargs '{\"reasoning_effort\":\"medium\"}'\n--host 127.0.0.1 --port 10002 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 9465,
+    "prompt_tokens": 832,
+    "total_tokens": 10297,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 240.4,
+    "ttft_ms": 1610.485,
+    "prefill_tps": 516.614560210123,
+    "decode_tps": 39.69064761198,
+    "prompt_tokens": 832,
+    "predicted_tokens": 9465,
+    "prefill_ms": 1610.485,
+    "decode_ms": 238469.276
+  },
+  "mtp": {
+    "draft_n": 7334,
+    "draft_n_accepted": 5797,
+    "accept_rate": 0.79,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 832,
+    "prompt_ms": 1610.485,
+    "prompt_per_token_ms": 1.9356790865384614,
+    "prompt_per_second": 516.614560210123,
+    "predicted_n": 9465,
+    "predicted_ms": 238469.276,
+    "predicted_per_token_ms": 25.194852192287374,
+    "predicted_per_second": 39.69064761198,
+    "draft_n": 7334,
+    "draft_n_accepted": 5797
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "output.py",
+  "output_bytes": 35277,
+  "reasoning_bytes": 5357,
+  "wall_secs": 240.4,
+  "created_utc": "2026-08-15T08:11:51+00:00"
+}

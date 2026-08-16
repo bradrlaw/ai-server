@@ -1,0 +1,65 @@
+{
+  "test": "logic-puzzle-reasoning",
+  "model_slot": "big-q8",
+  "label": "big-q8",
+  "model_name": "Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
+  "proxy": "http://localhost:10002",
+  "sampler": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": 0.0,
+    "presence_penalty": null
+  },
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--chat-template-kwargs '{\"reasoning_effort\":\"medium\"}'\n--host 127.0.0.1 --port 10002 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "usage": {
+    "completion_tokens": 21820,
+    "prompt_tokens": 392,
+    "total_tokens": 22212,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 561.5,
+    "ttft_ms": 860.892,
+    "prefill_tps": 455.34166887367985,
+    "decode_tps": 38.99849449725701,
+    "prompt_tokens": 392,
+    "predicted_tokens": 21820,
+    "prefill_ms": 860.892,
+    "decode_ms": 559508.778
+  },
+  "mtp": {
+    "draft_n": 16790,
+    "draft_n_accepted": 13426,
+    "accept_rate": 0.8,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 392,
+    "prompt_ms": 860.892,
+    "prompt_per_token_ms": 2.1961530612244897,
+    "prompt_per_second": 455.34166887367985,
+    "predicted_n": 21820,
+    "predicted_ms": 559508.778,
+    "predicted_per_token_ms": 25.642015490375805,
+    "predicted_per_second": 38.99849449725701,
+    "draft_n": 16790,
+    "draft_n_accepted": 13426
+  },
+  "extraction": {
+    "extracted": false,
+    "kind": "raw"
+  },
+  "output_file": "index.html",
+  "output_bytes": 6620,
+  "reasoning_bytes": 72719,
+  "wall_secs": 561.5,
+  "created_utc": "2026-08-15T08:39:11+00:00"
+}

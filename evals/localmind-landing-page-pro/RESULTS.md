@@ -13,6 +13,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 41/41 | 77.4 | 2986 ms | 13139 | 43321 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 41/41 | 44.5 | 1714 ms | 19265 | 54311 B | on 92% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 41/41 | 43.1 | 1707 ms | 14927 | 44504 B | on 87% | stop |
+| `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 42.1 | 1919 ms | 19711 | 55928 B | on 90% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 41/41 | 41.9 | 1824 ms | 14469 | 43646 B | on 90% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 41/41 | 41.5 | 1728 ms | 18221 | 51195 B | on 85% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 41/41 | 39.9 | 1666 ms | 19104 | 52361 B | on 81% | stop |
@@ -28,6 +29,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
+| `big-q8` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
@@ -37,4 +39,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-08-15T06:17:16+00:00._
+_Last generated 2026-08-16T04:36:37+00:00._

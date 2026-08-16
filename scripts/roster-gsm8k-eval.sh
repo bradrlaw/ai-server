@@ -21,7 +21,7 @@ declare -A SPEC=(
  [chat-uncensored-q6]="qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf|1|q8_0|6|49152"
  [fast-uncensored]="gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf|1|f16|6|49152"
  [gemma-31b]="gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf|0|q8_0|8|16384"
- [big]="qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf|1|f16|6|49152"
+ [big]="qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf|1|f16|6|49152"
  [coder-next]="qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf|0|f16|8|16384"
 )
 
