@@ -164,6 +164,11 @@ models:
   # DeltaNet linear attention keeps KV/compute buffers flat, so 2 concurrent
   # sequences cost the SAME VRAM as 1. Verified 2026-07-17: two concurrent 26k-token
   # prefills peak 28.7GB(idx1)/27.3GB(idx2) — identical to idle, no OOM.
+  # COLD TIER (2026-08-18): weights relocated to models/cold (bulk HDD) to reclaim
+  # ~50GB NVMe. On-demand only (ttl 300), so the tradeoff is a slow first load
+  # (~5min HDD read of 49.6GB) after the model has been idle-evicted; warm reuse
+  # within the ttl window is unaffected. Move back to models/qwen3-coder-next/ (and
+  # drop the cold/ path prefix) if it becomes a hot always-on model again.
   "coder-next":
     name: "Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) — agentic coding, 256k"
     description: "Hybrid-MoE coding model split across both V100s, 256k, non-thinking. Preempts coding+chat."
@@ -173,7 +178,7 @@ models:
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf
+      --model ${models_dir}/cold/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16
