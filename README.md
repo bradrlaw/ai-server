@@ -245,6 +245,22 @@ Things I'd change on a second build, learned the hard way:
    add the spare drive to the volume group and expand in place. Something to fix on the
    next rebuild.
 
+5. **Name model slots by role/tier, not by a transient attribute — and add an
+   indirection layer so a rename isn't a breaking change.** The small-card slot was
+   named `fast`, which described its *speed* at the time rather than its *role*. Once the
+   P100 died and was swapped for a slower 12 GB Titan X (and eventually some other card),
+   `fast` stopped being our fastest agent — the name is now actively misleading, but
+   renaming it is a breaking change because `fast`/`fast-12b`/`fast-uncensored` string
+   literals crept into ~15+ places: the llama-swap router + mode overlays, the LiteLLM
+   `model_name` entries clients call, `plan_build_mcp.py`, the status-page fast-keeper
+   loop, `config/pi/models.json`, the BYOK launcher, and a lot of docs/ADRs. Two lessons:
+   (a) pick **stable, role-based** slot names up front (e.g. `small`/`chat`/`coding`/`big`,
+   describing the tier not the hardware or a benchmark result); (b) introduce a single
+   **alias/indirection layer** (one canonical slot id mapped once to the client-facing
+   name, the GGUF path, and the card) so future renames touch one table instead of a
+   dozen files. Tabled the `fast`→`small` rename for now precisely because the blast
+   radius is too large — which is the whole point of this note.
+
 ## Layout
 
 | Path | Tracked | Contents |

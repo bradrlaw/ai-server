@@ -26,20 +26,22 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 # output budget because the hidden thinking phase spends output tokens. Values already set
 # in the environment win, so you can override per invocation.
 #   ctx-size / reasoning (see config/llama-swap.yaml):
-#     coding     184320  reasoning  (Q6_K + MTP self-spec decode; 200k OOMs with MTP)
+#     coding     163840  reasoning  (Qwen3.8-27B Q6_K + MTP self-spec decode; reasoning_effort=medium)
 #     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
-#     fast       32768   NON-thinking (Gemma-4-26B-A4B MoE; fast-12b fallback=131072)
+#     fast       32768   NON-thinking (Gemma-4-12B dense on the 12GB Titan X stopgap; fast-12b fallback also 32768)
 case "$COPILOT_MODEL" in
-  coding)     def_prompt=131072; def_output=32768 ;;   # 163840 <= 184320 (~20k spare)
+  coding)     def_prompt=114688; def_output=32768 ;;   # 147456 <= 163840 (~16k spare); 3.8 ctx dropped 184320->163840
   chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
   big)        def_prompt=163840; def_output=32768 ;;
   # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
   # Keep prompt + output within one slot: 98304 + 32768 = 131072.
+  # NOTE: coder-next weights live on the bulk cold tier (2026-08-18), so the FIRST
+  # request after idle eviction (ttl 300) blocks ~5min on the 49.6GB HDD read.
   coder-next) def_prompt=98304;  def_output=32768 ;;
-  fast)       def_prompt=24576;  def_output=8192  ;;   # MoE, ctx 32768 (24576+8192)
-  fast-12b)   def_prompt=98304;  def_output=8192  ;;   # dense 12B fallback, ctx 131072
+  fast)       def_prompt=20480;  def_output=8192  ;;   # 28672 <= 32768 (~4k spare); dense 12B, ctx 32768
+  fast-12b)   def_prompt=20480;  def_output=8192  ;;   # dense 12B, Titan X stopgap ctx dropped 131072->32768
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
@@ -49,8 +51,8 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 # Run the token-heavy explore/search subagent on a DIFFERENT local model than the
 # driver so it executes on a SEPARATE GPU in parallel (no contention/eviction):
 #     driver (COPILOT_MODEL, default 'coding') -> V100 idx1
-#     explore/search subagent  -> 'fast' (Gemma-4-26B-A4B MoE) on the P100 (idx0), always warm
-# The P100 is on a different card from every V100 driver, so the driver keeps
+#     explore/search subagent  -> 'fast' (Gemma-4-12B dense on the 12GB Titan X stopgap, idx0), always warm
+# The Titan X (idx0) is on a different card from every V100 driver, so the driver keeps
 # reasoning while explores run in parallel with zero cold-start (fast keeper thread).
 # Override with SEARCH_SUBAGENT_MODEL=<id>; set it EMPTY to inherit the driver.
 #
@@ -60,7 +62,7 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 #    whose availability is "off" (server-only) — NOT reachable by env,
 #    COPILOT_CLI_ENABLED_FEATURE_FLAGS, or /experimental. Proven: a delegated explore
 #    kept `fast` at 0 tokens. Kept here so it auto-activates if GitHub enables the flag.
-#  * Per-subagent local models (e.g. task->chat on idx2, explorer->fast on P100) are
+#  * Per-subagent local models (e.g. task->chat on idx2, explorer->fast on the Titan X idx0) are
 #    NOT possible through single-provider env-var BYOK (the /agents picker only lists
 #    the one configured model). They ARE possible two ways:
 #      (a) @github/copilot-sdk host: CopilotClient({onListModels}) + createSession(
