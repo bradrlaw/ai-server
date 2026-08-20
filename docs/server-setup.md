@@ -950,6 +950,18 @@ family accounts under Admin → Users. Web search is pre-wired (`ENABLE_WEB_SEAR
 `WEB_SEARCH_ENGINE=searxng`); enable it per-chat with the web/globe toggle. Data persists in
 the `open-webui-data` volume.
 
+**Uploaded-image GC (`open-webui-data/uploads/`):** Open WebUI (through at least v0.11)
+never garbage-collects uploads — deleting a chat leaves the image on disk **and** its row in
+`webui.db`'s `file` table, and it does **not** cascade-delete the `chat_file` join rows, so
+those orphans (and dangling join rows) accumulate forever. `scripts/openwebui-prune-uploads.py`
+(run inside the container via `scripts/openwebui-prune-uploads.sh`) finds `file` rows no longer
+referenced by any **live** chat/knowledge/note — treating a join row whose parent chat is gone
+as unreferenced — and deletes both the disk file and the DB rows. Safe by default (dry-run);
+a `--min-age-days` grace (default 7) protects freshly-uploaded, not-yet-attached files.
+Automated daily by `openwebui-prune-uploads.timer` (09:00 UTC ≈ owner's quiet hours). Manual:
+`scripts/openwebui-prune-uploads.sh` (preview) / `--apply` (delete). NB: the big `cache/`
+dir in the volume (embedding + whisper models, ~1 GB) is **not** user images — leave it.
+
 **SearXNG:** `search/formats` includes `json` (required by Open WebUI). Secret injected from
 `SEARXNG_SECRET` (settings.yml keeps the literal `ultrasecretkey` placeholder). Verified:
 `/search?q=...&format=json` returns results.

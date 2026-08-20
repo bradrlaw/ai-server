@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily prune of orphaned Open WebUI uploads
+Documentation=file:/srv/ai/scripts/openwebui-prune-uploads.service
+
+[Timer]
+# 09:00 UTC ~= 04:00/05:00 US-Eastern (owner's quiet hours / deep idle).
+OnCalendar=*-*-* 09:00:00
+# Run on next boot if the machine was off at the scheduled time.
+Persistent=true
+# Spread load a little; harmless for a maintenance prune.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
