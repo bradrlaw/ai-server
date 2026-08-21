@@ -1,0 +1,15 @@
+[Unit]
+Description=Prune orphaned Open WebUI uploads (delete files whose chat/knowledge reference is gone)
+Documentation=file:/srv/ai/scripts/openwebui-prune-uploads.py
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# --apply actually deletes; --min-age-days 7 protects freshly-uploaded files
+# that may not yet be attached to a saved chat. Adjust the grace period as needed.
+ExecStart=/srv/ai/scripts/openwebui-prune-uploads.sh --apply --min-age-days 7 --quiet
+# Needs to reach the docker socket + delete root-owned files in the volume.
+User=root
+Nice=10
+IOSchedulingClass=idle
