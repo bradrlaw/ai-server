@@ -2,62 +2,64 @@
   "test": "dungeon-adventure-engine",
   "model_slot": "big",
   "label": "big",
-  "model_name": "Qwen3.6-27B-UD-Q6_K_XL.gguf",
-  "model_path": "/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf",
+  "model_name": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf",
   "endpoint": "http://127.0.0.1:9090/v1/chat/completions",
   "proxy": "http://localhost:10001",
   "sampler": {
-    "temperature": 0.7,
+    "temperature": 1.0,
     "top_p": 0.95,
     "top_k": 20,
-    "max_tokens": 32000
+    "max_tokens": 32000,
+    "min_p": 0.0,
+    "presence_penalty": null
   },
-  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--host 127.0.0.1 --port 10001 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
+  "load_command": "/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf\n--ctx-size 262144\n--cache-type-k f16\n--cache-type-v f16\n--split-mode layer\n--parallel 1\n--spec-type draft-mtp\n--spec-draft-n-max 2\n--chat-template-kwargs '{\"reasoning_effort\":\"medium\"}'\n--host 127.0.0.1 --port 10001 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics",
   "usage": {
-    "completion_tokens": 14078,
+    "completion_tokens": 9377,
     "prompt_tokens": 832,
-    "total_tokens": 14910,
+    "total_tokens": 10209,
     "prompt_tokens_details": {
       "cached_tokens": 0
     }
   },
   "finish_reason": "stop",
   "performance": {
-    "wall_secs": 355.3,
-    "ttft_ms": 1365.919,
-    "prefill_tps": 609.1137175776894,
-    "decode_tps": 39.85081765170539,
+    "wall_secs": 225.8,
+    "ttft_ms": 1352.073,
+    "prefill_tps": 615.351390050685,
+    "decode_tps": 41.85897320434234,
     "prompt_tokens": 832,
-    "predicted_tokens": 14078,
-    "prefill_ms": 1365.919,
-    "decode_ms": 353267.532
+    "predicted_tokens": 9377,
+    "prefill_ms": 1352.073,
+    "decode_ms": 224014.095
   },
   "mtp": {
-    "draft_n": 10566,
-    "draft_n_accepted": 8796,
-    "accept_rate": 0.832,
+    "draft_n": 7220,
+    "draft_n_accepted": 5766,
+    "accept_rate": 0.799,
     "enabled": true
   },
   "server_timings": {
     "cache_n": 0,
     "prompt_n": 832,
-    "prompt_ms": 1365.919,
-    "prompt_per_token_ms": 1.6417295673076924,
-    "prompt_per_second": 609.1137175776894,
-    "predicted_n": 14078,
-    "predicted_ms": 353267.532,
-    "predicted_per_token_ms": 25.093588009660465,
-    "predicted_per_second": 39.85081765170539,
-    "draft_n": 10566,
-    "draft_n_accepted": 8796
+    "prompt_ms": 1352.073,
+    "prompt_per_token_ms": 1.6250877403846156,
+    "prompt_per_second": 615.351390050685,
+    "predicted_n": 9377,
+    "predicted_ms": 224014.095,
+    "predicted_per_token_ms": 23.889740322064625,
+    "predicted_per_second": 41.85897320434234,
+    "draft_n": 7220,
+    "draft_n_accepted": 5766
   },
   "extraction": {
     "extracted": true,
     "kind": "fenced"
   },
   "output_file": "output.py",
-  "output_bytes": 16218,
-  "reasoning_bytes": 38683,
-  "wall_secs": 355.3,
-  "created_utc": "2026-07-27T09:25:42+00:00"
+  "output_bytes": 35232,
+  "reasoning_bytes": 5291,
+  "wall_secs": 225.8,
+  "created_utc": "2026-08-15T06:22:40+00:00"
 }

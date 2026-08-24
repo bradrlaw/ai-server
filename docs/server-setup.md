@@ -641,9 +641,9 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
-| `coding` | Qwen3.6-27B **Q6_K + MTP**         | idx1        | 184320 | ~31.5 GB (q8_0 KV, MTP self-spec) |
+| `coding` | Qwen3.8-27B **Q6_K + MTP**         | idx1        | 163840 | ~30.7 GB (q8_0 KV, MTP self-spec) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
-| `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
+| `big`    | Qwen3.8-27B **UD-Q8_K_XL + MTP** (split) | idx1+idx2   | 262144 | ~51 GB (23+28), f16 KV, ttl 300s |
 | `small`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
 | `small-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `small` |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
@@ -657,9 +657,9 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 
 | API id (unchanged) | Open WebUI display name |
 |--------------------|-------------------------|
-| `coding`           | `coding (Qwen3.6-27B)` |
+| `coding`           | `coding (Qwen3.8-27B)` |
 | `chat`             | `chat (Qwen3.6-35B-A3B MoE)` |
-| `big`              | `big (Qwen3.6-27B BF16)` |
+| `big`              | `big (Qwen3.8-27B UD-Q8_K_XL)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
 | `small`             | `small (Gemma-4-26B-A4B MoE)` |
 | `small-12b`         | `small-12b (Gemma-4-12B dense)` |

@@ -3,9 +3,9 @@
   "score": 29,
   "max": 29,
   "pct": 100.0,
-  "bytes": 16491,
+  "bytes": 38806,
   "hint_ratio": 1.0,
-  "doc_ratio": 0.93,
+  "doc_ratio": 1.0,
   "bad_imports": [],
   "dynamic": {
     "runs": true,

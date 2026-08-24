@@ -26,17 +26,19 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 # output budget because the hidden thinking phase spends output tokens. Values already set
 # in the environment win, so you can override per invocation.
 #   ctx-size / reasoning (see config/llama-swap.yaml):
-#     coding     184320  reasoning  (Q6_K + MTP self-spec decode; 200k OOMs with MTP)
+#     coding     163840  reasoning  (Qwen3.8-27B Q6_K + MTP self-spec decode; reasoning_effort=medium)
 #     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
 #     small      32768   NON-thinking (Gemma-4-12B dense on Titan X; small-12b fallback)
 case "$COPILOT_MODEL" in
-  coding)     def_prompt=131072; def_output=32768 ;;   # 163840 <= 184320 (~20k spare)
+  coding)     def_prompt=114688; def_output=32768 ;;   # 147456 <= 163840 (~16k spare); 3.8 ctx dropped 184320->163840
   chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
   big)        def_prompt=163840; def_output=32768 ;;
   # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
   # Keep prompt + output within one slot: 98304 + 32768 = 131072.
+  # NOTE: coder-next weights live on the bulk cold tier (2026-08-18), so the FIRST
+  # request after idle eviction (ttl 300) blocks ~5min on the 49.6GB HDD read.
   coder-next) def_prompt=98304;  def_output=32768 ;;
   small)      def_prompt=20480;  def_output=8192  ;;   # dense 12B on Titan X, ctx 32768 (20480+8192, ~4k spare)
   small-12b)  def_prompt=20480;  def_output=8192  ;;   # dense 12B fallback, ctx 32768 (~4k spare)

@@ -16,12 +16,12 @@ mkdir -p "$LOGDIR"
 
 # name | file | reasoning(1/0) | kv | parallel | ctx
 declare -A SPEC=(
- [coding]="qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf|1|q8_0|6|49152"
+ [coding]="qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf|1|q8_0|6|49152"
  [chat]="qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf|1|q8_0|6|49152"
  [chat-uncensored-q6]="qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf|1|q8_0|6|49152"
  [fast-uncensored]="gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf|1|f16|6|49152"
  [gemma-31b]="gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf|0|q8_0|8|16384"
- [big]="qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf|1|f16|6|49152"
+ [big]="qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf|1|f16|6|49152"
  [coder-next]="qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf|0|f16|8|16384"
 )
 
@@ -66,17 +66,33 @@ worker() {  # $1=gpus $2=port  $3..=model names
 echo "### unloading llama-swap to free both V100s"
 curl -s 127.0.0.1:9090/unload >/dev/null 2>&1; sleep 4
 
-echo "### phase 1: two single-card workers in parallel (idx1, idx2)"
-worker 1 8899 coding chat-uncensored-q6 gemma-31b &
-WA=$!
-worker 2 8900 chat fast-uncensored &
-WB=$!
-wait $WA; wait $WB
+# Optional subset: pass model names as args to bench only those (dual-card models
+# big/coder-next auto-routed to phase 2). No args = full roster (default set).
+DUAL_SET=" big coder-next "
+if [ "$#" -gt 0 ]; then
+  SINGLE=(); DUAL=()
+  for m in "$@"; do
+    if [[ "$DUAL_SET" == *" $m "* ]]; then DUAL+=("$m"); else SINGLE+=("$m"); fi
+  done
+else
+  SINGLE=(coding chat-uncensored-q6 gemma-31b chat fast-uncensored)
+  DUAL=(big coder-next)
+fi
+
+echo "### phase 1: single-card models split across two workers (idx1, idx2)"
+if [ "${#SINGLE[@]}" -gt 0 ]; then
+  A=(); B=(); i=0
+  for m in "${SINGLE[@]}"; do (( i % 2 == 0 )) && A+=("$m") || B+=("$m"); i=$((i+1)); done
+  [ "${#A[@]}" -gt 0 ] && { worker 1 8899 "${A[@]}" & WA=$!; }
+  [ "${#B[@]}" -gt 0 ] && { worker 2 8900 "${B[@]}" & WB=$!; }
+  [ -n "${WA:-}" ] && wait "$WA"; [ -n "${WB:-}" ] && wait "$WB"
+fi
 echo "### phase 1 complete"
 
 echo "### phase 2: dual-V100 models (sequential)"
-curl -s 127.0.0.1:9090/unload >/dev/null 2>&1; sleep 4
-run_one big "1,2" 8899
-run_one coder-next "1,2" 8899
+if [ "${#DUAL[@]}" -gt 0 ]; then
+  curl -s 127.0.0.1:9090/unload >/dev/null 2>&1; sleep 4
+  for m in "${DUAL[@]}"; do run_one "$m" "1,2" 8899; done
+fi
 
 echo "### ALL DONE"

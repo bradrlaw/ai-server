@@ -7,14 +7,27 @@ driver can't drive shows `✗`/`—` here without affecting that score.
 
 | Model | Fixture (no take) | Take-first workaround | JS errors |
 | --- | :--: | :--: | ---: |
+| `big` | ✗ | ✗ | 0 |
 | `chat` | ✓ | ✓ | 0 |
 | `chat-copilot` | ✓ | ✓ | 0 |
-| `coding` | ✓ | ✗ | 0 |
+| `coding` | ✗ | ✗ | 0 |
 | `coding-copilot` | ✗ | ✓ | 0 |
+| `coding-qwen3.6` | ✓ | ✗ | 0 |
 | `fast` | ✗ | ✓ | 0 |
 | `fast-copilot` | ✓ | ✓ | 0 |
 
 ## Per-run milestones
+
+### `big`
+- **Fixture (no take)** — goal NOT reached ✗
+  - ✗ `north` → reach_library: > north
+  - ✗ `use lever` → pull_lever: > use lever
+  - ✗ `west` → reach_secret: > west
+- **Take-first workaround** — goal NOT reached ✗
+  - ✗ `north` → reach_library: > north
+  - ✓ `take lever` → take_lever: > take lever
+  - ✗ `use lever` → pull_lever: > use lever
+  - ✗ `west` → reach_secret: > west
 
 ### `chat`
 - **Fixture (no take)** — goal reached ✓
@@ -39,15 +52,15 @@ driver can't drive shows `✗`/`—` here without affecting that score.
   - ✓ `west` → reach_secret: > westSecret ChamberA hidden room behind a concealed passage. Faint runes glow faintly on the walls when no one is looking directly at them. A narrow slit of li
 
 ### `coding`
-- **Fixture (no take)** — goal reached ✓
-  - ✓ `go north` → reach_library: &gt; go north You head north and arrive at the Forgotten Library.You can see: <span class="item-name">lever</span>
-  - ✓ `use lever` → pull_lever: &gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes
-  - ✓ `go west` → reach_secret: &gt; go west You head west and arrive at the Secret Chamber.You can see: <span class="item-name">ancient scroll</span>
+- **Fixture (no take)** — goal NOT reached ✗
+  - ✓ `north` → reach_library: > northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o
+  - ✗ `use lever` → pull_lever [hit: "don't have"]: > use leverYou don't have a "lever" to use.
+  - ✗ `west` → reach_secret [hit: "can't go west"]: > westYou can't go west from here.
 - **Take-first workaround** — goal NOT reached ✗
-  - ✓ `go north` → reach_library: &gt; go north You head north and arrive at the Forgotten Library.You can see: <span class="item-name">lever</span>
-  - ✓ `take lever` → take_lever: lever Inventory is empty.
-  - ✓ `use lever` → pull_lever: &gt; use leverYou already have the lever. You'd need to be in the library to put it back and pull it.
-  - ✗ `go west` → reach_secret [hit: "can't go west"]: &gt; go westYou can't go west from here.
+  - ✓ `north` → reach_library: > northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o
+  - ✓ `take lever` → take_lever: > take leverThe lever is bolted to the wall. You can pull it, but you can't take it.
+  - ✗ `use lever` → pull_lever: > use leverYou don't have a "lever" to use.
+  - ✗ `west` → reach_secret [hit: "can't go west"]: > westYou can't go west from here.
 
 ### `coding-copilot`
 - **Fixture (no take)** — goal NOT reached ✗
@@ -59,6 +72,17 @@ driver can't drive shows `✗`/`—` here without affecting that score.
   - ✗ `take lever` → take_lever: Inventory is empty.
   - ✓ `use lever` → pull_lever: You grip the heavy iron lever and pull with all your strength. With a deep groan of ancient stone, a hidden passage slides open in the western wall!
   - ✓ `west` → reach_secret: Secret ChamberA hidden alcove behind the library walls. The air is still and perfectly dry. An ancient scroll rests on a stone pedestal, untouched for centuries
+
+### `coding-qwen3.6`
+- **Fixture (no take)** — goal reached ✓
+  - ✓ `go north` → reach_library: &gt; go north You head north and arrive at the Forgotten Library.You can see: <span class="item-name">lever</span>
+  - ✓ `use lever` → pull_lever: &gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes
+  - ✓ `go west` → reach_secret: &gt; go west You head west and arrive at the Secret Chamber.You can see: <span class="item-name">ancient scroll</span>
+- **Take-first workaround** — goal NOT reached ✗
+  - ✓ `go north` → reach_library: &gt; go north You head north and arrive at the Forgotten Library.You can see: <span class="item-name">lever</span>
+  - ✓ `take lever` → take_lever: lever Inventory is empty.
+  - ✓ `use lever` → pull_lever: &gt; use leverYou already have the lever. You'd need to be in the library to put it back and pull it.
+  - ✗ `go west` → reach_secret [hit: "can't go west"]: &gt; go westYou can't go west from here.
 
 ### `fast`
 - **Fixture (no take)** — goal NOT reached ✗
@@ -82,4 +106,4 @@ driver can't drive shows `✗`/`—` here without affecting that score.
   - ✓ `use lever` → pull_lever: You pull the lever. A grinding sound echoes, and a secret passage opens to the west.
   - ✓ `west` → reach_secret: You move west.
 
-_Last generated 2026-07-29T07:55:01.785Z._
+_Last generated 2026-08-15T03:16:43.546Z._
