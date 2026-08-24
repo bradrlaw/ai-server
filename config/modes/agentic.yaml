@@ -3,7 +3,7 @@
 # Pure autonomous / agentic workloads: many unattended agents and their tool
 # calls fanning out at once, favouring THROUGHPUT over a single huge context.
 #
-# Residency = matrix set `qg` (coding idx1 + gemma-26b idx2 + fast P100 idx0),
+# Residency = matrix set `qg` (coding idx1 + gemma-26b idx2 + small P100 idx0),
 # so this mode loads `gemma-26b` on idx2 INSTEAD of `chat` (they share idx2 and
 # evict each other). All three sit on separate cards → co-resident, no conflict.
 #
@@ -14,7 +14,7 @@
 #   * `gemma-26b` (Gemma-4-26B-A4B MoE, idx2) -> P=8. The throughput champ
 #     (~281 tok/s aggregate @ P=8, ~19/32GB) blitzes through many focused,
 #     small-context agent tasks (131072 / 8 = ~16k per slot).
-#   * `fast` (Gemma-4-26B-A4B MoE, P100 idx0) -> P=2. A couple of slots with a safe
+#   * `small` (Gemma-4-26B-A4B MoE, P100 idx0) -> P=2. A couple of slots with a safe
 #     window (131072 / 2 = ~64k per slot); P100 caps at P=4 (OOM at P=8) so
 #     P=2 leaves headroom.
 #
@@ -27,7 +27,7 @@ label: "Agentic (autonomous multi-agent throughput)"
 description: >
   Autonomous agent workloads: coding P=2 (~100k/slot) for concurrent automated
   coding, gemma-26b P=8 (~16k/slot, ~281 tok/s) for fast focused agent tasks,
-  and fast P=2 (~32k/slot, MoE) on the P100. Loads gemma-26b in place of chat.
+  and small P=2 (~32k/slot, MoE) on the P100. Loads gemma-26b in place of chat.
 overrides:
   coding:
     parallel: 2
@@ -38,7 +38,7 @@ overrides:
   gemma-26b:
     parallel: 8
     concurrencyLimit: 16
-  fast:
+  small:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
@@ -48,4 +48,4 @@ overrides:
 preload:
   - coding
   - gemma-26b
-  - fast
+  - small

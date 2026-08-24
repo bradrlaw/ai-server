@@ -1,6 +1,6 @@
 # GitHub Copilot desktop app — local model routing
 
-How to drive the three local BYOK models (`coding`, `chat`, `fast`) from the GitHub Copilot
+How to drive the three local BYOK models (`coding`, `chat`, `small`) from the GitHub Copilot
 desktop app so subagents and parallel work land on **different GPUs**. Verified live
 2026-07-18 against this AI server. See also `docs/server-setup.md` →
 "Subagent model routing (GPU-tiered)" for the full findings and the SDK-host alternative.
@@ -11,7 +11,7 @@ desktop app so subagents and parallel work land on **different GPUs**. Verified 
 | --- | --- | --- | --- |
 | `coding` | Qwen3.6-27B (dense, Q6_K) | V100 idx1 | Best overall output, but **slowest** (dense 27B) — reserve for the driver + quality-critical reasoning |
 | `chat` | Qwen3.6-35B-A3B (MoE) | V100 idx2 | Near-`coding` quality but **much faster** (MoE, ~3B active params) — ideal for high-volume/parallel review + second-opinion |
-| `fast` | Gemma-4-12B | P100 idx0 | Cheapest card, always warm — noisy explore + command-running |
+| `small` | Gemma-4-12B | P100 idx0 | Cheapest card, always warm — noisy explore + command-running |
 
 > **Throughput note (measured live 2026-07-18):** in a two-agent parallel run, the `chat`
 > agent was spawned *after* the `coding` agent yet completed most of its work first — the
@@ -70,22 +70,22 @@ model via its session dropdown. This is the simplest, most deterministic paralle
 
 - Session A → `coding` (V100 idx1): the main implementation / hard reasoning task.
 - Session B → `chat` (V100 idx2): a parallel review, refactor, or second workstream.
-- Session C → `fast` (P100 idx0): quick lookups, running tests/builds, scratch questions.
+- Session C → `small` (P100 idx0): quick lookups, running tests/builds, scratch questions.
 
 Because each model lives on its own GPU, the three sessions run with **no contention and no
-eviction**. Keep to one heavy session per V100; `fast` on the P100 is effectively free.
+eviction**. Keep to one heavy session per V100; `small` on the P100 is effectively free.
 
 ## Paste-ready global instructions
 
 ```
-## Local model → subagent routing (BYOK: coding, chat, fast)
+## Local model → subagent routing (BYOK: coding, chat, small)
 
 When delegating to a subagent, ALWAYS pass an explicit model id, matching one of the
 locally-registered BYOK models EXACTLY (all lowercase — the gateway is case-sensitive;
 "Chat" or "Coding" will fail with 400 Invalid model name). Use this mapping:
 
-- explore / search / codebase-overview subagents → model: fast
-- task subagents that run tests, builds, lints, or shell commands → model: fast
+- explore / search / codebase-overview subagents → model: small
+- task subagents that run tests, builds, lints, or shell commands → model: small
 - code-review subagents → model: chat
 - rubber-duck / second-opinion subagents → model: chat
 - research subagents → model: chat
@@ -116,4 +116,4 @@ UPS is why the server was moved off it.)
   at ~2k generated tokens as its model is evicted mid-flight. Turn plan-build off for these
   sessions (or `COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher).
 - **One heavy session/subagent per V100.** Don't point two heavy tasks at the same model —
-  they serialize on the single llama-server slot. Spread across `coding`/`chat`/`fast`.
+  they serialize on the single llama-server slot. Spread across `coding`/`chat`/`small`.

@@ -28,9 +28,9 @@ Bind address/port and upstreams are configurable via environment variables:
 
 Optional background workers:
   OWUI_API_KEY         set to enable pushing a live status banner into Open WebUI
-  FAST_KEEPER_ENABLED  (default true) re-warm `fast` whenever the P100 slot is empty
-  FAST_KEEP_MODEL      (default fast)   FAST_KEEP_ALT (default fast-uncensored)
-  FAST_KEEPER_INTERVAL (default 60s)
+  SMALL_KEEPER_ENABLED  (default true) re-warm `small` whenever the P100 slot is empty
+  SMALL_KEEP_MODEL      (default small)   SMALL_KEEP_ALT (default small-uncensored)
+  SMALL_KEEPER_INTERVAL (default 60s)
 """
 
 from __future__ import annotations
@@ -149,21 +149,21 @@ OWUI_BANNER_DISMISSIBLE = os.environ.get("OWUI_BANNER_DISMISSIBLE", "false").low
     "yes",
 )
 
-# --- Optional: keep the P100 `fast` model always resident ---------------------
-# The P100 (idx0) slot is `(fast | fast-uncensored)` — mutually exclusive. A
-# llama-swap restart, or `fast-uncensored`'s ttl expiring after use, can leave the
-# card empty until something requests `fast`. This keeper re-warms `fast` whenever
-# the P100 slot is empty. It never evicts `fast-uncensored` (if that is loaded the
+# --- Optional: keep the P100 `small` model always resident ---------------------
+# The P100 (idx0) slot is `(small | small-uncensored)` — mutually exclusive. A
+# llama-swap restart, or `small-uncensored`'s ttl expiring after use, can leave the
+# card empty until something requests `small`. This keeper re-warms `small` whenever
+# the P100 slot is empty. It never evicts `small-uncensored` (if that is loaded the
 # user is actively using it), so it only fires when NEITHER model is resident.
-FAST_KEEPER_ENABLED = os.environ.get("FAST_KEEPER_ENABLED", "true").lower() in (
+SMALL_KEEPER_ENABLED = os.environ.get("SMALL_KEEPER_ENABLED", "true").lower() in (
     "1",
     "true",
     "yes",
 )
-FAST_KEEP_MODEL = os.environ.get("FAST_KEEP_MODEL", "fast")
-FAST_KEEP_ALT = os.environ.get("FAST_KEEP_ALT", "fast-uncensored")
-FAST_KEEPER_INTERVAL = float(os.environ.get("FAST_KEEPER_INTERVAL", "60"))
-FAST_KEEPER_TIMEOUT = float(os.environ.get("FAST_KEEPER_TIMEOUT", "120"))
+SMALL_KEEP_MODEL = os.environ.get("SMALL_KEEP_MODEL", "small")
+SMALL_KEEP_ALT = os.environ.get("SMALL_KEEP_ALT", "small-uncensored")
+SMALL_KEEPER_INTERVAL = float(os.environ.get("SMALL_KEEPER_INTERVAL", "60"))
+SMALL_KEEPER_TIMEOUT = float(os.environ.get("SMALL_KEEPER_TIMEOUT", "120"))
 
 # --- Quiet hours (deep-idle window) -----------------------------------------
 # Boundary-triggered, load-once semantics: when the window BEGINS we unload the
@@ -264,14 +264,14 @@ FAN_RECHECK_SEC = int(os.environ.get("FAN_RECHECK_SEC", "30"))
 GPU_POWER_MIN_W = int(os.environ.get("GPU_POWER_MIN_W", "150"))
 GPU_POWER_MAX_W = int(os.environ.get("GPU_POWER_MAX_W", "250"))
 GPU_POWER_STEP_W = int(os.environ.get("GPU_POWER_STEP_W", "25"))
-# Models re-warmed when the window ends (fast is handled by the keeper).
+# Models re-warmed when the window ends (small is handled by the keeper).
 QUIET_WARM_ON_EXIT = [
     m.strip()
     for m in os.environ.get("QUIET_WARM_ON_EXIT", "coding,chat").split(",")
     if m.strip()
 ]
 # Warm these on service start when the box boots OUTSIDE the quiet window. The
-# llama-swap `on_startup` hook only preloads `fast`, and _exit_window (which warms
+# llama-swap `on_startup` hook only preloads `small`, and _exit_window (which warms
 # the daily trio) only fires on an in->out window transition — which never happens
 # when the machine boots already outside quiet hours. Without this, a daytime
 # reboot leaves coding/chat cold until first use. Defaults to QUIET_WARM_ON_EXIT.
@@ -296,7 +296,7 @@ HISTORY_ENABLED = os.environ.get("HISTORY_ENABLED", "true").lower() in (
 HISTORY_INTERVAL = float(os.environ.get("HISTORY_INTERVAL", "15"))
 HISTORY_POINTS = int(os.environ.get("HISTORY_POINTS", "240"))
 
-# Set while quiet hours has the box in deep idle — the fast keeper honours this
+# Set while quiet hours has the box in deep idle — the small keeper honours this
 # and stops re-warming so it doesn't fight the quiet-hours loop.
 _QUIET_SUPPRESS_KEEPER = threading.Event()
 
@@ -1147,7 +1147,7 @@ def _warm_model(model: str) -> bool:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=FAST_KEEPER_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=SMALL_KEEPER_TIMEOUT) as resp:
             resp.read()
         return True
     except Exception as exc:  # noqa: BLE001 - best-effort warmup
@@ -1157,8 +1157,8 @@ def _warm_model(model: str) -> bool:
 
 def _fast_keeper_loop():
     print(
-        f"[keeper] keeping {FAST_KEEP_MODEL!r} resident on the P100 "
-        f"(checked every {FAST_KEEPER_INTERVAL:.0f}s; yields to {FAST_KEEP_ALT!r})"
+        f"[keeper] keeping {SMALL_KEEP_MODEL!r} resident on the P100 "
+        f"(checked every {SMALL_KEEPER_INTERVAL:.0f}s; yields to {SMALL_KEEP_ALT!r})"
     )
     while True:
         try:
@@ -1170,17 +1170,17 @@ def _fast_keeper_loop():
                     if isinstance(m, dict)
                 }
                 # Only warm when the P100 slot is empty (neither variant loaded),
-                # so we never evict fast-uncensored while it is in use.
+                # so we never evict small-uncensored while it is in use.
                 if (
                     not _QUIET_SUPPRESS_KEEPER.is_set()
-                    and FAST_KEEP_MODEL not in loaded
-                    and FAST_KEEP_ALT not in loaded
+                    and SMALL_KEEP_MODEL not in loaded
+                    and SMALL_KEEP_ALT not in loaded
                 ):
-                    print(f"[keeper] P100 slot empty — warming {FAST_KEEP_MODEL!r}")
-                    _warm_model(FAST_KEEP_MODEL)
+                    print(f"[keeper] P100 slot empty — warming {SMALL_KEEP_MODEL!r}")
+                    _warm_model(SMALL_KEEP_MODEL)
         except Exception as exc:  # noqa: BLE001 - keeper must never crash the service
             print(f"[keeper] loop error: {exc}")
-        time.sleep(FAST_KEEPER_INTERVAL)
+        time.sleep(SMALL_KEEPER_INTERVAL)
 
 
 # --- Quiet hours (deep-idle window) -----------------------------------------
@@ -1411,7 +1411,7 @@ def _quiet_hours_loop():
 
     # On a fresh boot / service restart OUTSIDE the quiet window, warm the daily
     # models once. Nothing else does: the llama-swap on_startup hook only preloads
-    # `fast`, and _exit_window (which warms coding/chat) only fires on an in->out
+    # `small`, and _exit_window (which warms coding/chat) only fires on an in->out
     # transition that never happens when we boot already outside the window. If we
     # boot INSIDE the window, leave them cold — the loop enters deep idle below.
     if QUIET_WARM_ON_START and not effective_in_window():
@@ -1990,10 +1990,10 @@ def main():
         threading.Thread(target=_banner_loop, daemon=True).start()
     else:
         print("[banner] OWUI_API_KEY not set — OWUI banner push disabled")
-    if FAST_KEEPER_ENABLED:
+    if SMALL_KEEPER_ENABLED:
         threading.Thread(target=_fast_keeper_loop, daemon=True).start()
     else:
-        print("[keeper] FAST_KEEPER_ENABLED=false — fast keeper disabled")
+        print("[keeper] SMALL_KEEPER_ENABLED=false — small keeper disabled")
     if QUIET_HOURS_ENABLED:
         threading.Thread(target=_quiet_hours_loop, daemon=True).start()
     else:

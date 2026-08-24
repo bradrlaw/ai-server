@@ -17,7 +17,7 @@
 # Usage:
 #   scripts/bench-concurrency.sh                      # coding, [1,2,4,8,16] via LiteLLM
 #   BENCH_MODEL=chat scripts/bench-concurrency.sh
-#   BENCH_USERS="1,2,4,8,16,32" BENCH_MODEL=fast scripts/bench-concurrency.sh
+#   BENCH_USERS="1,2,4,8,16,32" BENCH_MODEL=small scripts/bench-concurrency.sh
 #   BENCH_API_URL=http://127.0.0.1:9090/v1/chat/completions scripts/bench-concurrency.sh  # hit llama-swap directly
 set -euo pipefail
 

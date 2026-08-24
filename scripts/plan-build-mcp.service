@@ -22,7 +22,7 @@ Environment=PLAN_BUILD_TRANSPORT=streamable-http
 # NO auth (like comfyui-mcp) — acceptable on the private LAN/Tailscale only.
 Environment=PLAN_BUILD_HOST=0.0.0.0
 Environment=PLAN_BUILD_PORT=9100
-# Service-wide caller_gpu assumption: clients drive the P100 `fast` chat model, so
+# Service-wide caller_gpu assumption: clients drive the idx0 `small` chat model, so
 # the tools swap `big`/`coder-next` onto the V100s WITHOUT evicting the caller. If a
 # BYOK session instead drives a V100 model (coding/chat/big/coder-next), it must use
 # only the fast_* tools (which never evict the daily V100 models).

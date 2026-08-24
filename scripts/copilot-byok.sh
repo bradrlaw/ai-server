@@ -30,7 +30,7 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 #     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
-#     fast       32768   NON-thinking (Gemma-4-26B-A4B MoE; fast-12b fallback=131072)
+#     small      32768   NON-thinking (Gemma-4-12B dense on Titan X; small-12b fallback)
 case "$COPILOT_MODEL" in
   coding)     def_prompt=131072; def_output=32768 ;;   # 163840 <= 184320 (~20k spare)
   chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
@@ -38,8 +38,8 @@ case "$COPILOT_MODEL" in
   # coder-next runs --parallel 2, so each slot is 131072, NOT the full 262144.
   # Keep prompt + output within one slot: 98304 + 32768 = 131072.
   coder-next) def_prompt=98304;  def_output=32768 ;;
-  fast)       def_prompt=24576;  def_output=8192  ;;   # MoE, ctx 32768 (24576+8192)
-  fast-12b)   def_prompt=98304;  def_output=8192  ;;   # dense 12B fallback, ctx 131072
+  small)      def_prompt=20480;  def_output=8192  ;;   # dense 12B on Titan X, ctx 32768 (20480+8192, ~4k spare)
+  small-12b)  def_prompt=20480;  def_output=8192  ;;   # dense 12B fallback, ctx 32768 (~4k spare)
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
@@ -49,9 +49,9 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 # Run the token-heavy explore/search subagent on a DIFFERENT local model than the
 # driver so it executes on a SEPARATE GPU in parallel (no contention/eviction):
 #     driver (COPILOT_MODEL, default 'coding') -> V100 idx1
-#     explore/search subagent  -> 'fast' (Gemma-4-26B-A4B MoE) on the P100 (idx0), always warm
+#     explore/search subagent  -> 'small' (Gemma-4-12B dense) on the Titan X (idx0), always warm
 # The P100 is on a different card from every V100 driver, so the driver keeps
-# reasoning while explores run in parallel with zero cold-start (fast keeper thread).
+# reasoning while explores run in parallel with zero cold-start (small keeper thread).
 # Override with SEARCH_SUBAGENT_MODEL=<id>; set it EMPTY to inherit the driver.
 #
 # CAVEATS (verified 2026-07-18; see docs/server-setup.md "Subagent model routing"):
@@ -59,20 +59,20 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 #    is gated by the account feature flag copilot_swe_agent_cli_search_subagent,
 #    whose availability is "off" (server-only) — NOT reachable by env,
 #    COPILOT_CLI_ENABLED_FEATURE_FLAGS, or /experimental. Proven: a delegated explore
-#    kept `fast` at 0 tokens. Kept here so it auto-activates if GitHub enables the flag.
-#  * Per-subagent local models (e.g. task->chat on idx2, explorer->fast on P100) are
+#    kept `small` at 0 tokens. Kept here so it auto-activates if GitHub enables the flag.
+#  * Per-subagent local models (e.g. task->chat on idx2, explorer->small on idx0) are
 #    NOT possible through single-provider env-var BYOK (the /agents picker only lists
 #    the one configured model). They ARE possible two ways:
 #      (a) @github/copilot-sdk host: CopilotClient({onListModels}) + createSession(
 #          {provider:LiteLLM, customAgents:[{model:"chat"}]}) — PROVEN live (explorer
 #          ran 81k tokens on chat/idx2 while driver stayed on coding/idx1).
-#      (b) GitHub Copilot desktop app: configure coding/chat/fast as separate BYOK
+#      (b) GitHub Copilot desktop app: configure coding/chat/small as separate BYOK
 #          models (exact lowercase ids — LiteLLM is case-sensitive; `Chat` 400s), then
 #          ask for a multi-model review ("...using the coding model and the chat model").
 #          PROVEN live 2026-07-18: parallel coding(idx1)+chat(idx2) reviewers. BUT do NOT
 #          expose the plan-build MCP to such a session (COPILOT_PLAN_BUILD_MCP=0) — it's
 #          serial and swaps big/coder-next onto both V100s, evicting the reviewers' models.
-export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-fast}"
+export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-small}"
 
 # Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.
 # It runs as a native HTTP service on the AI server (scripts/plan-build-mcp.service,

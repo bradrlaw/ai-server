@@ -43,7 +43,7 @@ Capabilities:
 - **Local LLM serving with automatic model swapping.** [llama.cpp](https://github.com/ggml-org/llama.cpp)
   behind [llama-swap](https://github.com/mostlygeek/llama-swap) loads models on demand
   and a *matrix router* picks co-resident model sets that fit across the three GPUs, so
-  a coding model, a chat model, and a fast model can stay hot simultaneously and swap in
+  a coding model, a chat model, and a small model can stay hot simultaneously and swap in
   heavier models on request — no manual juggling.
 - **One OpenAI-compatible API for everything.** [LiteLLM](https://github.com/BerriAI/litellm)
   fronts the local router (and optional cloud fallbacks) so any OpenAI client — editors,
@@ -109,7 +109,7 @@ the wall is higher (CPU, motherboard, NVMe, fans, and PSU conversion losses on t
 
 ### Idle — daily models loaded (warm)
 
-Normal running state: the `fast` model resident on the P100 plus `coding` + `chat` on the
+Normal running state: the `small` model resident on the P100 plus `coding` + `chat` on the
 V100s, no active inference.
 
 | GPU | Card | Power | Core temp | Mem temp | SM clock |
@@ -268,7 +268,7 @@ Things others running older multi-GPU boxes may find reusable:
 | `scripts/comfyui-free-gpu-node.py` | ComfyUI node that **unloads llama-swap LLMs and waits for VRAM** to actually free before a render, avoiding OOM on shared GPUs. |
 | `scripts/comfyui-snapshot.sh` | **Reversible snapshots** of the ComfyUI custom-node/pip state so you can undo a bad node-pack install. |
 | `scripts/gpu-fan-control.py` (+ `.service`, `.config.json`) | Temperature-driven **shroud-fan control + self-healing power caps** (drives off V100 HBM temp; re-caps GPUs that fall off/return on the bus). |
-| `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), keeps the **`fast` model warm on the P100**, and can run an optional **quiet-hours deep-idle window** (unloads models + stops ComfyUI overnight to drop the V100s out of P0; auto-wakes on client activity). |
+| `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), keeps the **`small` model warm on the P100**, and can run an optional **quiet-hours deep-idle window** (unloads models + stops ComfyUI overnight to drop the V100s out of P0; auto-wakes on client activity). |
 | `docker/open-webui/functions/server_status_inlet.py` | Open WebUI **new-chat status banner** — shows what's running at the start of each chat, sourced from the status service. |
 | `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_60/sm_70** with the P100 fp16-precision carveout applied. |
 | `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from `llama-swap.yaml` so it never drifts. |

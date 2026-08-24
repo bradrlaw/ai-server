@@ -255,7 +255,7 @@ less fragile and engines independently upgradable.
    `cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf` — first switch into those modes pays a
    one-time ~21–28 GB HDD load (~150 MB/s). **Gotcha:** check the mode overlays
    (`config/modes/*.yaml`), not just `llama-swap.base.yaml`, before moving a file — a slot's
-   file may differ per mode. Only the daily/base served slots (`coding`+`chat`+`fast` MTP
+   file may differ per mode. Only the daily/base served slots (`coding`+`chat`+`small` MTP
    files, uncensored-heretic, etc.) stay on the hot NVMe tier; `llama-swap.base.yaml` itself
    references no `cold/` paths.
 
@@ -309,7 +309,7 @@ sudo systemctl restart llama-swap                    # model router (YAML auto-r
 sudo systemctl restart gpu-fan-control               # fan curves + power caps
 sudo systemctl restart comfyui-open comfyui-secure   # both ComfyUI instances
 sudo systemctl restart comfyui-mcp                   # ComfyUI image/video MCP tools
-sudo systemctl restart server-status                 # status service / OWUI banner / fast keeper
+sudo systemctl restart server-status                 # status service / OWUI banner / small keeper
 
 systemctl status llama-swap --no-pager               # is it up?
 journalctl -u llama-swap -e --no-pager               # recent logs
@@ -347,21 +347,21 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi                    # GPU util/VRAM/temp
 curl -s 127.0.0.1:9095/status.json | python3 -m json.tool  # aggregated host+GPU+model status
 curl -s 127.0.0.1:9095/history.json | python3 -m json.tool # time series behind the dashboard sparklines
 
-# Warm the daily set after a restart (fast preloads itself; coding+chat load on first hit):
-for m in coding chat fast; do
+# Warm the daily set after a restart (small preloads itself; coding+chat load on first hit):
+for m in coding chat small; do
   curl -s 127.0.0.1:9090/v1/chat/completions -H 'content-type: application/json' \
     -d "{\"model\":\"$m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" >/dev/null
 done
 ```
 
-Unload all router models (frees all VRAM). The `fast` keeper in `server-status` re-warms
-`fast` within ~60 s, so stop that service first if you need the GPUs to stay idle. Note the
+Unload all router models (frees all VRAM). The `small` keeper in `server-status` re-warms
+`small` within ~60 s, so stop that service first if you need the GPUs to stay idle. Note the
 LLMs are not the only thing holding the cards: the two **ComfyUI** instances keep a resident
 CUDA context on the V100s, which pins them to P0 (max clocks, ~36–37 W each) even with no
 inference. To reach the **true cold-idle baseline** (e.g. to measure no-load power draw), stop
 ComfyUI too:
 ```bash
-sudo systemctl stop server-status                          # pause the fast keeper
+sudo systemctl stop server-status                          # pause the small keeper
 curl -s -X POST 127.0.0.1:9090/api/models/unload -d '{}'   # unload every LLM
 sudo systemctl stop comfyui-open comfyui-secure            # release the V100 CUDA contexts
 CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put -c 15   # e.g. capture true idle draw
@@ -382,7 +382,7 @@ re-idles once **GPU SM utilization stays below `QUIET_ACTIVE_SM_PCT`% (default 5
 is loaded" because `coding`/`chat` have no ttl and would otherwise pin the box awake all
 window. On re-idle the models are unloaded and ComfyUI stopped again; the next client
 request reloads on demand. At window end the daily set (`coding`, `chat`) is re-warmed and
-the `fast` keeper resumes.
+the `small` keeper resumes.
 
 Disabled by default. To enable:
 ```bash
@@ -466,7 +466,7 @@ models. The model registry (gguf path, GPU pinning, split mode) is read straight
 `config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
 ```bash
 scripts/bench-models.sh --list                 # show model names + GPU pinning
-scripts/bench-models.sh                         # bench the daily set (coding chat fast)
+scripts/bench-models.sh                         # bench the daily set (coding chat small)
 scripts/bench-models.sh coding chat gemma-31b   # bench specific models by name
 scripts/bench-models.sh --all                   # every model in the config
 scripts/bench-models.sh --free coding           # unload llama-swap models first (avoid OOM)
@@ -644,8 +644,8 @@ Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 | `coding` | Qwen3.6-27B **Q6_K + MTP**         | idx1        | 184320 | ~31.5 GB (q8_0 KV, MTP self-spec) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
 | `big`    | Qwen3.6-27B **BF16** (split)       | idx1+idx2   | 16384 | ~51 GB (25+26), ttl 300s |
-| `fast`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
-| `fast-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `fast` |
+| `small`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
+| `small-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `small` |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
@@ -661,20 +661,20 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 | `chat`             | `chat (Qwen3.6-35B-A3B MoE)` |
 | `big`              | `big (Qwen3.6-27B BF16)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
-| `fast`             | `fast (Gemma-4-26B-A4B MoE)` |
-| `fast-12b`         | `fast-12b (Gemma-4-12B dense)` |
+| `small`             | `small (Gemma-4-26B-A4B MoE)` |
+| `small-12b`         | `small-12b (Gemma-4-12B dense)` |
 
 (The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
 `MODEL_LABELS` map — keep the two in sync if a model is swapped.)
 
-**Routing = matrix (3 cards).** `f`(fast, P100) is in every set so it's never evicted and runs
+**Routing = matrix (3 cards).** `f`(small, P100) is in every set so it's never evicted and runs
 CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
 `gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
-(big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+fast(P100) all
-co-resident; after the 2026-07-22 swap `fast` (MoE) uses ~15.3 GB on the P100 (was ~7.7 GB as the 12B). `fast` answers immediately (Gemma reasoning disabled).
+(big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+small(P100) all
+co-resident; after the 2026-07-22 swap `small` (MoE) uses ~15.3 GB on the P100 (was ~7.7 GB as the 12B). `small` answers immediately (Gemma reasoning disabled).
 
 **Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
-`fast` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
+`small` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
 `gemma-31b`/`gemma-26b` keep reasoning on. All use QAT UD-Q4_K_XL (unsloth) — 4-bit quality
 close to full precision. Our llama.cpp build (9850, `LLM_ARCH_GEMMA4`) supports them natively.
 
@@ -730,7 +730,7 @@ Env vars (see `scripts/copilot-byok.sh`, which sources the key from `docker/.env
     export COPILOT_PROVIDER_BASE_URL=http://<host>:4000/v1   # e.g. Tailscale <tailscale-ip>
     export COPILOT_PROVIDER_TYPE=openai
     export COPILOT_PROVIDER_API_KEY=$LITELLM_MASTER_KEY
-    export COPILOT_MODEL=coding        # or chat / big / coder-next / fast
+    export COPILOT_MODEL=coding        # or chat / big / coder-next / small
     copilot
 
 On the server just run `/srv/ai/scripts/copilot-byok.sh`. If the endpoint 404s, try the base URL
@@ -753,8 +753,8 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 | `chat`       | 98304 | yes |  57344 | 24576 | 81920 (~16k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
 | `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
-| `fast`       | 32768 | **no** |  24576 |  8192 | 32768 (fits) |
-| `fast-12b`   | 131072 | **no** |  98304 |  8192 | 106496 (~24k spare) |
+| `small`       | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
+| `small-12b`   | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
 | *(other)*    | — | — | 32768 | 8192 | conservative fallback |
 
 Notes:
@@ -779,23 +779,23 @@ different GPU — so the driver keeps reasoning while subagents work **in parall
 | --- | --- | --- |
 | V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
 | V100 idx2 | `chat` | task/general subagent |
-| P100 idx0 | `fast` (Gemma-4-26B-A4B MoE) | explore/search subagent (always warm) |
+| P100 idx0 | `small` (Gemma-4-26B-A4B MoE) | explore/search subagent (always warm) |
 
-Because `fast`/`chat` live on separate cards from the driver, subagents run with no
-contention, no eviction, and (for `fast`) zero cold-start (the status service's keeper
-keeps `fast` resident). All three route through LiteLLM `:4000` → llama-swap → the
+Because `small`/`chat` live on separate cards from the driver, subagents run with no
+contention, no eviction, and (for `small`) zero cold-start (the status service's keeper
+keeps `small` resident). All three route through LiteLLM `:4000` → llama-swap → the
 right GPU, so no server-side change is needed — only the client picks the per-agent model.
 
 **What works where (verified live 2026-07-18, CLI 1.0.71 / `@github/copilot-sdk@1.0.7`):**
 
 1. **Env-var BYOK (`copilot-byok.sh`) — single model only.** `copilot help providers`
    confirms the env-var path (`COPILOT_PROVIDER_BASE_URL` + `COPILOT_MODEL`) registers
-   exactly one BYOK model, so the `/agents` picker can't offer `chat`/`fast` to subagents.
-   `SEARCH_SUBAGENT_MODEL=fast` is set in the launcher but is **inert**: the search
+   exactly one BYOK model, so the `/agents` picker can't offer `chat`/`small` to subagents.
+   `SEARCH_SUBAGENT_MODEL=small` is set in the launcher but is **inert**: the search
    subagent is gated by the account flag `copilot_swe_agent_cli_search_subagent`, whose
    availability is **`off`** (server-only) — not reachable via env,
    `COPILOT_CLI_ENABLED_FEATURE_FLAGS`, or `/experimental`. Proven: a delegated explore
-   left `fast` at 0 tokens. Kept in the script so it auto-activates if GitHub flips the flag.
+   left `small` at 0 tokens. Kept in the script so it auto-activates if GitHub flips the flag.
 
 2. **Copilot SDK host — full GPU tiering, PROVEN.** A small `@github/copilot-sdk` program
    registers all local models via `onListModels` and pins per-agent models via
@@ -808,7 +808,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
 
    ```js
    import { CopilotClient, approveAll } from "@github/copilot-sdk";
-   const client = new CopilotClient({ onListModels: () => localModels /* coding, chat, fast */ });
+   const client = new CopilotClient({ onListModels: () => localModels /* coding, chat, small */ });
    await client.start();
    const session = await client.createSession({
      model: "coding",
@@ -822,7 +822,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
    `models[]` with per-model `wireModel` — for mixing CAPI + several BYOK providers.)
 
 3. **GitHub Copilot desktop app — WORKS for multi-model reviews (verified 2026-07-18).**
-   Configure `coding`/`chat`/`fast` as separate BYOK models in the app, then ask for a
+   Configure `coding`/`chat`/`small` as separate BYOK models in the app, then ask for a
    multi-model review (e.g. *"review the codebase using the `coding` model and the `chat`
    model"*). The app **does** fan out into parallel per-model review subagents — observed
    live: a `coding` reviewer ran on V100 idx1 and a `chat` reviewer on V100 idx2
@@ -833,7 +833,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
 
    - **Exact lowercase model ids.** LiteLLM is case-sensitive: the driver once passed
      `model=Chat` and got `400 Invalid model name` (call `/v1/models` for the canonical ids:
-     `coding`, `chat`, `fast`, …). Name the BYOK models exactly as registered — all lowercase.
+     `coding`, `chat`, `small`, …). Name the BYOK models exactly as registered — all lowercase.
    - **Do NOT expose the `plan-build` MCP to a review/parallel session.** Its tools are
      **serial** (blocking `_chat` calls) and the heavy ones swap `big`/`coder-next` onto
      **both V100s**, evicting the `coding`/`chat` models the review subagents are running on
@@ -873,7 +873,7 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
 - **`caller_gpu` over a shared endpoint:** the guard (see mcpo section) normally requires each
   call to report `caller_gpu` so a driver model can't evict itself. A shared HTTP service can't
   know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=p100`
-  — i.e. it assumes clients drive the P100 `fast` chat model, letting `big`/`coder-next` swap
+  — i.e. it assumes clients drive the P100 `small` chat model, letting `big`/`coder-next` swap
   onto the V100s without evicting the caller. **If a BYOK session instead drives a V100 model**
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
@@ -991,27 +991,27 @@ _plan-build server (in-house planner→coder pipeline):_ source
 `docker/mcpo/plan_build_mcp.py` (mounted at `/config`), launched with
 `uv run --with mcp` (uv builds an ephemeral venv with the `mcp` package on first start;
 `UV_CACHE_DIR=/tmp/uv-cache` since `/config` is read-only). It exposes three tools that call
-the **LiteLLM gateway** and do the heavy lifting on the V100s while the `fast` chat model
+the **LiteLLM gateway** and do the heavy lifting on the V100s while the `small` chat model
 (P100, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
 `fast_plan_and_build` (the interactive path: plan with `chat` + implement with `coding` — the
 two daily V100 models that stay co-resident, so **no GPU swap**; may also be called from those
-V100 models, not just `fast`), `fast_make_plan` / `fast_implement_spec` (the plan-only /
+V100 models, not just `small`), `fast_make_plan` / `fast_implement_spec` (the plan-only /
 implement-only halves of that fast path, using `chat` / `coding` respectively),
 `implement_spec` (implement a given spec directly with `coder-next`, no planning), and
 `reset_models` (the "done" call: warm the default V100 models — `coding`+`chat`,
 `PLAN_BUILD_DEFAULT_MODELS` — back onto the cards, evicting any `big`/`coder-next` left
 resident). Planner
-(`big`/`chat`/`fast`) and coder are overridable per call. Because `big` and `coder-next`
+(`big`/`chat`/`small`) and coder are overridable per call. Because `big` and `coder-next`
 both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
-`coder-next` in (evicting `big`); `fast` stays resident so the chat keeps responding. **So it
+`coder-next` in (evicting `big`); `small` stays resident so the chat keeps responding. **So it
 must only be called from a P100-exclusive model** — a V100 caller (coding/chat/big) would
 evict *itself* mid-call and break the conversation. The tool can't see its caller through the
 MCP protocol, so it takes a **`caller_gpu`** arg the model reports (via its system prompt) and
 refuses anything not P100-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `p100`). Enforce
-it two ways: (1) in Open WebUI, enable this tool **only on the `fast` model**; (2) add to the
-`fast` model's system prompt: _"When calling any plan-build tool, always pass
+it two ways: (1) in Open WebUI, enable this tool **only on the `small` model**; (2) add to the
+`small` model's system prompt: _"When calling any plan-build tool, always pass
 `caller_gpu="p100"`."_ **This
 needs container networking + the gateway key:** the mcpo service adds
 `extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
@@ -1075,20 +1075,20 @@ network only. Start/stop: `sudo systemctl start|stop comfyui`.
 aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), frees the
 V100 ComfyUI needs, then runs the generation. ComfyUI is pinned to **idx1 (the `coding` card)**,
 so the hook unloads **only** the model(s) squatting there via llama-swap's per-model endpoint
-(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `fast` (P100) resident** so
+(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `small` (P100) resident** so
 family chat stays responsive during image gen. Models to keep are set by the `FREE_GPU_KEEP` env
-(default `chat,fast`); everything else running (`coding`, or a split `big`/`coder-next`) is
+(default `chat,small`); everything else running (`coding`, or a split `big`/`coder-next`) is
 evicted and reloads on-demand. It triggers **only on generate**, not on page loads. Configurable
 via `LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
-(idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/fast untouched) — log shows
-`free_gpu: unloading ['coding'] before generation (keeping ['chat', 'fast'])`.
+(idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/small untouched) — log shows
+`free_gpu: unloading ['coding'] before generation (keeping ['chat', 'small'])`.
 
 **Idle watchdog (reverse direction).** ComfyUI caches its models in VRAM after a run, which
 would keep idx1 occupied and block `coding` from reloading. The same hook runs a background task
 that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
 (`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release idx1,
 then warms `FREE_GPU_RESTORE` (default `coding`) back onto the card via llama-swap — so the box
-returns to its daily resident state (coding + chat + fast) with no manual step. Runs at most once
+returns to its daily resident state (coding + chat + small) with no manual step. Runs at most once
 per idle period; set `FREE_GPU_IDLE_SECS=0` to disable.
 
 **Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
@@ -1145,7 +1145,7 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   `get/set_defaults`, publish tools. Long renders return `{"status":"running","prompt_id":…}` —
   poll `get_job(prompt_id=…)`. Ideal for agents/long-running processes.
 - **GPU coordination:** the tool hits ComfyUI's `/prompt`, so the existing `free_gpu` hook still
-  fires (unloads idx1's LLM keeping chat+fast, idle watchdog restores `coding`) regardless of
+  fires (unloads idx1's LLM keeping chat+small, idle watchdog restores `coding`) regardless of
   caller.
 - **Displaying images inline:** mcpo serializes an MCP `ImageContent` (what `view_image`'s
   `FastMCPImage` produces) into an inert data-URI **string**; Open WebUI feeds that to the model
@@ -1188,7 +1188,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
-utility/small tasks `fast` — i.e. the daily-mode trio, so no GPU swap on normal
+utility/small tasks `small` — i.e. the daily-mode trio, so no GPU swap on normal
 use. All authenticate to LiteLLM with `LITELLM_MASTER_KEY`.
 
 **One-time setup (host, non-privileged):**
@@ -1208,7 +1208,7 @@ and injects the LiteLLM key into Hermes' live config.
 - Config = JSON5 at `/srv/ai/openclaw/state/openclaw.json` (writable; OpenClaw runs
   schema migrations). A dedicated `litellm` provider (`api: openai-completions`,
   `baseUrl: http://host.docker.internal:4000`, `apiKey: "${LITELLM_API_KEY}"`,
-  `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`fast`;
+  `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`small`;
   `agents.defaults.model.primary = litellm/chat`, `fallbacks = [litellm/coding]`.
 - **Must** set `gateway.mode: "local"`, `gateway.bind: "lan"` and an
   `OPENCLAW_GATEWAY_TOKEN` (env SecretRef) — a loopback bind makes the published

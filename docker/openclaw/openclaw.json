@@ -18,7 +18,7 @@
       "models": {
         "litellm/chat": {},
         "litellm/coding": {},
-        "litellm/fast": {}
+        "litellm/small": {}
       }
     }
   },
@@ -80,8 +80,8 @@
             "reasoning": true
           },
           {
-            "id": "fast",
-            "name": "Gemma-4-12B (fast)",
+            "id": "small",
+            "name": "Gemma-4-12B (small)",
             "contextWindow": 131072,
             "maxTokens": 8192,
             "input": [

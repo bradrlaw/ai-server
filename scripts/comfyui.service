@@ -21,8 +21,8 @@ Environment=CUDA_VISIBLE_DEVICES=1
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
 # Models the free_gpu hook KEEPS loaded during image gen (they live on idx2/P100,
 # not on ComfyUI's idx1 card). Only the idx1 occupant (coding/big/coder-next) is
-# unloaded per-run; chat + fast stay responsive.
-Environment=FREE_GPU_KEEP=chat,fast
+# unloaded per-run; chat + small stay responsive.
+Environment=FREE_GPU_KEEP=chat,small
 # Idle watchdog: after this many seconds with no generation, free ComfyUI's VRAM
 # and warm the daily model(s) below back onto idx1 (0 disables).
 Environment=FREE_GPU_IDLE_SECS=300

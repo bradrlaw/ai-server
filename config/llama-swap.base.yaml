@@ -177,7 +177,7 @@ models:
       --parallel 2
       ${common}
 
-  # --- fast: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on the P100 (idx0) -------
+  # --- small: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on the P100 (idx0) -------
   # SWAPPED 2026-07-22 from the dense Gemma-4-12B to this MoE (25B total / ~3.8B
   # active). On the P100 the MoE is strictly faster AND higher quality than the
   # 12B: ~2x decode (~60 vs ~29 tok/s), 1.5-2x prefill (568 vs 286 tok/s @2k),
@@ -187,21 +187,21 @@ models:
   # ctx 32768 + ub1024 @ P=1 -> 15.2GB (~1.2GB free, safe for always-on). The
   # parallel overlays override ctx DOWN and cap at P=2 (agentic/heavy-coding: ctx
   # 24576 @ P=2 -> ~15.4GB); P=4 OOMs, and 48k+ OOMs at P=1. Need >32k single-user
-  # context? Use the `fast-12b` fallback (128k, dense).
+  # context? Use the `small-12b` fallback (128k, dense).
   # --reasoning-budget 0 keeps replies immediate (no thinking phase), matching the
-  # old `fast` persona. Runs CONCURRENTLY with coding+chat (own card).
+  # old `small` persona. Runs CONCURRENTLY with coding+chat (own card).
   # MTP (2026-07-23): Gemma-4 has no embedded MTP head, so self-spec uses a SEPARATE
   # ~460MB gemma4-assistant draft head (unsloth/ironbcc it-qat-assistant, Q8_0) via
   # --model-draft + --spec-type draft-mtp. Measured +38% decode (~60 -> ~83 t/s @4k,
   # n_max=1 sweet spot; n_max=2 drops acceptance on this MoE). Draft fits the P100
-  # (~15.9GB/16GB, ~0.45GB free at 32k) — the card is dedicated to `fast` when this
-  # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `fast`
+  # (~15.9GB/16GB, ~0.45GB free at 32k) — the card is dedicated to `small` when this
+  # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `small`
   # model". NB: MTP is single-stream only — the agentic/heavy-coding overlays run
-  # `fast` at --parallel 2 and strip the draft (spec: none).
+  # `small` at --parallel 2 and strip the draft (spec: none).
   # TEMPORARY (2026-07-27): the P100 (idx0) failed with an uncorrectable HBM
   # double-bit ECC error (Xid 48/64/62, page-retirement fatal, "GPU Reset
   # Required") and was replaced by a stopgap 12GB GTX TITAN X (Maxwell sm_52).
-  # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `fast` temporarily
+  # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `small` temporarily
   # serves the dense 12B (~6.3GB, fits with comfortable headroom). RESTORE the
   # MoE block below when a 16GB+ card (P100/V100) returns to idx0.
   #   --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
@@ -212,7 +212,7 @@ models:
   # draft ctx also fails to init: "Gemma4Assistant requires ctx_other to be set").
   # So the draft is STRIPPED on all three idx0 models during the stopgap (slower
   # decode, but it actually serves). RESTORE the draft lines with the 16GB+ card.
-  "fast":
+  "small":
     name: "Gemma-4-12B dense — fast non-reasoning chat (TITAN X stopgap)"
     description: "Snappy general chat on the stopgap 12GB Titan X (idx0); dense 12B, no reasoning phase. Temporary replacement for the failed P100's 26B MoE. MTP draft disabled (crashes on Maxwell)."
     env:
@@ -227,26 +227,26 @@ models:
       --reasoning-budget 0
       ${common}
 
-  # --- fast-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
-  # FALLBACK for the old always-on `fast`. Dense 12B, ~6.3GB weights -> ~8.5GB
+  # --- small-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
+  # FALLBACK for the old always-on `small`. Dense 12B, ~6.3GB weights -> ~8.5GB
   # with ctx, leaving ~7.5GB headroom on the 16GB P100. Slower than the MoE
   # (~29 tok/s decode, ~286 tok/s prefill @2k) but far more VRAM headroom: does
   # 128k single-user comfortably and leaves room to co-host a P100 offload job.
-  # Shares idx0 with `fast`/`fast-uncensored` (mutually exclusive). Request it to
-  # swap the MoE out; ttl unloads it so `fast` reclaims the card.
+  # Shares idx0 with `small`/`small-uncensored` (mutually exclusive). Request it to
+  # swap the MoE out; ttl unloads it so `small` reclaims the card.
   # MTP (2026-07-23): dense 12B is bandwidth-bound with very high draft acceptance
   # (~92-98%), so the separate gemma4-assistant draft head (Q8_0, 465MB) is a BIG
   # win — measured +67% decode (28.1 -> 47.0 t/s @4k steady, n_max=1). n_max=1
   # beats n=2/3 at steady-state (deeper drafts decay acceptance past ~2k). Draft
   # costs ~0.8GB (~9.8GB/16GB at 32k) so 128k headroom is unaffected. See
-  # docs/benchmarking.md "MTP on the `fast-12b` model". Always --parallel 1 (no
+  # docs/benchmarking.md "MTP on the `small-12b` model". Always --parallel 1 (no
   # overlay overrides it), so MTP applies in every mode.
   # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
   # 128k ctx OOMs on 12GB (weights 6.3GB + 128k KV > 12GB), so ctx is dropped to
   # 32768. The MTP draft (--spec-type draft-mtp) also CRASHES on the Maxwell Titan
   # X (CUDA illegal memory access in the draft sampler), so it is STRIPPED here.
   # RESTORE --ctx-size 131072 + the draft lines when a 16GB+ card returns to idx0.
-  "fast-12b":
+  "small-12b":
     name: "Gemma-4-12B dense — fast fallback (headroom)"
     description: "Dense 12B fallback on the idx0 Titan X stopgap. Shares idx0 (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
@@ -262,15 +262,15 @@ models:
       --reasoning-budget 0
       ${common}
 
-  # --- fast-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
-  # Abliterated/uncensored counterpart to `fast` (HauhauCS Balanced). ~7.4GB
-  # weights; shares the P100 (idx0) with `fast`, so the two are MUTUALLY
+  # --- small-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
+  # Abliterated/uncensored counterpart to `small` (HauhauCS Balanced). ~7.4GB
+  # weights; shares the P100 (idx0) with `small`, so the two are MUTUALLY
   # EXCLUSIVE (10.9GB + 7.4GB > 16GB) — the matrix P100 slot is `(f | fu)`, so
-  # requesting this evicts `fast` and vice-versa. Reasoning ON by default (the
+  # requesting this evicts `small` and vice-versa. Reasoning ON by default (the
   # Balanced tune reasons before answering); roleplay/creative-writing focus.
   # Vision via --mmproj; MTP speculative decoding (Unsloth draft head) for ~60%
   # faster generation with identical output. Tuned sampling per the model card.
-  # ttl unloads it so `fast` reclaims the card.
+  # ttl unloads it so `small` reclaims the card.
   # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
   # 128k ctx OOMs on 12GB, so ctx dropped to 32768. This tune also loads a BF16
   # mmproj (vision) on top of ~7.4GB Q4_K_M weights, so it is the tightest of the
@@ -278,9 +278,9 @@ models:
   # CRASHES on the Maxwell Titan X (CUDA illegal memory access in the draft
   # sampler), so it is STRIPPED here. RESTORE --ctx-size 131072 + the draft lines
   # when a 16GB+ card returns to idx0.
-  "fast-uncensored":
+  "small-uncensored":
     name: "Gemma-4-12B Uncensored — reasoning chat + vision"
-    description: "Uncensored/abliterated Gemma-4-12B on the idx0 Titan X stopgap; reasoning on, vision (mmproj). Shares idx0 with fast (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
+    description: "Uncensored/abliterated Gemma-4-12B on the idx0 Titan X stopgap; reasoning on, vision (mmproj). Shares idx0 with small (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -299,7 +299,7 @@ models:
   # -> ~26.7GB on 32GB (SWA). f16 KV at 131k OOMs (31GB+compute buf); q8_0 halves
   # KV to reach 128k. ub2048 = best prefill (760 t/s). Evicts coding when used.
   # 2026-07-23: MTP self-spec via a separate ~490MB gemma4-assistant draft head
-  # (NotMe404/gemma-4-31b-it-assistant-mtp, Q8_0), same mechanism as fast/fast-12b.
+  # (NotMe404/gemma-4-31b-it-assistant-mtp, Q8_0), same mechanism as small/small-12b.
   # Dense 31B is bandwidth-bound so MTP wins big: steady-state decode 28.1 -> 56.5
   # t/s (+101%, accept ~100% @4k) at n_max=3, ~+1.2GB VRAM. n=3 is the robust pick
   # (best across all prompt lengths incl. short); n>=4 chases higher steady-state
@@ -379,16 +379,16 @@ routing:
     use: matrix
     settings:
       matrix:
-        # Card map: idx0(P100)=fast(MoE)|fast-12b|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
-        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `fast`
-        #           and `fast-uncensored` are mutually exclusive on idx0 (they
+        # Card map: idx0(P100)=small(MoE)|small-12b|small-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
+        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `small`
+        #           and `small-uncensored` are mutually exclusive on idx0 (they
         #           evict each other); one of them coexists with all V100 activity.
         vars:
           c: coding
           h: chat
           b: big
-          f: fast
-          fu: fast-uncensored
+          f: small
+          fu: small-uncensored
           n: coder-next
           x: gemma-31b
           y: gemma-26b
@@ -399,7 +399,7 @@ routing:
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
           # any subset, e.g. just [f], or [c] alone). The P100 slot `(f | fu)`
-          # expands each set into a `fast` and a `fast-uncensored` variant, so
+          # expands each set into a `small` and a `small-uncensored` variant, so
           # exactly one P100 model coexists with V100 activity and requesting the
           # other swaps it in.
           qq: "c & h & (f | fu)"    # daily: coding(idx1) + chat(idx2) + P100 chat
@@ -410,13 +410,13 @@ routing:
           max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
           cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat
 
-# hooks: run actions on lifecycle events. Preload `fast` on startup so the P100
+# hooks: run actions on lifecycle events. Preload `small` on startup so the P100
 # (idx0) is never left empty after a llama-swap (re)start — the P100 slot is
-# `(f | fu)`, so `fast` is the always-ready default there. (This covers restarts;
-# if `fast-uncensored` is requested it evicts `fast` and, once its ttl expires,
-# the P100 stays empty until `fast` is requested again — request `fast` to
+# `(f | fu)`, so `small` is the always-ready default there. (This covers restarts;
+# if `small-uncensored` is requested it evicts `small` and, once its ttl expires,
+# the P100 stays empty until `small` is requested again — request `small` to
 # restore it. Single-model preload = no group needed.)
 hooks:
   on_startup:
     preload:
-      - "fast"
+      - "small"

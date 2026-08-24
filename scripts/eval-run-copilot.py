@@ -49,8 +49,8 @@ TOKEN_BUDGETS = {
     "chat":       (57344, 24576),
     "big":        (163840, 32768),
     "coder-next": (98304, 32768),
-    "fast":       (24576, 8192),
-    "fast-12b":   (98304, 8192),
+    "small":      (20480, 8192),
+    "small-12b":  (20480, 8192),
 }
 DEFAULT_BUDGET = (32768, 8192)
 
@@ -107,7 +107,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", required=True, help="evals/<test> directory name")
     ap.add_argument("--model", default="coding",
-                    help="BYOK model id / COPILOT_MODEL (coding|chat|big|coder-next|fast)")
+                    help="BYOK model id / COPILOT_MODEL (coding|chat|big|coder-next|small)")
     ap.add_argument("--label", default=None, help="output label (default <model>-copilot)")
     ap.add_argument("--ext", default="html", help="expected output file extension")
     ap.add_argument("--base-url", default="http://127.0.0.1:4000/v1",

@@ -18,7 +18,7 @@ Method notes:
 Usage (run with the harness venv python):
   .venv/bin/python scripts/parallel-sweep.py --models coding \
       --parallels 1,4 --concs 1,4,8 --max-tokens 128            # smoke
-  .venv/bin/python scripts/parallel-sweep.py --models coding,chat,fast \
+  .venv/bin/python scripts/parallel-sweep.py --models coding,chat,small \
       --parallels 1,2,4,8 --concs 1,2,4,8,12,16 --max-tokens 256  # full
 """
 import argparse, asyncio, csv, os, re, subprocess, sys, time
@@ -39,7 +39,7 @@ CHAT_URL = f"{SWAP}/v1/chat/completions"
 RESULTS_DIR = "/srv/ai/benchmarks/llm-scaling-bench/results"
 PROMPT = "write me a 1000 word essay on the history and future of artificial intelligence"
 
-MODEL_GPU = {"coding": 1, "chat": 2, "fast": 0,
+MODEL_GPU = {"coding": 1, "chat": 2, "small": 0,
              "big": 1, "coder-next": 1, "gemma-31b": 1, "gemma-26b": 2}  # VRAM-log card
 
 
@@ -184,7 +184,7 @@ async def sweep(models, parallels, concs, max_tokens, out_csv):
 
 
 def print_matrix(rows, concs):
-    models = sorted({r["model"] for r in rows}, key=lambda m: ["coding","chat","fast"].index(m) if m in ["coding","chat","fast"] else 9)
+    models = sorted({r["model"] for r in rows}, key=lambda m: ["coding","chat","small"].index(m) if m in ["coding","chat","small"] else 9)
     for model in models:
         print(f"\n### {model} — aggregate tokens/sec (rows=--parallel, cols=concurrent users)")
         header = "  P\\conc |" + "".join(f"{c:>8}" for c in concs)
