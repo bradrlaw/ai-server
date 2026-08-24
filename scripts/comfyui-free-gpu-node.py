@@ -11,7 +11,7 @@ occupying the card ComfyUI needs, so the GPU is free. It only acts on the
 NOT evict anything; the card is freed only when someone clicks "Queue".
 
 ComfyUI is pinned to a single V100 (idx1 = the `coding` card). `chat` (idx2) and
-`fast` (P100) live on OTHER cards and never conflict, so we keep them loaded and
+`small` (idx0) live on OTHER cards and never conflict, so we keep them loaded and
 unload only the idx1 occupant via llama-swap's per-model unload endpoint
 (POST /api/models/unload/<model>). Anything not in FREE_GPU_KEEP is unloaded; the
 kept models stay responsive throughout image generation. Unloaded models reload
@@ -22,12 +22,12 @@ a run, which would keep the idx1 card occupied and block the daily `coding` mode
 from reloading. So a background task watches for inactivity: after FREE_GPU_IDLE_SECS
 with no generation, it unloads ComfyUI's models + empties the CUDA cache to release
 idx1, then warms FREE_GPU_RESTORE (default `coding`) back onto the card so the box
-returns to its daily state (coding + chat + fast) with no manual step.
+returns to its daily state (coding + chat + small) with no manual step.
 
 Config via env (set in comfyui.service):
   LLAMASWAP_URL       default http://127.0.0.1:9090
   FREE_GPU_PATHS      comma list of request paths that trigger a free (default /prompt)
-  FREE_GPU_KEEP       comma list of models to KEEP loaded (default "chat,fast" — the
+  FREE_GPU_KEEP       comma list of models to KEEP loaded (default "chat,small" — the
                       idx2 + P100 models that don't share ComfyUI's card)
   FREE_GPU_IDLE_SECS  seconds of no generation before ComfyUI's VRAM is released
                       and the daily model restored (default 300; 0 disables)
@@ -56,10 +56,10 @@ TRIGGER_PATHS = tuple(
     p.strip() for p in os.environ.get("FREE_GPU_PATHS", "/prompt,/api/prompt").split(",") if p.strip()
 )
 # Models to KEEP loaded through image generation — those on cards ComfyUI does
-# NOT use (idx2 `chat` + P100 `fast`). Everything else running is unloaded so the
+# NOT use (idx2 `chat` + idx0 `small`). Everything else running is unloaded so the
 # idx1 V100 (the `coding` card) is freed.
 KEEP_MODELS = frozenset(
-    m.strip() for m in os.environ.get("FREE_GPU_KEEP", "chat,fast").split(",") if m.strip()
+    m.strip() for m in os.environ.get("FREE_GPU_KEEP", "chat,small").split(",") if m.strip()
 )
 # Idle watchdog: release ComfyUI's VRAM this long after the last generation, then
 # warm the daily model(s) back. 0 disables the watchdog entirely.
@@ -162,7 +162,7 @@ async def _wait_for_release(targets, free_before):
 async def _free_gpu():
     """Unload only the llama-swap model(s) squatting on ComfyUI's card.
 
-    Keeps FREE_GPU_KEEP models (default chat + fast, on idx2/P100) resident and
+    Keeps FREE_GPU_KEEP models (default chat + small, on idx2/idx0) resident and
     unloads everything else running (idx1 `coding`, or a split `big`/`coder-next`)
     via llama-swap's per-model endpoint. Ignores failures — never blocks a run.
     """

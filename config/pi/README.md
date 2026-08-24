@@ -62,10 +62,10 @@ In interactive mode, `/model` lists the `aiserver` models below.
 
 | pi model     | Backing model              | GPU          | Notes                                  |
 |--------------|----------------------------|--------------|----------------------------------------|
-| `coding`     | Qwen3.6-27B dense          | V100 idx1    | best quality, slowest, reasoning       |
+| `coding`     | Qwen3.8-27B dense          | V100 idx1    | best quality, slowest, reasoning       |
 | `chat`       | Qwen3.6-35B-A3B MoE        | V100 idx2    | near-coding quality, much faster, reasoning |
 | `coder-next` | Qwen3-Coder-Next 80B-A3B   | both V100s   | non-thinking, preempts coding+chat     |
-| `fast`       | Gemma-4-12B                | P100 idx0    | always warm, non-reasoning             |
+| `small`      | Gemma-4-12B                | Titan X idx0 | always warm, non-reasoning             |
 
 Add more from the roster (`big`, `gemma-31b`, `chat-uncensored-q6`, …) by copying
 a model block and changing `id` (must match a LiteLLM model id exactly — ids are

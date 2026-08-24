@@ -99,7 +99,7 @@ def _apply_overrides(block: list[str], ov: dict) -> list[str]:
         # spec: none / false  -> strip ALL speculative-decode flags (--spec-type,
         # --spec-draft-n-max, and the separate-draft-model flags --model-draft /
         # --n-gpu-layers-draft) so a parallel worker pool runs without MTP. Handles
-        # both same-line (coding/chat) and one-flag-per-line (fast/big) layouts.
+        # both same-line (coding/chat) and one-flag-per-line (small/big) layouts.
         # spec: "draft-mtp:N" -> set draft n-max to N (same-line layouts).
         want = ov["spec"]
         if not want or want == "none":

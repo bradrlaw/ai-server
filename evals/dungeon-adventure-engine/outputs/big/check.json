@@ -1,16 +1,16 @@
 {
   "file": "outputs/big/output.py",
-  "score": 29,
+  "score": 27,
   "max": 29,
-  "pct": 100.0,
-  "bytes": 16218,
+  "pct": 93.1,
+  "bytes": 35232,
   "hint_ratio": 1.0,
-  "doc_ratio": 1.0,
+  "doc_ratio": 0.97,
   "bad_imports": [],
   "dynamic": {
     "runs": true,
     "shows_room": true,
-    "inventory_ok": true,
+    "inventory_ok": false,
     "error": null
   },
   "checks": {
@@ -100,7 +100,7 @@
       "desc": "Runs and prints the starting room"
     },
     "dyn_inventory": {
-      "pass": true,
+      "pass": false,
       "weight": 2,
       "desc": "Taking an item reflects in inventory"
     }

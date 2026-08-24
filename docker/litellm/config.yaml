@@ -25,14 +25,14 @@ model_list:
       model: openai/coder-next
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
-  - model_name: fast
+  - model_name: small
     litellm_params:
-      model: openai/fast
+      model: openai/small
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
-  - model_name: fast-12b
+  - model_name: small-12b
     litellm_params:
-      model: openai/fast-12b
+      model: openai/small-12b
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
   - model_name: gemma-31b
@@ -55,9 +55,9 @@ model_list:
       model: openai/chat-uncensored-q6
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
-  - model_name: fast-uncensored
+  - model_name: small-uncensored
     litellm_params:
-      model: openai/fast-uncensored
+      model: openai/small-uncensored
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
 

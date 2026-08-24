@@ -1,9 +1,9 @@
 {
-  "file": "outputs/coding/output.md",
-  "score": 12,
+  "file": "outputs/coding/index.html",
+  "score": 11,
   "max": 12,
-  "pct": 100.0,
-  "bytes": 6549,
+  "pct": 91.7,
+  "bytes": 3589,
   "checks": {
     "contradiction_flagged": {
       "pass": true,
@@ -16,7 +16,7 @@
       "desc": "Identifies the specific clash (Ben\u2192ICML=March vs Aug, or ICLR=Robotics vs Ben=RL)"
     },
     "ben_is_rl": {
-      "pass": true,
+      "pass": false,
       "weight": 1,
       "desc": "Deduces Ben's subfield is Reinforcement Learning"
     },

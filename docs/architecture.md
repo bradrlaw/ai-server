@@ -79,14 +79,14 @@ Power caps (ADR-0009): V100 175W, P100 200W. Caps don't affect VRAM.
 
 | GPU | Idx / bus | Primary role | Resident VRAM (typical) | Spare |
 |-----|-----------|--------------|-------------------------|-------|
-| V100 #1 | 1 / bus03 | Qwen3.6-27B **coding** (Q6_K + MTP, 180k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.75 GB |
+| V100 #1 | 1 / bus03 | Qwen3.8-27B **coding** (Q6_K + MTP, 160k ctx) | ~30.7 GB (q8_0 KV, MTP) | ~1.3 GB |
 | V100 #2 | 2 / bus04 | Qwen3.6-35B-A3B **chat** (UD-Q6_K + MTP, 96k ctx) | ~31.5 GB (q8_0 KV, MTP) | ~0.9 GB |
 | both V100 | 1+2 | *Occasional* big/high-quant (TP=2 `-sm layer`) | preempts the two above | — |
-| P100 | 0 / bus01 | **Gemma-4-12B `fast`** (always-on) + aux mix (co-resident) | ~10.8 GB + aux, see below | — |
+| P100 | 0 / bus01 | **Gemma-4-12B `small`** (always-on) + aux mix (co-resident) | ~10.8 GB + aux, see below | — |
 
-**P100 16 GB budget:** the always-on `fast` chat model (Gemma-4-12B QAT, `--reasoning-budget 0`,
+**P100 16 GB budget:** the always-on `small` chat model (Gemma-4-12B QAT, `--reasoning-budget 0`,
 ctx 131072) now occupies ~10.8 GB, leaving ~5 GB for the aux mix below. Phase 4 (embeddings/STT/caption)
-must fit in that remainder — pick the smaller variants, lower `fast`'s ctx, or move `fast` to a V100 spare slot
+must fit in that remainder — pick the smaller variants, lower `small`'s ctx, or move `small` to a V100 spare slot
 if the P100 aux mix grows.
 
 **P100 16 GB aux budget (co-resident, on-demand):**
@@ -110,10 +110,10 @@ Notes:
 
 | Client-facing model name | Backend | GPU | Notes |
 |--------------------------|---------|-----|-------|
-| `coding` (→ Qwen3.6-27B) | llama-swap → llama-server | V100 #1 | default for VS Code/CLI/opencode |
+| `coding` (→ Qwen3.8-27B) | llama-swap → llama-server | V100 #1 | default for VS Code/CLI/opencode |
 | `chat` (→ Qwen3.6-35B-A3B) | llama-swap → llama-server | V100 #2 | fast MoE; reasoning model |
 | `big` (→ high-quant/large) | llama-swap **TP profile** | both V100 | preempts `coding`+`chat` |
-| `fast` (→ Gemma-4-12B) | llama-swap → llama-server | P100 | always-on, non-reasoning snappy chat |
+| `small` (→ Gemma-4-12B) | llama-swap → llama-server | P100 | always-on, non-reasoning snappy chat |
 | `gemma-31b` (→ Gemma-4-31B) | llama-swap → llama-server | V100 #1 | comparison model (evicts `coding`, ttl 600s) |
 | `gemma-26b` (→ Gemma-4-26B-A4B) | llama-swap → llama-server | V100 #2 | comparison model (evicts `chat`, ttl 600s) |
 | `embeddings` | TEI/Infinity | P100 | RAG + Immich + Open WebUI |
@@ -144,7 +144,7 @@ each autonomous agent) with per-key budgets/rate limits → doubles as agent gua
 | Langfuse / Prometheus / Grafana / DCGM | container | — |
 
 **Idle power management (quiet hours).** The always-on `server-status` service keeps the P100
-`fast` model warm and can run an optional overnight **deep-idle window**: it unloads the daily
+`small` model warm and can run an optional overnight **deep-idle window**: it unloads the daily
 models and stops the ComfyUI units so the V100s fall out of P0 (~103 W → ~73 W), auto-waking on
 client activity and re-idling after a GPU-utilization lull. ⚠️ **The machine clock is `Etc/UTC`
 but the owner is US Eastern**, so the window is evaluated in `QUIET_TZ` (e.g. `America/New_York`),

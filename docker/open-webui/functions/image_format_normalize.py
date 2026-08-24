@@ -4,7 +4,7 @@ author: bradrlaw (ai-server)
 description: >
     Transcode chat-attached images that the native vision models can't decode into
     PNG before the request reaches the model. Open WebUI's frontend happily displays
-    webp/avif/heic, but the llama.cpp multimodal loader (mmproj, e.g. fast-uncensored
+    webp/avif/heic, but the llama.cpp multimodal loader (mmproj, e.g. small-uncensored
     on the P100) decodes images with stb_image, which supports PNG/JPEG/BMP/GIF but
     NOT webp/avif/heic/tiff — so those fail with "Failed to load image or audio file".
     This inlet filter finds base64 image data-URLs of unsupported types in the

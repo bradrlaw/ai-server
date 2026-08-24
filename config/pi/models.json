@@ -37,8 +37,8 @@
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
-          "id": "fast",
-          "name": "Gemma-4-12B (fast, non-reasoning)",
+          "id": "small",
+          "name": "Gemma-4-12B (small, non-reasoning)",
           "reasoning": false,
           "input": ["text"],
           "contextWindow": 131072,

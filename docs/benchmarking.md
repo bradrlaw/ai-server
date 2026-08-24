@@ -9,6 +9,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [Quick start — Ziskind's harness against LiteLLM](#quick-start--ziskinds-harness-against-litellm)
 - [The critical caveat: `--parallel N` caps concurrency](#the-critical-caveat---parallel-n-caps-concurrency)
 - [Baseline results (2026-07-21)](#baseline-results-2026-07-21)
+- [`--parallel` throughput sweep (2026-08-24)](#--parallel-throughput-sweep-2026-08-24)
 - [`--parallel` throughput sweep (2026-07-21)](#--parallel-throughput-sweep-2026-07-21)
   - [The catch: `--parallel N` divides per-request context](#the-catch---parallel-n-divides-per-request-context)
 - [MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)](#moe-on-the-p100-16-gb--gemma-4-26b-a4b-2026-07-22)
@@ -104,6 +105,55 @@ llama.cpp/LM Studio. Throughput does **not** improve with concurrency on a
 > The `429` is **llama-swap's** per-model `concurrencyLimit` (default **10**),
 > *not* the engine — raise it per model in `config/llama-swap.yaml` if you want the
 > router to admit more simultaneous requests.
+
+## `--parallel` throughput sweep (2026-08-24)
+
+Re-run of the `--parallel` sweep on the **current roster** (Qwen3.8-27B `coding`/`big`,
+`small` on the GTX Titan X stopgap that replaced the dead P100), 256 max tokens,
+concurrency 1–16. Harness/method unchanged from the 2026-07-21 baseline below
+(`scripts/parallel-sweep.py`, benchmarking `:9090` directly, restoring the pristine
+`llama-swap.yaml` on exit). Chart labels show slot **and** backing model.
+
+![--parallel throughput sweep — peak aggregate tok/s per model (2026-08-24)](img/parallel-sweep-20260824.png)
+
+*Raw data: [`data/parallel-sweep-20260824.csv`](data/parallel-sweep-20260824.csv)
+(regenerate the chart with `benchmarks/llm-scaling-bench/.venv/bin/python
+scripts/plot-parallel-sweep.py docs/data/parallel-sweep-20260824.csv -o
+docs/img/parallel-sweep-20260824.png --config config/llama-swap.yaml`; the
+`--config` flag reads slot→model names from the live router config).*
+
+Peak aggregate tokens/sec per `--parallel`, and VRAM at the best setting:
+
+| Model | GPU / kind | ctx | P=1 | P=2 | P=4 | P=8 | Best | VRAM@best |
+|-------|-----------|----:|----:|----:|----:|----:|------|-----------|
+| coding      | V100 idx1, Qwen3.8-27B Q6_K **+MTP** | 163840 | **33** | 35 | 36 | OOM | P=4 | 31.7/32 GB |
+| chat        | V100 idx2, Qwen3.6-35B-A3B MoE **+MTP** | 98304 | 118 | 120 | 125 | **127** | P=8 | 32.2/32 GB |
+| small       | Titan X idx0, Gemma-4-12B (dense) | 32768 | 19 | 32 | **37** | OOM | P=4 | 11.6/12 GB |
+| big         | dual-V100, Qwen3.8-27B Q8_K_XL (dense) | 262144 | 38 | 48 | 54 | **61** | P=8 | 24.8/32 GB/card |
+| coder-next  | dual-V100, Qwen3-Coder-Next MoE | 262144 | 74 | 111 | 145 | **191** | P=8 | 28.5/32 GB/card |
+| gemma-31b   | V100 idx1, Gemma-4-31B (dense) | 131072 | 34 | 46 | **70** | OOM | P=4 | 31.2/32 GB |
+| gemma-26b   | V100 idx2, Gemma-4-26B-A4B MoE | 131072 | 102 | 177 | 228 | **293** | P=8 | 22.1/32 GB |
+
+Patterns (and what changed vs the 2026-07-21 baseline):
+- **MTP self-speculative decode reshapes the curve.** The two Qwen slots now run MTP
+  (`coding`, `chat`). MTP **boosts single-user speed** — `coding` P=1 22→**33** tok/s,
+  `chat` P=1 84→**118** — but **flattens `--parallel` scaling**: MTP already spends the
+  batch dimension on draft+verify, so extra sequences find little compute headroom.
+  `coding` is nearly flat (33→36) and its compute buffers are already ~31.7 GB at P=4,
+  so **P=8 OOMs**; `chat`'s ceiling actually *dropped* (P=8 194→127). Net: MTP is a win
+  for interactive single-user coding, a wash-to-loss for many-slot throughput. Daily
+  keeps both at `--parallel 1`, which is the right call.
+- **Non-MTP models scale as before.** `gemma-26b` is still the throughput champ
+  (**293 tok/s** at P=8), `coder-next` reaches **191**, `big` **61** — all within a few
+  percent of July, confirming the harness and the dual-V100 path are stable.
+- **VRAM-tight dense models cap early.** `small` (12 GB Titan X) and `gemma-31b`
+  (31 GB at P=4) OOM before P=8 — the batch *compute* buffers, not KV, are what grow.
+- **`small` is the slowest tier by design** (Titan X Maxwell stopgap): 19 tok/s single
+  user, best 37 at P=4. This is the "not actually fast" slot the rename fixed.
+
+The per-request-context tradeoff from the baseline still applies verbatim: raising
+`--parallel` divides `--ctx-size` across slots, so the max-throughput setting is not
+automatically the right daily setting — see the table under the 2026-07-21 section.
 
 ## `--parallel` throughput sweep (2026-07-21)
 
@@ -1289,3 +1339,181 @@ sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py --label t2i
 sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py \
   --label video --workflow ~/your_video_api.json --runs 2
 ```
+
+## Qwen3.8-27B migration — `coding` + `big` benchmark suite (2026-08-15)
+
+We migrated the `coding` and `big` slots from Qwen3.6-27B to **Qwen3.8-27B**
+(unsloth GGUFs, `general.architecture=qwen35` — drop-in on llama.cpp build 9850,
+MTP `nextn` head embedded in the main GGUF). `chat` stays Qwen3.6-35B-A3B MoE.
+This section records the full validation pass (throughput, MTP, GSM8K quality,
+code evals) against the retained 3.6 numbers.
+
+- **coding** = Qwen3.8-27B **Q6_K** (21.3 GiB), single V100 idx1, q8_0 KV,
+  ctx **163840** (trimmed from 3.6's 180k — the larger 3.8 weights left only ~1 GB
+  free at 180k; 160k = 30.7/32 GB, ~2 GB headroom), MTP `--spec-draft-n-max 3`.
+- **big** = Qwen3.8-27B **UD-Q6_K_XL** (24.1 GiB), dual-V100 `-sm layer`, f16 KV,
+  ctx 262144, MTP `n_max 2`. (Never BF16 — corrected stale doc claim during migration.)
+
+Harnesses: `scripts/bench-qwen3.8-27b.sh` (llama-bench), `scripts/mtp-bench.py`
+(`--model` the 3.8 GGUF), `scripts/roster-gsm8k-eval.sh coding big` (SPEC updated to
+3.8), `scripts/eval-run.py`. Data: `docs/data/qwen3.8-27b-bench-20260815/`,
+`docs/data/mtp/qwen38-{coding,big}-mtp.csv`, `docs/data/lm-eval/{coding,big}-gsm8k-20260815/`.
+
+### Single-stream throughput (llama-bench, raw — no MTP), pp512 / tg128 t/s
+
+| config | depth 0 pp / tg | depth 8192 pp / tg |
+|---|---|---|
+| coding Q6_K — single V100 (`-sm none`) | 755 / 22.8 | 665 / 21.7 |
+| coding Q6_K — dual V100 (`-sm layer`)  | 770 / 25.0 | 674 / 24.3 |
+| coding Q6_K — dual V100 (`-sm row`)    | 202 / 21.4 | 194 / 20.6 |
+| big UD-Q6_K_XL — single V100 (`-sm none`) | 778 / 23.0 | 686 / 22.0 |
+| big UD-Q6_K_XL — dual V100 (`-sm layer`)  | 801 / 24.3 | 700 / 23.4 |
+| big UD-Q6_K_XL — dual V100 (`-sm row`)    | 198 / 21.0 | 191 / 20.3 |
+
+Same picture as 3.6: `-sm layer` is the only viable dual-V100 split (row split
+tanks prefill to ~200 t/s over the NVLink-less PCIe PHB). Raw decode ~22–23 t/s;
+the real decode win comes from MTP (below).
+
+### MTP self-speculative decode (echo-heavy `code` prompt)
+
+`coding` Q6_K, single V100 idx1, q8_0 KV, ctx 40960 — decode t/s / draft-acceptance
+by prompt size:
+
+| n_max | ~512 | ~2.5k | ~5k | ~10k | ~21k | accept |
+|---|---|---|---|---|---|---|
+| 0 (off) | 22.4 | 22.1 | 21.7 | 21.2 | 20.1 | — |
+| 2       | 43.6 | 43.1 | 42.3 | 41.0 | 38.3 | ~98% |
+| **3 (shipped)** | **48.7** | **47.9** | **46.7** | **45.3** | **42.4** | ~94–98% |
+| 4       | 52.9 | 53.0 | 51.4 | 49.7 | 45.2 | ~93–98% |
+
+`big` UD-Q6_K_XL, dual-V100 `-sm layer`, f16 KV — decode t/s / acceptance:
+
+| n_max | ~1k | ~2.5k | ~5k | ~10k | ~21k | accept |
+|---|---|---|---|---|---|---|
+| 0 (off) | 23.9 | 23.8 | 23.5 | 22.9 | 21.9 | — |
+| **2 (shipped)** | **48.1** | **47.8** | **47.2** | **46.3** | **44.1** | ~98% |
+| 3       | 51.1 | 51.0 | 49.8 | 48.8 | 47.6 | ~97–98% |
+
+MTP gives ~2.2–2.4× decode on code with 93–99% acceptance (much higher than the
+~0.55 seen on a generative summary probe — acceptance is prompt-dependent). Shipped
+depths unchanged from 3.6 (coding n3, big n2); n4/n3 are marginally faster but
+tighten VRAM and the 3.6 sweeps showed n4 regresses on generative prompts.
+
+### GSM8K quality (5-shot, greedy, n=100)
+
+| slot | model | flexible-extract | strict-match |
+|---|---|---|---|
+| coding | Qwen3.6-27B (was) | 0.98 | 0.98 |
+| coding | **Qwen3.8-27B** | **0.99** | 0.92 |
+| big | Qwen3.6-27B (was) | 0.98 | 0.98 |
+| big | **Qwen3.8-27B** | **0.98** | 0.92 |
+
+Flexible-extract (the accuracy metric) holds/improves. Strict-match dips to 0.92 —
+this only reflects final-answer *formatting* under the reasoning template (the
+right number is present but not always in the exact `#### N` shape strict-match
+wants), not solve rate. (Measured at the model's default `reasoning_effort=xhigh`;
+GSM8K fit within the 6144-token gen budget, so xhigh was fine here — but see the
+next section for why xhigh is *not* fine for long-form codegen.)
+
+### `reasoning_effort` — the `xhigh` default is pathological for codegen
+
+Qwen3.8's chat template exposes `reasoning_effort` (`reasoning_effort|default('xhigh')`,
+valid values `xhigh | medium | low`). At the default **`xhigh`** the model reasons
+enormously on complex build-an-app prompts — on `dungeon-adventure-engine` it burned
+**39,478 completion tokens** (and truncated `local-dungeon-web` even at a 49k cap),
+i.e. ~20+ minutes for a single answer at ~32 t/s. This is a serving-quality bug: the
+first eval pass hit `finish=length` with **0 bytes** of extractable code.
+
+Dropping to **`medium`** collapses reasoning to a sane budget with no quality loss and
+*more* complete output:
+
+| test | xhigh tokens | medium tokens | medium output |
+|---|---|---|---|
+| dungeon-adventure-engine | 39,478 (`stop`@49k) | **9,565** | 38.8 KB, `stop` |
+| local-dungeon-web | 49,152 (`length`, truncated) | **16,372** | 29.8 KB, `stop` |
+
+We bake `--chat-template-kwargs '{"reasoning_effort":"medium"}'` into the `coding` and
+`big` blocks of `config/llama-swap.base.yaml` so every request gets bounded reasoning.
+Clients should also send the unsloth **thinking-mode sampling** set
+(`temperature=1.0, top_p=0.95, top_k=20, min_p=0.0`) — `eval-run.py` gained `--min-p` /
+`--presence-penalty` for this. `low` is available for even faster/terser replies.
+
+### Code-generation evals (`scripts/eval-run.py`, objective `check.py` score)
+
+All five tests at the **production setting** — `reasoning_effort=medium`, thinking-mode
+sampling (`temp 1.0, top_p 0.95, top_k 20, min_p 0.0`) — vs the retained 3.6 outputs
+(`*-qwen3.6` labels, run at the 3.6 default sampling). 3.8 medium reasoning lands at
+~9–19k tokens/answer, comparable to 3.6's natural ~13k:
+
+| test | coding 3.6 | coding 3.8 @medium | big 3.6 | big 3.8 @medium |
+|---|---|---|---|---|
+| dungeon-adventure-engine   | 29/29 | 29/29 | 29/29 | 27/29 |
+| local-dungeon-web          | 41/41 | 41/41 | —     | 41/41 |
+| localmind-landing-page     | 27/27 | 27/27 | 27/27 | 27/27 |
+| localmind-landing-page-pro | 41/41 | 41/41 | 41/41 | 41/41 |
+| logic-puzzle-reasoning     | 12/12 | 11/12 | 12/12 | 12/12 |
+
+**3.8 @medium is at parity with 3.6.** The single-sample table above shows two
+1-point dips (coding `logic-puzzle` 11/12; big `dungeon` 27/29), but a follow-up
+**controlled variance study** (`docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`,
+3 samples per cell, all at `reasoning_effort=medium`) proves these are **sampling
+noise from the temperature, not a model or reasoning regression**:
+
+| test (slot) | temp 0.7 (3.6-matched) | temp 1.0 (unsloth thinking) |
+|---|---|---|
+| logic-puzzle (coding, pure reasoning) | 11, 11, 10 / 12 | **12, 12, 12** / 12 |
+| dungeon (big, code generation)        | **29, 29, 29** / 29 | 29, **2**, 29 / 29 |
+
+The confound: the retained 3.6 baselines ran at **temp 0.7** (eval-run default) while the
+3.8 pass followed unsloth's thinking-mode rec of **temp 1.0** (+ `min_p 0.0`). Temperature
+cuts both ways — on the *pure-reasoning* logic puzzle, temp 1.0 explores enough to hit the
+"Ben = Reinforcement Learning" deduction (12/12 ×3), whereas the more deterministic temp 0.7
+keeps routing the contradiction through the Robotics branch and misses that one w=1 check. On
+*code generation*, temp 1.0 is too hot: one of three `big` runs emitted a non-parsing program
+(`IndentationError` → 2/29), while temp 0.7 was rock-solid 29/29 ×3. `reasoning_effort=medium`
+is used in **every** cell, so bounded reasoning is not implicated in either dip.
+
+**Practical takeaway:** unsloth's `temp=1.0` thinking-mode preset is tuned for reasoning
+benchmarks; for long-form **code** generation it adds tail-risk of broken output. Prefer
+`temperature ≈ 0.6–0.8` for coding work (this is a per-request client sampler choice, not a
+server setting) and reserve `temp 1.0` for reasoning/analysis prompts.
+
+All ten single-sample runs finished cleanly (`finish=stop`), 3.6-54 KB output, decode
+34-46 t/s with MTP on. Manual design scores (`scores.json`) are hand-entered and not part of
+this automated pass. The game-agnostic playability harness gave mixed goal-reachability across
+models (incl. 3.6 and `chat`); it keys off specific movement phrasing, so "not reached" is a
+soft signal, not a regression given the objective scores.
+
+**Verdict:** Qwen3.8-27B is a clean upgrade for `coding` + `big` — genuine quality parity with
+3.6 (GSM8K flexible ↑ for coding; code evals at full parity once sampling is matched), MTP
+intact (~2.3× decode, high acceptance on code), throughput on par. **The one required config
+change is capping `reasoning_effort` at `medium`** — the `xhigh` default makes long-form codegen
+unusably slow and truncation-prone. Shipped: coding Q6_K 160k n3, big **UD-Q8_K_XL** 256k n2
+(see the Q6-vs-Q8 A/B below), both with `reasoning_effort=medium`. 3.6 GGUFs retained as rollback.
+
+### `big` slot: UD-Q6_K_XL vs UD-Q8_K_XL A/B (2026-08-15)
+
+The `big` slot is the "max quality" slot, so we A/B'd the Q8 dynamic quant against the Q6 it
+shipped on. Both dual-V100 `-sm layer`, 256k f16 KV, MTP n2, `reasoning_effort=medium`, unsloth
+thinking-mode sampling.
+
+| | UD-Q6_K_XL | UD-Q8_K_XL |
+|---|---|---|
+| weights on disk | 25.9 GB | 31.5 GB |
+| VRAM @256k (idx1 / idx2) | ~21.7 / 24.9 GB (~47 total) | ~23.2 / 27.7 GB (~51 total) |
+| decode (avg across 5 evals) | ~43 t/s | ~41 t/s (**−5%**) |
+| MTP acceptance | 0.76–0.93 | 0.79–0.93 (unchanged) |
+
+**Eval scores (single sample, temp 1.0):** identical — dungeon 27→29/29, local-dungeon-web
+41/41, localmind 27/27, localmind-pro 41/41, logic-puzzle 12/12. **No measurable quality gain.**
+
+**Same temperature tail-risk:** re-running `dungeon` 3× on Q8 at temp 1.0 reproduced the exact
+Q6 failure — 29/29, **2/29** (`IndentationError`, non-parsing), 29/29. So the code-break is
+**sampling-driven, not quantization** — Q8 does not fix it (lowering temp to ~0.7 does). BF16
+was ruled out: ~55 GB weights + KV overflow 64 GB at 256k.
+
+**Decision:** shipped **UD-Q8_K_XL** as the `big` default — it fits 256k comfortably, keeps MTP
+(acceptance unchanged), and costs only ~5% decode, which is acceptable for the occasional
+max-quality slot. The quality delta over Q6 is below eval noise, so this is precision insurance
+rather than a measured win. (Raw study: `docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`
+for the temperature effect; llama-bench numbers in the section above were taken on Q6_K_XL.)

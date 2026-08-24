@@ -1,0 +1,78 @@
+{
+  "label": "big",
+  "test": "local-dungeon-web",
+  "runs": {
+    "natural_fixture": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> north"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> use lever"
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> west"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": false
+    },
+    "with_take": {
+      "ok_input": true,
+      "steps": [
+        {
+          "label": "reach_library",
+          "send": "north",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> north"
+        },
+        {
+          "label": "take_lever",
+          "send": "take lever",
+          "ok": true,
+          "matched": "take",
+          "hitNegative": null,
+          "excerpt": "> take lever"
+        },
+        {
+          "label": "pull_lever",
+          "send": "use lever",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> use lever"
+        },
+        {
+          "label": "reach_secret",
+          "send": "west",
+          "ok": false,
+          "matched": null,
+          "hitNegative": null,
+          "excerpt": "> west"
+        }
+      ],
+      "jsErrors": [],
+      "goal_reached": false
+    }
+  },
+  "generated_utc": "2026-08-15T03:13:20.179Z",
+  "note": "best-effort jsdom playthrough; NOT part of the objective check.json score"
+}

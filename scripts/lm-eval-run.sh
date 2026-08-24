@@ -12,8 +12,8 @@
 # Usage:
 #   scripts/lm-eval-run.sh <served-model> [base_url] [tasks] [limit] [max_gen_toks] [concurrency]
 # Examples:
-#   scripts/lm-eval-run.sh fast
-#   scripts/lm-eval-run.sh fast-12b http://127.0.0.1:9090/v1/chat/completions gsm8k 200
+#   scripts/lm-eval-run.sh small
+#   scripts/lm-eval-run.sh small-12b http://127.0.0.1:9090/v1/chat/completions gsm8k 200
 #   scripts/lm-eval-run.sh qwen35-pxq4 http://127.0.0.1:8899/v1/chat/completions gsm8k 200 3072
 set -euo pipefail
 cd "$(dirname "$0")/.."

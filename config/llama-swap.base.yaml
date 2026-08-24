@@ -37,37 +37,35 @@ models:
   # OOM on large prompts (f16 KV @160k left <1GB free, so the prefill compute
   # buffer couldn't allocate and the server crashed) AND frees room for a large
   # context. (Pre-MTP this slot ran non-MTP Q6_K at 200k, ~29.8/32GB.)
-  # --- coding: Qwen3.6-27B Q6_K + MTP on V100 #1 (idx1) ------------------
-  # MTP build (unsloth/Qwen3.6-27B-MTP-GGUF) — same Q6_K weights plus the model's
-  # built-in multi-token-prediction head (embedded blk.64.nextn.*, +0.35GB),
-  # enabled with --spec-type draft-mtp. Lossless self-speculative decode: this
-  # dense 27B is bandwidth-bound (~23 t/s baseline) with very high draft acceptance
-  # (~87%), so MTP is a BIG win — measured +81% decode (22.9 -> ~41 t/s at n_max=2)
-  # at identical weights, ~2-5% prefill cost. See docs/benchmarking.md
-  # "MTP speculative decode" (2026-07-23).
-  # n_max=3 (2026-07-25): a full 500->32k sweep showed n_max=3 beats n_max=2 in every
-  # cell (no regressions), avg +6-9% single-stream decode, for +150MB. n_max=4 is a bit
-  # faster on average but regresses at some sizes (draft over-shoot) and halves the
-  # headroom, so n=3 is the robust default. See "Chaining ngram-mod..." + the n_max sweep.
-  # VRAM: MTP's extra ~1GB compute buffer means 200k no longer fits (OOM), so ctx is
-  # capped at 180k (184320) — a near-full prefill peaks ~32.17GB/32GB at n=3 (~0.6GB
-  # headroom, measured n2=32.02 / n4=32.32). This trades 20k of context for the speedup.
+  # --- coding: Qwen3.8-27B Q6_K + MTP on V100 #1 (idx1) ------------------
+  # Qwen3.8-27B (unsloth/Qwen3.8-27B-GGUF, general.architecture=qwen35) — the MTP
+  # head is embedded in the MAIN GGUF (nextn_predict_layers=1, block_count 65), so
+  # no separate -MTP repo is needed; enabled with --spec-type draft-mtp as before.
+  # MIGRATED from Qwen3.6-27B on 2026-08-15. It is a genuine drop-in: same qwen35
+  # arch, so our llama.cpp build 9850 (4f31eedb0) loads it with NO rebuild.
+  # VRAM: 3.8 Q6_K weights (~22GB) are larger than 3.6's, so 180k no longer leaves
+  # safe headroom (loaded 31.68GB/32GB, ~1GB free — a full prefill would OOM). Ctx
+  # trimmed 180k -> 160k (163840): measured load 30.68GB/32GB (~2GB headroom) at
+  # n_max=3, q8_0 KV. MTP verified live on idx1 (draft acceptance ~0.55 @ temp 0.6,
+  # mean len 2.66), coherent output. NB: Qwen3.8 is a REASONING model (thinking ON
+  # by default) — give generous max_tokens or empty content comes back mid-think.
   # coding runs alone on idx1 (comfyui-open evicts it before image gen via the
   # free_gpu hook), so the full-card peak is the real ceiling.
   "coding":
-    name: "Qwen3.6-27B (Q6_K + MTP) — coding"
-    description: "Daily-driver coding model, single V100, MTP self-speculative decode. 180k ctx, q8_0 KV."
+    name: "Qwen3.8-27B (Q6_K + MTP) — coding"
+    description: "Daily-driver coding model, single V100, MTP self-speculative decode. 160k ctx, q8_0 KV."
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
-      --ctx-size 184320
+      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf
+      --ctx-size 163840
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
       --spec-type draft-mtp --spec-draft-n-max 3
+      --chat-template-kwargs '{"reasoning_effort":"medium"}'
       ${common}
 
   # --- chat: Qwen3.6-35B-A3B UD-Q6_K + MTP on V100 #2 (idx2) -------------
@@ -98,38 +96,43 @@ models:
       --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
-  # --- big: Qwen3.6-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------
+  # --- big: Qwen3.8-27B UD-Q6_K_XL across BOTH V100s (idx1+idx2) ----------
+  # MIGRATED from Qwen3.6-27B on 2026-08-15 (unsloth/Qwen3.8-27B-GGUF, arch=qwen35,
+  # drop-in — MTP nextn head embedded in the main GGUF). The design rationale below
+  # (Q6 vs BF16, ubatch, f16 KV) carries over; the 3.6 throughput/VRAM numbers are
+  # historical and should be re-benchmarked for 3.8 (weights ~1GB larger).
   # Highest-quality dense model, tuned for OVERNIGHT long-context planning where
   # accuracy/precision matter more than speed. Occasional use; auto-unloads
   # after 5 min idle so coding+chat can reclaim the cards.
-  # WEIGHTS: UD-Q6_K_XL (Unsloth Dynamic, imatrix-calibrated ~24GB) at FULL f16
-  # KV — chosen over BF16/Q8 after a 256k head-to-head (Tarjan SCC @ temp 0):
-  # UD-Q6_K_XL+f16 gave the most VRAM headroom, the fastest decode, full KV
-  # precision (best long-context recall), and 5/5 correct code. Q8 weights added
-  # no correctness (also 5/5) but cost ~6GB headroom; BF16+q8_0 KV was razor-thin
-  # at 256k (idx2 <1GB free).
+  # WEIGHTS: UD-Q8_K_XL (Unsloth Dynamic Q8, imatrix-calibrated ~31.5GB) at FULL
+  # f16 KV. Adopted 2026-08-15 as the max-quality default after a Q6-vs-Q8 A/B on
+  # the 3.8 code evals: Q8 fits 256k comfortably (idx1 23.2GB / idx2 27.7GB =
+  # ~51GB of 64GB), decode only ~5% slower than UD-Q6_K_XL (MTP masks the extra
+  # weight bandwidth — acceptance unchanged ~0.79-0.93), and scored at parity.
+  # (Earlier the slot ran UD-Q6_K_XL; a prior 256k head-to-head found Q8 added no
+  # correctness at temp 0, but this is the "max quality" slot so we spend the ~5%
+  # for the higher-precision weights. BF16 does NOT fit at 256k — ~55GB weights +
+  # KV overflows 64GB.)
   # NB: keeps default --ubatch-size 512 on purpose — benchmarks showed larger
   # ubatch HURTS prefill here (232->167 t/s at ub 512->2048) due to inter-GPU
   # sync overhead of the layer split. Do not add --ubatch-size.
-  # Verified 2026-07-03: ctx 262144 (256k NATIVE, no RoPE scaling) with f16 KV and
-  # a 104k-token prefill peaks at ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
+  # (3.6 baseline) ctx 262144 (256k NATIVE, no RoPE scaling) with f16 KV and a
+  # 104k-token prefill peaked ~21.9GB(idx1)/24.2GB(idx2) -> ~8.3GB headroom per
   # card; decode ~22.6 t/s (layer-split limits GPU util ~47%). Deep 256k fills are
   # slow (~8+ min) — acceptable for unattended overnight passes.
-  # MTP (2026-07-23): switched to unsloth/Qwen3.6-27B-MTP-GGUF (same UD-Q6_K_XL,
-  # +380MB embedded nextn head) with self-spec draft-mtp n_max=2. Apples-to-apples
-  # dual-V100 split @32k f16 KV: decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance,
-  # lossless (main model verifies). The dual-card split-mode MTP path works. VRAM
-  # only +~1.8GB (~31GB total across both cards @32k) so 256k ctx headroom is fine.
+  # MTP: self-spec draft-mtp n_max=2. On 3.6 the dual-V100 split @32k f16 KV gave
+  # decode 24.1 -> 42.1 t/s (+75%), ~87% acceptance, lossless (main model verifies);
+  # VRAM only +~1.8GB. The dual-card split-mode MTP path works on our llama.cpp build.
   "big":
-    name: "Qwen3.6-27B (UD-Q6_K_XL, MTP) — max quality, dual-V100, 256k"
-    description: "Imatrix Q6 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
+    name: "Qwen3.8-27B (UD-Q8_K_XL, MTP) — max quality, dual-V100, 256k"
+    description: "Q8 dynamic 27B split across both V100s, full f16 KV @ 256k, MTP self-spec decode. Preempts coding+chat."
     ttl: 300
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3.6-27b-mtp/Qwen3.6-27B-UD-Q6_K_XL.gguf
+      --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16
@@ -137,6 +140,7 @@ models:
       --parallel 1
       --spec-type draft-mtp
       --spec-draft-n-max 2
+      --chat-template-kwargs '{"reasoning_effort":"medium"}'
       ${common}
 
   # --- coder-next: Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) dual-V100 --------
@@ -160,6 +164,11 @@ models:
   # DeltaNet linear attention keeps KV/compute buffers flat, so 2 concurrent
   # sequences cost the SAME VRAM as 1. Verified 2026-07-17: two concurrent 26k-token
   # prefills peak 28.7GB(idx1)/27.3GB(idx2) — identical to idle, no OOM.
+  # COLD TIER (2026-08-18): weights relocated to models/cold (bulk HDD) to reclaim
+  # ~50GB NVMe. On-demand only (ttl 300), so the tradeoff is a slow first load
+  # (~5min HDD read of 49.6GB) after the model has been idle-evicted; warm reuse
+  # within the ttl window is unaffected. Move back to models/qwen3-coder-next/ (and
+  # drop the cold/ path prefix) if it becomes a hot always-on model again.
   "coder-next":
     name: "Qwen3-Coder-Next 80B-A3B (UD-Q4_K_XL) — agentic coding, 256k"
     description: "Hybrid-MoE coding model split across both V100s, 256k, non-thinking. Preempts coding+chat."
@@ -169,7 +178,7 @@ models:
       - "CUDA_VISIBLE_DEVICES=1,2"
     cmd: |
       ${llama-server}
-      --model ${models_dir}/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf
+      --model ${models_dir}/cold/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16
@@ -177,7 +186,7 @@ models:
       --parallel 2
       ${common}
 
-  # --- fast: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on the P100 (idx0) -------
+  # --- small: Gemma-4-26B-A4B MoE (QAT UD-Q4_K_XL) on the P100 (idx0) -------
   # SWAPPED 2026-07-22 from the dense Gemma-4-12B to this MoE (25B total / ~3.8B
   # active). On the P100 the MoE is strictly faster AND higher quality than the
   # 12B: ~2x decode (~60 vs ~29 tok/s), 1.5-2x prefill (568 vs 286 tok/s @2k),
@@ -187,21 +196,21 @@ models:
   # ctx 32768 + ub1024 @ P=1 -> 15.2GB (~1.2GB free, safe for always-on). The
   # parallel overlays override ctx DOWN and cap at P=2 (agentic/heavy-coding: ctx
   # 24576 @ P=2 -> ~15.4GB); P=4 OOMs, and 48k+ OOMs at P=1. Need >32k single-user
-  # context? Use the `fast-12b` fallback (128k, dense).
+  # context? Use the `small-12b` fallback (128k, dense).
   # --reasoning-budget 0 keeps replies immediate (no thinking phase), matching the
-  # old `fast` persona. Runs CONCURRENTLY with coding+chat (own card).
+  # old `small` persona. Runs CONCURRENTLY with coding+chat (own card).
   # MTP (2026-07-23): Gemma-4 has no embedded MTP head, so self-spec uses a SEPARATE
   # ~460MB gemma4-assistant draft head (unsloth/ironbcc it-qat-assistant, Q8_0) via
   # --model-draft + --spec-type draft-mtp. Measured +38% decode (~60 -> ~83 t/s @4k,
   # n_max=1 sweet spot; n_max=2 drops acceptance on this MoE). Draft fits the P100
-  # (~15.9GB/16GB, ~0.45GB free at 32k) — the card is dedicated to `fast` when this
-  # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `fast`
+  # (~15.9GB/16GB, ~0.45GB free at 32k) — the card is dedicated to `small` when this
+  # model is loaded, so we max VRAM. See docs/benchmarking.md "MTP on the `small`
   # model". NB: MTP is single-stream only — the agentic/heavy-coding overlays run
-  # `fast` at --parallel 2 and strip the draft (spec: none).
+  # `small` at --parallel 2 and strip the draft (spec: none).
   # TEMPORARY (2026-07-27): the P100 (idx0) failed with an uncorrectable HBM
   # double-bit ECC error (Xid 48/64/62, page-retirement fatal, "GPU Reset
   # Required") and was replaced by a stopgap 12GB GTX TITAN X (Maxwell sm_52).
-  # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `fast` temporarily
+  # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `small` temporarily
   # serves the dense 12B (~6.3GB, fits with comfortable headroom). RESTORE the
   # MoE block below when a 16GB+ card (P100/V100) returns to idx0.
   #   --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
@@ -212,7 +221,7 @@ models:
   # draft ctx also fails to init: "Gemma4Assistant requires ctx_other to be set").
   # So the draft is STRIPPED on all three idx0 models during the stopgap (slower
   # decode, but it actually serves). RESTORE the draft lines with the 16GB+ card.
-  "fast":
+  "small":
     name: "Gemma-4-12B dense — fast non-reasoning chat (TITAN X stopgap)"
     description: "Snappy general chat on the stopgap 12GB Titan X (idx0); dense 12B, no reasoning phase. Temporary replacement for the failed P100's 26B MoE. MTP draft disabled (crashes on Maxwell)."
     env:
@@ -227,26 +236,26 @@ models:
       --reasoning-budget 0
       ${common}
 
-  # --- fast-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
-  # FALLBACK for the old always-on `fast`. Dense 12B, ~6.3GB weights -> ~8.5GB
+  # --- small-12b: Gemma-4-12B dense (QAT UD-Q4_K_XL) on the P100 (idx0) -----
+  # FALLBACK for the old always-on `small`. Dense 12B, ~6.3GB weights -> ~8.5GB
   # with ctx, leaving ~7.5GB headroom on the 16GB P100. Slower than the MoE
   # (~29 tok/s decode, ~286 tok/s prefill @2k) but far more VRAM headroom: does
   # 128k single-user comfortably and leaves room to co-host a P100 offload job.
-  # Shares idx0 with `fast`/`fast-uncensored` (mutually exclusive). Request it to
-  # swap the MoE out; ttl unloads it so `fast` reclaims the card.
+  # Shares idx0 with `small`/`small-uncensored` (mutually exclusive). Request it to
+  # swap the MoE out; ttl unloads it so `small` reclaims the card.
   # MTP (2026-07-23): dense 12B is bandwidth-bound with very high draft acceptance
   # (~92-98%), so the separate gemma4-assistant draft head (Q8_0, 465MB) is a BIG
   # win — measured +67% decode (28.1 -> 47.0 t/s @4k steady, n_max=1). n_max=1
   # beats n=2/3 at steady-state (deeper drafts decay acceptance past ~2k). Draft
   # costs ~0.8GB (~9.8GB/16GB at 32k) so 128k headroom is unaffected. See
-  # docs/benchmarking.md "MTP on the `fast-12b` model". Always --parallel 1 (no
+  # docs/benchmarking.md "MTP on the `small-12b` model". Always --parallel 1 (no
   # overlay overrides it), so MTP applies in every mode.
   # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
   # 128k ctx OOMs on 12GB (weights 6.3GB + 128k KV > 12GB), so ctx is dropped to
   # 32768. The MTP draft (--spec-type draft-mtp) also CRASHES on the Maxwell Titan
   # X (CUDA illegal memory access in the draft sampler), so it is STRIPPED here.
   # RESTORE --ctx-size 131072 + the draft lines when a 16GB+ card returns to idx0.
-  "fast-12b":
+  "small-12b":
     name: "Gemma-4-12B dense — fast fallback (headroom)"
     description: "Dense 12B fallback on the idx0 Titan X stopgap. Shares idx0 (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
@@ -262,15 +271,15 @@ models:
       --reasoning-budget 0
       ${common}
 
-  # --- fast-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
-  # Abliterated/uncensored counterpart to `fast` (HauhauCS Balanced). ~7.4GB
-  # weights; shares the P100 (idx0) with `fast`, so the two are MUTUALLY
+  # --- small-uncensored: Gemma-4-12B QAT Uncensored (Balanced Q4_K_M) on P100 -
+  # Abliterated/uncensored counterpart to `small` (HauhauCS Balanced). ~7.4GB
+  # weights; shares the P100 (idx0) with `small`, so the two are MUTUALLY
   # EXCLUSIVE (10.9GB + 7.4GB > 16GB) — the matrix P100 slot is `(f | fu)`, so
-  # requesting this evicts `fast` and vice-versa. Reasoning ON by default (the
+  # requesting this evicts `small` and vice-versa. Reasoning ON by default (the
   # Balanced tune reasons before answering); roleplay/creative-writing focus.
   # Vision via --mmproj; MTP speculative decoding (Unsloth draft head) for ~60%
   # faster generation with identical output. Tuned sampling per the model card.
-  # ttl unloads it so `fast` reclaims the card.
+  # ttl unloads it so `small` reclaims the card.
   # TEMPORARY (2026-07-27): idx0 is the 12GB GTX Titan X stopgap (P100 died, ECC).
   # 128k ctx OOMs on 12GB, so ctx dropped to 32768. This tune also loads a BF16
   # mmproj (vision) on top of ~7.4GB Q4_K_M weights, so it is the tightest of the
@@ -278,9 +287,9 @@ models:
   # CRASHES on the Maxwell Titan X (CUDA illegal memory access in the draft
   # sampler), so it is STRIPPED here. RESTORE --ctx-size 131072 + the draft lines
   # when a 16GB+ card returns to idx0.
-  "fast-uncensored":
+  "small-uncensored":
     name: "Gemma-4-12B Uncensored — reasoning chat + vision"
-    description: "Uncensored/abliterated Gemma-4-12B on the idx0 Titan X stopgap; reasoning on, vision (mmproj). Shares idx0 with fast (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
+    description: "Uncensored/abliterated Gemma-4-12B on the idx0 Titan X stopgap; reasoning on, vision (mmproj). Shares idx0 with small (mutually exclusive). Ctx 32k, MTP draft disabled (crashes on Maxwell)."
     ttl: 600
     env:
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
@@ -299,7 +308,7 @@ models:
   # -> ~26.7GB on 32GB (SWA). f16 KV at 131k OOMs (31GB+compute buf); q8_0 halves
   # KV to reach 128k. ub2048 = best prefill (760 t/s). Evicts coding when used.
   # 2026-07-23: MTP self-spec via a separate ~490MB gemma4-assistant draft head
-  # (NotMe404/gemma-4-31b-it-assistant-mtp, Q8_0), same mechanism as fast/fast-12b.
+  # (NotMe404/gemma-4-31b-it-assistant-mtp, Q8_0), same mechanism as small/small-12b.
   # Dense 31B is bandwidth-bound so MTP wins big: steady-state decode 28.1 -> 56.5
   # t/s (+101%, accept ~100% @4k) at n_max=3, ~+1.2GB VRAM. n=3 is the robust pick
   # (best across all prompt lengths incl. short); n>=4 chases higher steady-state
@@ -379,16 +388,16 @@ routing:
     use: matrix
     settings:
       matrix:
-        # Card map: idx0(P100)=fast(MoE)|fast-12b|fast-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
-        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `fast`
-        #           and `fast-uncensored` are mutually exclusive on idx0 (they
+        # Card map: idx0(P100)=small(MoE)|small-12b|small-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
+        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `small`
+        #           and `small-uncensored` are mutually exclusive on idx0 (they
         #           evict each other); one of them coexists with all V100 activity.
         vars:
           c: coding
           h: chat
           b: big
-          f: fast
-          fu: fast-uncensored
+          f: small
+          fu: small-uncensored
           n: coder-next
           x: gemma-31b
           y: gemma-26b
@@ -399,7 +408,7 @@ routing:
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
           # any subset, e.g. just [f], or [c] alone). The P100 slot `(f | fu)`
-          # expands each set into a `fast` and a `fast-uncensored` variant, so
+          # expands each set into a `small` and a `small-uncensored` variant, so
           # exactly one P100 model coexists with V100 activity and requesting the
           # other swaps it in.
           qq: "c & h & (f | fu)"    # daily: coding(idx1) + chat(idx2) + P100 chat
@@ -410,13 +419,13 @@ routing:
           max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
           cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat
 
-# hooks: run actions on lifecycle events. Preload `fast` on startup so the P100
+# hooks: run actions on lifecycle events. Preload `small` on startup so the P100
 # (idx0) is never left empty after a llama-swap (re)start — the P100 slot is
-# `(f | fu)`, so `fast` is the always-ready default there. (This covers restarts;
-# if `fast-uncensored` is requested it evicts `fast` and, once its ttl expires,
-# the P100 stays empty until `fast` is requested again — request `fast` to
+# `(f | fu)`, so `small` is the always-ready default there. (This covers restarts;
+# if `small-uncensored` is requested it evicts `small` and, once its ttl expires,
+# the P100 stays empty until `small` is requested again — request `small` to
 # restore it. Single-model preload = no group needed.)
 hooks:
   on_startup:
     preload:
-      - "fast"
+      - "small"

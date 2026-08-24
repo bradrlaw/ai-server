@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>coding — dungeon-adventure-engine</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
+letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .v{font-size:22px;font-weight:600;margin-top:4px}
+.card .v.teal{color:var(--teal)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
+.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
+.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
+</style></head>
+<body>
+<h1>coding</h1>
+<p class="sub">Qwen3.6-27B-Q6_K.gguf &middot; dungeon-adventure-engine
+&middot; 2026-07-27T09:08:30 UTC
+&middot; <a href="../../summary.html">← all runs</a>
+&middot; <a href="output.py">output</a>
+&middot; <a href="raw.txt">raw reply</a></p>
+<div class="grid">
+<div class="card"><div class="k">Objective</div><div class="v teal">29/29</div></div>
+<div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">1251 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">664.9 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">39.5 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">364.6 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">14318</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">16491 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 78% accept</div></div>
+<div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
+</div>
+<h2>Design scores (manual, 0–5 each)</h2>
+<div class="grid">
+<div class="card"><div class="k">Architecture</div><div class="v">—</div></div>
+<div class="card"><div class="k">Code quality</div><div class="v">—</div></div>
+<div class="card"><div class="k">Completeness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Robustness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Output polish</div><div class="v">—</div></div>
+</div>
+
+<h2>Output (output.py)</h2>
+<pre>&quot;&quot;&quot;
+Text-Based Adventure Game Engine
+A production-quality, single-file implementation using only the Python standard library.
+&quot;&quot;&quot;
+
+import sys
+from typing import Dict, List, Optional, Callable, Set, Tuple
+
+
+class Item:
+    &quot;&quot;&quot;Represents an interactive object in the game world.&quot;&quot;&quot;
+
+    def __init__(self, name: str, description: str, on_use: Optional[Callable[[&quot;GameState&quot;], str]] = None) -&gt; None:
+        &quot;&quot;&quot;
+        Initialize an Item.
+
+        Args:
+            name: Unique identifier for the item.
+            description: Text displayed when the item is examined.
+            on_use: Optional callback executed when the item is used. Receives GameState and returns a message.
+        &quot;&quot;&quot;
+        self.name = name
+        self.description = description
+        self.on_use = on_use
+
+
+class Room:
+    &quot;&quot;&quot;Represents a location in the game world.&quot;&quot;&quot;
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        exits: Dict[str, str],
+        items: List[str],
+        locked_doors: Optional[Dict[str, str]] = None
+    ) -&gt; None:
+        &quot;&quot;&quot;
+        Initialize a Room.
+
+        Args:
+            name: Display name of the room.
+            description: Base description of the room.
+            exits: Dictionary mapping direction strings to target room IDs.
+            items: List of item IDs currently in the room.
+            locked_doors: Dictionary mapping direction strings to required item IDs to unlock.
+        &quot;&quot;&quot;
+        self.name = name
+        self.description = description
+        self.exits = exits
+        self.items = items
+        self.locked_doors = locked_doors or {}
+
+
+class GameState:
+    &quot;&quot;&quot;Tracks the mutable state of the game session.&quot;&quot;&quot;
+
+    def __init__(self) -&gt; None:
+        &quot;&quot;&quot;Initialize game state with empty collections and default flags.&quot;&quot;&quot;
+        self.current_room: str = &quot;&quot;
+        self.inventory: List[str] = []
+        self.visited_rooms: Set[str] = set()
+        self.flags: Dict[str, bool] = {}
+        self.history: List[str] = []
+
+
+class GameEngine:
+    &quot;&quot;&quot;Core engine that manages game flow, input parsing, routing, and state updates.&quot;&quot;&quot;
+
+    def __init__(self, rooms: Dict[str, Room], items: Dict[str, Item], start_room_id: str) -&gt; None:
+        &quot;&quot;&quot;
+        Initialize the game engine.
+
+        Args:
+            rooms: Dictionary of room ID to Room instance.
+            items: Dictionary of item ID to Item instance.
+            start_room_id: The ID of the room where the game begins.
+        &quot;&quot;&quot;
+        self.rooms = rooms
+        self.items = items
+        self.state = GameState()
+        self.state.current_room = start_room_id
+        self.state.visited_rooms.add(start_room_id)
+
+    def run(self) -&gt; None:
+        &quot;&quot;&quot;Start the main game loop.&quot;&quot;&quot;
+        print(self._get_banner())
+        self._cmd_look()
+
+        try:
+            while True:
+                user_input = input(&quot;&gt; &quot;)
+                print(&quot;-&quot; * 40)
+                self._handle_command(user_input)
+
+                if self.state.flags.get(&quot;won&quot;):
+                    print(&quot;\n🎉 GAME COMPLETE! Thank you for playing.&quot;)
+                    break
+        except (EOFError, KeyboardInterrupt):
+            print(&quot;\n\nGoodbye! Thanks for playing.&quot;)
+            sys.exit(0)
+
+    def _get_banner(self) -&gt; str:
+        &quot;&quot;&quot;Return the ASCII art banner for the game.&quot;&quot;&quot;
+        return (
+            &quot;\n╔════════════════════════════════════════╗\n&quot;
+            &quot;║         DUNGEON OF WHISPERS            ║\n&quot;
+            &quot;║          A Text Adventure              ║\n&quot;
+            &quot;╚════════════════════════════════════════╝\n&quot;
+        )
+
+    def _log_event(self, message: str) -&gt; None:
+        &quot;&quot;&quot;Append an event to the game history, keeping only the last 10.&quot;&quot;&quot;
+        self.state.history.append(message)
+        if len(self.state.history) &gt; 10:
+            self.state.history.pop(0)
+
+    def _find_item_by_name(self, name: str, in_room: bool) -&gt; Optional[Item]:
+        &quot;&quot;&quot;
+        Find an item by name using exact or partial matching.
+
+        Args:
+            name: The name or partial name of the item.
+            in_room: If True, search room items; otherwise search inventory.
+
+        Returns:
+            The matching Item instance, or None if not found.
+        &quot;&quot;&quot;
+        ids = self.rooms[self.state.current_room].items if in_room else self.state.inventory
+
+        # Exact match first
+        if name in ids:
+            return self.items[name]
+
+        # Partial match (prefix/suffix)
+        for iid in ids:
+            if iid.startswith(name) or name.startswith(iid):
+                return self.items[iid]
+        return None
+
+    def _handle_command(self, raw: str) -&gt; None:
+        &quot;&quot;&quot;Parse raw input, resolve synonyms/partial matches, and route to handlers.&quot;&quot;&quot;
+        tokens = raw.strip().lower().split()
+        if not tokens:
+            return
+
+        cmd = tokens[0]
+        args = tokens[1:]
+
+        # Apply synonyms
+        if cmd == &quot;examine&quot;:
+            cmd = &quot;look at&quot;
+            args = tokens[1:]
+        elif cmd == &quot;grab&quot;:
+            cmd = &quot;take&quot;
+            args = tokens[1:]
+        elif cmd == &quot;i&quot;:
+            cmd = &quot;inventory&quot;
+        elif cmd == &quot;move&quot;:
+            cmd = &quot;go&quot;
+            args = tokens[1:]
+
+        # Direction shortcuts &amp; normalization
+        dir_map = {&quot;n&quot;: &quot;north&quot;, &quot;s&quot;: &quot;south&quot;, &quot;e&quot;: &quot;east&quot;, &quot;w&quot;: &quot;west&quot;}
+        if cmd in dir_map:
+            cmd = &quot;go&quot;
+            args = [dir_map[cmd]] if not args else [dir_map.get(args[0], args[0])]
+        elif cmd == &quot;go&quot; and args:
+            args[0] = dir_map.get(args[0], args[0])
+
+        # Handle &quot;look at&quot; explicitly
+        if cmd == &quot;look&quot; and args and args[0] == &quot;at&quot;:
+            cmd = &quot;look at&quot;
+            args = args[1:]
+
+        # Resolve partial command matches
+        base_cmds = [&quot;look&quot;, &quot;go&quot;, &quot;take&quot;, &quot;drop&quot;, &quot;inventory&quot;, &quot;use&quot;, &quot;help&quot;, &quot;history&quot;, &quot;quit&quot;]
+        resolved = cmd
+        for bc in base_cmds:
+            if cmd == bc or cmd.startswith(bc) or bc.startswith(cmd):
+                resolved = bc
+                break
+
+        # Dispatch to appropriate handler
+        if resolved == &quot;look at&quot; and args:
+            self._cmd_look_at(args)
+        elif resolved == &quot;look&quot;:
+            self._cmd_look()
+        elif resolved == &quot;go&quot;:
+            self._cmd_go(args[0] if args else None)
+        elif resolved == &quot;take&quot; and args:
+            self._cmd_take(args)
+        elif resolved == &quot;drop&quot; and args:
+            self._cmd_drop(args)
+        elif resolved == &quot;inventory&quot;:
+            self._cmd_inventory()
+        elif resolved == &quot;use&quot; and args:
+            self._cmd_use(args)
+        elif resolved == &quot;help&quot;:
+            self._cmd_help()
+        elif resolved == &quot;history&quot;:
+            self._cmd_history()
+        elif resolved == &quot;quit&quot;:
+            self._cmd_quit()
+        else:
+            print(&quot;Unknown command. Type &#x27;help&#x27; for available commands.&quot;)
+
+    def _cmd_look(self) -&gt; None:
+        &quot;&quot;&quot;Display the current room description and visible items.&quot;&quot;&quot;
+        room = self.rooms[self.state.current_room]
+        desc = room.description
+
+        # Dynamic description updates
+        if self.state.current_room == &quot;armory&quot; and &quot;torch&quot; in self.state.inventory:
+            desc += &quot; The torch flickers, casting long shadows across the weapons.&quot;
+        if self.state.current_room == &quot;library&quot; and self.state.flags.get(&quot;lever_pulled&quot;):
+            desc += &quot; The dusty bookshelf has been moved, revealing a secret passage to the west.&quot;
+
+        print(f&quot;\n{room.name}&quot;)
+        print(desc)
+
+        if room.items:
+            item_names = [self.items[iid].name for iid in room.items]
+            print(f&quot;You see: {&#x27;, &#x27;.join(item_names)}&quot;)
+
+        self._log_event(f&quot;Looked around {room.name}&quot;)
+
+    def _cmd_look_at(self, args: List[str]) -&gt; None:
+        &quot;&quot;&quot;Display the description of a specific item.&quot;&quot;&quot;
+        target_name = &quot; &quot;.join(args)
+        item = self._find_item_by_name(target_name, in_room=True) or self._find_item_by_name(target_name, in_room=False)
+
+        if item:
+            print(f&quot;{item.name}: {item.description}&quot;)
+            self._log_event(f&quot;Examined {item.name}&quot;)
+        else:
+            print(f&quot;You don&#x27;t see a &#x27;{target_name}&#x27; here.&quot;)
+
+    def _cmd_go(self, direction: Optional[str]) -&gt; None:
+        &quot;&quot;&quot;Move the player to an adjacent room, handling locks and auto-use.&quot;&quot;&quot;
+        if not direction:
+            print(&quot;Where do you want to go?&quot;)
+            return
+
+        room = self.rooms[self.state.current_room]
+
+        if direction not in room.exits:
+            print(&quot;You can&#x27;t go that way.&quot;)
+            return
+
+        # Check for locked doors
+        if direction in room.locked_doors:
+            req_item_id = room.locked_doors[direction]
+            if req_item_id in self.state.inventory:
+                req_item_name = self.items[req_item_id].name
+                if req_item_id == &quot;rusted key&quot;:
+                    print(f&quot;You use the {req_item_name} to unlock the door.&quot;)
+                    self._log_event(f&quot;Unlocked {direction} door with {req_item_name}&quot;)
+                # Remove lock permanently
+                del room.locked_doors[direction]
+            else:
+                print(f&quot;The door to the {direction} is locked. You need a {self.items[req_item_id].name}.&quot;)
+                return
+
+        # Execute movement
+        target_id = room.exits[direction]
+        self.state.current_room = target_id
+        self.state.visited_rooms.add(target_id)
+        self._cmd_look()
+        self._log_event(f&quot;Moved {direction} to {self.rooms[target_id].name}&quot;)
+
+    def _cmd_take(self, args: List[str]) -&gt; None:
+        &quot;&quot;&quot;Pick up an item from the current room.&quot;&quot;&quot;
+        target_name = &quot; &quot;.join(args)
+        item = self._find_item_by_name(target_name, in_room=True)
+
+        if not item:
+            print(f&quot;You don&#x27;t see a &#x27;{target_name}&#x27; here.&quot;)
+            return
+
+        if item.name in self.state.inventory:
+            print(f&quot;You already have the {item.name}.&quot;)
+            return
+
+        room = self.rooms[self.state.current_room]
+        room.items.remove(item.name)
+        self.state.inventory.append(item.name)
+
+        # Special behavior for torch
+        if item.name == &quot;torch&quot;:
+            self.rooms[&quot;armory&quot;].description += &quot; The torch flickers, casting long shadows.&quot;
+            print(&quot;You pick up the torch. Its flame illuminates the dark corners.&quot;)
+        else:
+            print(f&quot;Taken: {item.name}&quot;)
+
+        self._log_event(f&quot;Took {item.name}&quot;)
+
+    def _cmd_drop(self, args: List[str]) -&gt; None:
+        &quot;&quot;&quot;Drop an item from inventory into the current room.&quot;&quot;&quot;
+        target_name = &quot; &quot;.join(args)
+        item = self._find_item_by_name(target_name, in_room=False)
+
+        if not item:
+            print(f&quot;You aren&#x27;t carrying a &#x27;{target_name}&#x27;.&quot;)
+            return
+
+        self.state.inventory.remove(item.name)
+        self.rooms[self.state.current_room].items.append(item.name)
+        print(f&quot;Dropped: {item.name}&quot;)
+        self._log_event(f&quot;Dropped {item.name}&quot;)
+
+    def _cmd_inventory(self) -&gt; None:
+        &quot;&quot;&quot;List all items currently in the player&#x27;s inventory.&quot;&quot;&quot;
+        if not self.state.inventory:
+            print(&quot;Your inventory is empty.&quot;)
+        else:
+            item_names = [self.items[iid].name for iid in self.state.inventory]
+            print(f&quot;Inventory: {&#x27;, &#x27;.join(item_names)}&quot;)
+        self._log_event(&quot;Checked inventory&quot;)
+
+    def _cmd_use(self, args: List[str]) -&gt; None:
+        &quot;&quot;&quot;Activate an item&#x27;s special effect.&quot;&quot;&quot;
+        target_name = &quot; &quot;.join(args)
+        item = self._find_item_by_name(target_name, in_room=False)
+
+        if not item:
+            print(f&quot;You aren&#x27;t carrying a &#x27;{target_name}&#x27;.&quot;)
+            return
+
+        if item.on_use:
+            result_msg = item.on_use(self.state)
+            print(result_msg)
+            self._log_event(f&quot;Used {item.name}&quot;)
+        else:
+            print(f&quot;You can&#x27;t use the {item.name} here.&quot;)
+
+    def _cmd_help(self) -&gt; None:
+        &quot;&quot;&quot;Print available commands and usage instructions.&quot;&quot;&quot;
+        print(&quot;&quot;&quot;
+Available Commands:
+  look              - Describe the current room and visible items
+  look at &lt;item&gt;    - Examine a specific item
+  go &lt;direction&gt;    - Move north, south, east, or west (aliases: n, s, e, w, move)
+  take &lt;item&gt;       - Pick up an item (alias: grab)
+  drop &lt;item&gt;       - Leave an item in the room
+  inventory / i     - List carried items
+  use &lt;item&gt;        - Activate an item&#x27;s effect
+  history           - Show the last 10 events
+  help              - Show this message
+  quit              - Exit the game
+&quot;&quot;&quot;)
+        self._log_event(&quot;Viewed help&quot;)
+
+    def _cmd_history(self) -&gt; None:
+        &quot;&quot;&quot;Print the last 10 logged events.&quot;&quot;&quot;
+        if not self.state.history:
+            print(&quot;No events recorded yet.&quot;)
+        else:
+            print(&quot;Recent History:&quot;)
+            for i, event in enumerate(self.state.history, 1):
+                print(f&quot;  {i}. {event}&quot;)
+        self._log_event(&quot;Viewed history&quot;)
+
+    def _cmd_quit(self) -&gt; None:
+        &quot;&quot;&quot;Gracefully exit the game.&quot;&quot;&quot;
+        print(&quot;\nThank you for playing. Goodbye!&quot;)
+        sys.exit(0)
+
+
+def create_world() -&gt; Tuple[Dict[str, Room], Dict[str, Item]]:
+    &quot;&quot;&quot;Build and return the initial game world with rooms and items.&quot;&quot;&quot;
+
+    # Define item callbacks
+    def lever_callback(state: GameState) -&gt; str:
+        state.flags[&quot;lever_pulled&quot;] = True
+        return &quot;You pull the lever. With a heavy grinding sound, the bookshelf slides aside, revealing a secret passage to the west.&quot;
+
+    def scroll_callback(state: GameState) -&gt; str:
+        state.flags[&quot;won&quot;] = True
+        return &quot;The ancient runes glow with brilliant light! The secrets of the dungeon are revealed to you. You have found the secret ending!&quot;
+
+    # Create items
+    items: Dict[str, Item] = {
+        &quot;rusted key&quot;: Item(&quot;rusted key&quot;, &quot;A heavy, iron key covered in rust. It looks old but sturdy.&quot;),
+        &quot;lever&quot;: Item(&quot;lever&quot;, &quot;A rusted iron lever protruding from the wall. It looks like it hasn&#x27;t been touched in centuries.&quot;, on_use=lever_callback),
+        &quot;torch&quot;: Item(&quot;torch&quot;, &quot;A wooden stick wrapped in cloth, ready to be lit.&quot;),
+        &quot;golden coin&quot;: Item(&quot;golden coin&quot;, &quot;A gleaming coin stamped with an ancient crest. It probably buys you a very small sandwich in the modern economy.&quot;),
+        &quot;ancient scroll&quot;: Item(&quot;ancient scroll&quot;, &quot;A fragile parchment inscribed with glowing runes. It hums with latent power.&quot;, on_use=scroll_callback),
+    }
+
+    # Create rooms
+    rooms: Dict[str, Room] = {
+        &quot;entrance&quot;: Room(
+            &quot;Entrance Hall&quot;,
+            &quot;You stand in a dimly lit entrance hall. Stone walls surround you, and the air smells of damp earth.&quot;,
+            {&quot;north&quot;: &quot;library&quot;, &quot;east&quot;: &quot;armory&quot;, &quot;south&quot;: &quot;garden&quot;},
+            [&quot;rusted key&quot;]
+        ),
+        &quot;library&quot;: Room(
+            &quot;Library&quot;,
+            &quot;Rows of ancient books line the walls. A massive dusty bookshelf blocks the way south. To the west, a dark passage is hidden behind it.&quot;,
+            {&quot;south&quot;: &quot;entrance&quot;, &quot;west&quot;: &quot;secret_chamber&quot;},
+            [&quot;lever&quot;],
+            locked_doors={&quot;west&quot;: &quot;lever&quot;}
+        ),
+        &quot;armory&quot;: Room(
+            &quot;Armory&quot;,
+            &quot;Racks of forgotten weapons line the walls. A heavy iron door stands to the north.&quot;,
+            {&quot;west&quot;: &quot;entrance&quot;, &quot;north&quot;: &quot;treasure_room&quot;},
+            [&quot;torch&quot;],
+            locked_doors={&quot;north&quot;: &quot;rusted key&quot;}
+        ),
+        &quot;treasure_room&quot;: Room(
+            &quot;Treasure Room&quot;,
+            &quot;A small vault lined with gold and jewels. An inscription on the wall reads: &#x27;Wealth is fleeting, but knowledge endures.&#x27;&quot;,
+            {&quot;south&quot;: &quot;armory&quot;},
+            [&quot;golden coin&quot;]
+        ),
+        &quot;secret_chamber&quot;: Room(
+            &quot;Secret Chamber&quot;,
+            &quot;A hidden alcove filled with dust and forgotten artifacts. A pedestal stands in the center.&quot;,
+            {&quot;east&quot;: &quot;library&quot;},
+            [&quot;ancient scroll&quot;]
+        ),
+        &quot;garden&quot;: Room(
+            &quot;Garden&quot;,
+            &quot;A peaceful clearing bathed in soft sunlight. Birds chirp melodiously. You&#x27;ve found peace.&quot;,
+            {&quot;north&quot;: &quot;entrance&quot;},
+            []
+        ),
+    }
+
+    return rooms, items
+
+
+def main() -&gt; None:
+    &quot;&quot;&quot;Instantiate the world and run the game engine.&quot;&quot;&quot;
+    rooms, items = create_world()
+    engine = GameEngine(rooms, items, start_room_id=&quot;entrance&quot;)
+    engine.run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+
+<h2>llama.cpp load command</h2>
+<pre>/srv/ai/src/llama.cpp/build/bin/llama-server
+--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf
+--ctx-size 184320
+--cache-type-k q8_0 --cache-type-v q8_0
+--parallel 1
+--batch-size 2048 --ubatch-size 2048
+--spec-type draft-mtp --spec-draft-n-max 3
+--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics</pre>
+<h2>Sampler / request</h2>
+<pre>{
+  &quot;temperature&quot;: 0.7,
+  &quot;top_p&quot;: 0.95,
+  &quot;top_k&quot;: 20,
+  &quot;max_tokens&quot;: 32000
+}</pre>
+<h2>meta.json</h2>
+<pre>{
+  &quot;test&quot;: &quot;dungeon-adventure-engine&quot;,
+  &quot;model_slot&quot;: &quot;coding&quot;,
+  &quot;label&quot;: &quot;coding&quot;,
+  &quot;model_name&quot;: &quot;Qwen3.6-27B-Q6_K.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf&quot;,
+  &quot;endpoint&quot;: &quot;http://127.0.0.1:9090/v1/chat/completions&quot;,
+  &quot;proxy&quot;: &quot;http://localhost:10005&quot;,
+  &quot;sampler&quot;: {
+    &quot;temperature&quot;: 0.7,
+    &quot;top_p&quot;: 0.95,
+    &quot;top_k&quot;: 20,
+    &quot;max_tokens&quot;: 32000
+  },
+  &quot;load_command&quot;: &quot;/srv/ai/src/llama.cpp/build/bin/llama-server\n--model /srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf\n--ctx-size 184320\n--cache-type-k q8_0 --cache-type-v q8_0\n--parallel 1\n--batch-size 2048 --ubatch-size 2048\n--spec-type draft-mtp --spec-draft-n-max 3\n--host 127.0.0.1 --port 10005 --n-gpu-layers 999 --flash-attn on --cont-batching --jinja --metrics&quot;,
+  &quot;usage&quot;: {
+    &quot;completion_tokens&quot;: 14318,
+    &quot;prompt_tokens&quot;: 832,
+    &quot;total_tokens&quot;: 15150,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    }
+  },
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;performance&quot;: {
+    &quot;wall_secs&quot;: 364.6,
+    &quot;ttft_ms&quot;: 1251.326,
+    &quot;prefill_tps&quot;: 664.894679723749,
+    &quot;decode_tps&quot;: 39.45458117053839,
+    &quot;prompt_tokens&quot;: 832,
+    &quot;predicted_tokens&quot;: 14318,
+    &quot;prefill_ms&quot;: 1251.326,
+    &quot;decode_ms&quot;: 362898.289
+  },
+  &quot;mtp&quot;: {
+    &quot;draft_n&quot;: 12855,
+    &quot;draft_n_accepted&quot;: 10032,
+    &quot;accept_rate&quot;: 0.78,
+    &quot;enabled&quot;: true
+  },
+  &quot;server_timings&quot;: {
+    &quot;cache_n&quot;: 0,
+    &quot;prompt_n&quot;: 832,
+    &quot;prompt_ms&quot;: 1251.326,
+    &quot;prompt_per_token_ms&quot;: 1.503997596153846,
+    &quot;prompt_per_second&quot;: 664.894679723749,
+    &quot;predicted_n&quot;: 14318,
+    &quot;predicted_ms&quot;: 362898.289,
+    &quot;predicted_per_token_ms&quot;: 25.34559917586255,
+    &quot;predicted_per_second&quot;: 39.45458117053839,
+    &quot;draft_n&quot;: 12855,
+    &quot;draft_n_accepted&quot;: 10032
+  },
+  &quot;extraction&quot;: {
+    &quot;extracted&quot;: true,
+    &quot;kind&quot;: &quot;fenced&quot;
+  },
+  &quot;output_file&quot;: &quot;output.py&quot;,
+  &quot;output_bytes&quot;: 16491,
+  &quot;reasoning_bytes&quot;: 39915,
+  &quot;wall_secs&quot;: 364.6,
+  &quot;created_utc&quot;: &quot;2026-07-27T09:08:30+00:00&quot;
+}</pre>
+</body></html>

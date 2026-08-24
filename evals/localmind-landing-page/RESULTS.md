@@ -12,7 +12,10 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 27/27 | 128.0 | 1256 ms | 14167 | 38855 B | on 94% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 27/27 | 79.3 | 2035 ms | 7318 | 26903 B | on 84% | stop |
 | `thinkingcap` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 27/27 | 45.7 | 1320 ms | 11266 | 31703 B | on 93% | stop |
+| `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 27/27 | 45.6 | 1366 ms | 13318 | 36222 B | on 93% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 27/27 | 44.4 | 1261 ms | 12746 | 35269 B | on 92% | stop |
+| `coding` | Qwen3.8-27B-Q6_K.gguf | 27/27 | 43.8 | 1282 ms | 13132 | 35781 B | on 91% | stop |
+| `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 43.5 | 1528 ms | 12743 | 34849 B | on 93% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 27/27 | 42.8 | 1475 ms | 11312 | 32613 B | on 92% | stop |
 | `fast-uncensored` | Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf | 27/27 | 30.9 | 3219 ms | 7821 | 24438 B | on 77% | stop |
 | `gemma-31b` | gemma-4-31B-it-qat-UD-Q4_K_XL.gguf | 27/27 | 28.2 | 1465 ms | 8925 | 29927 B | on 32% | stop |
@@ -25,7 +28,10 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `thinkingcap` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `coding` | · | · | · | · | · | — |  |
+| `big-q8` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `fast-uncensored` | · | · | · | · | · | — |  |
 | `gemma-31b` | · | · | · | · | · | — |  |
@@ -33,4 +39,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-07-27T11:06:50+00:00._
+_Last generated 2026-08-16T04:36:37+00:00._

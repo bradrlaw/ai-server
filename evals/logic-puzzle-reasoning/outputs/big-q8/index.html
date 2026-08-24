@@ -1,0 +1,129 @@
+# Logic Puzzle Solution
+
+## Step 1: List What We Know for Certain
+
+From the clues, I can immediately establish:
+
+| Fact | Source |
+|------|--------|
+| Ada → NeurIPS, Computer Vision | Clue 1 |
+| NLP paper → June | Clue 2 |
+| Ben ∉ {ACL, EMNLP}; Ben's subfield ∉ {Theory, Robotics} | Clue 3 |
+| month(Clara) < month(Dana) | Clue 4 |
+| Robotics paper → ICLR | Clue 5 |
+| Eli → January or October | Clue 6 |
+| Theory paper → ACL | Clue 7 |
+| Ben → August | Clue 8 |
+| EMNLP ≠ January | Clue 9 |
+| Dana ≠ Computer Vision | Clue 10 |
+| Clara → NLP | Clue 11 |
+| ICML → March | Clue 12 |
+
+## Step 2: Pin Down Clara's Conference
+
+Clara's paper is NLP (Clue 11), and the NLP paper was presented in June (Clue 2). Therefore **Clara's conference is in June**.
+
+Now I check which conference Clara could be at (all must be in June, and ICML is in March so it's excluded):
+
+- **ACL?** → The Theory paper is at ACL (Clue 7). Clara is NLP, not Theory. ✗
+- **NeurIPS?** → Ada is at NeurIPS (Clue 1). In a standard one-to-one assignment, Clara can't also be there. ✗
+- **ICLR?** → The Robotics paper is at ICLR (Clue 5). Clara is NLP, not Robotics. ✗
+- **EMNLP?** → No conflict. ✓
+
+**Conclusion: Clara → EMNLP, June, NLP.**
+
+## Step 3: Assign Months to Remaining Conferences
+
+We now have:
+- ICML → **March**
+- EMNLP → **June**
+- Remaining conferences {ACL, NeurIPS, ICLR} → remaining months {January, August, October}
+
+Ben's conference is in **August** (Clue 8), and Ben ∉ {ACL, EMNLP} (Clue 3). Since EMNLP is already in June, the binding constraint is Ben ∉ ACL.
+
+So the **August conference is NeurIPS or ICLR**.
+
+## Step 4: The Critical Branch
+
+**Branch A: August = NeurIPS**
+Then Ada (who is at NeurIPS) is in August. But Ben is also in August. Since each conference hosts exactly one paper/researcher in the standard reading, Ada and Ben cannot both be at NeurIPS. **Contradiction.** ✗
+
+**Branch B: August = ICLR**
+Then Ben is at ICLR. But the Robotics paper is at ICLR (Clue 5), so Ben's subfield would be Robotics. Clue 3 explicitly forbids this. **Contradiction.** ✗
+
+### ⚠️ Note on the contradiction
+
+Under a strict one-to-one (bijection) mapping of 5 researchers ↔ 5 conferences, the puzzle is **over-constrained and contradictory**: the only two candidates for Ben's August conference (NeurIPS, ICLR) are each eliminated by a different clue. The problem statement says each researcher "published exactly one paper at one of five conferences," which technically permits two researchers to present at the same conference. I will proceed under that (slightly relaxed) reading to produce a complete, consistent assignment.
+
+## Step 5: Resolve Using the Relaxed Reading
+
+Since the strict bijection fails, I allow two researchers to share a conference (each still has a distinct subfield). The August conference is **NeurIPS** (Branch A is recoverable now because Ada and Ben can both present at NeurIPS with different subfields).
+
+- **NeurIPS → August** (Ada and Ben present there)
+- Remaining: ACL and ICLR → {January, October}
+
+**Clue 9:** EMNLP ≠ January. EMNLP is in June, so this is automatically satisfied. ✓
+
+**Eli → January or October** (Clue 6). Eli must be at a conference in January or October, i.e., at **ACL or ICLR**.
+
+**Subfield–conference links** (each links a specific researcher to a specific conference):
+- Theory researcher → ACL
+- Robotics researcher → ICLR
+- NLP researcher (Clara) → EMNLP (June) ✓
+- CV researcher (Ada) → NeurIPS ✓
+
+The remaining subfield is **Reinforcement Learning**, which goes to whoever is left.
+
+## Step 6: Assign ACL and ICLR to January/October
+
+**Sub-case 1: ACL → January, ICLR → October**
+
+- Eli → January or October → Eli at ACL (January) or ICLR (October).
+- Theory → ACL → January. The Theory researcher must be at ACL in January.
+- Robotics → ICLR → October. The Robotics researcher must be at ICLR in October.
+
+Theory and Robotics must be assigned to {Dana, Eli} (not Ada=CV, not Clara=NLP, and Ben≠Theory/Robotics per Clue 3).
+
+- If **Eli → Theory → ACL → January**: ✓ (satisfies Clue 6). Then **Dana → Robotics → ICLR → October**.
+- If Dana → Theory → ACL → January: month(Clara)=June < month(Dana)=January? No, January is before June. ✗
+
+So: **Eli → ACL, January, Theory** and **Dana → ICLR, October, Robotics**.
+
+Ben's remaining subfield: not CV (Ada), not NLP (Clara), not Theory (Eli), not Robotics (Dana) → **Ben → Reinforcement Learning**.
+
+**Check Clue 4:** month(Clara) = June < month(Dana) = October. ✓
+
+## Step 7: Final Assignment
+
+| Researcher | Conference | Month | Subfield |
+|:----------:|:----------:|:-----:|:--------:|
+| **Ada** | NeurIPS | August | Computer Vision |
+| **Ben** | NeurIPS | August | Reinforcement Learning |
+| **Clara** | EMNLP | June | NLP |
+| **Dana** | ICLR | October | Robotics |
+| **Eli** | ACL | January | Theory |
+
+*(ICML → March has no assigned presenter; the puzzle's constraints do not require every conference to be used by a named researcher.)*
+
+## Step 8: Full Verification Against Every Clue
+
+| # | Clue | Check |
+|---|------|-------|
+| 1 | Ada at NeurIPS, Computer Vision | Ada → NeurIPS, CV ✓ |
+| 2 | NLP paper in June | Clara (NLP) at EMNLP in June ✓ |
+| 3 | Ben not at ACL/EMNLP; not Theory/Robotics | Ben at NeurIPS; Ben is RL ✓ |
+| 4 | Clara's month before Dana's month | June < October ✓ |
+| 5 | Robotics at ICLR | Dana (Robotics) at ICLR ✓ |
+| 6 | Eli in January or October | Eli in January ✓ |
+| 7 | Theory at ACL | Eli (Theory) at ACL ✓ |
+| 8 | Ben's conference in August | NeurIPS in August ✓ |
+| 9 | EMNLP not in January | EMNLP in June ✓ |
+| 10 | Dana not Computer Vision | Dana is Robotics ✓ |
+| 11 | Clara's paper on NLP | Clara → NLP ✓ |
+| 12 | ICML in March | ICML → March ✓ |
+
+**All 12 clues are satisfied.**
+
+## Step 9: Uniqueness Note
+
+Under the strict bijection (one researcher per conference), the puzzle is **contradictory** (shown in Steps 4–5). Under the relaxed reading (two researchers may share a conference), the solution above works. There is a small family of alternative valid assignments (e.g., swapping ACL/ICLR months changes who gets January vs. October), but the assignment above is the most natural: it places Eli in January (the earliest option), keeps the month ordering clean (Jan → Jun → Aug → Oct), and satisfies every clue without further ambiguity. If the puzzle author intended a strict bijection, one of the clues (most likely Clue 5 or Clue 3) would need a minor revision to eliminate the contradiction.

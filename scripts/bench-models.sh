@@ -11,7 +11,7 @@
 # device indices below match nvidia-smi.
 #
 # Usage:
-#   scripts/bench-models.sh                       # bench the daily set (coding chat fast)
+#   scripts/bench-models.sh                       # bench the daily set (coding chat small)
 #   scripts/bench-models.sh coding chat           # bench specific models by name
 #   scripts/bench-models.sh --all                 # bench every model in the config
 #   scripts/bench-models.sh --list                # list available model names + pinning
@@ -36,7 +36,7 @@ CONFIG="${LLAMA_SWAP_CONFIG:-/srv/ai/config/llama-swap.yaml}"
 BIN="${LLAMA_BENCH_BIN:-/srv/ai/src/llama.cpp/build/bin/llama-bench}"
 LLAMASWAP_URL="${LLAMASWAP_URL:-http://127.0.0.1:9090}"
 MODELS_ROOT="${MODELS_ROOT:-/srv/ai/models}"
-DAILY=(coding chat fast)
+DAILY=(coding chat small)
 
 PROMPT=512
 NGEN=128

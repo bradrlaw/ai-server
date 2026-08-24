@@ -143,6 +143,10 @@ def main():
     ap.add_argument("--temp", type=float, default=0.7)
     ap.add_argument("--top-p", type=float, default=0.95)
     ap.add_argument("--top-k", type=int, default=20)
+    ap.add_argument("--min-p", type=float, default=None,
+                    help="min_p sampler (unsloth Qwen3.8 thinking mode: 0.0)")
+    ap.add_argument("--presence-penalty", type=float, default=None,
+                    help="presence_penalty (unsloth suggests 0-2 to curb endless repetition)")
     ap.add_argument("--max-tokens", type=int, default=32000)
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--system", default=None, help="optional system prompt")
@@ -173,6 +177,10 @@ def main():
                # Force a full cold prefill so TTFT / prefill-tps are real and
                # comparable across runs (don't reuse a warm KV cache from a prior run).
                "cache_prompt": False}
+    if args.min_p is not None:
+        payload["min_p"] = args.min_p
+    if args.presence_penalty is not None:
+        payload["presence_penalty"] = args.presence_penalty
 
     print(f"→ {args.model} @ {args.endpoint} (temp={args.temp}, max_tokens={args.max_tokens})",
           flush=True)
@@ -214,7 +222,8 @@ def main():
         "model_name": model_name, "model_path": model_path,
         "endpoint": args.endpoint, "proxy": proxy,
         "sampler": {"temperature": args.temp, "top_p": args.top_p,
-                    "top_k": args.top_k, "max_tokens": args.max_tokens},
+                    "top_k": args.top_k, "max_tokens": args.max_tokens,
+                    "min_p": args.min_p, "presence_penalty": args.presence_penalty},
         "load_command": load_cmd,
         "usage": usage, "finish_reason": finish,
         "performance": perf, "mtp": mtp,

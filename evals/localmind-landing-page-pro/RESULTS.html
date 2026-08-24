@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>localmind-landing-page-pro — results scoreboard</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px}
+h1{font-size:26px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 24px}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:10px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+th{background:var(--surface);color:var(--muted);font-weight:600;font-size:12px;
+text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+td.l,th.l{text-align:left}tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(124,92,252,.06)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.model{font-weight:600}.name{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;
+border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}
+.mtp-off{color:var(--muted)}.score{color:var(--teal);font-weight:600}
+.trunc{color:#f87171}.foot{color:var(--muted);font-size:12px;margin-top:18px}
+
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.navcur{color:var(--fg);font-weight:600}</style></head>
+<body>
+<h1>localmind-landing-page-pro — results scoreboard</h1>
+<p class="sub"><a href="summary.html">scoreboard</a> &middot; <span class="navcur">results</span><br>
+Objective = automated <code>check.py</code>. Design = manual 0–5 axes from each
+run's <code>scores.json</code> (subtotal /25; “—” = unscored).</p>
+
+<h2>Objective + performance (automated)</h2>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model</th><th class="l">Weights</th><th>Objective</th>
+    <th>Decode t/s</th><th>TTFT</th><th>Compl. tok</th><th>Output</th><th>MTP</th><th>Finish</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="l"><span class="model">chat</span></td>
+      <td class="l"><span class="name">Qwen3.6-35B-A3B-UD-Q6_K.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>129.8</td>
+      <td>1551.7 ms</td>
+      <td>15570</td>
+      <td>45898 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">90%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">chat-uncensored-q6</span></td>
+      <td class="l"><span class="name">Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>125.3</td>
+      <td>1593.6 ms</td>
+      <td>19380</td>
+      <td>54952 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">93%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">fast</span></td>
+      <td class="l"><span class="name">gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>77.4</td>
+      <td>2985.7 ms</td>
+      <td>13139</td>
+      <td>43321 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">83%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big</span></td>
+      <td class="l"><span class="name">Qwen3.8-27B-UD-Q6_K_XL.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>44.5</td>
+      <td>1714.0 ms</td>
+      <td>19265</td>
+      <td>54311 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">thinkingcap-27b</span></td>
+      <td class="l"><span class="name">ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>43.1</td>
+      <td>1706.9 ms</td>
+      <td>14927</td>
+      <td>44504 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">87%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big-q8</span></td>
+      <td class="l"><span class="name">Qwen3.8-27B-UD-Q8_K_XL.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>42.1</td>
+      <td>1919.0 ms</td>
+      <td>19711</td>
+      <td>55928 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">90%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big</span></td>
+      <td class="l"><span class="name">Qwen3.6-27B-UD-Q6_K_XL.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>41.9</td>
+      <td>1823.5 ms</td>
+      <td>14469</td>
+      <td>43646 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">90%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">coding</span></td>
+      <td class="l"><span class="name">Qwen3.6-27B-Q6_K.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>41.5</td>
+      <td>1727.7 ms</td>
+      <td>18221</td>
+      <td>51195 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">85%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">coding</span></td>
+      <td class="l"><span class="name">Qwen3.8-27B-Q6_K.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>39.9</td>
+      <td>1666.1 ms</td>
+      <td>19104</td>
+      <td>52361 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">81%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">fast-uncensored</span></td>
+      <td class="l"><span class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>29.2</td>
+      <td>4491.0 ms</td>
+      <td>12433</td>
+      <td>33939 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">76%</span></td>
+      <td>stop</td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">gemma-31b</span></td>
+      <td class="l"><span class="name">gemma-4-31B-it-qat-UD-Q4_K_XL.gguf</span></td>
+      <td><span class="score">41/41</span></td>
+      <td>27.3</td>
+      <td>1862.5 ms</td>
+      <td>13161</td>
+      <td>42929 B</td>
+      <td><span class="pill mtp-on">on</span> <span class="name">32%</span></td>
+      <td>stop</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<h2>Design quality (manual, 0–5 each; subtotal /25)</h2>
+<div class="wrap"><table>
+  <thead><tr>
+    <th class="l">Model</th><th>Visual polish</th><th>Responsiveness</th><th>Interaction</th><th>Hero visual</th><th>Code quality</th><th>Design</th><th class="l">Notes</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="l"><span class="model">chat</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">chat-uncensored-q6</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">fast</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">thinkingcap-27b</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big-q8</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">big</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">coding</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">coding</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">fast-uncensored</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td class="l"><span class="model">gemma-31b</span></td>
+      <td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td><td><span class="name">·</span></td>
+      <td><span class="name">—</span></td>
+      <td class="l"><span class="name"></span></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p class="foot">Generated 2026-08-16T04:36:37+00:00 by scripts/eval-summary.py.
+<code>·</code> = not yet scored. Edit each run's <code>scores.json</code> and rerun to refresh.</p>
+</body></html>

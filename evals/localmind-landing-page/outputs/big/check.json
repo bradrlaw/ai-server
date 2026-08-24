@@ -3,7 +3,7 @@
   "score": 27,
   "max": 27,
   "pct": 100.0,
-  "bytes": 32613,
+  "bytes": 36222,
   "checks": {
     "doctype": {
       "pass": true,

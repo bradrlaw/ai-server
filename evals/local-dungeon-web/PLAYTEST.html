@@ -38,16 +38,30 @@ affecting that score.</p>
 <div class="wrap"><table>
   <thead><tr><th class="l">Model</th><th>Fixture (no take)</th><th>Take-first workaround</th><th>JS errors</th></tr></thead>
   <tbody>
+    <tr><td class="l"><span class="model">big</span></td><td><span class="no">✗</span></td><td><span class="no">✗</span></td><td>0</td></tr>
     <tr><td class="l"><span class="model">chat</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
     <tr><td class="l"><span class="model">chat-copilot</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
-    <tr><td class="l"><span class="model">coding</span></td><td><span class="ok">✓</span></td><td><span class="no">✗</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">coding</span></td><td><span class="no">✗</span></td><td><span class="no">✗</span></td><td>0</td></tr>
     <tr><td class="l"><span class="model">coding-copilot</span></td><td><span class="no">✗</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
+    <tr><td class="l"><span class="model">coding-qwen3.6</span></td><td><span class="ok">✓</span></td><td><span class="no">✗</span></td><td>0</td></tr>
     <tr><td class="l"><span class="model">fast</span></td><td><span class="no">✗</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
     <tr><td class="l"><span class="model">fast-copilot</span></td><td><span class="ok">✓</span></td><td><span class="ok">✓</span></td><td>0</td></tr>
   </tbody>
 </table></div>
 
 <h2>Per-run milestones</h2>
+  <div class="run">
+    <h2 style="margin-top:0"><code>big</code></h2>
+      <h3>Fixture (no take) — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; north</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use lever</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">west</span> → reach_secret: <span class="ex">&gt; west</span></div>
+      <h3>Take-first workaround — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; north</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">&gt; take lever</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use lever</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">west</span> → reach_secret: <span class="ex">&gt; west</span></div>
+  </div>
   <div class="run">
     <h2 style="margin-top:0"><code>chat</code></h2>
       <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
@@ -74,15 +88,15 @@ affecting that score.</p>
   </div>
   <div class="run">
     <h2 style="margin-top:0"><code>coding</code></h2>
-      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes</span></div>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&amp;gt; go west You head west and arrive at the Secret Chamber.You can see: &lt;span class=&quot;item-name&quot;&gt;ancient scroll&lt;/span&gt;</span></div>
+      <h3>Fixture (no take) — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever <span class="ex">[hit: "don&#39;t have"]</span>: <span class="ex">&gt; use leverYou don&#39;t have a &quot;lever&quot; to use.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">west</span> → reach_secret <span class="ex">[hit: "can&#39;t go west"]</span>: <span class="ex">&gt; westYou can&#39;t go west from here.</span></div>
       <h3>Take-first workaround — <span class="no">goal NOT reached ✗</span></h3>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">lever Inventory is empty.</span></div>
-      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou already have the lever. You&#39;d need to be in the library to put it back and pull it.</span></div>
-      <div class="step bad"><span class="no">✗</span> <span class="cmd">go west</span> → reach_secret <span class="ex">[hit: "can&#39;t go west"]</span>: <span class="ex">&amp;gt; go westYou can&#39;t go west from here.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">north</span> → reach_library: <span class="ex">&gt; northYou head north...── Forgotten Library ──Rows of crumbling bookshelves line the walls, their contents long since reduced to dust and mold. A single beam o</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">&gt; take leverThe lever is bolted to the wall. You can pull it, but you can&#39;t take it.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&gt; use leverYou don&#39;t have a &quot;lever&quot; to use.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">west</span> → reach_secret <span class="ex">[hit: "can&#39;t go west"]</span>: <span class="ex">&gt; westYou can&#39;t go west from here.</span></div>
   </div>
   <div class="run">
     <h2 style="margin-top:0"><code>coding-copilot</code></h2>
@@ -95,6 +109,18 @@ affecting that score.</p>
       <div class="step bad"><span class="no">✗</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">Inventory is empty.</span></div>
       <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">You grip the heavy iron lever and pull with all your strength. With a deep groan of ancient stone, a hidden passage slides open in the western wall!</span></div>
       <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">Secret ChamberA hidden alcove behind the library walls. The air is still and perfectly dry. An ancient scroll rests on a stone pedestal, untouched for centuries</span></div>
+  </div>
+  <div class="run">
+    <h2 style="margin-top:0"><code>coding-qwen3.6</code></h2>
+      <h3>Fixture (no take) — <span class="ok">goal reached ✓</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou grip the cold iron lever and pull with all your strength. Gears grind and stones shift deep within the wall. A hidden passage opens to the wes</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go west</span> → reach_secret: <span class="ex">&amp;gt; go west You head west and arrive at the Secret Chamber.You can see: &lt;span class=&quot;item-name&quot;&gt;ancient scroll&lt;/span&gt;</span></div>
+      <h3>Take-first workaround — <span class="no">goal NOT reached ✗</span></h3>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">go north</span> → reach_library: <span class="ex">&amp;gt; go north You head north and arrive at the Forgotten Library.You can see: &lt;span class=&quot;item-name&quot;&gt;lever&lt;/span&gt;</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">take lever</span> → take_lever: <span class="ex">lever Inventory is empty.</span></div>
+      <div class="step"><span class="ok">✓</span> <span class="cmd">use lever</span> → pull_lever: <span class="ex">&amp;gt; use leverYou already have the lever. You&#39;d need to be in the library to put it back and pull it.</span></div>
+      <div class="step bad"><span class="no">✗</span> <span class="cmd">go west</span> → reach_secret <span class="ex">[hit: "can&#39;t go west"]</span>: <span class="ex">&amp;gt; go westYou can&#39;t go west from here.</span></div>
   </div>
   <div class="run">
     <h2 style="margin-top:0"><code>fast</code></h2>
@@ -121,5 +147,5 @@ affecting that score.</p>
       <div class="step"><span class="ok">✓</span> <span class="cmd">west</span> → reach_secret: <span class="ex">You move west.</span></div>
   </div>
 
-<p class="foot">Generated 2026-07-29T07:55:01.787Z by scripts/eval-playtest/playtest.js.</p>
+<p class="foot">Generated 2026-08-15T03:16:43.549Z by scripts/eval-playtest/playtest.js.</p>
 </body></html>

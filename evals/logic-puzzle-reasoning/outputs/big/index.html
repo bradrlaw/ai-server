@@ -1,0 +1,80 @@
+# Solving the Logic Puzzle
+
+## Step 1: List What I Know for Certain
+
+I'll extract every direct fact from the clues:
+
+| Fact | Source |
+|------|--------|
+| Ada → NeurIPS, Computer Vision | Clue 1 |
+| NLP → June | Clue 2 |
+| Ben ≠ ACL, Ben ≠ EMNLP, Ben ≠ Theory, Ben ≠ Robotics | Clue 3 |
+| Clara's month < Dana's month | Clue 4 |
+| Robotics → ICLR | Clue 5 |
+| Eli → January or October | Clue 6 |
+| Theory → ACL | Clue 7 |
+| Ben → August | Clue 8 |
+| EMNLP ≠ January | Clue 9 |
+| Dana ≠ Computer Vision | Clue 10 |
+| Clara → NLP | Clue 11 |
+| ICML → March | Clue 12 |
+
+From Clue 2 + Clue 11: **Clara → June** (her NLP paper was presented in June).
+
+## Step 2: Determine Each Person's Conference
+
+**Ada:** NeurIPS (directly stated).
+
+**Ben:** He is in August (Clue 8). His conference must be one of {ACL, EMNLP, ICML, ICLR} (NeurIPS is taken by Ada).
+
+- Not ACL (Clue 3) ✗
+- Not EMNLP (Clue 3) ✗
+- Not ICML — ICML is in **March** (Clue 12), but Ben is in **August**. A conference can only happen in one month, so Ben's conference is not ICML. ✗
+
+By elimination, **Ben → ICLR.**
+
+## Step 3: Check for a Contradiction
+
+Clue 5 states: *"The Robotics paper was presented at ICLR."*
+
+Since Ben is the person at ICLR (forced by the elimination above), Ben's subfield must be **Robotics**.
+
+But Clue 3 states: *"…his paper was not on Theory or **Robotics**."*
+
+> **These two requirements are mutually exclusive.** Ben must be at ICLR (the only remaining conference available to him), and the person at ICLR must have subfield Robotics, yet Ben is explicitly excluded from Robotics.
+
+## Step 4: Verify There Is No Escape
+
+I want to make sure no alternative reading rescues the puzzle:
+
+- Could Ben be at ICML after all? No — Clue 12 fixes ICML in March, Clue 8 fixes Ben in August. Each conference occupies exactly one month, so these are different events.
+- Could "the Robotics paper was presented at ICLR" mean something other than "the researcher whose subfield is Robotics is at ICLR"? No — in this puzzle each researcher has exactly one subfield and presents exactly one paper, so "the Robotics paper" unambiguously identifies the researcher at ICLR.
+- Could I have misidentified Ada's conference? Clue 1 is a direct statement: Ada is at NeurIPS. No ambiguity.
+- Could the month-conference pairing be non-bijective? The problem says five conferences in five different months, so it is a perfect matching.
+
+There is no consistent assignment.
+
+## Step 5: What Would the Solution Look Like (If Not for the Contradiction)?
+
+For completeness, here is how far the rest of the puzzle resolves before hitting the wall:
+
+- **Clara:** NLP, June. Her conference is one of {ACL, EMNLP, ICLR} (not ICML—March; not NeurIPS—Ada).
+- **Eli:** January or October.
+- **Dana:** Month after Clara's (Clue 4).
+- **ICML:** March. **Ben:** August. **Clara:** June. **Eli:** Jan/Oct. **Remaining person:** the last month.
+- **Subfields:** Ada = CV, Clara = NLP, ICLR = Robotics, ACL = Theory. Remaining subfields for the two remaining people: RL and the leftover.
+- **Dana ≠ CV** (Clue 10) — automatically satisfied since CV is Ada's.
+
+None of these further constraints are reachable, because the contradiction at Ben/ICLR/Robotics makes the entire system unsatisfiable.
+
+## Final Verdict
+
+**The puzzle as stated has no solution.** The clues are mutually contradictory:
+
+- Clues 1, 3, 8, and 12 together force Ben to be at ICLR (he can't be at ACL, EMNLP, NeurIPS, or ICML).
+- Clue 5 then forces Ben's subfield to be Robotics.
+- Clue 3 explicitly forbids Ben's subfield from being Robotics.
+
+No reassignment of the other researchers can fix this, because the contradiction involves only Ben, his conference slot, and the ICLR↔Robotics link.
+
+**To make the puzzle solvable**, one could, for example, change Clue 3 to *"Ben's paper was not on Theory"* (dropping Robotics), or change Clue 5 to *"The Robotics paper was presented at ICML."* Either alteration would remove the contradiction and allow a unique solution to be found by continuing the deduction.
