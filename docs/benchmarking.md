@@ -9,6 +9,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [Quick start — Ziskind's harness against LiteLLM](#quick-start--ziskinds-harness-against-litellm)
 - [The critical caveat: `--parallel N` caps concurrency](#the-critical-caveat---parallel-n-caps-concurrency)
 - [Baseline results (2026-07-21)](#baseline-results-2026-07-21)
+- [`--parallel` throughput sweep (2026-08-24)](#--parallel-throughput-sweep-2026-08-24)
 - [`--parallel` throughput sweep (2026-07-21)](#--parallel-throughput-sweep-2026-07-21)
   - [The catch: `--parallel N` divides per-request context](#the-catch---parallel-n-divides-per-request-context)
 - [MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)](#moe-on-the-p100-16-gb--gemma-4-26b-a4b-2026-07-22)
@@ -104,6 +105,55 @@ llama.cpp/LM Studio. Throughput does **not** improve with concurrency on a
 > The `429` is **llama-swap's** per-model `concurrencyLimit` (default **10**),
 > *not* the engine — raise it per model in `config/llama-swap.yaml` if you want the
 > router to admit more simultaneous requests.
+
+## `--parallel` throughput sweep (2026-08-24)
+
+Re-run of the `--parallel` sweep on the **current roster** (Qwen3.8-27B `coding`/`big`,
+`small` on the GTX Titan X stopgap that replaced the dead P100), 256 max tokens,
+concurrency 1–16. Harness/method unchanged from the 2026-07-21 baseline below
+(`scripts/parallel-sweep.py`, benchmarking `:9090` directly, restoring the pristine
+`llama-swap.yaml` on exit). Chart labels show slot **and** backing model.
+
+![--parallel throughput sweep — peak aggregate tok/s per model (2026-08-24)](img/parallel-sweep-20260824.png)
+
+*Raw data: [`data/parallel-sweep-20260824.csv`](data/parallel-sweep-20260824.csv)
+(regenerate the chart with `benchmarks/llm-scaling-bench/.venv/bin/python
+scripts/plot-parallel-sweep.py docs/data/parallel-sweep-20260824.csv -o
+docs/img/parallel-sweep-20260824.png --config config/llama-swap.yaml`; the
+`--config` flag reads slot→model names from the live router config).*
+
+Peak aggregate tokens/sec per `--parallel`, and VRAM at the best setting:
+
+| Model | GPU / kind | ctx | P=1 | P=2 | P=4 | P=8 | Best | VRAM@best |
+|-------|-----------|----:|----:|----:|----:|----:|------|-----------|
+| coding      | V100 idx1, Qwen3.8-27B Q6_K **+MTP** | 163840 | **33** | 35 | 36 | OOM | P=4 | 31.7/32 GB |
+| chat        | V100 idx2, Qwen3.6-35B-A3B MoE **+MTP** | 98304 | 118 | 120 | 125 | **127** | P=8 | 32.2/32 GB |
+| small       | Titan X idx0, Gemma-4-12B (dense) | 32768 | 19 | 32 | **37** | OOM | P=4 | 11.6/12 GB |
+| big         | dual-V100, Qwen3.8-27B Q8_K_XL (dense) | 262144 | 38 | 48 | 54 | **61** | P=8 | 24.8/32 GB/card |
+| coder-next  | dual-V100, Qwen3-Coder-Next MoE | 262144 | 74 | 111 | 145 | **191** | P=8 | 28.5/32 GB/card |
+| gemma-31b   | V100 idx1, Gemma-4-31B (dense) | 131072 | 34 | 46 | **70** | OOM | P=4 | 31.2/32 GB |
+| gemma-26b   | V100 idx2, Gemma-4-26B-A4B MoE | 131072 | 102 | 177 | 228 | **293** | P=8 | 22.1/32 GB |
+
+Patterns (and what changed vs the 2026-07-21 baseline):
+- **MTP self-speculative decode reshapes the curve.** The two Qwen slots now run MTP
+  (`coding`, `chat`). MTP **boosts single-user speed** — `coding` P=1 22→**33** tok/s,
+  `chat` P=1 84→**118** — but **flattens `--parallel` scaling**: MTP already spends the
+  batch dimension on draft+verify, so extra sequences find little compute headroom.
+  `coding` is nearly flat (33→36) and its compute buffers are already ~31.7 GB at P=4,
+  so **P=8 OOMs**; `chat`'s ceiling actually *dropped* (P=8 194→127). Net: MTP is a win
+  for interactive single-user coding, a wash-to-loss for many-slot throughput. Daily
+  keeps both at `--parallel 1`, which is the right call.
+- **Non-MTP models scale as before.** `gemma-26b` is still the throughput champ
+  (**293 tok/s** at P=8), `coder-next` reaches **191**, `big` **61** — all within a few
+  percent of July, confirming the harness and the dual-V100 path are stable.
+- **VRAM-tight dense models cap early.** `small` (12 GB Titan X) and `gemma-31b`
+  (31 GB at P=4) OOM before P=8 — the batch *compute* buffers, not KV, are what grow.
+- **`small` is the slowest tier by design** (Titan X Maxwell stopgap): 19 tok/s single
+  user, best 37 at P=4. This is the "not actually fast" slot the rename fixed.
+
+The per-request-context tradeoff from the baseline still applies verbatim: raising
+`--parallel` divides `--ctx-size` across slots, so the max-throughput setting is not
+automatically the right daily setting — see the table under the 2026-07-21 section.
 
 ## `--parallel` throughput sweep (2026-07-21)
 

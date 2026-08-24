@@ -58,7 +58,7 @@ LLAMASWAP_CONFIG = os.environ.get("LLAMASWAP_CONFIG", "/srv/ai/config/llama-swap
 # Committed benchmark chart (docs/img/…) served at /parallel-sweep.png and shown
 # in the dashboard's Benchmarks section. Empty/missing → section hidden.
 BENCH_CHART = os.environ.get(
-    "BENCH_CHART", "/srv/ai/docs/img/parallel-sweep-20260721.png")
+    "BENCH_CHART", "/srv/ai/docs/img/parallel-sweep-20260824.png")
 BENCH_DOC_URL = os.environ.get(
     "BENCH_DOC_URL",
     "https://github.com/bradrlaw/ai-server/blob/dev/docs/benchmarking.md")

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 from collections import defaultdict
 
 import matplotlib
@@ -25,6 +26,9 @@ import matplotlib.pyplot as plt
 
 # Bar colours per --parallel value (colour-blind-friendly, dark-theme friendly).
 PCOLORS = {1: "#4b8ce0", 2: "#7fce7f", 4: "#e6c04b", 8: "#e07f7f"}
+
+# Default config read for slot -> model-name labels (overridable via --config).
+DEFAULT_CONFIG = "/srv/ai/config/llama-swap.yaml"
 
 
 def load_peaks(path: str) -> dict[str, dict[int, float]]:
@@ -43,15 +47,57 @@ def load_peaks(path: str) -> dict[str, dict[int, float]]:
     return peak
 
 
+def _shorten_model(gguf: str) -> str:
+    """Turn a GGUF filename into a compact human model name for the chart.
+
+    e.g. 'Qwen3.8-27B-UD-Q8_K_XL.gguf' -> 'Qwen3.8-27B Q8_K_XL'
+         'gemma-4-12B-it-qat-UD-Q4_K_XL.gguf' -> 'Gemma-4-12B Q4_K_XL'
+    """
+    name = re.sub(r"\.gguf$", "", gguf)
+    # Split the quant suffix (Q<n>_... or BF16/F16) from the family stem.
+    m = re.search(r"(Q\d[\w]*|BF16|F16)$", name)
+    quant = m.group(1) if m else ""
+    stem = name[: m.start()] if m else name
+    stem = stem.rstrip("-_")
+    # Drop noisy tuning tokens from the family stem.
+    for tok in ("-it-qat", "-it", "-qat", "-UD", "-instruct", "-Instruct"):
+        stem = stem.replace(tok, "")
+    stem = stem.replace("gemma", "Gemma").rstrip("-_")
+    return f"{stem} {quant}".strip()
+
+
+def load_model_names(config: str) -> dict[str, str]:
+    """Map each router slot key -> compact model name from its --model GGUF."""
+    names: dict[str, str] = {}
+    try:
+        text = open(config).read()
+    except OSError:
+        return names
+    # Slot keys are 2-space-indented quoted keys; capture each block's --model.
+    for m in re.finditer(r'^  "([a-z0-9-]+)":\s*$', text, re.M):
+        slot = m.group(1)
+        blk = text[m.end():]
+        nxt = re.search(r'^  "[a-z0-9-]+":\s*$', blk, re.M)
+        if nxt:
+            blk = blk[: nxt.start()]
+        gguf = re.search(r"--model\s+\S*/([^/\s]+\.gguf)", blk)
+        if gguf:
+            names[slot] = _shorten_model(gguf.group(1))
+    return names
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("csv", help="sweep CSV (from scripts/parallel-sweep.py)")
     ap.add_argument("-o", "--out", default="docs/img/parallel-sweep.png")
+    ap.add_argument("--config", default=DEFAULT_CONFIG,
+                    help="llama-swap config to read slot->model names from")
     ap.add_argument("--title", default="llama-swap --parallel throughput sweep "
-                    "(peak aggregate tok/s, 2026-07-21)")
+                    "— peak aggregate tok/s")
     a = ap.parse_args()
 
     peak = load_peaks(a.csv)
+    model_names = load_model_names(a.config)
     # Order models by their best throughput (tallest first) for a clean read.
     models = sorted(peak, key=lambda m: -max(peak[m].values()))
     parallels = sorted({p for m in peak for p in peak[m]})
@@ -77,7 +123,18 @@ def main() -> None:
     ax.set_title(a.title, color="#e6e6e6", fontsize=12)
     ax.set_ylabel("peak aggregate tokens / sec", color="#cdd6e4")
     ax.set_xticks(list(x))
-    ax.set_xticklabels(models, color="#cdd6e4", rotation=15, ha="right")
+    # Multi-line tick labels: slot name + backing model family + quant, each on
+    # its own line so long names don't collide with neighbouring groups.
+    xlabels = []
+    for m in models:
+        mn = model_names.get(m)
+        if mn:
+            # _shorten_model joins "<family> <quant>" with a single space; stack
+            # the quant onto its own line to keep each label narrow.
+            xlabels.append(f"{m}\n{mn.replace(' ', chr(10))}")
+        else:
+            xlabels.append(m)
+    ax.set_xticklabels(xlabels, color="#cdd6e4", fontsize=8)
     ax.tick_params(axis="y", colors="#8b95a7")
     for spine in ax.spines.values():
         spine.set_color("#232a36")
