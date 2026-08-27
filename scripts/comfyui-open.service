@@ -28,6 +28,11 @@ Environment=LLAMASWAP_URL=http://127.0.0.1:9090
 Environment=FREE_GPU_KEEP=chat,gemma-26b,small,small-uncensored
 Environment=FREE_GPU_IDLE_SECS=300
 Environment=FREE_GPU_RESTORE=coding
+# Optional per-instance extra args (currently only --fp16-unet), toggled from the
+# status page. Lives on tmpfs (/run) so it AUTO-RESETS to empty on every boot —
+# native fp16 never silently persists across a reboot. The leading '-' makes a
+# missing file non-fatal; COMFYUI_EXTRA_ARGS then expands to nothing.
+EnvironmentFile=-/run/comfyui-fp16/open.env
 # NO auth: acceptable because this port backs the MCP/Open WebUI (which has its
 # own auth) and is only reachable on the private LAN + Tailscale.
 # Shared: models/, custom_nodes/, --user-directory (workflows + settings).
@@ -39,7 +44,7 @@ ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
   --temp-directory /srv/ai/comfyui/temp-open \
   --user-directory /srv/ai/comfyui/user \
   --database-url sqlite:////srv/ai/comfyui/user/comfyui-open.db \
-  --preview-method auto
+  --preview-method auto $COMFYUI_EXTRA_ARGS
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30

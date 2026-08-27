@@ -211,6 +211,16 @@ COMFYUI_UNIT_BY_LABEL = {
     (u[len("comfyui-"):] if u.startswith("comfyui-") else u): u
     for u in QUIET_COMFYUI_UNITS
 }
+# Per-instance native-fp16 toggle (--fp16-unet). Persisted as a tiny env file per
+# ComfyUI unit under a tmpfs runtime dir (see scripts/comfyui-fp16.tmpfiles) so it
+# AUTO-RESETS to off on every boot — no stale "enabled" survives a reboot. The
+# systemd unit reads it via EnvironmentFile=-/run/comfyui-fp16/<label>.env. The
+# dashboard lets you flip it ONLY while the instance is stopped, so the running
+# state always matches the checkbox. --fp16-unet affects EVERY model on that
+# instance (only MiniMax-H3 GGUF is validated: ~3.9x, and it needs the H3 fp16
+# fix node to avoid black frames), which is why it is off by default and per-run.
+COMFYUI_FP16_DIR = os.environ.get("COMFYUI_FP16_DIR", "/run/comfyui-fp16")
+COMFYUI_FP16_ARG = "--fp16-unet"
 # Optional creative-tool services (Fooocus/SwarmUI/InvokeAI) that are managed
 # on-demand: they are NOT enabled at boot (default off) and are started/stopped
 # from the dashboard via per-service buttons. Each holds VRAM on the V100s while
@@ -604,12 +614,13 @@ def collect_comfyui() -> list:
             port = None
         code, q = _http_status(f"{url}/queue")
         unit = COMFYUI_UNIT_BY_LABEL.get(label)
+        fp16 = _comfyui_fp16_state(unit)
         if code in (401, 403):
-            out.append({"label": label, "state": "locked", "port": port, "unit": unit})
+            out.append({"label": label, "state": "locked", "port": port, "unit": unit, "fp16": fp16})
             continue
         if code is None or q is None:
             out.append(
-                {"label": label, "state": "unreachable", "port": port, "unit": unit}
+                {"label": label, "state": "unreachable", "port": port, "unit": unit, "fp16": fp16}
             )
             continue
         running = len(q.get("queue_running") or [])
@@ -622,6 +633,7 @@ def collect_comfyui() -> list:
                 "pending": pending,
                 "port": port,
                 "unit": unit,
+                "fp16": fp16,
             }
         )
     return out
@@ -1253,6 +1265,61 @@ def _comfyui_ctl(action: str) -> tuple[bool, str]:
     return _systemctl_units(QUIET_COMFYUI_UNITS, action)
 
 
+def _comfyui_fp16_path(unit: str) -> str:
+    """Env-file path holding the per-unit --fp16-unet flag (comfyui-open ->
+    /run/comfyui-fp16/open.env)."""
+    label = unit[len("comfyui-"):] if unit.startswith("comfyui-") else unit
+    return os.path.join(COMFYUI_FP16_DIR, f"{label}.env")
+
+
+def _comfyui_fp16_state(unit: str) -> bool:
+    """True if the unit's native-fp16 flag file is present and enables --fp16-unet."""
+    if not unit:
+        return False
+    try:
+        with open(_comfyui_fp16_path(unit), encoding="utf-8") as f:
+            return COMFYUI_FP16_ARG in f.read()
+    except OSError:
+        return False
+
+
+def _set_comfyui_fp16(unit: str, enabled: bool) -> tuple[bool, str]:
+    """Write/clear the per-unit --fp16-unet env file. Refuses while the unit is
+    active — the flag must be chosen BEFORE start so the running instance always
+    matches what the checkbox shows. Returns (ok, detail)."""
+    if unit not in QUIET_COMFYUI_UNITS:
+        return False, f"unknown ComfyUI unit {unit!r}"
+    if _unit_is_active(unit):
+        return False, "stop the instance before changing native fp16"
+    path = _comfyui_fp16_path(unit)
+    try:
+        os.makedirs(COMFYUI_FP16_DIR, exist_ok=True)
+        if enabled:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"COMFYUI_EXTRA_ARGS={COMFYUI_FP16_ARG}\n")
+        else:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+        return True, "on" if enabled else "off"
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _reset_comfyui_fp16_all() -> None:
+    """Clear every unit's native-fp16 flag so the next start comes up in the
+    default, all-model-safe fp32 mode. Called at quiet-hours end (before the
+    auto-restart) so the nightly restore never silently re-enables fp16."""
+    for unit in QUIET_COMFYUI_UNITS:
+        try:
+            os.remove(_comfyui_fp16_path(unit))
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            print(f"[fp16] reset {unit} failed: {exc}")
+
+
 def _unit_is_active(unit: str) -> bool:
     """True if the systemd unit is active (no sudo needed for is-active)."""
     try:
@@ -1379,6 +1446,7 @@ def _enter_deep_idle() -> None:
 def _exit_window() -> None:
     print("[quiet] window ended — restoring active state")
     _QUIET_SUPPRESS_KEEPER.clear()
+    _reset_comfyui_fp16_all()
     _comfyui("start")
     for m in QUIET_WARM_ON_EXIT:
         _warm_model(m)
@@ -1469,6 +1537,10 @@ _HTML = """<!doctype html>
     padding:3px 10px; font-size:12px; cursor:pointer; margin-left:6px; font-family:inherit; }
   button.act:hover { background:#243247; }
   button.act:disabled { opacity:.5; cursor:default; }
+  label.fp16lbl { font-size:12px; color:#9fb0c7; margin-left:8px; cursor:pointer;
+    user-select:none; vertical-align:middle; }
+  label.fp16lbl input { vertical-align:middle; margin-right:3px; cursor:pointer; }
+  label.fp16lbl input:disabled { cursor:default; }
   .switch { position:relative; display:inline-block; width:42px; height:22px; vertical-align:middle; }
   .switch input { opacity:0; width:0; height:0; }
   .switch .slider { position:absolute; inset:0; cursor:pointer; background:#3a2a2a; border:1px solid #5a3a3a;
@@ -1734,6 +1806,17 @@ async function refresh(){  try{
         act = up
           ? `<button class="act" onclick="comfyAction('stop','${esc(c.unit)}')">⏹ Stop</button>`
           : `<button class="act" onclick="comfyAction('start','${esc(c.unit)}')">▶ Start</button>`;
+        // Native fp16 (--fp16-unet) toggle. Editable ONLY while the instance is
+        // stopped (a running instance already baked the flag into its args), so
+        // the checkbox always mirrors the live state. ~3.9× MiniMax-H3 on GGUF,
+        // but affects EVERY model on this instance — hence off by default.
+        const dis = up ? 'disabled' : '';
+        const ck = c.fp16 ? 'checked' : '';
+        const tt = up
+          ? 'stop this instance to change native fp16'
+          : 'native fp16 (--fp16-unet): ~3.9× MiniMax-H3 on GGUF, but affects ALL models on this instance';
+        act += ` <label class="fp16lbl" title="${tt}"><input type="checkbox" ${ck} ${dis}`
+          + ` onclick="comfyFp16('${esc(c.unit)}', this.checked)"> fp16</label>`;
       }
       return `<tr><td>ComfyUI <span class="sub">${esc(c.label)}</span></td><td>${state}</td><td>${linkHtml(null, c.port)}</td><td>${act}</td></tr>`;
     });
@@ -1806,6 +1889,21 @@ async function comfyAction(action, unit){
     if(msg) msg.textContent = d.ok ? ('ComfyUI '+label+' '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
   }catch(e){ if(msg) msg.textContent='error: '+e; }
   finally{ setTimeout(refresh, 1200); }
+}
+async function comfyFp16(unit, enabled){
+  const msg=document.getElementById('svcmsg');
+  document.querySelectorAll('#services input[type=checkbox]').forEach(b=>b.disabled=true);
+  const label = unit.replace('comfyui-','');
+  if(msg) msg.textContent = 'setting ComfyUI '+label+' native fp16 '+(enabled?'on':'off')+'…';
+  try{
+    const q='actions/comfyui-fp16?unit='+encodeURIComponent(unit)+'&enabled='+(enabled?'true':'false');
+    const r=await fetch(q,{method:'POST'});
+    const d=await r.json();
+    if(msg) msg.textContent = d.ok
+      ? ('ComfyUI '+label+' native fp16 '+(enabled?'on':'off'))
+      : ('failed: '+(d.detail||d.error||r.status));
+  }catch(e){ if(msg) msg.textContent='error: '+e; }
+  finally{ setTimeout(refresh, 900); }
 }
 async function serviceAction(name, action){
   const msg=document.getElementById('svcmsg');
@@ -1905,7 +2003,27 @@ class Handler(BaseHTTPRequestHandler):
                 "units": units, "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
-        elif path == "/actions/service":
+        elif path == "/actions/comfyui-fp16":
+            # Toggle a single ComfyUI instance's --fp16-unet flag. Only allowed
+            # while the instance is stopped (_set_comfyui_fp16 enforces this), so
+            # the checkbox always reflects the running state. Off by default and
+            # auto-cleared on boot (tmpfs) and at quiet-hours end.
+            if not STATUS_ACTIONS_ENABLED or not QUIET_COMFYUI_UNITS:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "comfyui actions disabled"}
+                ).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            unit = (qs.get("unit", [""])[0]).strip()
+            enabled = (qs.get("enabled", ["false"])[0]).lower() in (
+                "1", "true", "yes", "on")
+            ok, detail = _set_comfyui_fp16(unit, enabled)
+            _cache["at"] = 0.0  # force the next status poll to reflect the change
+            body = json.dumps({
+                "ok": ok, "unit": unit, "enabled": enabled, "detail": detail[:500],
+            }).encode("utf-8")
+            self._send(200 if ok else 400, body, "application/json")
             # Start/stop a managed creative-tool service (Fooocus/SwarmUI/InvokeAI).
             # Each unit has its own line in the server-status sudoers file.
             if not STATUS_ACTIONS_ENABLED or not MANAGED_SERVICES:

@@ -412,6 +412,44 @@ together (what quiet hours uses). These reuse the scoped sudoers rule and are ga
 sudoers file grants both the pair command (quiet hours) and the single-unit commands
 (independent buttons).
 
+#### ComfyUI native-fp16 toggle (`--fp16-unet`, per instance)
+
+Each ComfyUI row carries a small **fp16** checkbox next to its Start/Stop button. Ticking it
+launches that instance with `--fp16-unet`, which runs the UNet/DiT on the V100's fp16 tensor
+cores instead of the fp32 fallback. On **MiniMax-H3 GGUF** models this is **~3.9×** faster
+(35.3→9.2 s/it at 768²; native fp16 = `manual cast: None`) — but it needs the
+`custom_nodes/minimax_h3_fp16_fix.py` node installed, or H3 renders come out **pure black**
+from fp16 overflow (the fix keeps the 3 overflow-prone spots in fp32; it self-disables when
+`--fp16-unet` is off). See the H3 fp16 section in `docs/benchmarking.md`.
+
+**`--fp16-unet` is a per-instance flag that affects EVERY model on that ComfyUI instance** —
+only MiniMax-H3 is validated here — so it is **off by default** and meant to be flipped
+per-session:
+
+- The checkbox is **editable only while the instance is stopped**. Once you start it, the
+  flag is baked into the process args and the checkbox locks to show the live state (stop the
+  instance to change it again). `POST /actions/comfyui-fp16?unit=comfyui-open&enabled=true`.
+- The flag is stored as a tiny env file on **tmpfs** (`/run/comfyui-fp16/<label>.env`, read by
+  the unit via `EnvironmentFile=-`), so it **auto-resets to off on every reboot** — native fp16
+  never silently persists. Quiet-hours end also clears it before the nightly restart, so the
+  daily instances always come back up in the safe fp32 mode.
+
+One-time setup (units + tmpfs dir + service):
+```bash
+# 1) install the tmpfs runtime dir (default-off on boot):
+sudo cp scripts/comfyui-fp16.tmpfiles /etc/tmpfiles.d/comfyui-fp16.conf
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/comfyui-fp16.conf
+
+# 2) install the updated units (add EnvironmentFile + $COMFYUI_EXTRA_ARGS):
+sudo cp scripts/comfyui-open.service scripts/comfyui-secure.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 3) pick up the dashboard checkbox:
+sudo systemctl restart server-status
+```
+The toggle needs no extra sudoers entry (the status service writes the `/run` file as its own
+user); only Start/Stop go through the existing scoped rule.
+
 #### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
 The optional image-gen tools each hold VRAM on a V100 while running and can OOM the
 LLM/ComfyUI tiers if left up, so they are **not enabled at boot** — you start/stop them

@@ -357,12 +357,19 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 |---------|------|---------------|
 | ComfyUI-Manager | https://github.com/ltdrdata/ComfyUI-Manager | Custom-node management and reproducible install snapshots. |
 | ComfyUI-GGUF | https://github.com/city96/ComfyUI-GGUF | Loads GGUF-quantized diffusion models (e.g. Qwen-Image-Edit, FLUX.2) that don't fit as fp8 on the V100. |
+| ComfyUI-H3-Multishot | https://github.com/jlucasmcrell/ComfyUI-H3-Multishot | Teaches ComfyUI-GGUF the `minimax_h3` architecture (so H3 GGUFs load) and provides the H3 model/CLIP loaders used for MiniMax-H3 video. |
+| minimax-h3-fp16-fix | https://github.com/Amduraznak/minimax-h3-fp16-fix | One-file node by **Amduraznak** that runs MiniMax-H3 at native fp16 on Volta (V100, no bf16) — keeps the 3 fp16-overflow spots in fp32 so `--fp16-unet` stops black-framing. **~3.5× faster** on our secure V100 (38m32s → 10m53s on a GGUF clip). |
 | ComfyUI-KJNodes | https://github.com/kijai/ComfyUI-KJNodes | Utility nodes used across image/video workflows. |
 | ComfyUI-WanVideoWrapper | https://github.com/kijai/ComfyUI-WanVideoWrapper | WAN text/image-to-video generation with block-swap and VAE tiling for the 32 GB V100. |
+| ComfyUI-MiniMax-H3-Turbo | https://github.com/larryvrh/ComfyUI-MiniMax-H3-Turbo | MiniMax-H3 video nodes + 4-step turbo LoRA sampler used by the native (int8) H3 workflows. |
+| ComfyUI-MMAudio | https://github.com/kijai/ComfyUI-MMAudio | Video-to-audio Foley: generates sound matched to a generated clip (used in the Wan+MMAudio and add-audio-to-video workflows). |
+| ComfyUI-MultiGPU | https://github.com/pollockjj/ComfyUI-MultiGPU | Per-component device placement so oversized H3 models (DiT + Qwen3-VL text encoder + VAEs) fit across both V100s. |
+| ComfyUI-VideoHelperSuite | https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite | Video load/combine/preview nodes underpinning the video-gen workflows. |
 | ComfyUI-Frame-Interpolation | https://github.com/Fannovel16/ComfyUI-Frame-Interpolation | Frame interpolation for generated video. |
 | rgthree-comfy | https://github.com/rgthree/rgthree-comfy | Quality-of-life nodes incl. the Power Lora Loader used by style workflows. |
 | ComfyUI-Custom-Scripts | https://github.com/pythongosssss/ComfyUI-Custom-Scripts | Editor/UX enhancements for the ComfyUI graph. |
 | ComfyUI-Easy-Use | https://github.com/yolain/ComfyUI-Easy-Use | Simplified/composite nodes for building workflows. |
+| comfyui-krea2edit | https://github.com/lbouaraba/comfyui-krea2edit | Nodes for the Krea-2 image-edit workflows. |
 | ComfyUI_Text_Translation | https://github.com/TFL-TFL/ComfyUI_Text_Translation | In-graph prompt translation. |
 | ComfyUI-llama-cpp_vlm | https://github.com/mickeylan/ComfyUI-llama-cpp_vlm | Runs local VLM (GGUF + mmproj) inference inside ComfyUI for image captioning/analysis. |
 | ComfyUI-Login | https://github.com/liusida/ComfyUI-Login | Password authentication for the locked ComfyUI instance. |

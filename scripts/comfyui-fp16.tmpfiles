@@ -1,0 +1,10 @@
+# Runtime dir for the ComfyUI per-instance native-fp16 toggle (--fp16-unet),
+# driven from the server status page. Living on tmpfs (/run) means it is wiped on
+# every boot, so native fp16 always defaults to OFF after a reboot — no stale
+# "enabled" flag can survive. Owned by the status-service / ComfyUI user (brad)
+# so the status service can write the per-unit <label>.env files and the ComfyUI
+# units can read them via EnvironmentFile=-/run/comfyui-fp16/<label>.env.
+#
+# Install:  sudo cp scripts/comfyui-fp16.tmpfiles /etc/tmpfiles.d/comfyui-fp16.conf
+#           sudo systemd-tmpfiles --create /etc/tmpfiles.d/comfyui-fp16.conf
+d /run/comfyui-fp16 0775 brad brad -
