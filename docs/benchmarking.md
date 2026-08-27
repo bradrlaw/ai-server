@@ -1380,6 +1380,33 @@ benchmark above. Times read straight from `journalctl -u comfyui-secure` (`Promp
 while the instance is stopped; auto-resets off on reboot / quiet-hours end). See
 `docs/server-setup.md` → "ComfyUI native-fp16 toggle".
 
+#### Alternative evaluated — `Icbears/minimax-h3-v100-patch` (rejected, 2026-08-27)
+
+A second patch, [`Icbears/minimax-h3-v100-patch`](https://github.com/Icbears/minimax-h3-v100-patch)
+(GPL-3.0, v0.1.3), takes a different **delivery** approach: it registers fp16 as a supported inference
+dtype for CUDA capability 7.0 at import time, so H3 instantiates in fp16 with **no `--fp16-unet`
+flag** — which would let it run without our per-instance toggle and without affecting other models
+on the instance. We A/B'd it on a temp instance (idx1, same fl2va curve Q5_1 GGUF, 768²×25, euler/simple):
+
+| patch | flag needed | s/it @ 768² | vs fp32 fallback | frames |
+|--------|-------------|-------------|------------------|--------|
+| fp32 fallback | — | 35.34 | 1× | valid |
+| `Amduraznak` (shipped) | `--fp16-unet` | **9.15** | **3.9×** | valid |
+| `Icbears` v0.1.3 | none | 9.49 | 3.7× | valid (`mean≈112, std≈67`) |
+
+It **installed cleanly on our 0.30.1** despite targeting 0.33.2 (all its structural gates passed) and
+logged `registered native FP16 H3 loading for CUDA capability 7.0 … no --fp16-unet flag is required`.
+
+**Verdict: keep Amduraznak, don't switch.** Inspecting both sources, Icbears applies the **identical**
+overflow recipe at the **same three sites with the same constants** — fp32 `condition_proj`,
+`out_proj` rescaled ×64 (`OUT_PROJ_SCALE = 64.0`), `fc2` rescaled ×256 (`MLP_FC2_SCALE = 256.0`),
+fp32 residual stream — so it's Amduraznak's fixes repackaged with a no-flag dtype shim, not a
+complementary technique. The two are **truly mutually exclusive** (Icbears refuses to stack; forcing
+both would double-apply the rescales — ÷4096 / ÷65536 — and corrupt output). Icbears is ~4% *slower*,
+GPL-3.0 (vs MIT), and built against a newer ComfyUI, and its only edge (dropping the global flag) is
+already handled by our per-instance toggle. Recorded here as a verified fallback if we ever upgrade
+ComfyUI or want to retire the toggle.
+
 
 (unsloth GGUFs, `general.architecture=qwen35` — drop-in on llama.cpp build 9850,
 MTP `nextn` head embedded in the main GGUF). `chat` stays Qwen3.6-35B-A3B MoE.
