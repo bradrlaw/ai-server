@@ -1340,9 +1340,47 @@ sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py \
   --label video --workflow ~/your_video_api.json --runs 2
 ```
 
-## Qwen3.8-27B migration — `coding` + `big` benchmark suite (2026-08-15)
+## MiniMax-H3 video — native fp16 on V100 (`--fp16-unet` + overflow fix, 2026-08-27)
 
-We migrated the `coding` and `big` slots from Qwen3.6-27B to **Qwen3.8-27B**
+H3's DiT only whitelists bf16/fp32, so on Volta (no bf16) ComfyUI silently casts to **fp32** and
+crawls. Forcing `--fp16-unet` alone runs on fp16 tensor cores but **black-frames** — three spots in
+the H3 DiT overflow fp16's range (text-conditioning projection, attention-sink residual rows, a
+couple of block output projections). The one-file node
+`custom_nodes/minimax_h3_fp16_fix.py` (from `Amduraznak/minimax-h3-fp16-fix`, MIT) keeps just those
+spots in fp32/rescaled while everything else runs fp16; it self-disables unless `--fp16-unet` is set.
+
+Measured on our stack (ComfyUI v0.30.1, torch 2.6.0+cu124, dual-V100 visible, `fl2va-curve-Q5_1`
+GGUF via **ComfyUI-H3-Multishot** + ComfyUI-GGUF, 25-frame clip):
+
+| resolution | fp32 fallback | `--fp16-unet` **no fix** | `--fp16-unet` **+ fix** | speedup | frames |
+|-----------:|--------------:|-------------------------:|------------------------:|--------:|:------|
+| 512×512 | 14.88 s/it | 3.70 s/it | **4.05 s/it** | **3.67×** | black w/o fix, valid w/ |
+| 768×768 | 35.34 s/it | — | **9.15 s/it** | **3.86×** | valid (mean 168) |
+
+- **The fix is mandatory on a non-int8 model**: without it `--fp16-unet` gives pure black (`max=0`);
+  with it the DiT runs native fp16 (`model weight dtype torch.float16, manual cast: None`) and
+  output is clean. The ~9 % overhead vs the (broken) no-fix run is the fp32 islands — the correct
+  trade.
+- **Speedup grows with resolution** (compute-bound scaling: 3.67× → 3.86×); the Reddit-reported ~11×
+  was at 1120×768 on a single card where compute fully dominates.
+
+**Real-world confirmation (secure slot, single V100 idx2, 2026-08-27):** a full production clip run
+back-to-back on the `comfyui-secure` instance via the status-page fp16 toggle — same GGUF workflow,
+flag flipped between runs — gave **10m53s with `--fp16-unet` (native fp16, `manual cast: None`)** vs
+**38m32s in the fp32 fallback (`manual cast: torch.float32`)**, i.e. **3.54×**, matching the s/it
+benchmark above. Times read straight from `journalctl -u comfyui-secure` (`Prompt executed in …`).
+
+- **Model format matters more than the fix.** Our earlier **int8_convrot** pruned/turbo weights only
+  gained **1.28×** from the fix, because int8 GEMM dequantizes to fp32 accumulate and never reaches
+  fp16 tensor cores regardless of `--fp16-unet`. A **GGUF** (or stock bf16) model dequantizes to the
+  compute dtype, so it actually reaches native fp16 — that is what unlocks the ~3.9×.
+
+`--fp16-unet` is a per-instance ComfyUI flag affecting **every** model on that instance, so it ships
+**off** and is flipped per-session from the status page's per-ComfyUI **fp16** checkbox (editable only
+while the instance is stopped; auto-resets off on reboot / quiet-hours end). See
+`docs/server-setup.md` → "ComfyUI native-fp16 toggle".
+
+
 (unsloth GGUFs, `general.architecture=qwen35` — drop-in on llama.cpp build 9850,
 MTP `nextn` head embedded in the main GGUF). `chat` stays Qwen3.6-35B-A3B MoE.
 This section records the full validation pass (throughput, MTP, GSM8K quality,
