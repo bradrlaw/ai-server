@@ -1407,6 +1407,39 @@ GPL-3.0 (vs MIT), and built against a newer ComfyUI, and its only edge (dropping
 already handled by our per-instance toggle. Recorded here as a verified fallback if we ever upgrade
 ComfyUI or want to retire the toggle.
 
+#### Power-cap vs speed — H3 Turbo LoRA, 175 W vs 225 W (2026-08-28)
+
+Once native fp16 is in play, does raising the per-card power cap buy meaningful speed for H3
+video? Ran the **same six-render matrix twice** on `comfyui-secure` (V100 idx2) — once at the
+default **175 W**, once at **225 W** — using the Larryvrh **MiniMax-H3-Turbo** LoRA (v4-600 EMA,
+4- and 6-step schedules) across three latent sizes (frames fixed at 37; only spatial res varies).
+Per-step **s/it** (from tqdm) is the cap-independent metric; each render is matched 1:1 by identical
+`x.shape` + step count. Data: [`docs/data/h3-turbo-powercap-20260828.csv`](data/h3-turbo-powercap-20260828.csv).
+
+| latent (spatial) | steps | 175 W s/it | 225 W s/it | **speedup** | 225 W peak HBM | 225 W power-capped |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1.45 M (30×54) | 4 | 29.0 | 24.8 | **1.17×** | 80–82 °C | 51–57 % |
+| 1.45 M (30×54) | 6 | 29.04 | 24.94 | **1.16×** | 83 °C | 54 % |
+| 2.85 M (42×76) | 6 | 85.9 | 75.5 | **1.14×** | 86–87 °C | 22–29 % |
+| 3.68 M (48×86) | 6 | 135.4 | 123.6 | **1.09×** | ~87 °C | ~22 % |
+
+- **The gain shrinks as the render gets heavier** — +50 W (+28 %) buys ~17 % on the small clip but
+  only ~9 % on the big one. Reason: at 175 W the card is **100 % power-capped** on every shape; at
+  225 W the *light* renders still sit ~50 % power-capped (headroom left → they gain most), while the
+  *heavy* render stops being power-bound (~22 % capped) and pins **HBM at 86–87 °C** — the same
+  HBM-thermal wall the earlier T2I/video sweeps hit. The heavy run's s/it even drifts up mid-render
+  (first step 124.7 vs 123.6 median) = progressive HBM throttle.
+- Same trend in wall-clock totals: 1.45 M 6-step 207.8 → 180.6 s, 2.85 M ~576 → 502 s,
+  3.68 M 892 → 794 s.
+- **Native fp16 confirmed on all 12 renders** (`model weight dtype torch.float16, manual cast: None`)
+  via the Amduraznak fix — the power-cap comparison is on top of, not instead of, the fp16 win.
+
+**Takeaway:** 225 W is a reasonable *watched* boost (~9–17 %) for short/low-res H3 clips, but for
+sustained heavy video the payoff is small and it pushes HBM into the ~87 °C throttle zone — so
+**175 W stays the default** (matching the T2I/video power-cap conclusion above: the lever for long
+jobs is cooling, not power). The cap is global per-card, applied at boot by `gpu-fan-control`, and
+resets to 175 W on reboot; raise it (`nvidia-smi -pl`) only for a supervised light-clip session.
+
 
 (unsloth GGUFs, `general.architecture=qwen35` — drop-in on llama.cpp build 9850,
 MTP `nextn` head embedded in the main GGUF). `chat` stays Qwen3.6-35B-A3B MoE.
