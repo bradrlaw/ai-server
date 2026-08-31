@@ -371,6 +371,35 @@ sudo systemctl start comfyui-open comfyui-secure server-status
 Leaving ComfyUI running is normal (image gen stays instant); just know the V100s won't
 deep-idle until their CUDA context is gone.
 
+### Dual-V100 for oversized ComfyUI models (component placement)
+Some models don't fit one 32 GB V100 even quantized. The MiniMax-H3 reference-to-video
+graph loads a **21.6 GB** int8 diffusion model **+** a **15 GB** Qwen3-VL text encoder **+**
+~5 GB of VAEs — ~42 GB total. On one card ComfyUI evicts weights to CPU and streams them
+back **every sampling step** (measured ~4 GB/s `rxpci` on the slow PCIe gen3 x8 bus), which
+dominates wall-clock. The fix is to **place whole components on separate cards** (no model is
+split — see the no-NVLink rule of thumb: split by component, never one model across cards).
+
+`comfyui-secure` is pinned to `CUDA_VISIBLE_DEVICES=2,1` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` →
+`cuda:0` = idx2, `cuda:1` = idx1) and runs `--reserve-vram 2` (low, so the diffusion model
+stays fully resident on idx2). The [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)
+node pack adds a `device` dropdown to the loaders. In the workflow:
+
+| Loader | Swap to | device |
+|--------|---------|--------|
+| UNETLoader (diffusion) | `UNETLoaderMultiGPU` | `cuda:0` (idx2) |
+| CLIPLoader (text encoder) | `CLIPLoaderMultiGPU` | `cuda:1` (idx1) |
+| VAELoader (video + audio) | `VAELoaderMultiGPU` | `cuda:1` (idx1) |
+
+This keeps the denoising loop 100% on idx2 with **no PCIe offload** (`rxpci` drops from
+~4 GB/s to ~20 MB/s; idx2 goes fully compute-bound). Only a one-time text-encoder→sampler
+handoff crosses the bus. Cards work **sequentially** (TE encodes, then idx2 denoises) — the
+win is HBM capacity, not concurrent compute.
+
+> **Pre-flight (manual recipe):** idx1 also serves LLMs and hosts `comfyui-open`. Before a
+> dual-GPU run, free idx1: `sudo systemctl stop comfyui-open` and unload idx1's llama-swap
+> models, then confirm `nvidia-smi` shows idx1 near-empty. Normal (non-MultiGPU) workflows
+> are unaffected — they default to `cuda:0` (idx2) as before.
+
 ### Quiet-hours deep-idle window
 The `server-status` service can run an optional overnight window that drops the box to the
 true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). On
