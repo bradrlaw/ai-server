@@ -16,15 +16,72 @@ Config via env (see comfyui-mcp.service):
   COMFY_MCP_RETURN_MARKDOWN  when truthy, tools return a markdown image link for
                            inline display in mcpo/Open WebUI (not MCP ImageContent)
   COMFY_MCP_SRC            path to the upstream clone (default /srv/ai/src/comfyui-mcp-server)
+  COMFY_MCP_AUTH_TOKEN       Bearer token for a login-gated ComfyUI (ComfyUI-Login);
+                           injected into every request to the ComfyUI host.
+  COMFY_MCP_AUTH_TOKEN_FILE  path to a file whose FIRST LINE is that token (e.g. the
+                           secure instance's comfyui/login/PASSWORD). Preferred over
+                           COMFY_MCP_AUTH_TOKEN so the secret never lands in a unit
+                           file or env, and auto-tracks a password change. Ignored if
+                           COMFY_MCP_AUTH_TOKEN is set.
 """
 import os
 import sys
 import time
+from urllib.parse import urlsplit
 
 SRC = os.getenv("COMFY_MCP_SRC", "/srv/ai/src/comfyui-mcp-server")
 sys.path.insert(0, SRC)
 # publish-root detection uses cwd; run from the repo root like upstream expects.
 os.chdir(SRC)
+
+
+def _load_auth_token() -> str:
+    """Bearer token for a login-gated ComfyUI, from env or a file's first line."""
+    tok = os.getenv("COMFY_MCP_AUTH_TOKEN", "").strip()
+    if tok:
+        return tok
+    path = os.getenv("COMFY_MCP_AUTH_TOKEN_FILE", "").strip()
+    if path:
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return fh.readline().strip()
+        except OSError as exc:  # missing/unreadable -> run unauthenticated (degraded)
+            print(f"[comfyui-mcp] auth token file {path!r} unreadable: {exc}",
+                  file=sys.stderr, flush=True)
+    return ""
+
+
+# The (vendored) upstream talks to ComfyUI with module-level requests.get/post/head
+# calls (no shared Session, no auth header). A login-gated instance (ComfyUI-Login,
+# our :8189 "secure" canvas) rejects every unauthenticated call with 401/redirect.
+# Rather than fork upstream, wrap requests.Session.request to attach
+# `Authorization: Bearer <token>` for requests aimed at the ComfyUI host — including
+# the import-time availability probe (so the bridge starts NON-degraded on secure)
+# and the server-side asset HEAD/GET used to size/preview outputs. Installed BEFORE
+# `import server` for exactly that reason. No-op when no token is configured, so the
+# open (:8188, auth-less) bridge behaves exactly as before.
+_AUTH_TOKEN = _load_auth_token()
+if _AUTH_TOKEN:
+    import requests
+
+    _comfy = urlsplit(os.getenv("COMFYUI_URL", "http://127.0.0.1:8188"))
+    _COMFY_HOSTPORT = _comfy.netloc  # host:port we should authenticate to
+    _orig_request = requests.sessions.Session.request
+
+    def _request_with_auth(self, method, url, *args, **kwargs):
+        try:
+            same_host = urlsplit(url).netloc == _COMFY_HOSTPORT
+        except Exception:
+            same_host = False
+        if same_host:
+            headers = dict(kwargs.get("headers") or {})
+            headers.setdefault("Authorization", f"Bearer {_AUTH_TOKEN}")
+            kwargs["headers"] = headers
+        return _orig_request(self, method, url, *args, **kwargs)
+
+    requests.sessions.Session.request = _request_with_auth
+    print(f"[comfyui-mcp] Bearer auth enabled for ComfyUI at {_COMFY_HOSTPORT}",
+          flush=True)
 
 # Upstream server.py runs a ComfyUI availability check at *import* time and calls
 # sys.exit(1) if ComfyUI is unreachable. That makes the bridge (and its :9000
