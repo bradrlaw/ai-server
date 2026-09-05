@@ -93,6 +93,115 @@ if _AUTH_TOKEN:
     print(f"[comfyui-mcp] Bearer auth enabled for ComfyUI at {sorted(_AUTH_HOSTPORTS)}",
           flush=True)
 
+# --------------------------------------------------------------------------- #
+# UI-defaults workflow patches (see scripts/comfyui_workflow_import.py).
+#
+# The bridge advertises a tool parameter for every PARAM_ placeholder an imported
+# workflow exposes, and at render time fills omitted params from the vendored
+# DefaultsManager's HARDCODED image defaults (width/height 512, steps 20) — NOT
+# from the values you set in the ComfyUI UI. That's why an omitted `steps` became
+# 20 instead of your workflow's 8. It also marks any placeholder outside a small
+# hardcoded set (e.g. input_image, megapixels, length) as *required*.
+#
+# These two class patches make imported workflows honor the UI:
+#   1. Relax `required` so ONLY `prompt` and `input_image` are mandatory; every
+#      other omitted knob falls back to the workflow's own captured UI value.
+#      Must run BEFORE `import server` because tool signatures (required vs
+#      optional) are frozen when the generation tools are registered at import.
+#   2. Wrap `render_workflow` to (a) merge the workflow's per-file `meta.json`
+#      `defaults` (the captured UI values) UNDER the caller-provided params so an
+#      omitted knob uses the UI value instead of the hardcoded 512/20, and (b)
+#      resolve `input_image`-kind params by uploading a URL / data-URI / bytes to
+#      ComfyUI's /upload/image and substituting the stored filename.
+# Toggle off with COMFY_MCP_UI_DEFAULTS=0.
+# --------------------------------------------------------------------------- #
+if os.getenv("COMFY_MCP_UI_DEFAULTS", "1").strip().lower() not in ("0", "false", "no", "off"):
+    import io as _io
+    import base64 as _base64
+    from managers import workflow_manager as _wm  # noqa: E402
+
+    _ALWAYS_REQUIRED = {"prompt", "input_image"}
+    _COMFY_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
+
+    # --- (1) required-relax ------------------------------------------------- #
+    _orig_extract = _wm.WorkflowManager._extract_parameters
+
+    def _extract_parameters_relaxed(self, workflow):
+        params = _orig_extract(self, workflow)
+        for name, param in params.items():
+            param.required = name in _ALWAYS_REQUIRED
+        return params
+
+    _wm.WorkflowManager._extract_parameters = _extract_parameters_relaxed
+
+    # --- input_image upload helper ------------------------------------------ #
+    def _upload_input_image(value):
+        """Return a ComfyUI-input filename for a URL / data-URI / bare name."""
+        import requests  # local import; requests already patched for auth above
+        val = str(value).strip()
+        if not val:
+            return val
+        # A bare filename with no scheme/path is assumed to already live in the
+        # ComfyUI input dir (or a prior upload) -> pass through unchanged.
+        if "://" not in val and not val.startswith("data:") and "/" not in val:
+            return val
+        try:
+            if val.startswith("data:"):
+                _, _, b64 = val.partition(",")
+                raw = _base64.b64decode(b64)
+                fname = "mcp_input.png"
+            else:
+                r = requests.get(val, timeout=30)
+                r.raise_for_status()
+                raw = r.content
+                fname = os.path.basename(urlsplit(val).path) or "mcp_input.png"
+            files = {"image": (fname, _io.BytesIO(raw), "application/octet-stream")}
+            resp = requests.post(f"{_COMFY_URL}/upload/image", files=files,
+                                 data={"overwrite": "true", "type": "input"}, timeout=60)
+            resp.raise_for_status()
+            j = resp.json()
+            name = j.get("name", fname)
+            sub = j.get("subfolder", "")
+            return f"{sub}/{name}" if sub else name
+        except Exception as exc:  # noqa: BLE001 - surface a clear render error
+            print(f"[comfyui-mcp] input_image upload failed for {val!r}: {exc}",
+                  file=sys.stderr, flush=True)
+            return val
+
+    # --- (2) render_workflow: merge UI defaults + resolve input images ------- #
+    _orig_render = _wm.WorkflowManager.render_workflow
+
+    def _render_with_ui_defaults(self, definition, provided_params, defaults_manager=None):
+        merged = dict(provided_params or {})
+        try:
+            meta_path = self._safe_workflow_path(definition.workflow_id)
+            meta = self._load_workflow_metadata(meta_path) if meta_path else {}
+        except Exception:  # noqa: BLE001
+            meta = {}
+        ui_defaults = meta.get("defaults", {}) if isinstance(meta, dict) else {}
+        param_meta = meta.get("params", {}) if isinstance(meta, dict) else {}
+
+        # Fill omitted knobs from the workflow's captured UI values (seed stays
+        # unset so the vendored render randomizes it).
+        for name, param in definition.parameters.items():
+            if name == "seed":
+                continue
+            if merged.get(name) is None and name in ui_defaults:
+                merged[name] = ui_defaults[name]
+
+        # Resolve image-kind params (upload URL/data-URI -> input filename).
+        for name, info in param_meta.items():
+            if isinstance(info, dict) and info.get("kind") == "image":
+                if merged.get(name):
+                    merged[name] = _upload_input_image(merged[name])
+
+        return _orig_render(self, definition, merged, defaults_manager)
+
+    _wm.WorkflowManager.render_workflow = _render_with_ui_defaults
+    print("[comfyui-mcp] UI-defaults workflow patches active "
+          "(required=prompt/input_image only; omitted knobs use meta.json UI values)",
+          flush=True)
+
 # Upstream server.py runs a ComfyUI availability check at *import* time and calls
 # sys.exit(1) if ComfyUI is unreachable. That makes the bridge (and its :9000
 # endpoint) disappear whenever ComfyUI is intentionally down — e.g. the quiet-hours

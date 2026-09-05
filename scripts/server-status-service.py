@@ -40,6 +40,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -48,6 +49,7 @@ import urllib.request
 import datetime as dt
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 HOST = os.environ.get("STATUS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STATUS_PORT", "9095"))
@@ -255,6 +257,20 @@ STATUS_ACTIONS_ENABLED = os.environ.get("STATUS_ACTIONS_ENABLED", "true").lower(
     "1",
     "true",
     "yes",
+)
+# Let the dashboard re-import a ComfyUI workflow into the MCP bridge's library from
+# the latest render (scripts/comfyui_workflow_import.py). This templatizes the
+# workflow's knobs to PARAM_ placeholders and captures the UI values as meta.json
+# defaults so chat picks up whatever you set in the ComfyUI UI. Runs as this
+# service's own user (no sudo); a bridge RESTART is only needed when the exposed
+# param SET changes (reported back in the response).
+WORKFLOW_SYNC_ENABLED = os.environ.get("WORKFLOW_SYNC_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+COMFY_MCP_WORKFLOW_DIR = os.environ.get(
+    "COMFY_MCP_WORKFLOW_DIR", "/srv/ai/config/comfyui-mcp/workflows"
 )
 # Allow the dashboard to adjust per-GPU sustained power caps. The chosen watts are
 # written into the gpu-fan-control config, which the daemon treats as the live
@@ -599,6 +615,82 @@ def collect_models() -> dict:
             "mode": cfg["mode"], "config": cfg["models"]}
 
 
+def collect_workflows() -> list:
+    """List the MCP bridge's workflow library (COMFY_MCP_WORKFLOW_DIR).
+
+    Each entry summarizes what chat can control for that workflow, read from the
+    sidecar <name>.meta.json written by scripts/comfyui_workflow_import.py:
+    {id, name, exposed (param names), required, defaults, updated_at, has_meta,
+     source_prefix}. source_prefix is the SaveImage/SaveVideo filename prefix the
+     one-click sync scans for the newest render (name with '_' -> '-').
+    """
+    out: list = []
+    wf_dir = Path(COMFY_MCP_WORKFLOW_DIR)
+    if not wf_dir.is_dir():
+        return out
+    for wf_path in sorted(wf_dir.glob("*.json")):
+        if wf_path.name.endswith(".meta.json"):
+            continue
+        wid = wf_path.stem
+        meta_path = wf_path.with_suffix(".meta.json")
+        meta = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                meta = {}
+        params = meta.get("params", {}) if isinstance(meta, dict) else {}
+        out.append({
+            "id": wid,
+            "name": meta.get("name", wid.replace("_", " ").title()),
+            "exposed": sorted(params.keys()),
+            "required": meta.get("required", []),
+            "defaults": meta.get("defaults", {}),
+            "updated_at": meta.get("updated_at"),
+            "has_meta": bool(meta),
+            "source_prefix": wid.replace("_", "-"),
+        })
+    return out
+
+
+def _sync_workflow(name: str, source: str = "", dry_run: bool = False) -> tuple[bool, dict]:
+    """Import/refresh one bridge workflow from a render (see comfyui_workflow_import).
+
+    `source` may be empty (newest render matching the workflow's prefix), a media
+    path (PNG/MP4/WEBM embedding the API graph), or a SaveImage/SaveVideo prefix.
+    Returns (ok, report). Runs in-process as this service's user; never sudo.
+    """
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import comfyui_workflow_import as cwi  # noqa: WPS433 (lazy, stdlib-only)
+    except Exception as exc:  # noqa: BLE001
+        return False, {"error": f"import engine unavailable: {exc}"}
+
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", (name or "").strip())
+    if not safe:
+        return False, {"error": "missing workflow name"}
+    src = (source or "").strip()
+    kwargs = {}
+    media_exts = (".png", ".mp4", ".webm", ".webp", ".gif")
+    if not src:
+        kwargs["from_output"] = None  # engine defaults to name's '-' prefix
+    elif "/" in src or src.lower().endswith(media_exts):
+        kwargs["from_media"] = src
+    else:
+        kwargs["from_output"] = src
+    try:
+        graph, resolved = cwi.load_source_graph(safe, **kwargs)
+        report = cwi.import_workflow(
+            safe, graph, resolved,
+            dest_dir=Path(COMFY_MCP_WORKFLOW_DIR), dry_run=dry_run,
+        )
+        return True, report
+    except SystemExit as exc:  # engine raises SystemExit for user-facing errors
+        return False, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        return False, {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def collect_comfyui() -> list:
     out = []
     for pair in COMFYUI_URLS.split(","):
@@ -916,6 +1008,7 @@ def build_status() -> dict:
         "gpus": gpus,
         "host": host,
         "power_mode": _power_state["mode"],
+        "workflows": collect_workflows() if WORKFLOW_SYNC_ENABLED else [],
         "quiet": {
             "enabled": QUIET_HOURS_ENABLED,
             "paused": _QUIET_PAUSED.is_set(),
@@ -938,6 +1031,7 @@ def build_status() -> dict:
             "quiet": STATUS_ACTIONS_ENABLED and QUIET_HOURS_ENABLED,
             "gpu_power": GPU_POWER_ACTIONS_ENABLED,
             "gpu_power_range": [GPU_POWER_MIN_W, GPU_POWER_MAX_W, GPU_POWER_STEP_W],
+            "workflow_sync": STATUS_ACTIONS_ENABLED and WORKFLOW_SYNC_ENABLED,
         },
     }
 
@@ -1572,6 +1666,10 @@ _HTML = """<!doctype html>
   <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
   <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
   <section><h2>Services <span class="hsub" id="svcactions"></span></h2><div id="services">…</div></section>
+  <section id="wfsyncsec" style="display:none"><h2>ComfyUI workflow sync <span class="hsub" id="wfsyncmsg"></span></h2>
+    <div class="sub" style="margin-bottom:8px">Re-import a workflow's defaults from its latest ComfyUI render. Tune the workflow in the ComfyUI UI, generate one image/video, then <b>Sync</b> — chat then uses your UI values (steps, LoRA, size…) and can override any exposed knob. <b>Preview</b> shows what would change without writing.</div>
+    <div id="wfsync">…</div>
+  </section>
   <section id="quietsec" style="display:none"><h2>Quiet hours <span class="hsub" id="quietstate"></span></h2>
     <div id="quietctl">…</div>
     <div class="sub" id="quiethint" style="margin-top:8px"></div>
@@ -1833,6 +1931,7 @@ async function refresh(){  try{
     // Quiet-hours toggle: pause/resume the nightly deep-idle window at runtime so a
     // long ComfyUI/LLM job can run through it without editing the unit.
     renderQuiet(d);
+    renderWorkflows(d);
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 function renderQuiet(d){
@@ -1904,6 +2003,63 @@ async function comfyFp16(unit, enabled){
       : ('failed: '+(d.detail||d.error||r.status));
   }catch(e){ if(msg) msg.textContent='error: '+e; }
   finally{ setTimeout(refresh, 900); }
+}
+function renderWorkflows(d){
+  const sec=document.getElementById('wfsyncsec');
+  const wfs=d.workflows||[];
+  const canAct=d.actions && d.actions.workflow_sync;
+  if(!canAct || !wfs.length){ sec.style.display='none'; return; }
+  sec.style.display='';
+  const rows=wfs.map(w=>{
+    const exposed=(w.exposed||[]).join(', ')||'<span class="sub">none — run Sync</span>';
+    const upd=w.updated_at?('<span class="hsub">'+esc(String(w.updated_at).slice(0,19).replace('T',' '))+'</span>'):'<span class="hsub">never</span>';
+    const src='wfsrc_'+esc(w.id).replace(/[^A-Za-z0-9_-]/g,'_');
+    const ctrl=`<input id="${src}" class="wfsrc" placeholder="${esc(w.source_prefix)} (latest render)" style="width:180px">`
+      +` <button class="act" onclick="syncWorkflow('${esc(w.id)}',true)">🔍 Preview</button>`
+      +` <button class="act" onclick="syncWorkflow('${esc(w.id)}',false)">⬇ Sync</button>`;
+    return `<tr><td><b>${esc(w.id)}</b><br>${upd}</td><td class="sub">${exposed}</td><td>${ctrl}</td></tr>`;
+  });
+  document.getElementById('wfsync').innerHTML =
+    '<table><tr><th>Workflow</th><th>Exposed knobs</th><th>Source / Action</th></tr>'+rows.join('')+'</table>'
+    +'<div id="wfsyncout" class="sub" style="margin-top:8px;white-space:pre-wrap;font-family:monospace"></div>';
+}
+async function syncWorkflow(name, dryRun){
+  const msg=document.getElementById('wfsyncmsg');
+  const out=document.getElementById('wfsyncout');
+  const srcEl=document.getElementById('wfsrc_'+name.replace(/[^A-Za-z0-9_-]/g,'_'));
+  const source=srcEl?srcEl.value.trim():'';
+  document.querySelectorAll('#wfsync button.act').forEach(b=>b.disabled=true);
+  if(msg) msg.textContent=(dryRun?'previewing ':'syncing ')+name+'…';
+  try{
+    let q='actions/sync-workflow?name='+encodeURIComponent(name)+'&dry_run='+(dryRun?'true':'false');
+    if(source) q+='&source='+encodeURIComponent(source);
+    const r=await fetch(q,{method:'POST'});
+    const d=await r.json();
+    if(!d.ok){
+      const why=esc((d.report&&d.report.error)||d.error||('HTTP '+r.status));
+      if(msg) msg.textContent='failed';
+      if(out) out.textContent='✗ '+name+': '+why;
+      toast('Workflow sync failed: '+why, true);
+    } else {
+      const rep=d.report||{};
+      const ex=Object.keys(rep.exposed||{});
+      const sk=Object.keys(rep.skipped||{});
+      let txt=(dryRun?'PREVIEW ':'SYNCED ')+name+'  (source: '+esc(rep.source||'?')+')\n';
+      txt+='  exposed: '+(ex.join(', ')||'(none)')+'\n';
+      if(sk.length) txt+='  skipped: '+sk.map(k=>esc(k)+' ['+esc(rep.skipped[k])+']').join('; ')+'\n';
+      txt+='  defaults: '+esc(JSON.stringify(rep.defaults||{}))+'\n';
+      if(rep.restart_needed) txt+='  ⚠ exposed set changed — restart bridges to update the tool schema:\n    sudo systemctl restart comfyui-mcp comfyui-mcp-secure\n';
+      else txt+='  ✓ content hot-reloads (no restart needed)\n';
+      if(dryRun) txt+='  (preview only — nothing written)';
+      if(out) out.textContent=txt;
+      if(msg) msg.textContent=dryRun?'preview ready':'synced';
+      if(!dryRun) toast(name+' synced'+(rep.restart_needed?' — restart bridges to expose new knobs':''));
+    }
+  }catch(e){ if(msg) msg.textContent='error'; if(out) out.textContent='error: '+esc(String(e)); }
+  finally{
+    document.querySelectorAll('#wfsync button.act').forEach(b=>b.disabled=false);
+    if(!dryRun) setTimeout(refresh, 1200);
+  }
 }
 async function serviceAction(name, action){
   const msg=document.getElementById('svcmsg');
@@ -2089,6 +2245,33 @@ class Handler(BaseHTTPRequestHandler):
             _cache["at"] = 0.0  # force the next status poll to re-probe the limit
             body = json.dumps({
                 "ok": ok, "index": index, "watts": watts, "detail": detail[:500],
+            }).encode("utf-8")
+            self._send(200 if ok else 500, body, "application/json")
+        elif path == "/actions/sync-workflow":
+            # Re-import a ComfyUI workflow's defaults into the MCP bridge library
+            # from its latest render (see collect_workflows / _sync_workflow).
+            # Non-privileged (writes only COMFY_MCP_WORKFLOW_DIR as this user).
+            if not STATUS_ACTIONS_ENABLED or not WORKFLOW_SYNC_ENABLED:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "workflow sync disabled"}
+                ).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            name = (qs.get("name", [""])[0]).strip()
+            source = (qs.get("source", [""])[0]).strip()
+            dry_run = (qs.get("dry_run", ["false"])[0]).lower() in (
+                "1", "true", "yes", "on")
+            if not name:
+                self._send(400, json.dumps(
+                    {"ok": False, "error": "missing workflow name"}
+                ).encode("utf-8"), "application/json")
+                return
+            ok, report = _sync_workflow(name, source=source, dry_run=dry_run)
+            if ok and not dry_run:
+                _cache["at"] = 0.0  # force re-probe so the panel reflects new meta
+            body = json.dumps({
+                "ok": ok, "name": name, "dry_run": dry_run, "report": report,
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
         else:
