@@ -139,6 +139,38 @@ if _max_wait:
     _cc.ComfyUIClient._wait_for_prompt = _wait_for_prompt_longer
     print(f"[comfyui-mcp] inline wait extended to {_MAX_WAIT}s", flush=True)
 
+# When markdown mode is on (COMFY_MCP_RETURN_MARKDOWN), the tool result already
+# carries a browser-reachable markdown image link that Open WebUI renders inline.
+# Upstream ALSO exposes a `return_inline_preview` boolean tool parameter that, when
+# the model sets it True, embeds a ~16KB base64 data URI in the tool result. That
+# blob is redundant for display, poisons the conversation context, and — accumulated
+# across turns on a 35B model — balloons prompt-processing time into multi-minute,
+# no-token-output "churn" (and 10-min upstream timeouts). Force inline preview OFF so
+# only the compact markdown link is returned. `register_and_build_response` is
+# imported by-name into the tool modules, so patch each already-bound reference (and
+# the source) to override the flag. Set COMFY_MCP_KEEP_INLINE_PREVIEW=1 to opt out.
+_markdown_on = os.getenv("COMFY_MCP_RETURN_MARKDOWN", "").strip().lower() in (
+    "1", "true", "yes", "on")
+_keep_preview = os.getenv("COMFY_MCP_KEEP_INLINE_PREVIEW", "").strip().lower() in (
+    "1", "true", "yes", "on")
+if _markdown_on and not _keep_preview:
+    import tools.helpers as _helpers  # noqa: E402
+
+    _orig_build = _helpers.register_and_build_response
+
+    def _build_no_inline_preview(*args, **kwargs):
+        kwargs["return_inline_preview"] = False  # drop the base64 blob
+        return _orig_build(*args, **kwargs)
+
+    _helpers.register_and_build_response = _build_no_inline_preview
+    # Re-point the copies the tool modules imported at import time.
+    for _modname in ("tools.generation", "tools.workflow"):
+        _mod = sys.modules.get(_modname)
+        if _mod is not None and hasattr(_mod, "register_and_build_response"):
+            _mod.register_and_build_response = _build_no_inline_preview
+    print("[comfyui-mcp] inline base64 preview suppressed (markdown link only)",
+          flush=True)
+
 server.mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
 _port = os.getenv("FASTMCP_PORT", "").strip()
 if _port:
