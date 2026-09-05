@@ -64,13 +64,23 @@ _AUTH_TOKEN = _load_auth_token()
 if _AUTH_TOKEN:
     import requests
 
-    _comfy = urlsplit(os.getenv("COMFYUI_URL", "http://127.0.0.1:8188"))
-    _COMFY_HOSTPORT = _comfy.netloc  # host:port we should authenticate to
+    # Authenticate requests to EITHER the connection host (COMFYUI_URL, used for
+    # queueing + history polling) OR the public/display host (COMFY_MCP_PUBLIC_URL,
+    # used by the server-side asset HEAD/GET that sizes outputs and builds the inline
+    # preview). Both point at the same login-gated ComfyUI, just via different
+    # host:port (127.0.0.1:8189 vs 192.168.4.57:8189); without the public one those
+    # asset fetches 401 and the preview/metadata silently drops.
+    _AUTH_HOSTPORTS = set()
+    for _u in (os.getenv("COMFYUI_URL", "http://127.0.0.1:8188"),
+               os.getenv("COMFY_MCP_PUBLIC_URL", "")):
+        _u = (_u or "").strip()
+        if _u:
+            _AUTH_HOSTPORTS.add(urlsplit(_u).netloc)
     _orig_request = requests.sessions.Session.request
 
     def _request_with_auth(self, method, url, *args, **kwargs):
         try:
-            same_host = urlsplit(url).netloc == _COMFY_HOSTPORT
+            same_host = urlsplit(url).netloc in _AUTH_HOSTPORTS
         except Exception:
             same_host = False
         if same_host:
@@ -80,7 +90,7 @@ if _AUTH_TOKEN:
         return _orig_request(self, method, url, *args, **kwargs)
 
     requests.sessions.Session.request = _request_with_auth
-    print(f"[comfyui-mcp] Bearer auth enabled for ComfyUI at {_COMFY_HOSTPORT}",
+    print(f"[comfyui-mcp] Bearer auth enabled for ComfyUI at {sorted(_AUTH_HOSTPORTS)}",
           flush=True)
 
 # Upstream server.py runs a ComfyUI availability check at *import* time and calls
@@ -104,6 +114,30 @@ try:
     import server  # noqa: E402  (module-level ComfyUI availability check runs on import)
 finally:
     sys.exit, time.sleep = _orig_exit, _orig_sleep
+
+# Upstream blocks inline for at most max_attempts=30 (~30s) polling ComfyUI history;
+# on timeout it returns a "still running, use get_job(...)" handle. For a COLD render
+# on the secure canvas (14GB+ model load off disk + sampling) 30s is not enough, so
+# the tool hands back a job handle — and some models react by RE-QUEUEING the same
+# workflow instead of polling, producing duplicate GPU jobs and a long poll loop.
+# Extend the inline wait (COMFY_MCP_MAX_WAIT seconds, well under the client's ~300s
+# tool timeout) so typical cold renders finish in the first call. Only overrides the
+# upstream default of 30 (callers that pass an explicit value are left alone); no-op
+# if the env is unset, so the open bridge is unchanged unless configured.
+_max_wait = os.getenv("COMFY_MCP_MAX_WAIT", "").strip()
+if _max_wait:
+    import comfyui_client as _cc  # noqa: E402  (already imported via server)
+
+    _MAX_WAIT = int(_max_wait)
+    _orig_wait = _cc.ComfyUIClient._wait_for_prompt
+
+    def _wait_for_prompt_longer(self, prompt_id, max_attempts=30):
+        if max_attempts == 30:  # upstream default -> substitute our configured budget
+            max_attempts = _MAX_WAIT
+        return _orig_wait(self, prompt_id, max_attempts=max_attempts)
+
+    _cc.ComfyUIClient._wait_for_prompt = _wait_for_prompt_longer
+    print(f"[comfyui-mcp] inline wait extended to {_MAX_WAIT}s", flush=True)
 
 server.mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
 _port = os.getenv("FASTMCP_PORT", "").strip()

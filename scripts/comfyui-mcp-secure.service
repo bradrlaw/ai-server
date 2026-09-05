@@ -33,6 +33,11 @@ Environment=COMFY_MCP_PUBLIC_URL=http://192.168.4.57:8189
 # Return markdown image links (not MCP ImageContent) so Open WebUI via mcpo renders
 # generated images inline.
 Environment=COMFY_MCP_RETURN_MARKDOWN=1
+# Block inline up to this many seconds waiting for the render before returning a
+# "still running" job handle. Raised from the upstream 30s because the secure canvas
+# often serves heavier models with a cold 14GB+ load; without this the client
+# re-queues the same workflow (duplicate GPU jobs + a long poll loop).
+Environment=COMFY_MCP_MAX_WAIT=150
 # FastMCP's DNS-rebinding protection only trusts localhost by default; allow the
 # host:port pairs mcpo/agents use to reach THIS bridge (:9001).
 Environment=COMFY_MCP_ALLOWED_HOSTS=host.docker.internal:9001,127.0.0.1:9001,localhost:9001
