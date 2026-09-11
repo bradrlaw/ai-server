@@ -2044,12 +2044,12 @@ async function syncWorkflow(name, dryRun){
       const rep=d.report||{};
       const ex=Object.keys(rep.exposed||{});
       const sk=Object.keys(rep.skipped||{});
-      let txt=(dryRun?'PREVIEW ':'SYNCED ')+name+'  (source: '+esc(rep.source||'?')+')\n';
-      txt+='  exposed: '+(ex.join(', ')||'(none)')+'\n';
-      if(sk.length) txt+='  skipped: '+sk.map(k=>esc(k)+' ['+esc(rep.skipped[k])+']').join('; ')+'\n';
-      txt+='  defaults: '+esc(JSON.stringify(rep.defaults||{}))+'\n';
-      if(rep.restart_needed) txt+='  ⚠ exposed set changed — restart bridges to update the tool schema:\n    sudo systemctl restart comfyui-mcp comfyui-mcp-secure\n';
-      else txt+='  ✓ content hot-reloads (no restart needed)\n';
+      let txt=(dryRun?'PREVIEW ':'SYNCED ')+name+'  (source: '+esc(rep.source||'?')+')\\n';
+      txt+='  exposed: '+(ex.join(', ')||'(none)')+'\\n';
+      if(sk.length) txt+='  skipped: '+sk.map(k=>esc(k)+' ['+esc(rep.skipped[k])+']').join('; ')+'\\n';
+      txt+='  defaults: '+esc(JSON.stringify(rep.defaults||{}))+'\\n';
+      if(rep.restart_needed) txt+='  ⚠ exposed set changed — restart bridges to update the tool schema:\\n    sudo systemctl restart comfyui-mcp comfyui-mcp-secure\\n';
+      else txt+='  ✓ content hot-reloads (no restart needed)\\n';
       if(dryRun) txt+='  (preview only — nothing written)';
       if(out) out.textContent=txt;
       if(msg) msg.textContent=dryRun?'preview ready':'synced';
@@ -2180,6 +2180,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": ok, "unit": unit, "enabled": enabled, "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 400, body, "application/json")
+        elif path == "/actions/service":
             # Start/stop a managed creative-tool service (Fooocus/SwarmUI/InvokeAI).
             # Each unit has its own line in the server-status sudoers file.
             if not STATUS_ACTIONS_ENABLED or not MANAGED_SERVICES:
