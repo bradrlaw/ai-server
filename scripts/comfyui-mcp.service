@@ -28,6 +28,10 @@ Environment=COMFY_MCP_PUBLIC_URL=http://192.168.4.57:8188
 # Return markdown image links (not MCP ImageContent) so Open WebUI via mcpo renders
 # generated images inline — mcpo serializes ImageContent to inert data-URI text.
 Environment=COMFY_MCP_RETURN_MARKDOWN=1
+# Block inline up to this many seconds waiting for the render before returning a
+# "still running" job handle. Raised from the upstream 30s so a cold model load +
+# sampling finishes in the first call (avoids the client re-queueing duplicate jobs).
+Environment=COMFY_MCP_MAX_WAIT=150
 # set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
 Environment=HOME=/home/brad
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py

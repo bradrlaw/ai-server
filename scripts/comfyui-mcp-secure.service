@@ -1,0 +1,59 @@
+[Unit]
+Description=ComfyUI MCP server (SECURE) — bridges the login-gated ComfyUI (:8189) to MCP clients (mcpo / agents)
+Documentation=https://github.com/joenorton/comfyui-mcp-server
+# Second instance of the bridge, pointed at the password-protected "secure" canvas
+# (comfyui-secure.service, V100 idx2, :8189, ComfyUI-Login). Lets Open WebUI/agents
+# target open vs secure by choosing the corresponding tool namespace (mcpo entries
+# "comfyui" -> :9000/open, "comfyui-secure" -> :9001/secure). Bridge only (no GPU).
+After=network-online.target comfyui-secure.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+# Upstream clone (kept pristine for `git pull`); our launcher overrides bind host/port.
+WorkingDirectory=/srv/ai/src/comfyui-mcp-server
+# ComfyUI endpoint the bridge talks to — the SECURE instance on localhost.
+Environment=COMFYUI_URL=http://127.0.0.1:8189
+# Bearer token for the login gate is read at startup from the SECURE instance's
+# password file (first line == token). Keeping it a FILE means the secret never lands
+# in this unit or in git, and it auto-tracks a password change (scripts/reset-comfyui-password.sh).
+Environment=COMFY_MCP_AUTH_TOKEN_FILE=/srv/ai/comfyui/login/PASSWORD
+# Style workflow library — shared with the open bridge (tracked in the ai-server repo).
+Environment=COMFY_MCP_WORKFLOW_DIR=/srv/ai/config/comfyui-mcp/workflows
+# Bind on all interfaces so the mcpo container reaches us via host.docker.internal.
+Environment=FASTMCP_HOST=0.0.0.0
+# Distinct port from the open bridge (:9000). mcpo proxies this at the "comfyui-secure" entry.
+Environment=FASTMCP_PORT=9001
+# Browser-reachable ComfyUI URL used ONLY for display/asset links. Points at :8189;
+# the user's browser is authenticated to secure via its ComfyUI-Login cookie, so the
+# inline image links render without embedding the token in chat text.
+Environment=COMFY_MCP_PUBLIC_URL=http://192.168.4.57:8189
+# Return markdown image links (not MCP ImageContent) so Open WebUI via mcpo renders
+# generated images inline.
+Environment=COMFY_MCP_RETURN_MARKDOWN=1
+# Block inline up to this many seconds waiting for the render before returning a
+# "still running" job handle. Raised from the upstream 30s because the secure canvas
+# often serves heavier models with a cold 14GB+ load; without this the client
+# re-queues the same workflow (duplicate GPU jobs + a long poll loop).
+Environment=COMFY_MCP_MAX_WAIT=150
+# FastMCP's DNS-rebinding protection only trusts localhost by default; allow the
+# host:port pairs mcpo/agents use to reach THIS bridge (:9001).
+Environment=COMFY_MCP_ALLOWED_HOSTS=host.docker.internal:9001,127.0.0.1:9001,localhost:9001
+# set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
+Environment=HOME=/home/brad
+ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py
+# Bounce mcpo once THIS bridge is accepting connections so the comfyui-secure tools
+# always load (mcpo does not retry a backend that was down at its startup). Poll our
+# own port (:9001, any HTTP reply — a bare GET returns 406) for up to ~60s and ONLY
+# restart mcpo if the bridge came up (guards against a failed-restart loop when secure
+# ComfyUI is down). Leading '-' + guards: never fail this service on a missing tool.
+ExecStartPost=-/bin/bash -c 'for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:9001/mcp && { sleep 2; docker restart mcpo 2>/dev/null || true; exit 0; }; sleep 2; done'
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
