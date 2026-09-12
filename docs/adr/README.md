@@ -37,6 +37,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0018](0018-gpu-upgrade-eval-16-32gb.md) | GPU upgrade eval (16/24/32 GB): arch→CUDA→feature→bandwidth→fit | Accepted |
 | [0019](0019-ups-graceful-shutdown-nut.md) | UPS graceful shutdown via NUT | Accepted |
 | [0020](0020-additional-oss-creative-tools.md) | Add optional OSS creative/training tools alongside ComfyUI | Accepted |
+| [0021](0021-v100-field-guide-eval-dflash2-ecc.md) | V100 field-guide eval: DFlash2 & ECC-off deferred (no action) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
