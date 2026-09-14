@@ -38,6 +38,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0019](0019-ups-graceful-shutdown-nut.md) | UPS graceful shutdown via NUT | Accepted |
 | [0020](0020-additional-oss-creative-tools.md) | Add optional OSS creative/training tools alongside ComfyUI | Accepted |
 | [0021](0021-v100-field-guide-eval-dflash2-ecc.md) | V100 field-guide eval: DFlash2 & ECC-off deferred (no action) | Accepted |
+| [0022](0022-samba-share-srv-ai.md) | Share /srv/ai over SMB (Samba) on Tailscale + LAN | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
