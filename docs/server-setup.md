@@ -35,6 +35,7 @@ Last updated: 2026-06-30
 - [Phase 6 (partial) — ComfyUI generative media (2026-07-03)](#phase-6-partial--comfyui-generative-media-2026-07-03)
 - [Personal-assistant gateways — OpenClaw + Hermes (2026-07-21)](#personal-assistant-gateways--openclaw--hermes-2026-07-21)
 - [Network exposure & firewall (2026-07-07)](#network-exposure--firewall-2026-07-07)
+- [Mounting /srv/ai over SMB (macOS / Windows) — 2026-09-13](#mounting-srvai-over-smb-macos--windows--2026-09-13)
 
 ## 1. Hardware
 
@@ -1353,3 +1354,89 @@ Tailscale devices while blocking any other source. If you ever must reach a
 service from outside, prefer Tailscale over a router port-forward — never expose
 `:8188`. To reset the locked instance's password:
 `sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013).
+
+## Mounting /srv/ai over SMB (macOS / Windows) — 2026-09-13
+
+For bulk file management and cleanup, mount `/srv/ai` natively in macOS Finder or
+Windows Explorer via **Samba (SMB3)**. Config is repo-tracked and installed by a
+sudo script; rationale is in [ADR-0022](adr/0022-samba-share-srv-ai.md).
+
+- Canonical config: [`config/smb.conf`](../config/smb.conf) (SMB3-only,
+  `smb encrypt = required`, bound to `lo tailscale0 eno1` — **never** the docker
+  bridges or the public internet; single share `srv-ai` → `/srv/ai`, macOS
+  `vfs_fruit` interop).
+- Installer: [`scripts/setup-samba.sh`](../scripts/setup-samba.sh) — idempotent;
+  agents cannot sudo, so run it yourself:
+
+```bash
+sudo /srv/ai/scripts/setup-samba.sh
+```
+
+It installs Samba, deploys the config (backs up any existing `/etc/samba/smb.conf`,
+validates with `testparm`), prompts once for an SMB password for `brad`
+(separate from the login password), adds `ufw` rules for port 445 on `tailscale0`
++ the LAN subnet (and `allow 22/tcp`; it does **not** auto-enable ufw, so no SSH
+lockout), then enables `smbd` and disables the unused `nmbd`/NetBIOS daemon.
+
+Mount from any device on the tailnet or LAN (use the server's Tailscale IP or its
+LAN IP; find them with `tailscale ip -4` and `ip -4 addr show eno1`):
+
+```
+macOS    Finder → Go → Connect to Server →  smb://<server-ip>/srv-ai
+Windows  Explorer address bar →             \\<server-ip>\srv-ai
+```
+
+Log in as **`brad`** with the SMB password set above.
+
+**Caveats.**
+- **Not internet-facing** — SMB listens only on loopback + Tailscale + LAN.
+  Encryption is required; if a legacy client can't mount, relax `smb encrypt` to
+  `desired` in `config/smb.conf` and re-run the installer.
+- **Root-owned files** under `/srv/ai` (some model/LoRA files created via sudo)
+  can't be modified/deleted over SMB as `brad`. Fix per-directory as needed, e.g.
+  `sudo chown -R brad:brad /srv/ai/comfyui/models/loras` (the installer prints the
+  count of non-`brad`-owned paths).
+- **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`
+  and remove the LAN `ufw` rule.
+
+### Managing SMB accounts & passwords
+
+The SMB password is stored **separately from the Linux login password**. With the
+default `tdbsam` backend (used by our config) accounts live in
+`/var/lib/samba/private/passdb.tdb` (root-only, mode 0600) as an **NT hash** (MD4
+of the UTF-16 password — not plaintext, but unsalted, so keep that file root-only
+and use a strong password). Changing the Linux/SSH password does **not** change the
+SMB password, and vice-versa.
+
+```bash
+# Change brad's SMB password (prompts twice, no echo):
+sudo smbpasswd brad
+
+# Add an SMB account (must already be a unix user):
+sudo smbpasswd -a <user>
+
+# List SMB accounts:
+sudo pdbedit -L            # add -v for full detail
+
+# Disable / re-enable an account without deleting it:
+sudo smbpasswd -d <user>
+sudo smbpasswd -e <user>
+
+# Remove an SMB account entirely:
+sudo smbpasswd -x <user>
+```
+
+No `smbd` restart is needed — changes take effect on the next login (existing
+mounted sessions persist until they reconnect). To grant another person access,
+first create the unix user (`sudo adduser <user>`), add them to `valid users` in
+`config/smb.conf` (re-run `setup-samba.sh` to redeploy), then `sudo smbpasswd -a
+<user>`. The installer itself runs `smbpasswd -a brad` only on first run (it checks
+`pdbedit -L`), so routine rotation is just `sudo smbpasswd brad`.
+
+Who's currently connected / open files:
+
+```bash
+sudo smbstatus              # sessions, shares, and locked files
+```
+
+
