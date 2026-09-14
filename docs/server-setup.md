@@ -1399,3 +1399,44 @@ Log in as **`brad`** with the SMB password set above.
 - **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`
   and remove the LAN `ufw` rule.
 
+### Managing SMB accounts & passwords
+
+The SMB password is stored **separately from the Linux login password**. With the
+default `tdbsam` backend (used by our config) accounts live in
+`/var/lib/samba/private/passdb.tdb` (root-only, mode 0600) as an **NT hash** (MD4
+of the UTF-16 password — not plaintext, but unsalted, so keep that file root-only
+and use a strong password). Changing the Linux/SSH password does **not** change the
+SMB password, and vice-versa.
+
+```bash
+# Change brad's SMB password (prompts twice, no echo):
+sudo smbpasswd brad
+
+# Add an SMB account (must already be a unix user):
+sudo smbpasswd -a <user>
+
+# List SMB accounts:
+sudo pdbedit -L            # add -v for full detail
+
+# Disable / re-enable an account without deleting it:
+sudo smbpasswd -d <user>
+sudo smbpasswd -e <user>
+
+# Remove an SMB account entirely:
+sudo smbpasswd -x <user>
+```
+
+No `smbd` restart is needed — changes take effect on the next login (existing
+mounted sessions persist until they reconnect). To grant another person access,
+first create the unix user (`sudo adduser <user>`), add them to `valid users` in
+`config/smb.conf` (re-run `setup-samba.sh` to redeploy), then `sudo smbpasswd -a
+<user>`. The installer itself runs `smbpasswd -a brad` only on first run (it checks
+`pdbedit -L`), so routine rotation is just `sudo smbpasswd brad`.
+
+Who's currently connected / open files:
+
+```bash
+sudo smbstatus              # sessions, shares, and locked files
+```
+
+
