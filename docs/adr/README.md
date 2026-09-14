@@ -39,6 +39,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0020](0020-additional-oss-creative-tools.md) | Add optional OSS creative/training tools alongside ComfyUI | Accepted |
 | [0021](0021-v100-field-guide-eval-dflash2-ecc.md) | V100 field-guide eval: DFlash2 & ECC-off deferred (no action) | Accepted |
 | [0022](0022-samba-share-srv-ai.md) | Share /srv/ai over SMB (Samba) on Tailscale + LAN | Accepted |
+| [0023](0023-filebrowser-nonroot.md) | Run the Filebrowser container as non-root (1000:1000) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
