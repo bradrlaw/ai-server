@@ -13,7 +13,10 @@ set -euo pipefail
 MODEL_DIR=/srv/ai/models/qwen3.6-35b-a3b
 BIN=/srv/ai/src/llama.cpp/build/bin/llama-bench
 Q6K="$MODEL_DIR/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
-BF16="$MODEL_DIR/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"   # sharded; loader finds shard 2
+# BF16 pair moved to the bulk HDD (cold tier) — it can't be served on 2×V100
+# (69 GB > 64 GB VRAM), so it only exists as a requant/bench source. See
+# docs/benchmarking.md "MoE benchmark — Qwen3.6-35B-A3B". Sharded; loader finds shard 2.
+BF16="/srv/ai/storage-bulk/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
 
 OUT_DIR="${1:-$MODEL_DIR/bench-$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$OUT_DIR"

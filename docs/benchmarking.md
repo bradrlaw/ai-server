@@ -35,6 +35,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [coding context-window sweep (2026-07-02)](#coding-context-window-sweep-2026-07-02)
   - [Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)](#prompt-processing-prefill-tuning----ubatch-size-2026-07-02)
   - [Gemma-4 benchmarks + context/ubatch tuning (2026-07-02)](#gemma-4-benchmarks--contextubatch-tuning-2026-07-02)
+- [Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)](#host-memory-bandwidth--stream-on-the-i7-6950x-2026-09-23)
 
 ## Tooling
 
@@ -1615,3 +1616,72 @@ was ruled out: ~55 GB weights + KV overflow 64 GB at 256k.
 max-quality slot. The quality delta over Q6 is below eval noise, so this is precision insurance
 rather than a measured win. (Raw study: `docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`
 for the temperature effect; llama-bench numbers in the section above were taken on Q6_K_XL.)
+
+## Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)
+
+Sustained main-memory (DDR4) bandwidth of the host, measured with **McCalpin's
+STREAM** (the `jeffhammond/STREAM` mirror — still the standard, simplest tool for
+this). This is CPU/system RAM bandwidth, not GPU VRAM; it bounds CPU-side work
+like GGUF load/mmap, llama.cpp CPU offload, dataset preprocessing, and the Docker
+app tier.
+
+**Build** (`/srv/ai/src/STREAM`, gitignored):
+```bash
+git clone --depth 1 https://github.com/jeffhammond/STREAM.git
+cd STREAM
+# Arrays 2.5 GiB each (7.6 GiB total) ≫ 25 MB L3 so nothing caches.
+gcc -O3 -march=native -fopenmp -mcmodel=medium \
+    -DSTREAM_ARRAY_SIZE=340000000 -DNTIMES=20 stream.c -o stream_omp
+```
+
+**Run** (10 physical cores, one thread each, pinned):
+```bash
+OMP_NUM_THREADS=10 OMP_PROC_BIND=spread OMP_PLACES=cores ./stream_omp
+```
+
+**Hardware:** i7-6950X (Broadwell-E, 10C/20T, 25 MB L3, single NUMA node),
+**8 × 16 GB = 128 GB across all 4 channels (2 DIMMs/channel)**, DIMMs rated
+**DDR4-3200 (XMP)** but running at the JEDEC-fallback **2133 MT/s** (confirmed via
+`dmidecode`). Governor `schedutil`.
+
+**Results — best rate (MB/s), 20 iterations, best-of:**
+
+| Config                          | Copy   | Scale  | Add    | Triad  |
+|---------------------------------|-------:|-------:|-------:|-------:|
+| **10 threads, spread (cores)**  | 50943  | 34531  | 38054  | 38080  |
+| 10 threads, close (cores)       | 51565  | 34821  | 38130  | **38199** |
+| 20 threads, close (SMT threads) | 49274  | 32564  | 35674  | 35109  |
+
+**Findings:**
+- **~38.2 GB/s Triad, ~51.6 GB/s Copy** is the sustained ceiling. Against the
+  confirmed **DDR4-2133 quad-channel peak (68.3 GB/s)** that's **56 %** on Triad and
+  **~76 %** on Copy — healthy STREAM efficiency for consumer Broadwell-E.
+- **SMT hurts:** 20 threads is ~8 % slower on Triad than 10 — a bandwidth-bound
+  kernel gains nothing from hyperthreads and pays scheduling/contention overhead.
+  Pin **one thread per physical core**.
+- `spread` vs `close` thread placement is within run-to-run noise on this single
+  socket (single NUMA node → no placement penalty).
+- Solution validated on all runs (avg error < 1e-13).
+
+**Tuning — can this be improved?** Channel population is already **optimal** (all
+4 channels filled, 2 DIMMs each), so the only real lever is **memory speed**: the
+DIMMs are rated **DDR4-3200 (XMP)** but the board runs them at the JEDEC-fallback
+**2133 MT/s**. Options, in order of impact/safety:
+1. **Bump 2133 → 2400 (recommended).** DDR4-2400 is Broadwell-E's **official** max;
+   set it via XMP or a manual multiplier in BIOS. Expect stable, ~**+12 %**
+   bandwidth (peak 68.3 → 76.8 GB/s). Requires a reboot into firmware.
+2. **2400 → 2666/2800+ (overclock, optional).** The DIMMs are XMP-3200, but with
+   **8 DIMMs / 2-per-channel (2DPC)** the X99 memory controller often won't hold
+   high speeds — 2133 is likely *why* the board defaulted low. Anything above 2400
+   is overclocking the IMC; validate with an overnight `memtest86`/`memtester` pass
+   before trusting it, and expect diminishing returns.
+3. **CPU governor (marginal, ~1–3 %).** `performance` pins the uncore/mesh
+   frequency higher than `schedutil`, helping bandwidth-bound kernels:
+   `echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`
+   (non-persistent unless made to stick).
+
+**Does it matter here?** For this server's role, host RAM bandwidth rarely
+bottlenecks the AI workloads — inference runs on the V100s (~900 GB/s VRAM) and
+GGUF loading is NVMe/mmap-bound. The safe, worthwhile change is enabling the
+official **2400** in BIOS; chasing higher (2DPC-limited) speeds isn't worth the
+stability risk on a headless always-on box.
