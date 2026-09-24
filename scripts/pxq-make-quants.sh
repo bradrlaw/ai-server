@@ -15,7 +15,7 @@ quant() {  # src out tier
   "$Q" "$src" "$out" "$tier" "$NTHREADS" 2>&1 | tail -3
   ls -la "$out" 2>/dev/null | awk '{printf "  wrote %.2f GB\n",$5/1e9}'
 }
-SRC35=/srv/ai/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf
+SRC35=/srv/ai/storage-bulk/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf
 for T in PXQ6 PXQ4 PXQ3 PXQ2; do
   quant "$SRC35" "$OUT/Qwen3.6-35B-A3B-$T.gguf" "$T"
 done
