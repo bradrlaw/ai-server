@@ -451,6 +451,47 @@ sudo systemctl restart server-status
 The toggle needs no extra sudoers entry (the status service writes the `/run` file as its own
 user); only Start/Stop go through the existing scoped rule.
 
+#### On-demand Qwen-Image 2.1 instance (`comfyui-qwen`, :8190)
+A **separate, self-contained, login-gated** ComfyUI **v0.37.2** instance runs the new
+Qwen-Image 2.1 unified generate+edit model. It is isolated from the H3-pinned 0.30.1 tree
+(which can't be upgraded without breaking the H3 fp16 nodes) but **shares the model store**.
+Full design + rationale in **ADR-0024**. Key facts:
+- App tree `/srv/ai/comfyui-qwen`, venv `/srv/ai/venvs/comfyui-qwen` (**torch 2.8.0+cu128** —
+  `comfy-kitchen` needs torch ≥ 2.7; cu128 still ships Volta sm_70 kernels).
+- Pinned to **idx1 (V100 #1), shared with `comfyui-open`**; the `free_gpu` node evicts the
+  idx1 LLM (`coding`) on generate.
+- **Login-gated** (ComfyUI-Login in `custom_nodes_qwen`); set the password on first visit to
+  `:8190/login`. Shares `/srv/ai/comfyui/models` via `scripts/comfyui-qwen-extra-paths.yaml`;
+  separate `output-qwen`/`input-qwen`/`temp-qwen`/user dir.
+- **`--disable-dynamic-vram` is required** — ComfyUI 0.37's DynamicVRAM allocator OOMs on the
+  WanVAE decode; classic offloading peaks ~29 GB (full bf16, 1024²) with headroom.
+- Models (shared tree): `diffusion_models/qwen_image_2.1_bf16.safetensors`,
+  `text_encoders/qwen3vl_8b_bf16.safetensors` (+ `qwen3vl_8b_int8_convrot.safetensors` kept as
+  a VRAM-relief fallback), `vae/qwen_image_2.1_vae_bf16.safetensors`. In the UI, pick the bf16
+  files in the template's model dropdowns.
+
+One-time setup (owner sudo — agents cannot):
+```bash
+# 1) install the on-demand unit (NOT enabled at boot — start it from the dashboard):
+sudo cp scripts/comfyui-qwen.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 2) refresh the scoped sudoers so the dashboard/quiet-hours can start/stop it
+#    (adds the 3-unit vector + a single-unit comfyui-qwen line):
+sudo install -m 0440 -o root -g root \
+  scripts/server-status-comfyui.sudoers /etc/sudoers.d/server-status-comfyui
+sudo visudo -cf /etc/sudoers.d/server-status-comfyui        # syntax check
+
+# 3) pick up the new COMFYUI_URLS + QUIET_COMFYUI_UNITS (adds the :8190 row/button):
+sudo cp scripts/server-status.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart server-status
+
+# 4) start it (or use the dashboard ▶ Start button on the comfyui-qwen row):
+sudo systemctl start comfyui-qwen
+```
+First run: open `https://<host>:8190/login`, set a password, then load a
+**Qwen-Image 2.1** template (Templates → search "Qwen Image 2.1") and run a t2i / edit.
+
 #### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
 The optional image-gen tools each hold VRAM on a V100 while running and can OOM the
 LLM/ComfyUI tiers if left up, so they are **not enabled at boot** — you start/stop them

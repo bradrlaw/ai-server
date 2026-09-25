@@ -24,9 +24,10 @@
 # update the unit lists below to match (order-sensitive — sudo matches the exact
 # argument vector).
 
-brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open comfyui-secure, /usr/bin/systemctl stop comfyui-open comfyui-secure
+brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open comfyui-secure comfyui-qwen, /usr/bin/systemctl stop comfyui-open comfyui-secure comfyui-qwen
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-open, /usr/bin/systemctl stop comfyui-open
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-secure, /usr/bin/systemctl stop comfyui-secure
+brad ALL=(root) NOPASSWD: /usr/bin/systemctl start comfyui-qwen, /usr/bin/systemctl stop comfyui-qwen
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start fooocus, /usr/bin/systemctl stop fooocus
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start swarmui, /usr/bin/systemctl stop swarmui
 brad ALL=(root) NOPASSWD: /usr/bin/systemctl start invokeai, /usr/bin/systemctl stop invokeai
