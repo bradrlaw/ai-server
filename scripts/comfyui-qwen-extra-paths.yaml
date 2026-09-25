@@ -1,0 +1,31 @@
+# Extra search paths for the on-demand LOCKED Qwen-Image 2.1 instance
+# (comfyui-qwen.service, :8190). This instance is a SEPARATE ComfyUI 0.37.x tree
+# at /srv/ai/comfyui-qwen (kept apart from the H3-pinned 0.30.1 tree at
+# /srv/ai/comfyui), so its own models/ dir is empty. This file points it at the
+# SHARED model tree under /srv/ai/comfyui/models so all instances share weights.
+#
+# It also adds an isolated custom_nodes dir (custom_nodes_qwen) that carries
+# ComfyUI-Login, so the password gate loads ONLY on this instance (mirrors the
+# comfyui-secure pattern). ComfyUI merges this with the instance's own default
+# custom_nodes dir, so the built-in nodes still load too.
+qwen_shared:
+  base_path: /srv/ai/comfyui/
+  checkpoints: models/checkpoints/
+  loras: models/loras/
+  vae: models/vae/
+  text_encoders: |
+    models/text_encoders/
+    models/clip/
+  diffusion_models: |
+    models/unet/
+    models/diffusion_models/
+  clip_vision: models/clip_vision/
+  style_models: models/style_models/
+  embeddings: models/embeddings/
+  upscale_models: models/upscale_models/
+  controlnet: models/controlnet/
+  model_patches: models/model_patches/
+  background_removal: models/background_removal/
+
+qwen_login_nodes:
+  custom_nodes: /srv/ai/comfyui-qwen/custom_nodes_qwen
