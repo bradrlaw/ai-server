@@ -1,0 +1,41 @@
+# aichat -> LiteLLM gateway (OpenAI-compatible) on this server.
+# Default model: uncensored chat slot. MCP tools: comfyui-secure via llm-functions bridge.
+model: aiserver:chat-uncensored-q6
+save: false
+keybindings: emacs
+function_calling: true
+# Apply the default role (image-gen steered to krea2_turbo_bf16) in both modes.
+cmd_prelude: role:default
+repl_prelude: role:default
+# NOTE: a top-level `use_tools` is IGNORED by aichat (tools only activate via the
+# `--use-tools` flag, the REPL `.use-tools` command, or a role/agent that declares
+# `use_tools`). It is kept here only for documentation; the ACTUAL activation lives
+# in roles/default.md's frontmatter (`use_tools: comfyui`), which cmd_prelude/
+# repl_prelude apply to every session. Without that, aichat sends ZERO tools and the
+# model hallucinates fake tool calls / result URLs.
+use_tools: comfyui
+mapping_tools:
+  comfyui: 'comfyui_secure_list_models,comfyui_secure_get_defaults,comfyui_secure_set_defaults,comfyui_secure_list_workflows,comfyui_secure_run_workflow,comfyui_secure_view_image,comfyui_secure_flux1_krea,comfyui_secure_flux2_klein,comfyui_secure_generate_image,comfyui_secure_generate_song,comfyui_secure_krea2_turbo,comfyui_secure_krea2_turbo_bf16,comfyui_secure_z_image_turbo,comfyui_secure_regenerate,comfyui_secure_get_queue_status,comfyui_secure_get_job,comfyui_secure_list_assets,comfyui_secure_get_asset_metadata,comfyui_secure_cancel_job,comfyui_secure_get_publish_info,comfyui_secure_set_comfyui_output_root,comfyui_secure_publish_asset'
+clients:
+  - type: openai-compatible
+    name: aiserver
+    api_base: http://127.0.0.1:4000/v1
+    api_key: sk-REPLACE_WITH_LITELLM_MASTER_KEY
+    models:
+      - name: coding
+        supports_function_calling: true
+      - name: chat
+        supports_function_calling: true
+      - name: big
+        supports_function_calling: true
+      - name: coder-next
+        supports_function_calling: true
+      - name: small
+      - name: small-12b
+      - name: gemma-31b
+      - name: gemma-26b
+      - name: chat-uncensored-q4
+        supports_function_calling: true
+      - name: chat-uncensored-q6
+        supports_function_calling: true
+      - name: small-uncensored

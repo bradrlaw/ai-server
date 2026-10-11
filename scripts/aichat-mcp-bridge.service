@@ -1,0 +1,28 @@
+[Unit]
+Description=aichat MCP bridge — exposes external MCP servers (comfyui-secure, ...) as llm-functions tools for aichat
+Documentation=https://github.com/bradrlaw/ai-server
+# The bridge reads /srv/ai/tools/llm-functions/mcp.json and connects to each MCP
+# server listed there (currently the login-gated comfyui-secure MCP on :9001),
+# re-exposing their tools over a small HTTP API on :8808 that the llm-functions
+# bin shims (bin/comfyui_secure_*) POST to. aichat picks them up via functions.json.
+# Order after the comfyui-secure MCP so listTools() succeeds at boot; the bridge
+# does NOT auto-reconnect if that server restarts — re-run `argc mcp start` (or
+# restart this unit) after the upstream MCP bounces.
+After=network-online.target comfyui-mcp-secure.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai/tools/llm-functions
+Environment=HOME=/home/brad
+Environment=MCP_BRIDGE_PORT=8808
+ExecStart=/usr/bin/node /srv/ai/tools/llm-functions/mcp/bridge/index.js /srv/ai/tools/llm-functions
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
