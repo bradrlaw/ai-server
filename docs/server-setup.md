@@ -1252,6 +1252,59 @@ Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through m
 `http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
 (Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).
 
+## aichat — terminal LLM client + comfyui image gen (ADR-0025)
+
+A lightweight terminal client for talking to the models over SSH, with the
+comfyui-secure image tools wired in. Tracked snapshot (config template, role,
+mcp.json, the bridge patch, attribution) lives in `config/aichat/`; the running
+client is **local & gitignored**. Upstream pieces are all **sigoden / MIT**:
+[`aichat`](https://github.com/sigoden/aichat),
+[`argc`](https://github.com/sigoden/argc),
+[`llm-functions`](https://github.com/sigoden/llm-functions) (pinned `616d8d8`).
+
+- **Binaries:** `~/.local/bin/{aichat,argc}` (static musl, no sudo/cargo needed).
+- **Config:** `~/.config/aichat/config.yaml` (perms `600`) — points at LiteLLM
+  `:4000`, lists all served models, default model `aiserver:chat-uncensored-q6`,
+  `save: false` (no transcript logging). Template: `config/aichat/config.example.yaml`
+  (replace the `api_key` placeholder with `LITELLM_MASTER_KEY` from `docker/.env`).
+- **Default role:** `~/.config/aichat/roles/default.md` (from
+  `config/aichat/roles/default.md`), applied to every session via
+  `cmd_prelude`/`repl_prelude: role:default`. Its frontmatter `use_tools: comfyui`
+  is what **activates the tools**; the body routes unqualified "generate an image"
+  requests to the local `comfyui_secure_krea2_turbo_bf16` workflow.
+- **MCP tools:** `llm-functions` clone at `/srv/ai/tools/llm-functions` (aichat's
+  `functions_dir` is a symlink to it). `mcp.json` (from
+  `config/aichat/llm-functions-mcp.json`) lists the comfyui-secure MCP
+  (`http://127.0.0.1:9001/mcp`). The **bridge** (`mcp/bridge/index.js`) is patched
+  (`config/aichat/llm-functions-bridge.patch`, +72/−6, MIT) to (a) speak
+  streamable-http/SSE and (b) repair the comfyui schema's typeless numeric params
+  so aichat doesn't loop on `{"width":{"width":1024}}`. Run `argc mcp start` once in
+  the clone to generate `functions.json` + `bin/` shims.
+- **Bridge service:** `scripts/aichat-mcp-bridge.service` keeps the bridge alive on
+  `:8808`. Install: `sudo scripts/install-aichat-mcp-bridge.sh`. It does **not**
+  auto-reconnect — after quiet-hours bounces comfyui-secure, run
+  `sudo systemctl restart aichat-mcp-bridge` (or `argc mcp start`).
+- **No `[Y/n]` prompt:** `tools/llm-functions/.env` (gitignored) sets
+  `LLM_MCP_SKIP_CONFIRM=comfyui_secure_[a-z0-9_]+` so the comfyui tools run without
+  confirmation; other MCP servers added later still prompt.
+
+**Two gotchas (both cause "no image generated, model prints a fake URL"):**
+
+1. **Tools activate via the role, not a top-level `use_tools`** — aichat ignores a
+   top-level `use_tools`; it only attaches tools from `--use-tools`, the REPL
+   `.use-tools`, or a role/agent frontmatter. If tools aren't attached, the model
+   invents a textual `<tool_call>` **and hallucinates a result URL** (we saw a bogus
+   `s3.amazonaws.com` link) — nothing is generated and nothing leaves the box.
+2. **Each tool-using model needs `supports_function_calling: true`** in its config
+   entry.
+
+From-scratch rebuild: install the two binaries; clone `llm-functions` at `616d8d8`
+and `git apply config/aichat/llm-functions-bridge.patch`; `cd` in and
+`npm --prefix mcp/bridge install`; copy `config/aichat/llm-functions-mcp.json` →
+`mcp.json`; `argc mcp start`; copy the config template + role into
+`~/.config/aichat/` (fill the key, `chmod 600`); symlink `functions_dir`; create
+the `.env` skip-confirm line; `sudo scripts/install-aichat-mcp-bridge.sh`.
+
 ## Personal-assistant gateways — OpenClaw + Hermes (2026-07-21)
 
 Two self-hosted **always-on assistant gateways** run as app-tier containers
