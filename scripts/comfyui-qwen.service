@@ -1,0 +1,68 @@
+[Unit]
+Description=ComfyUI (LOCKED, on-demand) — Qwen-Image 2.1 generate+edit server on V100 #1 (idx1), :8190
+Documentation=https://github.com/comfyanonymous/ComfyUI
+After=network-online.target nvidia-persistenced.service
+Wants=network-online.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+# SEPARATE ComfyUI 0.37.x tree + venv (kept apart from the H3-pinned 0.30.1 tree
+# and its venv at /srv/ai/comfyui + /srv/ai/venvs/comfyui). Qwen-Image 2.1 needs
+# ComfyUI >= 0.37.0; upgrading the H3 tree in place would break the pinned
+# MiniMax-H3 fp16 custom nodes, so this instance is fully self-contained.
+WorkingDirectory=/srv/ai/comfyui-qwen
+# Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
+# cards as nvidia-smi (idx0=Titan X, idx1/2=V100).
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Pin to V100 #1 (idx1 = the `coding` card), SHARED with the OPEN instance
+# (comfyui-open, idx1). Both are on-demand image servers that rarely run at once;
+# the free_gpu env below evicts the idx1 LLM occupants while generating.
+Environment=CUDA_VISIBLE_DEVICES=1
+# Reduce allocator fragmentation so large activation spikes (Qwen-Image DiT
+# attention at higher resolutions) can reuse reserved-but-unallocated VRAM
+# instead of OOMing on the 32 GB V100.
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+Environment=LLAMASWAP_URL=http://127.0.0.1:9090
+# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
+# keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
+# and idx0 (small, small-uncensored). Mirrors comfyui-open (same card). Keep in
+# sync with llama-swap.yaml.
+Environment=FREE_GPU_KEEP=chat,gemma-26b,small,small-uncensored
+Environment=FREE_GPU_IDLE_SECS=300
+Environment=FREE_GPU_RESTORE=coding
+# Optional per-instance extra args (currently only --fp16-unet), toggled from the
+# status page. Lives on tmpfs (/run) so it AUTO-RESETS to empty on every boot.
+# The leading '-' makes a missing file non-fatal.
+EnvironmentFile=-/run/comfyui-fp16/qwen.env
+# Auth: ComfyUI-Login is loaded via the custom_nodes_qwen path in the extra-paths
+# config below (present ONLY on this instance). Set the shared password on first
+# visit to :8190/login. The PASSWORD lives at
+# /srv/ai/comfyui-qwen/login/PASSWORD (delete it to reset).
+# Shared: models/ (via --extra-model-paths-config, points at /srv/ai/comfyui/models).
+# Separate: custom_nodes, output/input/temp, --user-directory (isolates this
+# instance's nodes, assets, workflows and settings from the H3 tree).
+#
+# --disable-dynamic-vram is REQUIRED on this V100: ComfyUI 0.37's new comfy-aimdo
+# "DynamicVRAM" allocator greedily reserves ~30 GB and then OOMs during the
+# Qwen-Image 2.1 WanVAE decode (the sampler finishes, VAE decode fails to grow).
+# Classic estimate-based offloading peaks at ~29 GB for full-bf16 1024^2 with
+# ~2.7 GB headroom and completes cleanly. See ADR-0024.
+ExecStart=/srv/ai/venvs/comfyui-qwen/bin/python /srv/ai/comfyui-qwen/main.py \
+  --listen 0.0.0.0 --port 8190 \
+  --disable-dynamic-vram \
+  --extra-model-paths-config /srv/ai/scripts/comfyui-qwen-extra-paths.yaml \
+  --output-directory /srv/ai/comfyui-qwen/output-qwen \
+  --input-directory /srv/ai/comfyui-qwen/input-qwen \
+  --temp-directory /srv/ai/comfyui-qwen/temp-qwen \
+  --user-directory /srv/ai/comfyui-qwen/user \
+  --database-url sqlite:////srv/ai/comfyui-qwen/user/comfyui-qwen.db \
+  --preview-method auto $COMFYUI_EXTRA_ARGS
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
