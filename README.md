@@ -339,6 +339,14 @@ separately by their respective creators and are not redistributed here.)
 | SearXNG | https://github.com/searxng/searxng | Self-hosted metasearch engine used for web-search tooling. |
 | Filebrowser | https://github.com/filebrowser/filebrowser | Web file manager for browsing/downloading generated assets and models. |
 
+### Terminal client tooling
+
+| Project | Link | How it's used |
+|---------|------|---------------|
+| aichat | https://github.com/sigoden/aichat | Lightweight terminal LLM client over the LiteLLM gateway; default uncensored chat slot, model selection, and comfyui-secure image gen from the shell (MIT; see ADR-0025 + `config/aichat/`). |
+| argc | https://github.com/sigoden/argc | Builds the `llm-functions` tool shims + `functions.json` that expose MCP tools to aichat (MIT). |
+| llm-functions | https://github.com/sigoden/llm-functions | Function-calling runtime + MCP bridge for aichat (MIT, pinned `616d8d8`; local bridge patch for streamable-http + schema repair in `config/aichat/llm-functions-bridge.patch`). |
+
 ### Optional add-on tools (alternative image-gen UIs + training)
 
 Optional, installed alongside — not replacing — ComfyUI. Install + full attribution in
