@@ -52,15 +52,25 @@ attribution README) plus the systemd unit + installer under `scripts/`.
   (nothing leaves the box); OWUI/mcpo path untouched; reproducible from the tracked
   snapshot + upstream `616d8d8`.
 - Negative / trade-offs: the client lives outside the repo (local dirs), so the
-  snapshot must be kept in sync by hand after config changes. The bridge holds a
-  persistent connection to comfyui-secure and does **not** auto-reconnect — after
-  quiet-hours stops/restarts comfyui-secure the bridge needs
-  `sudo systemctl restart aichat-mcp-bridge` (or `argc mcp start`). The comfyui
-  schema patch is name-heuristic; new typeless params may need the hint lists
-  extended.
-- Follow-ups / things to watch: consider adding auto-reconnect or a
-  `PartOf=`/restart hook tying the bridge to `comfyui-mcp-secure.service`; keep the
-  `config/aichat/` snapshot updated when the roster or tool set changes.
+  snapshot must be kept in sync by hand after config changes. The bridge opens a
+  single session to its upstream MCP and has **no reconnect logic**, so it must be
+  restarted whenever `comfyui-mcp-secure` (`:9001`) restarts; this is now handled
+  automatically by `PartOf=comfyui-mcp-secure.service` on the bridge unit (see
+  below). The comfyui schema patch is name-heuristic; new typeless params may need
+  the hint lists extended.
+- Follow-ups / things to watch: keep the `config/aichat/` snapshot updated when the
+  roster or tool set changes. Note the restart hook is deliberately tied to
+  `comfyui-mcp-secure` (the bridge's actual upstream), **not** `comfyui-secure`
+  (`:8189`): quiet hours stops/starts the latter, and `PartOf` doesn't propagate
+  *start*, so tying to it would strand the bridge down for the rest of the day.
+
+### Restart hook
+The bridge unit declares `After=comfyui-mcp-secure.service` + `PartOf=comfyui-mcp-secure.service`.
+`PartOf` propagates the upstream MCP's stop/restart to the bridge, and `After`
+ensures the bridge comes back up only once the upstream is ready — so the one event
+that breaks the bridge's session (`systemctl restart comfyui-mcp-secure`, e.g. after
+a workflow-param change) now transparently restarts the bridge too. Quiet hours does
+not touch `comfyui-mcp-secure`, so the daily deep-idle cycle leaves the bridge alone.
 
 ## Alternatives considered
 - **Open WebUI only** — already available, but browser-bound; the ask was
