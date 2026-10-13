@@ -5,11 +5,23 @@ Documentation=https://github.com/bradrlaw/ai-server
 # server listed there (currently the login-gated comfyui-secure MCP on :9001),
 # re-exposing their tools over a small HTTP API on :8808 that the llm-functions
 # bin shims (bin/comfyui_secure_*) POST to. aichat picks them up via functions.json.
-# Order after the comfyui-secure MCP so listTools() succeeds at boot; the bridge
-# does NOT auto-reconnect if that server restarts — re-run `argc mcp start` (or
-# restart this unit) after the upstream MCP bounces.
+#
+# The bridge opens ONE session to :9001 at startup and has NO reconnect logic, so a
+# restart of comfyui-mcp-secure (e.g. after a workflow-param change:
+# `systemctl restart comfyui-mcp-secure`) leaves the bridge talking to a dead
+# session while its process stays alive (Restart=on-failure never fires). The
+# PartOf+After below make systemd restart THIS unit whenever comfyui-mcp-secure is
+# restarted, re-establishing the session automatically.
+#   - After=  : start/restart the bridge only once the upstream MCP is up, so the
+#               startup listTools() succeeds.
+#   - PartOf= : propagate the upstream's stop/restart to the bridge. Deliberately
+#               tied to comfyui-mcp-secure (:9001, the bridge's actual upstream),
+#               NOT comfyui-secure (:8189) — quiet hours stops/starts the latter and
+#               PartOf doesn't propagate *start*, which would strand the bridge down.
+#               comfyui-mcp-secure is untouched by quiet hours.
 After=network-online.target comfyui-mcp-secure.service
 Wants=network-online.target
+PartOf=comfyui-mcp-secure.service
 
 [Service]
 Type=simple

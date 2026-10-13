@@ -1310,9 +1310,12 @@ client is **local & gitignored**. Upstream pieces are all **sigoden / MIT**:
   so aichat doesn't loop on `{"width":{"width":1024}}`. Run `argc mcp start` once in
   the clone to generate `functions.json` + `bin/` shims.
 - **Bridge service:** `scripts/aichat-mcp-bridge.service` keeps the bridge alive on
-  `:8808`. Install: `sudo scripts/install-aichat-mcp-bridge.sh`. It does **not**
-  auto-reconnect — after quiet-hours bounces comfyui-secure, run
-  `sudo systemctl restart aichat-mcp-bridge` (or `argc mcp start`).
+  `:8808`. Install: `sudo scripts/install-aichat-mcp-bridge.sh`. The bridge has **no
+  reconnect logic**, so the unit declares `After=` + `PartOf=comfyui-mcp-secure.service`:
+  a restart of the upstream MCP (`:9001`, e.g. `systemctl restart comfyui-mcp-secure`
+  after a workflow-param change) now auto-restarts the bridge. It is tied to
+  `comfyui-mcp-secure`, **not** `comfyui-secure` (`:8189`) — quiet hours stops/starts
+  the latter and `PartOf` doesn't propagate *start*, which would strand the bridge.
 - **No `[Y/n]` prompt:** `tools/llm-functions/.env` (gitignored) sets
   `LLM_MCP_SKIP_CONFIRM=comfyui_secure_[a-z0-9_]+` so the comfyui tools run without
   confirmation; other MCP servers added later still prompt.
