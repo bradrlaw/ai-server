@@ -335,7 +335,8 @@ docker compose logs -f litellm                       # follow logs
 | Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.base.yaml` (or a mode's `preload:`) | re-render (`llama-swap-mode.py set <mode>`) then `sudo systemctl restart llama-swap` (boot preload only runs at process start) |
 | Switch serving mode (daily / heavy-coding / agentic) | — | `scripts/llama-swap-mode.py set agentic` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the [`llama-swap-mode` MCP](#llama-swap-mode-mcp-switch-serving-modes-from-a-client) (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
 | Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
-| GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
+| GPU power caps | `power_limits` in `scripts/gpu-fan-control.config.json` (or the status dashboard's per-GPU power dropdown) | none — the daemon re-reads it every `power_recheck_sec` (30 s) and applies it live; a raw `nvidia-smi -pl` is reverted on the next pass |
+| GPU fan curves / `min_duty` / zones | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup) |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
@@ -682,7 +683,8 @@ worst-case, memory-bandwidth-saturating prefill) the HBM plateaus at 85 °C and 
 card SOFT-throttles itself to ~180 W / ~1130 MHz to hold that temp. This is safe
 (within HBM2 spec) and expected for a passive Tesla + 40 mm fan. Normal inference/
 serving (token-gen dominated, far lower sustained mem BW) should not reach this.
-To ELIMINATE throttle under max load, cap power/clocks:
+To ELIMINATE throttle under max load, cap power/clocks (historical, pre-daemon — power caps
+are now owned by `gpu-fan-control`, which reverts a raw `-pl` within 30 s; see below):
   `sudo nvidia-smi -i 1 -pl 200`   (range 100-250 W; card self-limits ~180 W at 85 °C)
   or lock the graphics clock: `sudo nvidia-smi -i 1 -lgc <MHz>` (mem clock is fixed 877).
 Enable `nvidia-smi -pm 1` (persistence) so caps survive. Tune per-card if desired.
@@ -710,9 +712,13 @@ a top-level `power_limits` object in `gpu-fan-control.config.json`:
 ```
 `gpu-fan-control.py:reconcile_power_limits()` runs `nvidia-smi -i N -pm 1 -pl W` for each
 entry (logged as `power cap GPUN 250W -> 175W`). A capping failure is **non-fatal** — the
-fan daemon keeps running (airflow is the safety-critical function). To change caps, edit the
-config and re-run `sudo install-fan-service.sh` (validates 50-400 W range). Board limits:
-V100 100-250 W, P100 125-250 W.
+fan daemon keeps running (airflow is the safety-critical function). To change caps, edit
+`power_limits` in the config (or use the status dashboard's per-GPU power dropdown): the
+daemon re-reads it every `power_recheck_sec` (30 s) and applies it live — no restart, no GPU
+reset. A raw `nvidia-smi -pl` is reverted on the next pass, so benchmarks that sweep caps
+must go through the config (`power-cap-sweep.sh` / `comfyui-power-sweep.py` do).
+`sudo install-fan-service.sh` validates the 50-400 W range at (re)install. Board limits:
+V100 100-250 W, P100 125-250 W, Titan X 150-275 W.
 
 **Boot/recovery self-heal (2026-07-14).** After a wall-power loss, a V100 (bus04/idx2)
 "fell off the bus" (`NVRM: ... has fallen off the bus`; visible in `lspci` but not

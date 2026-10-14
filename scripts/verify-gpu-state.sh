@@ -3,12 +3,18 @@
 # Verifies all expected GPUs enumerated and power caps + fan daemon are in the
 # right state WITHOUT manual intervention. Safe to run any time; needs no root.
 #
-# Expected (see gpu-fan-control.config.json):
-#   idx0 P100 (bus01) = 200W, idx1 V100 (bus03) = 175W, idx2 V100 (bus04) = 175W
+# Expected GPU count + caps are read from gpu-fan-control.config.json (the daemon's
+# live source of truth, also edited by the status dashboard), so this check never
+# drifts from what the daemon is told to enforce.
 set -u
 
-EXPECT_COUNT=3
-declare -A EXPECT_CAP=( [0]=200 [1]=175 [2]=175 )
+CONFIG="$(dirname "$(readlink -f "$0")")/gpu-fan-control.config.json"
+EXPECT_COUNT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("expected_gpu_count", 3))' "$CONFIG" 2>/dev/null || echo 3)
+declare -A EXPECT_CAP=()
+while read -r i w; do EXPECT_CAP[$i]=$w; done < <(python3 -c '
+import json, sys
+for i, w in json.load(open(sys.argv[1])).get("power_limits", {}).items():
+    print(int(i), int(w))' "$CONFIG" 2>/dev/null)
 fail=0
 
 echo "=== GPU state check $(date) ==="

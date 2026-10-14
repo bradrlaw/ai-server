@@ -34,7 +34,9 @@ Read this first, then the detailed docs:
 - **CUDA 12.x only** — 13.x dropped Maxwell/Pascal/Volta (sm_52/sm_60/sm_70). sm_70 also means **no fp8 /
   FlashAttention-2 / SageAttention**; use `sdpa` attention and avoid `*_fast` fp8 paths in ComfyUI.
 - **Keep GPUs under thermal limits** via power caps applied at boot by the `gpu-fan-control`
-  service (Titan X idx0 200W, V100 idx1 175W / idx2 200W); V100 HBM throttles ~85 °C. Maxwell GPU
+  service (Titan X idx0 200W, V100 idx1/idx2 175W each — `power_limits` in
+  `scripts/gpu-fan-control.config.json`, re-read live every 30 s, so a raw `nvidia-smi -pl`
+  gets reverted: change caps via that file or the status dashboard); V100 HBM throttles ~85 °C. Maxwell GPU
   Boost 2.0 self-trims the Titan X to ~200W/~1126MHz at its 83 °C target regardless of a higher cap.
 - **Clock is UTC, owner is US Eastern.** The machine runs `Etc/UTC` but the owner thinks in
   EST/EDT (~4–5 h offset). Any wall-clock scheduling (cron, timers, the quiet-hours window) must
