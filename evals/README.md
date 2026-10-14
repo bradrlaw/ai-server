@@ -115,10 +115,12 @@ refreshes the test's `summary.html`.
 - **`outputs/<label>/run.html`** — a per-run page: metric cards, the llama.cpp load
   command, the sampler, the full `meta.json`, and (for HTML tests) the rendered page inline.
 
-Both are plain files. **To view rendered pages, use the evals web viewer at
-`http://<server>:8085/`** (a read-only static server that serves this tree with
-directory listing) — open `localmind-landing-page/summary.html`, then click into any
-run. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it shows HTML
+Both are plain files. **To view rendered pages, open them straight from the SMB share**
+(`smb://<server-ip>/srv-ai` on macOS, `\\<server-ip>\srv-ai` on Windows — see
+[Mounting /srv/ai over SMB](../docs/server-setup.md#mounting-srvai-over-smb-macos--windows--2026-09-13)):
+browse to `evals/localmind-landing-page/`, open `summary.html` in a browser, then click
+into any run. Links and the `run.html` inline preview are relative, so they work from the
+share. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it shows HTML
 *source* rather than rendering it.
 
 ## Scoring
