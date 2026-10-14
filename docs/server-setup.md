@@ -670,6 +670,13 @@ proves the daemon drives that pwm from that GPU, not which card the fan physical
 sits on. Always confirm with the forced-fan cross-test. (`identify-fan.sh` is still
 useful for pwm↔tach discovery and the P100/case/side-fan classification.)
 
+**Re-run it after any fan/shroud re-wiring:** `sudo scripts/verify-gpu-fan-mapping.sh`
+(GPUs idle; ~2-3 min). It reads the zones from `gpu-fan-control.config.json` (hwmon found
+by name), maxes each zone's fan in turn, and reports per zone whether the fan **responds**
+(tach at floor vs max — flags a dead fan, a missing tach, or a 3-pin DC fan on a
+PWM-mode header) and whether it physically cools the GPU the config says (OK / MISMATCH).
+Exit 0 only if everything matches.
+
 ### Fan control drives off HBM MEMORY temp (2026-07-01)
 The daemon controls each V100 zone on **max(core, memory)** temp, not core alone.
 Reason: the V100's HBM2 `temperature.memory` runs ~15-20 °C HOTTER than the core and
@@ -692,6 +699,15 @@ Enable `nvidia-smi -pm 1` (persistence) so caps survive. Tune per-card if desire
 ### Power-cap sweep results + automatic caps at boot (2026-07-01)
 `power-cap-sweep.sh` sweeps caps and benches prefill+decode, recording peak temps and
 throughput. Results (Qwen3.6-27B on V100s, Qwen3.5-9B Q8_0 on P100):
+
+> **Tool update (2026-10):** the sweep is now `scripts/power-cap-sweep.py` (the `.sh` is a
+> back-compat shim). It sets each cap **through the daemon's config** (no sudo; the old raw
+> `nvidia-smi -pl` was silently reverted by the 30 s reconcile), runs several GPUs in
+> lockstep, records fan RPM/duty, throttle reasons and cool-down time, has a `--soak`
+> steady-state phase, restores the original caps on exit, and writes CSVs to
+> `docs/data/thermal/`. Cooling A/B example:
+> `scripts/power-cap-sweep.py --gpus 1 2 --caps 175 225 250 --free --label <shroud-layout>`
+> then `--caps 175 --soak 600`; swap the shrouds between cards and repeat.
 
 | GPU | 250W | 200W | 175W | 150W | chosen |
 |-----|------|------|------|------|--------|
@@ -716,7 +732,7 @@ fan daemon keeps running (airflow is the safety-critical function). To change ca
 `power_limits` in the config (or use the status dashboard's per-GPU power dropdown): the
 daemon re-reads it every `power_recheck_sec` (30 s) and applies it live — no restart, no GPU
 reset. A raw `nvidia-smi -pl` is reverted on the next pass, so benchmarks that sweep caps
-must go through the config (`power-cap-sweep.sh` / `comfyui-power-sweep.py` do).
+must go through the config (`power-cap-sweep.py` / `comfyui-power-sweep.py` do).
 `sudo install-fan-service.sh` validates the 50-400 W range at (re)install. Board limits:
 V100 100-250 W, P100 125-250 W, Titan X 150-275 W.
 

@@ -290,7 +290,7 @@ Things others running older multi-GPU boxes may find reusable:
 | `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from `llama-swap.yaml` so it never drifts. |
 | `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
 | `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |
-| `scripts/bench-*.sh`, `power-cap-sweep.sh`, `verify-gpu-*.sh` | Benchmarking, power/thermal sweeps, and GPU/fan-mapping verification helpers. |
+| `scripts/bench-*.sh`, `power-cap-sweep.py`, `verify-gpu-*.sh` | Benchmarking, power/thermal sweeps (caps set via the fan daemon's config), and GPU-state / fan-mapping verification helpers. |
 | `scripts/copilot-byok.sh` | Point **GitHub Copilot** at the local endpoint (bring-your-own-key). |
 
 ## Documentation
