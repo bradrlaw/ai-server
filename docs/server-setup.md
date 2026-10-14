@@ -341,6 +341,7 @@ docker compose logs -f litellm                       # follow logs
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
 | Enable the OWUI status banner | `cp scripts/server-status.env.example scripts/server-status.env`, set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
+| Status dashboard password | — | `python3 scripts/server-status-service.py --set-password` as `brad` (no sudo/restart; signs every browser out) — see [sign-in](#status-dashboard-sign-in-adr-0027) |
 
 ### Check state / warm the daily models
 ```bash
@@ -372,6 +373,29 @@ sudo systemctl start comfyui-open comfyui-secure server-status
 ```
 Leaving ComfyUI running is normal (image gen stays instant); just know the V100s won't
 deep-idle until their CUDA context is gone.
+
+### Status dashboard sign-in (ADR-0027)
+The `server-status` dashboard (`http://<host>:9095/`) can stop/start services and change GPU
+power caps, so it asks every browser to **sign in** with one shared password. It also blocks
+cross-site requests: every `POST /actions/...` needs the session, a same-origin request and
+the page's CSRF token. Set or change the password as `brad` (no sudo, no restart):
+```bash
+python3 /srv/ai/scripts/server-status-service.py --set-password
+```
+- **No password ⇒ nobody can sign in** (fails closed). `install-status-service.sh` prompts
+  for one if it's missing.
+- **Changing the password applies immediately and signs every browser out.** Restarting the
+  service does too (sessions are in memory). Sessions also end after 12 h idle or 7 d total.
+- **Lockout:** 5 wrong passwords from one IP ⇒ 429 for 15 min. Sign-ins are logged:
+  `journalctl -u server-status | grep '\[auth\]'`.
+- **No sign-in needed for read-only JSON from the host and containers.** That covers
+  `/status.json`, `/history.json` and the chart PNGs (the `curl` lines above, and the Open
+  WebUI status banner) — `STATUS_TRUSTED_READ_NETS`. From the LAN or Tailscale they need a
+  session, like the page.
+- **The `POST /actions/...` endpoints below are what the dashboard buttons call.** They can't
+  be driven by a plain `curl` any more.
+- **Plain HTTP:** the password crosses the LAN unencrypted (Tailscale traffic is encrypted),
+  so don't reuse one from elsewhere.
 
 ### Dual-V100 for oversized ComfyUI models (component placement)
 Some models don't fit one 32 GB V100 even quantized. The MiniMax-H3 reference-to-video
@@ -439,7 +463,8 @@ are listed as separate rows and can be started/stopped **independently**
 (`POST /actions/comfyui?action=start|stop&unit=comfyui-open`) — handy for waking one
 instance during the deep-idle window without SSHing in. Omitting `unit` still controls both
 together (what quiet hours uses). These reuse the scoped sudoers rule and are gated by
-`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only). The
+`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only) and by the
+dashboard sign-in. The
 sudoers file grants both the pair command (quiet hours) and the single-unit commands
 (independent buttons).
 
@@ -1503,6 +1528,7 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | ComfyUI MCP bridge **open** (`comfyui-mcp`) | 9000 | none — same exposure as `:8188` |
 | ComfyUI MCP bridge **secure** (`comfyui-mcp-secure`) | 9001 | none on the bridge (it injects the `:8189` login) → **kernel-filtered to localhost + mcpo** via the internal `mcp-secure` network (ADR-0026) |
 | aichat MCP bridge | 127.0.0.1:8808 | none → loopback bind + kernel filter (ADR-0026) |
+| Status dashboard (`server-status`) | 9095 | sign-in (one shared password) + same-origin/CSRF checks on every action; read-only JSON open to the host + containers only (ADR-0027) |
 
 Services that hold credentials for *another* service (the two secure-canvas MCP bridges) are
 fenced with per-unit systemd IP filters (`IPAddressAllow`/`IPAddressDeny`). These hold

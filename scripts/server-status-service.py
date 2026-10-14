@@ -9,6 +9,13 @@ containers (Open WebUI) and browsers can reach it:
   GET /             -> minimal auto-refreshing HTML dashboard (foundation for a
                        richer page later)
   GET /healthz      -> "ok"
+  GET|POST /login, POST /logout, POST /actions/* (dashboard controls)
+
+Access control (ADR-0027): every browser must sign in with the dashboard password
+(set it with `python3 server-status-service.py --set-password`, as the service user,
+no sudo). Every POST also needs the session's CSRF token. Read-only JSON stays open
+to the host itself and Docker containers (STATUS_TRUSTED_READ_NETS) for the OWUI
+filter and local curl; actions never are.
 
 Sources (all read locally on the host):
   - llama-swap   : http://127.0.0.1:9090/running  and  /v1/models
@@ -35,10 +42,16 @@ Optional background workers:
 
 from __future__ import annotations
 
+import base64
+import getpass
+import hashlib
+import hmac
+import ipaddress
 import json
 import math
 import os
 import re
+import secrets
 import subprocess
 import sys
 import threading
@@ -308,6 +321,38 @@ QUIET_WARM_ON_START = [
     ).split(",")
     if m.strip()
 ]
+
+# --- Dashboard login + CSRF (ADR-0027) -----------------------------------------
+# One shared dashboard password, stored as a PBKDF2 hash in STATUS_AUTH_FILE (0600,
+# owned by the service user). Missing/unreadable file => nobody can sign in (fail
+# closed). Re-read on change, so a new password applies without a restart and signs
+# every existing session out.
+_DEFAULT_AUTH_FILE = "/srv/ai/var/status-service/auth.json"
+STATUS_AUTH_FILE = os.environ.get("STATUS_AUTH_FILE", _DEFAULT_AUTH_FILE)
+# Sessions live in memory only (a service restart signs everyone out). Idle = no
+# request at all; an open dashboard tab polls every 5 s, so it only expires once
+# closed. Max = hard cap since sign-in.
+STATUS_SESSION_IDLE_SECS = float(os.environ.get("STATUS_SESSION_IDLE_SECS", str(12 * 3600)))
+STATUS_SESSION_MAX_SECS = float(os.environ.get("STATUS_SESSION_MAX_SECS", str(7 * 86400)))
+# Sources that may READ the JSON/chart endpoints without signing in: the host itself
+# (local curl, SSH tunnels) and Docker containers (the Open WebUI status filter calls
+# host.docker.internal:9095/status.json). Never applies to /, /login or /actions/*.
+STATUS_TRUSTED_READ_NETS = []
+for _n in os.environ.get(
+    "STATUS_TRUSTED_READ_NETS", "127.0.0.0/8,::1/128,172.16.0.0/12"
+).split(","):
+    if _n.strip():
+        STATUS_TRUSTED_READ_NETS.append(ipaddress.ip_network(_n.strip(), strict=False))
+# Extra browser origins allowed to POST, e.g. if a TLS reverse proxy fronts the page
+# ("https://ai.example.ts.net"). The page's own http(s)://<Host> is always allowed.
+STATUS_EXTRA_ORIGINS = {
+    o.strip().rstrip("/")
+    for o in os.environ.get("STATUS_EXTRA_ORIGINS", "").split(",")
+    if o.strip()
+}
+# Failed sign-ins allowed per source IP per window before it gets 429s.
+STATUS_LOGIN_MAX_FAILS = int(os.environ.get("STATUS_LOGIN_MAX_FAILS", "5"))
+STATUS_LOGIN_WINDOW_SECS = float(os.environ.get("STATUS_LOGIN_WINDOW_SECS", "900"))
 
 # --- History (in-memory time series for the dashboard sparklines) -------------
 # A background thread snapshots per-GPU util/power/temp/VRAM and host CPU/RAM %
@@ -1601,6 +1646,7 @@ def _quiet_hours_loop():
 _HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="__CSRF_TOKEN__">
 <title>AI Server Status</title>
 <style>
   :root { color-scheme: dark; }
@@ -1659,7 +1705,7 @@ _HTML = """<!doctype html>
 </style></head>
 <body>
 <div id="toasts"></div>
-<header><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
+<header><button class="act" style="float:right" onclick="logout()">Sign out</button><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
   <section><h2>Models (llama-swap) <span class="hsub" id="modebadge"></span></h2><div id="models">…</div></section>
   <section><h2>GPUs</h2><div id="gpus">…</div></section>
@@ -1680,6 +1726,17 @@ _HTML = """<!doctype html>
   </section>
 </main>
 <script>
+const CSRF=(document.querySelector('meta[name="csrf-token"]')||{}).content||'';
+// Every request goes through api(): it sends the session's CSRF token (required on
+// POSTs) and returns to the sign-in page when the session has expired.
+async function api(url, opts){
+  opts=Object.assign({cache:'no-store', credentials:'same-origin'}, opts||{});
+  opts.headers=Object.assign({'X-CSRF-Token':CSRF}, opts.headers||{});
+  const r=await fetch(url, opts);
+  if(r.status===401){ location.href='login'; throw new Error('signed out'); }
+  return r;
+}
+async function logout(){ try{ await api('logout',{method:'POST'}); }catch(e){} location.href='login'; }
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
 function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 function fmtK(n){ if(n==null) return '–'; return n>=1000? (n/1000).toFixed(1)+'k' : String(n); }
@@ -1733,7 +1790,7 @@ async function setGpuPower(el, index){
   el.disabled = true;
   if(msg) msg.textContent = '…';
   try{
-    const r = await fetch('actions/gpu-power?index='+index+'&watts='+encodeURIComponent(watts), {method:'POST'});
+    const r = await api('actions/gpu-power?index='+index+'&watts='+encodeURIComponent(watts), {method:'POST'});
     const d = await r.json();
     if(d.ok){
       if(msg) msg.textContent = esc(d.detail || ('set '+watts+' W'));
@@ -1791,7 +1848,7 @@ function cell(vals, unit, opts){
 }
 async function refreshHistory(){
   try{
-    const r = await fetch('history.json', {cache:'no-store'}); const d = await r.json();
+    const r = await api('history.json'); const d = await r.json();
     if(!d.count){ document.getElementById('history').innerHTML = '<span class="sub">collecting… (first sample within '+Math.round(d.interval)+'s)</span>'; return; }
     const mins = Math.round(d.count*d.interval/60);
     document.getElementById('histspan').textContent = '· last '+(mins>=1? mins+' min':d.count*d.interval+'s')+' ('+d.count+' pts @ '+Math.round(d.interval)+'s)';
@@ -1812,7 +1869,7 @@ async function refreshHistory(){
   }catch(e){ document.getElementById('history').innerHTML = '<span class="sub">history error: '+esc(String(e))+'</span>'; }
 }
 async function refresh(){  try{
-    const r = await fetch('status.json', {cache:'no-store'}); const d = await r.json();
+    const r = await api('status.json'); const d = await r.json();
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
     // models
     let m = d.models;
@@ -1963,7 +2020,7 @@ async function toggleQuiet(el){
   el.disabled=true;
   if(msg) msg.textContent='…';
   try{
-    const r=await fetch('actions/quiet?paused='+paused,{method:'POST'});
+    const r=await api('actions/quiet?paused='+paused,{method:'POST'});
     const dd=await r.json();
     if(dd.ok){
       toast(dd.paused? 'Quiet hours paused — the box will stay awake through tonight’s window.'
@@ -1983,7 +2040,7 @@ async function comfyAction(action, unit){
   if(msg) msg.textContent = (action==='start'?'starting ':'stopping ')+'ComfyUI '+label+'…';
   try{
     const q='actions/comfyui?action='+action+(unit?('&unit='+encodeURIComponent(unit)):'');
-    const r=await fetch(q,{method:'POST'});
+    const r=await api(q,{method:'POST'});
     const d=await r.json();
     if(msg) msg.textContent = d.ok ? ('ComfyUI '+label+' '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
   }catch(e){ if(msg) msg.textContent='error: '+e; }
@@ -1996,7 +2053,7 @@ async function comfyFp16(unit, enabled){
   if(msg) msg.textContent = 'setting ComfyUI '+label+' native fp16 '+(enabled?'on':'off')+'…';
   try{
     const q='actions/comfyui-fp16?unit='+encodeURIComponent(unit)+'&enabled='+(enabled?'true':'false');
-    const r=await fetch(q,{method:'POST'});
+    const r=await api(q,{method:'POST'});
     const d=await r.json();
     if(msg) msg.textContent = d.ok
       ? ('ComfyUI '+label+' native fp16 '+(enabled?'on':'off'))
@@ -2033,7 +2090,7 @@ async function syncWorkflow(name, dryRun){
   try{
     let q='actions/sync-workflow?name='+encodeURIComponent(name)+'&dry_run='+(dryRun?'true':'false');
     if(source) q+='&source='+encodeURIComponent(source);
-    const r=await fetch(q,{method:'POST'});
+    const r=await api(q,{method:'POST'});
     const d=await r.json();
     if(!d.ok){
       const why=esc((d.report&&d.report.error)||d.error||('HTTP '+r.status));
@@ -2066,7 +2123,7 @@ async function serviceAction(name, action){
   document.querySelectorAll('#services button.act').forEach(b=>b.disabled=true);
   if(msg) msg.textContent = (action==='start'?'starting ':'stopping ')+name+'…';
   try{
-    const r=await fetch('actions/service?name='+encodeURIComponent(name)+'&action='+action,{method:'POST'});
+    const r=await api('actions/service?name='+encodeURIComponent(name)+'&action='+action,{method:'POST'});
     const d=await r.json();
     if(msg) msg.textContent = d.ok ? (name+' '+action+' ok') : ('failed: '+(d.detail||d.error||r.status));
     if(d.ok && action==='start') toast(name+' starting — first launch can take a while if it downloads deps.');
@@ -2080,46 +2137,380 @@ refreshHistory(); setInterval(refreshHistory, 15000);
 """
 
 
+_LOGIN_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Server Status — sign in</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; margin:0; background:#0f1115; color:#e6e6e6;
+    display:flex; min-height:100vh; align-items:center; justify-content:center; }
+  form { background:#151922; border:1px solid #232a36; border-radius:10px; padding:22px 24px; width:300px; }
+  h1 { font-size:18px; margin:0 0 14px; }
+  input { width:100%; box-sizing:border-box; background:#0f1115; color:#e6e6e6;
+    border:1px solid #2c3a4f; border-radius:6px; padding:8px 10px; font-size:14px; }
+  button { margin-top:12px; width:100%; background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f;
+    border-radius:6px; padding:8px; font-size:14px; cursor:pointer; font-family:inherit; }
+  button:hover { background:#243247; }
+  .msg { color:#e07f7f; font-size:13px; margin-top:10px; white-space:pre-wrap; }
+</style></head><body>
+<form method="post" action="login">
+  <h1>AI Server Status</h1>
+  <input type="password" name="password" autocomplete="current-password"
+    placeholder="Dashboard password" autofocus required>
+  <button type="submit">Sign in</button>
+  <div class="msg">__MSG__</div>
+</form></body></html>
+"""
+
+# The exact command that writes the file this process reads (STATUS_AUTH_FILE may
+# come from server-status.env, which the CLI doesn't load on its own).
+_SET_PASSWORD_CMD = (
+    ("" if STATUS_AUTH_FILE == _DEFAULT_AUTH_FILE else f"STATUS_AUTH_FILE={STATUS_AUTH_FILE} ")
+    + "python3 /srv/ai/scripts/server-status-service.py --set-password"
+)
+_NO_PASSWORD_MSG = (
+    "No dashboard password is set. On the server, as the service user, run:\n"
+    + _SET_PASSWORD_CMD
+)
+_SESSION_COOKIE = "ai_status_sid"
+_PBKDF2_ITERS = 600_000
+_MAX_SESSIONS = 64
+_MAX_BODY = 8192
+
+_auth_lock = threading.Lock()
+_auth_cache: dict = {"key": None, "rec": None}
+_sessions: dict[str, dict] = {}
+_sessions_lock = threading.Lock()
+_login_fails: dict[str, deque] = {}
+_login_lock = threading.Lock()
+_login_check_lock = threading.Lock()
+
+
+def _hash_password(pw: str) -> dict:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, _PBKDF2_ITERS)
+    return {
+        "algo": "pbkdf2_sha256",
+        "iterations": _PBKDF2_ITERS,
+        "salt": base64.b64encode(salt).decode(),
+        "hash": base64.b64encode(dk).decode(),
+    }
+
+
+def _load_auth() -> dict | None:
+    """The stored password record, or None if unset/unreadable (fail closed).
+    Cached on (mtime, size, inode) so a password change is picked up live."""
+    try:
+        st = os.stat(STATUS_AUTH_FILE)
+    except OSError:
+        return None
+    key = (st.st_mtime_ns, st.st_size, st.st_ino)
+    with _auth_lock:
+        if _auth_cache["key"] == key:
+            return _auth_cache["rec"]
+    try:
+        with open(STATUS_AUTH_FILE, encoding="utf-8") as f:
+            rec = json.load(f)
+        if rec.get("algo") != "pbkdf2_sha256" or int(rec["iterations"]) < 100_000:
+            raise ValueError("unsupported hash record")
+        rec["_salt"] = base64.b64decode(rec["salt"])
+        rec["_dk"] = base64.b64decode(rec["hash"])
+    except Exception as exc:  # noqa: BLE001 - any bad file => locked
+        print(f"[auth] cannot use {STATUS_AUTH_FILE}: {exc} — sign-in disabled", flush=True)
+        rec = None
+    with _auth_lock:
+        _auth_cache.update(key=key, rec=rec)
+    return rec
+
+
+def _check_password(pw: str) -> dict | None:
+    """Return the auth record when pw matches it, else None."""
+    rec = _load_auth()
+    if rec is None or not pw:
+        return None
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", pw.encode("utf-8"), rec["_salt"], int(rec["iterations"])
+    )
+    return rec if hmac.compare_digest(dk, rec["_dk"]) else None
+
+
+def _new_session(gen: str) -> str:
+    sid = secrets.token_urlsafe(32)
+    now = time.time()
+    with _sessions_lock:
+        if len(_sessions) >= _MAX_SESSIONS:
+            del _sessions[min(_sessions, key=lambda k: _sessions[k]["last"])]
+        _sessions[sid] = {
+            "csrf": secrets.token_urlsafe(32), "created": now, "last": now, "gen": gen,
+        }
+    return sid
+
+
+def _get_session(sid: str | None) -> dict | None:
+    """Validate + touch a session. Sessions minted under an older password (gen)
+    or past the idle/max lifetime are dropped."""
+    if not sid:
+        return None
+    rec = _load_auth()
+    now = time.time()
+    with _sessions_lock:
+        s = _sessions.get(sid)
+        if s is None:
+            return None
+        if (
+            rec is None
+            or s["gen"] != rec["hash"]
+            or now - s["last"] > STATUS_SESSION_IDLE_SECS
+            or now - s["created"] > STATUS_SESSION_MAX_SECS
+        ):
+            del _sessions[sid]
+            return None
+        s["last"] = now
+        return dict(s, sid=sid)
+
+
+def _drop_session(sid: str | None) -> None:
+    with _sessions_lock:
+        _sessions.pop(sid or "", None)
+
+
+def _login_blocked(ip: str) -> bool:
+    now = time.time()
+    with _login_lock:
+        for k in list(_login_fails):
+            dq = _login_fails[k]
+            while dq and now - dq[0] > STATUS_LOGIN_WINDOW_SECS:
+                dq.popleft()
+            if not dq:
+                del _login_fails[k]
+        return len(_login_fails.get(ip, ())) >= STATUS_LOGIN_MAX_FAILS
+
+
+def _login_failed(ip: str) -> None:
+    with _login_lock:
+        _login_fails.setdefault(ip, deque()).append(time.time())
+
+
+def _login_succeeded(ip: str) -> None:
+    with _login_lock:
+        _login_fails.pop(ip, None)
+
+
+def _cli_set_password() -> int:
+    """`--set-password`: prompt for the dashboard password and store its hash."""
+    if os.geteuid() == 0:
+        print("Run this as the service user (brad), not root — the service must be "
+              "able to read the file it writes.", file=sys.stderr)
+        return 1
+    pw = getpass.getpass("New dashboard password: ")
+    if len(pw) < 8:
+        print("Too short — use at least 8 characters (a passphrase is best).",
+              file=sys.stderr)
+        return 1
+    if getpass.getpass("Repeat it: ") != pw:
+        print("The two entries differ — nothing changed.", file=sys.stderr)
+        return 1
+    rec = _hash_password(pw)
+    rec["set_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    os.makedirs(os.path.dirname(STATUS_AUTH_FILE), exist_ok=True)
+    tmp = f"{STATUS_AUTH_FILE}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(rec, f)
+        f.write("\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, STATUS_AUTH_FILE)
+    print(f"Saved {STATUS_AUTH_FILE} (mode 0600). A running service picks it up "
+          "immediately and signs out existing dashboard sessions.")
+    return 0
+
+
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code: int, body: bytes, ctype: str):
+    def _security_headers(self):
+        # No CORS headers at all: other origins can't read responses, and a
+        # cross-origin request carrying X-CSRF-Token needs a preflight (OPTIONS),
+        # which this server doesn't implement, so the browser never sends it.
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+
+    def _send(self, code: int, body: bytes, ctype: str, headers=()):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._security_headers()
+        for k, v in headers:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_json(self, code: int, obj: dict, headers=()):
+        self._send(code, json.dumps(obj).encode("utf-8"), "application/json", headers)
+
+    def _redirect(self, location: str, headers=()):
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self._security_headers()
+        for k, v in headers:
+            self.send_header(k, v)
+        self.end_headers()
+
+    def _send_login(self, code: int = 200, msg: str = ""):
+        if not msg and _load_auth() is None:
+            msg = _NO_PASSWORD_MSG
+        safe = msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        self._send(code, _LOGIN_HTML.replace("__MSG__", safe).encode("utf-8"),
+                   "text/html; charset=utf-8")
+
+    def _client_ip(self) -> str:
+        ip = self.client_address[0]
+        try:
+            a = ipaddress.ip_address(ip)
+            if isinstance(a, ipaddress.IPv6Address) and a.ipv4_mapped:
+                return str(a.ipv4_mapped)
+            return str(a)
+        except ValueError:
+            return ip
+
+    def _trusted_reader(self) -> bool:
+        try:
+            a = ipaddress.ip_address(self._client_ip())
+        except ValueError:
+            return False
+        return any(a in n for n in STATUS_TRUSTED_READ_NETS)
+
+    def _session(self) -> dict | None:
+        # Parse by hand: other apps on this host share the cookie jar (cookies
+        # ignore ports) and SimpleCookie gives up on the first odd cookie. Try every
+        # ai_status_sid value: a page on another port can plant a decoy with a longer
+        # Path, which browsers send first, to lock the real session out.
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == _SESSION_COOKIE:
+                sess = _get_session(v.strip())
+                if sess:
+                    return sess
+        return None
+
+    def _same_origin(self) -> bool:
+        """Browsers send Origin + Sec-Fetch-Site on every POST; when present they must
+        name this exact origin. Other ports on this host are other origins but the
+        SAME site (SameSite cookies flow to them), so SameSite alone isn't enough."""
+        sfs = (self.headers.get("Sec-Fetch-Site") or "").lower()
+        if sfs and sfs not in ("same-origin", "none"):
+            return False
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True  # non-browser client; still needs the session + CSRF token
+        host = self.headers.get("Host") or ""
+        allowed = {f"http://{host}", f"https://{host}"} | STATUS_EXTRA_ORIGINS
+        return origin.rstrip("/") in allowed
+
+    def _read_body(self) -> bytes | None:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return None
+        if length < 0 or length > _MAX_BODY:
+            return None
+        return self.rfile.read(length) if length else b""
+
+    def _handle_login(self, raw: bytes):
+        ip = self._client_ip()
+        if not self._same_origin():
+            print(f"[auth] cross-site sign-in blocked from {ip}", flush=True)
+            return self._send_login(403, "Cross-site sign-in blocked.")
+        if _load_auth() is None:
+            return self._send_login(503, _NO_PASSWORD_MSG)
+        form = urllib.parse.parse_qs(raw.decode("utf-8", "replace"))
+        pw = (form.get("password") or [""])[0]
+        # One check at a time, so a burst of parallel guesses can't all slip past
+        # the lockout before the first failure is recorded (and hashing stays on
+        # one core). The failure delay happens outside the lock.
+        with _login_check_lock:
+            blocked = _login_blocked(ip)
+            rec = None if blocked else _check_password(pw)
+            if rec is None and not blocked:
+                _login_failed(ip)
+        if blocked:
+            return self._send_login(
+                429, "Too many failed attempts — try again in a few minutes.")
+        if rec is None:
+            print(f"[auth] sign-in FAILED from {ip}", flush=True)
+            time.sleep(1.0)
+            return self._send_login(401, "Wrong password.")
+        _login_succeeded(ip)
+        sid = _new_session(rec["hash"])
+        print(f"[auth] signed in from {ip}", flush=True)
+        # Browser-session cookie (no Max-Age); the server enforces the lifetimes.
+        self._redirect("./", headers=[(
+            "Set-Cookie", f"{_SESSION_COOKIE}={sid}; Path=/; HttpOnly; SameSite=Strict",
+        )])
+
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        if path == "/healthz":
+            return self._send(200, b"ok", "text/plain")
+        if path == "/login":
+            if self._session():
+                return self._redirect("./")
+            return self._send_login()
+        if path == "/":
+            sess = self._session()
+            if not sess:
+                return self._redirect("login")
+            html = (_HTML.replace("__BENCH_DOC_URL__", BENCH_DOC_URL)
+                    .replace("__CSRF_TOKEN__", sess["csrf"]))
+            return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+        if path not in ("/status.json", "/status", "/history.json", "/history",
+                        "/parallel-sweep.png", "/bench-chart.png"):
+            return self._send(404, b"not found", "text/plain")
+        if not (self._session() or self._trusted_reader()):
+            return self._send_json(401, {"ok": False, "error": "login required"})
         if path in ("/status.json", "/status"):
             body = json.dumps(cached_status()).encode("utf-8")
             self._send(200, body, "application/json")
         elif path in ("/history.json", "/history"):
             body = json.dumps(build_history()).encode("utf-8")
             self._send(200, body, "application/json")
-        elif path == "/healthz":
-            self._send(200, b"ok", "text/plain")
-        elif path in ("/parallel-sweep.png", "/bench-chart.png"):
+        else:
             try:
                 with open(BENCH_CHART, "rb") as f:
                     self._send(200, f.read(), "image/png")
             except OSError:
                 self._send(404, b"chart not found", "text/plain")
-        elif path == "/":
-            html = _HTML.replace("__BENCH_DOC_URL__", BENCH_DOC_URL)
-            self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
-        else:
-            self._send(404, b"not found", "text/plain")
 
     def do_POST(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # drain any request body so the socket stays clean
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-            if length:
-                self.rfile.read(length)
-        except Exception:  # noqa: BLE001
-            pass
+        raw = self._read_body()
+        if raw is None:
+            self.close_connection = True
+            return self._send_json(413, {"ok": False, "error": "bad or oversized body"})
+        if path == "/login":
+            return self._handle_login(raw)
+        # Everything else changes state: signed-in session + same origin + the
+        # session's CSRF token in a custom header, for every source address.
+        sess = self._session()
+        if not sess:
+            return self._send_json(401, {"ok": False, "error": "login required"})
+        if not self._same_origin():
+            print(f"[auth] cross-site POST {path} blocked from {self._client_ip()}",
+                  flush=True)
+            return self._send_json(403, {"ok": False, "error": "cross-site request blocked"})
+        token = self.headers.get("X-CSRF-Token") or ""
+        if not hmac.compare_digest(token.encode("utf-8"), sess["csrf"].encode("utf-8")):
+            return self._send_json(403, {"ok": False, "error": "bad or missing CSRF token"})
+        if path == "/logout":
+            _drop_session(sess["sid"])
+            return self._send_json(200, {"ok": True}, headers=[(
+                "Set-Cookie",
+                f"{_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+            )])
         if path == "/actions/comfyui":
             if not STATUS_ACTIONS_ENABLED or not QUIET_COMFYUI_UNITS:
                 self._send(403, json.dumps(
@@ -2302,6 +2693,9 @@ def main():
         print("[quiet] QUIET_HOURS_ENABLED=false — deep-idle window disabled")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"ai-server status service listening on http://{HOST}:{PORT}")
+    if _load_auth() is None:
+        print(f"[auth] no dashboard password in {STATUS_AUTH_FILE} — the dashboard is "
+              f"locked; run: {_SET_PASSWORD_CMD}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2311,4 +2705,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--set-password" in sys.argv[1:]:
+        sys.exit(_cli_set_password())
     main()

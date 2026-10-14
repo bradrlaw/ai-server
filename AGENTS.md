@@ -51,6 +51,14 @@ Read this first, then the detailed docs:
   - Don't attach containers to `mcp-secure` or add `:9001` clients without updating the
     filter. If the host LAN IP or that subnet changes, update the unit too.
   - Check with `scripts/verify-mcp-lockdown.sh`.
+- **The status dashboard (`:9095`) needs the owner's sign-in (ADR-0027).**
+  - Read-only `GET /status.json` / `/history.json` work without it from the host and
+    containers (`curl -s 127.0.0.1:9095/status.json`).
+  - `POST /actions/*` (service start/stop, power caps, fp16, quiet hours, workflow sync)
+    needs a browser session + same-origin + CSRF token, so agents can't call it — hand
+    those changes to the user, or use the underlying config/CLI path.
+  - Only the owner sets the password (`server-status-service.py --set-password`); don't
+    touch `/srv/ai/var/status-service/auth.json`.
 
 ## Serving stack (hybrid deploy — ADR-0006)
 - **GPU/low-level tiers run NATIVE** (systemd/venv): llama.cpp + **llama-swap** router,

@@ -43,6 +43,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0024](0024-qwen-image-2.1-comfyui-instance.md) | On-demand Qwen-Image 2.1 ComfyUI instance (comfyui-qwen, :8190) | Accepted |
 | [0025](0025-aichat-terminal-client-mcp.md) | aichat terminal client with comfyui-secure MCP tools | Accepted |
 | [0026](0026-secure-mcp-bridge-network-lockdown.md) | Lock the secure ComfyUI MCP bridges to localhost + mcpo | Accepted |
+| [0027](0027-status-dashboard-login-csrf.md) | Sign-in + CSRF protection for the status dashboard (:9095) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
