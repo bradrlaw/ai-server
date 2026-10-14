@@ -1280,8 +1280,9 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
     `http://172.31.250.1:9001/mcp`.
   - Don't attach other containers to `mcp-secure` or point new clients at `:9001` without
     deliberately updating the filter.
-  - The filter also allowlists the host's own LAN IP (`/32`) for the `COMFY_MCP_PUBLIC_URL`
-    asset fetches. **If the LAN IP changes, update both.**
+  - The filter also allowlists the host's own LAN IP (`/32`) so the bridge can fetch its own
+    `COMFY_MCP_PUBLIC_URL` links, e.g. a previous render passed back as `input_image`.
+    **If the LAN IP changes, update both.**
 
   Check everything with `scripts/verify-mcp-lockdown.sh` (read-only; the installer runs it).
 - **Tools:** per-style (`z_image_turbo`, …), plus `generate_image`, `run_workflow`,

@@ -38,8 +38,11 @@ Legitimate clients, inventoried before the change:
   bridge on `127.0.0.1`, and the unit's own `ExecStartPost` readiness probe.
 - **`:9001` (out):**
   - ComfyUI `127.0.0.1:8189`;
-  - the host's own LAN IP `:8189`, for the asset HEAD/GET built from
-    `COMFY_MCP_PUBLIC_URL`;
+  - the host's own LAN IP `:8189`, whenever the bridge fetches one of its own
+    `COMFY_MCP_PUBLIC_URL` links. Today that means an `input_image` that is a
+    previous render's link ("edit that image"). The inline-preview and
+    `view_image` thumbnail fetches use the same URL, but they are dormant while
+    markdown mode is on. Output sizing at registration uses `127.0.0.1`;
   - DNS on `127.0.0.53`;
   - arbitrary http(s) URLs for `input_image`.
 - **`:8808`:** only the local llm-functions shims (`curl http://localhost:8808`).
@@ -65,8 +68,9 @@ give mcpo a dedicated path:
    IPAddressAllow=localhost 172.31.250.0/29 192.168.4.57/32
    IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 ::/0
    ```
-   - `192.168.4.57/32` is the host's own LAN IP, needed for the
-     `COMFY_MCP_PUBLIC_URL` asset fetches. Only the host itself can source it:
+   - `192.168.4.57/32` is the host's own LAN IP, needed when the bridge fetches
+     its own `COMFY_MCP_PUBLIC_URL` links (see Context). Only the host itself can
+     source it:
      the kernel drops inbound packets that claim a local source address as
      martians.
    - Public IPv4 stays allowed for `input_image` URL fetches.
@@ -109,8 +113,8 @@ give mcpo a dedicated path:
 - **Negative / trade-offs:**
   - **Addresses to keep in sync:**
     - the host LAN IP, between the unit's `/32` and `COMFY_MCP_PUBLIC_URL` (a
-      DHCP change already broke the public URL; now it also breaks asset
-      fetches);
+      DHCP change already broke the public URL; now it also breaks feeding a
+      render's link back in as `input_image`);
     - `172.31.250.0/29` across compose, the unit, and the mcpo `config.json`.
 
     The verify script checks both.

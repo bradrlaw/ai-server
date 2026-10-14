@@ -149,7 +149,7 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
   pub_host=$(echo "$envs" | grep -o 'COMFY_MCP_PUBLIC_URL=[^ ]*' | sed -E 's#.*://([^:/]+).*#\1#')
   allow=$(systemctl show -p IPAddressAllow --value "$SECURE_UNIT" 2>/dev/null)
   if [[ -n $pub_host && " $allow " == *" $pub_host/32 "* ]]; then
-    ok "COMFY_MCP_PUBLIC_URL host $pub_host is in IPAddressAllow (asset fetches work)"
+    ok "COMFY_MCP_PUBLIC_URL host $pub_host is in IPAddressAllow (public-URL fetches work)"
   else
     bad "COMFY_MCP_PUBLIC_URL host '${pub_host:-?}' not allowlisted as /32 (allow: $allow) — keep them in sync"
   fi
@@ -170,11 +170,12 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
   done
   [[ -n $TS_IP ]] || skip "tailscale0 has no IPv4 — Tailscale-source probe skipped"
   # Positive control: the host's own LAN IP is allowlisted (/32 beats the 192.168/16
-  # deny) — the same address pair the COMFY_MCP_PUBLIC_URL asset HEAD/GET uses.
+  # deny) — the same address pair the bridge uses to fetch its own COMFY_MCP_PUBLIC_URL
+  # links (e.g. an input_image that is a previous render's link).
   if [[ -n $pub_host ]]; then
     c=$(code "http://127.0.0.1:$SECURE_PORT/mcp" -m "$T_OK" --interface "$pub_host")
     [[ $c != 000 ]] && ok "source $pub_host (allowlisted /32) -> :$SECURE_PORT answers (HTTP $c)" \
-                    || bad "source $pub_host -> :$SECURE_PORT dropped — asset fetches via COMFY_MCP_PUBLIC_URL will fail"
+                    || bad "source $pub_host -> :$SECURE_PORT dropped — fetching COMFY_MCP_PUBLIC_URL links (input_image) will fail"
   fi
 
   hdr "Docker: '$MCP_NET' network + container reachability"
