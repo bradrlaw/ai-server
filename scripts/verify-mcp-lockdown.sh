@@ -130,10 +130,12 @@ if [[ $SECTION == all || $SECTION == aichat ]]; then
 
   body=$(curl -s -m 30 -X POST "http://127.0.0.1:$AICHAT_PORT/tools/comfyui_secure_get_queue_status" \
            -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
-  if echo "$body" | grep -q '"status"'; then
+  # Pattern match, not `echo | grep -q`: under pipefail a large reply (a running job
+  # embeds its whole graph) SIGPIPEs echo and reads as a false FAIL.
+  if [[ $body == *'"status"'* ]]; then
     ok "end-to-end: aichat bridge -> :$SECURE_PORT -> ComfyUI get_queue_status answered"
   else
-    bad "end-to-end aichat bridge tool call failed: $(echo "$body" | head -c 160)"
+    bad "end-to-end aichat bridge tool call failed: ${body:0:160}"
   fi
 fi
 
@@ -167,6 +169,13 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
                     || bad "source $ip ($what) -> :$SECURE_PORT answered HTTP $c (IP filter NOT active)"
   done
   [[ -n $TS_IP ]] || skip "tailscale0 has no IPv4 — Tailscale-source probe skipped"
+  # Positive control: the host's own LAN IP is allowlisted (/32 beats the 192.168/16
+  # deny) — the same address pair the COMFY_MCP_PUBLIC_URL asset HEAD/GET uses.
+  if [[ -n $pub_host ]]; then
+    c=$(code "http://127.0.0.1:$SECURE_PORT/mcp" -m "$T_OK" --interface "$pub_host")
+    [[ $c != 000 ]] && ok "source $pub_host (allowlisted /32) -> :$SECURE_PORT answers (HTTP $c)" \
+                    || bad "source $pub_host -> :$SECURE_PORT dropped — asset fetches via COMFY_MCP_PUBLIC_URL will fail"
+  fi
 
   hdr "Docker: '$MCP_NET' network + container reachability"
   if ! docker info >/dev/null 2>&1; then
@@ -188,7 +197,7 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
     fi
     mcp_gw=${mcp_gw:-172.31.250.1}
 
-    if docker inspect -f '{{.State.Running}}' mcpo 2>/dev/null | grep -q true; then
+    if [[ $(docker inspect -f '{{.State.Running}}' mcpo 2>/dev/null) == true ]]; then
       c=$(cprobe mcpo "http://$mcp_gw:$SECURE_PORT/mcp" "$T_OK")
       [[ $c != 000 && $c != n/a && $c != 421 ]] && ok "mcpo -> $mcp_gw:$SECURE_PORT answers (HTTP $c)" \
         || bad "mcpo -> $mcp_gw:$SECURE_PORT gave $c (421 = Host not in COMFY_MCP_ALLOWED_HOSTS)"
@@ -245,10 +254,10 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
     else
       body=$(curl -s -m 30 -X POST http://127.0.0.1:8000/comfyui-secure/get_queue_status \
                -H "Authorization: Bearer $key" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
-      if echo "$body" | grep -q '"status"'; then
+      if [[ $body == *'"status"'* ]]; then
         ok "mcpo /comfyui-secure/get_queue_status answered"
       else
-        bad "mcpo comfyui-secure tool call failed: $(echo "$body" | head -c 160)"
+        bad "mcpo comfyui-secure tool call failed: ${body:0:160}"
       fi
     fi
     unset key
