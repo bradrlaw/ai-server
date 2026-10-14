@@ -4,8 +4,12 @@
 # Two CPU-only bridges run the (vendored) joenorton/comfyui-mcp-server over
 # streamable-http, one per ComfyUI instance:
 #   comfyui-mcp.service         -> 0.0.0.0:9000 -> native ComfyUI :8188 (OPEN)
-#   comfyui-mcp-secure.service  -> 0.0.0.0:9001 -> native ComfyUI :8189 (SECURE, login-gated)
+#   comfyui-mcp-secure.service  -> :9001, kernel-filtered to localhost + mcpo (via the
+#                                  internal `mcp-secure` Docker network, ADR-0026)
+#                                  -> native ComfyUI :8189 (SECURE, login-gated)
 # mcpo proxies both to Open WebUI + agents (docker/mcpo/config.json: comfyui / comfyui-secure).
+# This script also (re)creates mcpo so it joins `mcp-secure`, then runs
+# scripts/verify-mcp-lockdown.sh --section secure.
 #
 # Prereqs:
 #   - upstream clone at /srv/ai/src/comfyui-mcp-server (git clone at e0101b2, then
@@ -49,16 +53,28 @@ done
 
 # mcpo does not retry backends that were down at its startup, so bounce it now that
 # the :9000/:9001 services are up to (re)establish the 'comfyui'/'comfyui-secure'
-# connections. Run as the repo owner so it uses brad's docker/compose context.
+# connections. `up -d` (not just restart) so compose creates the internal `mcp-secure`
+# network and recreates mcpo whenever its network attachments changed — the secure
+# bridge only admits mcpo over that network. Run as the repo owner so it uses brad's
+# docker/compose context.
 if command -v docker >/dev/null 2>&1; then
-  sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose restart mcpo' || \
-    echo "NOTE: could not restart mcpo automatically — run: cd /srv/ai/docker && docker compose restart mcpo"
+  sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose up -d --no-deps mcpo' || \
+    sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose restart mcpo' || \
+    echo "NOTE: could not update mcpo automatically — run: cd /srv/ai/docker && docker compose up -d --no-deps mcpo"
 fi
 
 echo
-echo "ComfyUI MCP bridges (streamable-http, NO auth on the bridge — LAN/Tailscale only):"
-echo "  open   -> http://<host>:9000/mcp  (ComfyUI :8188)"
-echo "  secure -> http://<host>:9001/mcp  (ComfyUI :8189, login-gated; bridge injects the token)"
+echo "ComfyUI MCP bridges (streamable-http, NO auth on the bridges themselves):"
+echo "  open   -> http://<host>:9000/mcp  (ComfyUI :8188; LAN/Tailscale reachable)"
+echo "  secure -> :9001/mcp  (ComfyUI :8189, login-gated; bridge injects the token)"
+echo "            reachable ONLY from localhost + mcpo (http://172.31.250.1:9001/mcp) — ADR-0026"
 echo "Logs:    journalctl -u comfyui-mcp -f   |   journalctl -u comfyui-mcp-secure -f"
 echo "Restart: sudo systemctl restart comfyui-mcp comfyui-mcp-secure"
 echo "mcpo:    exposed to Open WebUI/agents via docker/mcpo/config.json (comfyui / comfyui-secure entries)."
+
+echo
+echo "Verifying the secure-bridge lockdown (scripts/verify-mcp-lockdown.sh --section secure)..."
+if ! sudo -u brad /srv/ai/scripts/verify-mcp-lockdown.sh --section secure; then
+  echo "WARNING: lockdown verification FAILED — see the FAIL lines above."
+  exit 1
+fi

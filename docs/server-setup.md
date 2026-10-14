@@ -1270,6 +1270,20 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 - **Exposed via mcpo** (ADR-0011): `docker/mcpo/config.json` → `comfyui` entry, type
   `streamable-http`, url `http://host.docker.internal:9000/mcp`. **mcpo does not retry a backend
   that was down at its startup**, so the install script bounces mcpo after the service is up.
+- **Secure twin (`comfyui-mcp-secure`, `:9001` → login-gated `:8189`; ADR-0026):** the same
+  bridge and launcher, installed by the same script. It injects the ComfyUI-Login token from
+  `comfyui/login/PASSWORD`. Because it holds that credential and has **no auth of its own**, it
+  is **not** LAN/Tailscale-reachable:
+  - A systemd IP filter (`IPAddressAllow`/`IPAddressDeny` in the unit) admits only localhost
+    (e.g. the aichat bridge) and the internal `mcp-secure` Docker network (`172.31.250.0/29`).
+  - **Only mcpo** is attached to `mcp-secure`. Its `comfyui-secure` entry uses
+    `http://172.31.250.1:9001/mcp`.
+  - Don't attach other containers to `mcp-secure` or point new clients at `:9001` without
+    deliberately updating the filter.
+  - The filter also allowlists the host's own LAN IP (`/32`) for the `COMFY_MCP_PUBLIC_URL`
+    asset fetches. **If the LAN IP changes, update both.**
+
+  Check everything with `scripts/verify-mcp-lockdown.sh` (read-only; the installer runs it).
 - **Tools:** per-style (`z_image_turbo`, …), plus `generate_image`, `run_workflow`,
   `list_workflows`, `list_models`, async jobs (`get_job`, `get_queue_status`, `cancel_job`),
   `regenerate`, `view_image` (inline base64), `list_assets`, `get_asset_metadata`,
@@ -1327,12 +1341,17 @@ client is **local & gitignored**. Upstream pieces are all **sigoden / MIT**:
   `functions_dir` is a symlink to it). `mcp.json` (from
   `config/aichat/llm-functions-mcp.json`) lists the comfyui-secure MCP
   (`http://127.0.0.1:9001/mcp`). The **bridge** (`mcp/bridge/index.js`) is patched
-  (`config/aichat/llm-functions-bridge.patch`, +72/−6, MIT) to (a) speak
-  streamable-http/SSE and (b) repair the comfyui schema's typeless numeric params
-  so aichat doesn't loop on `{"width":{"width":1024}}`. Run `argc mcp start` once in
-  the clone to generate `functions.json` + `bin/` shims.
+  (`config/aichat/llm-functions-bridge.patch`, +77/−8, MIT) to:
+  (a) speak streamable-http/SSE;
+  (b) repair the comfyui schema's typeless numeric params so aichat doesn't loop on
+  `{"width":{"width":1024}}`;
+  (c) listen on loopback only (`MCP_BRIDGE_HOST`, default `127.0.0.1`; ADR-0026).
+
+  Run `argc mcp start` once in the clone to generate `functions.json` + `bin/` shims.
 - **Bridge service:** `scripts/aichat-mcp-bridge.service` keeps the bridge alive on
-  `:8808`. Install: `sudo scripts/install-aichat-mcp-bridge.sh`. The bridge has **no
+  `127.0.0.1:8808`, kernel-filtered to localhost (`IPAddressAllow=localhost`,
+  `IPAddressDeny=any`). It has no auth and holds a live session to the login-gated `:9001`.
+  Install: `sudo scripts/install-aichat-mcp-bridge.sh`. The bridge has **no
   reconnect logic**, so the unit declares `After=` + `PartOf=comfyui-mcp-secure.service`:
   a restart of the upstream MCP (`:9001`, e.g. `systemctl restart comfyui-mcp-secure`
   after a workflow-param change) now auto-restarts the bridge. It is tied to
@@ -1480,6 +1499,13 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | Hermes API server | 8642 | `HERMES_API_SERVER_KEY` |
 | SearXNG | 8888 | none |
 | llama-swap mgmt | 127.0.0.1:9090 | localhost-only (safe) |
+| ComfyUI MCP bridge **open** (`comfyui-mcp`) | 9000 | none — same exposure as `:8188` |
+| ComfyUI MCP bridge **secure** (`comfyui-mcp-secure`) | 9001 | none on the bridge (it injects the `:8189` login) → **kernel-filtered to localhost + mcpo** via the internal `mcp-secure` network (ADR-0026) |
+| aichat MCP bridge | 127.0.0.1:8808 | none → loopback bind + kernel filter (ADR-0026) |
+
+Services that hold credentials for *another* service (the two secure-canvas MCP bridges) are
+fenced with per-unit systemd IP filters (`IPAddressAllow`/`IPAddressDeny`). These hold
+regardless of ufw's state. Verify: `scripts/verify-mcp-lockdown.sh`.
 
 The box sits behind home-router NAT (`eno1 = <host-ip>/22`), so nothing is
 WAN-reachable unless the router forwards a port. `ufw` (installed) adds

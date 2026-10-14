@@ -22,7 +22,11 @@ Environment=COMFYUI_URL=http://127.0.0.1:8189
 Environment=COMFY_MCP_AUTH_TOKEN_FILE=/srv/ai/comfyui/login/PASSWORD
 # Style workflow library — shared with the open bridge (tracked in the ai-server repo).
 Environment=COMFY_MCP_WORKFLOW_DIR=/srv/ai/config/comfyui-mcp/workflows
-# Bind on all interfaces so the mcpo container reaches us via host.docker.internal.
+# Bind on all IPv4 interfaces, but the kernel-level IPAddressAllow/Deny below only
+# lets in localhost (aichat bridge, ExecStartPost probe) and the dedicated internal
+# Docker network "mcp-secure" (mcpo) — NOT the LAN/Tailscale (ADR-0026). 0.0.0.0
+# rather than the network's gateway IP so startup never races Docker creating that
+# bridge interface at boot.
 Environment=FASTMCP_HOST=0.0.0.0
 # Distinct port from the open bridge (:9000). mcpo proxies this at the "comfyui-secure" entry.
 Environment=FASTMCP_PORT=9001
@@ -39,10 +43,32 @@ Environment=COMFY_MCP_RETURN_MARKDOWN=1
 # re-queues the same workflow (duplicate GPU jobs + a long poll loop).
 Environment=COMFY_MCP_MAX_WAIT=150
 # FastMCP's DNS-rebinding protection only trusts localhost by default; allow the
-# host:port pairs mcpo/agents use to reach THIS bridge (:9001).
-Environment=COMFY_MCP_ALLOWED_HOSTS=host.docker.internal:9001,127.0.0.1:9001,localhost:9001
+# host:port pairs our two clients use to reach THIS bridge (:9001): mcpo via the
+# mcp-secure gateway IP (docker/mcpo/config.json) and local tools via loopback.
+# host.docker.internal is deliberately NOT listed — that path is blocked below.
+Environment=COMFY_MCP_ALLOWED_HOSTS=172.31.250.1:9001,127.0.0.1:9001,localhost:9001
 # set_defaults / publish persistence goes under $HOME/.config/comfy-mcp.
 Environment=HOME=/home/brad
+# --- Network lockdown (ADR-0026) ---------------------------------------------------
+# This bridge injects the secure canvas's login token and has NO auth of its own, so
+# who can reach it IS the access control. Enforced in-kernel (cgroup BPF) on every
+# socket of this unit (incl. ExecStartPost): inbound by SOURCE address, outbound by
+# DESTINATION address. An IPAddressAllow match wins; else an IPAddressDeny match
+# drops; anything matching neither is allowed.
+#   allow localhost         aichat bridge + ExecStartPost probe in; ComfyUI :8189 out
+#   allow 172.31.250.0/29   the internal "mcp-secure" Docker network — mcpo ONLY
+#                           (docker/docker-compose.yml); attach nothing else to it
+#   allow 192.168.4.57/32   this host's own LAN IP, for the asset HEAD/GET to
+#                           COMFY_MCP_PUBLIC_URL — keep in sync with it. Only the host
+#                           itself can source this address (kernel martian filter).
+#   deny  RFC1918 + CGNAT + link-local IPv4, and ALL IPv6 except ::1 → no LAN or
+#         Tailscale clients, no other Docker networks (Hermes/OpenClaw/...), and no
+#         LAN-side SSRF through input_image URLs.
+# Public IPv4 stays reachable so input_image http(s) URLs still fetch; nothing public
+# routes IN (NAT'd LAN, no port-forward, no global IPv6). `docker restart mcpo` uses
+# the unix socket, so it is unaffected. Verify: scripts/verify-mcp-lockdown.sh
+IPAddressAllow=localhost 172.31.250.0/29 192.168.4.57/32
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 ::/0
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/scripts/comfyui-mcp-launch.py
 # Bounce mcpo once THIS bridge is accepting connections so the comfyui-secure tools
 # always load (mcpo does not retry a backend that was down at its startup). Poll our

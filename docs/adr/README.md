@@ -41,6 +41,8 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0022](0022-samba-share-srv-ai.md) | Share /srv/ai over SMB (Samba) on Tailscale + LAN | Accepted |
 | [0023](0023-filebrowser-nonroot.md) | Run the Filebrowser container as non-root (1000:1000) | Accepted |
 | [0024](0024-qwen-image-2.1-comfyui-instance.md) | On-demand Qwen-Image 2.1 ComfyUI instance (comfyui-qwen, :8190) | Accepted |
+| [0025](0025-aichat-terminal-client-mcp.md) | aichat terminal client with comfyui-secure MCP tools | Accepted |
+| [0026](0026-secure-mcp-bridge-network-lockdown.md) | Lock the secure ComfyUI MCP bridges to localhost + mcpo | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

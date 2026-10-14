@@ -1,8 +1,8 @@
 diff --git a/mcp/bridge/index.js b/mcp/bridge/index.js
-index 6a66237..86ed989 100644
+index 6a66237..d402bcc 100644
 --- a/mcp/bridge/index.js
 +++ b/mcp/bridge/index.js
-@@ -4,6 +4,8 @@ import * as path from "node:path";
+@@ -4,10 +4,15 @@ import * as path from "node:path";
  import * as fs from "node:fs";
  import { Client } from "@modelcontextprotocol/sdk/client/index.js";
  import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -11,7 +11,14 @@ index 6a66237..86ed989 100644
  import express from "express";
  
  const app = express();
-@@ -29,10 +31,17 @@ try {
+ const PORT = process.env.MCP_BRIDGE_PORT || 8808;
++// Loopback by default: the bridge holds live sessions to credentialed MCP
++// servers (e.g. the login-gated comfyui-secure), so it must not be LAN-reachable.
++const HOST = process.env.MCP_BRIDGE_HOST || "127.0.0.1";
+ 
+ let [rootDir] = process.argv.slice(2);
+ 
+@@ -29,10 +34,17 @@ try {
  async function startMcpServer(id, serverConfig) {
    console.log(`Starting ${id} server...`);
    const capabilities = { tools: {} };
@@ -33,7 +40,7 @@ index 6a66237..86ed989 100644
    const client = new Client(
      { name: id, version: "1.0.0" },
      { capabilities }
-@@ -45,13 +54,13 @@ async function startMcpServer(id, serverConfig) {
+@@ -45,13 +57,13 @@ async function startMcpServer(id, serverConfig) {
        spec: {
          name: `${formatToolName(id, name, prefix)}`,
          description,
@@ -49,7 +56,18 @@ index 6a66237..86ed989 100644
          });
          const content = res.content;
          let text = arrayify(content)?.map(c => {
-@@ -188,6 +197,63 @@ function formatToolName(serverName, toolName, prefix) {
+@@ -164,8 +176,8 @@ async function runBridge() {
+     res.status(404).send("Not found");
+   });
+ 
+-  const server = app.listen(PORT, () => {
+-    console.log(`Server is running on port ${PORT}`);
++  const server = app.listen(PORT, HOST, () => {
++    console.log(`Server is running on ${HOST}:${PORT}`);
+   });
+ 
+   return async () => {
+@@ -188,6 +200,63 @@ function formatToolName(serverName, toolName, prefix) {
    return name.toLowerCase().replace(/-/g, "_");
  }
  

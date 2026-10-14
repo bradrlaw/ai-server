@@ -133,6 +133,11 @@ services:
       start_period: 90s
     networks:
       - ai
+      # Second, internal-only leg used solely to reach the SECURE ComfyUI MCP bridge
+      # on the host (172.31.250.1:9001). The bridge's systemd IP filter admits only
+      # localhost + this /29, so mcpo (API-key gated) is the one container that can
+      # reach it. ADR-0026.
+      - mcp-secure
 
   # Filebrowser — web file manager for the ComfyUI media dirs (browse/preview/
   # download images & videos, upload, rename/delete). Serves the two instances'
@@ -300,6 +305,19 @@ services:
 networks:
   ai:
     name: ai
+  # Dedicated link from mcpo to the secure ComfyUI MCP bridge (host :9001, ADR-0026).
+  # internal: no default route/NAT (mcpo's internet + other egress stays on `ai`);
+  # the host side is the gateway 172.31.250.1, which is where the bridge listens for
+  # mcpo. The bridge unit allowlists this whole /29 (scripts/comfyui-mcp-secure.service
+  # IPAddressAllow) — attach NOTHING but mcpo to this network, and keep the subnet in
+  # sync with that unit + docker/mcpo/config.json if you ever change it.
+  mcp-secure:
+    name: mcp-secure
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.250.0/29
+          gateway: 172.31.250.1
 
 volumes:
   open-webui-data:

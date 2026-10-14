@@ -63,6 +63,11 @@ attribution README) plus the systemd unit + installer under `scripts/`.
   `comfyui-mcp-secure` (the bridge's actual upstream), **not** `comfyui-secure`
   (`:8189`): quiet hours stops/starts the latter, and `PartOf` doesn't propagate
   *start*, so tying to it would strand the bridge down for the rest of the day.
+- **Update (2026-10-13):** upstream's `app.listen(PORT)` left the bridge reachable
+  from the LAN (`:8808/tools` answered), bypassing the secure canvas's login. It is
+  now loopback-only. A fourth patch item binds `MCP_BRIDGE_HOST`, default
+  `127.0.0.1`, and the unit kernel-filters to localhost. See
+  [ADR-0026](0026-secure-mcp-bridge-network-lockdown.md).
 
 ### Restart hook
 The bridge unit declares `After=comfyui-mcp-secure.service` + `PartOf=comfyui-mcp-secure.service`.

@@ -43,6 +43,14 @@ Read this first, then the detailed docs:
   be timezone-aware — e.g. quiet-hours reads `QUIET_TZ=America/New_York`, not the system clock.
 - **HF downloads:** use `/srv/ai/scripts/hf-dl download <repo> <path> --local-dir <dir>`
   (injects token from keyring, ~150 MB/s Xet). Don't use raw curl (throttled) or `HF_XET_HIGH_PERFORMANCE=1`.
+- **Secure-canvas MCP bridges are localhost/mcpo-only (ADR-0026).**
+  - `comfyui-mcp-secure` (`:9001`, injects the `:8189` login token) is kernel-filtered
+    (unit `IPAddressAllow`) to localhost + the internal `mcp-secure` Docker net.
+  - Only **mcpo** may join `mcp-secure`; it reaches the bridge at `172.31.250.1:9001`.
+  - The aichat bridge (`:8808`) is loopback-only.
+  - Don't attach containers to `mcp-secure` or add `:9001` clients without updating the
+    filter. If the host LAN IP or that subnet changes, update the unit too.
+  - Check with `scripts/verify-mcp-lockdown.sh`.
 
 ## Serving stack (hybrid deploy — ADR-0006)
 - **GPU/low-level tiers run NATIVE** (systemd/venv): llama.cpp + **llama-swap** router,

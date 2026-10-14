@@ -20,8 +20,9 @@ and the MCP server list. See `docs/adr/0025-aichat-terminal-client-mcp.md` and t
 | `llm-functions` @ `616d8d8` | https://github.com/sigoden/llm-functions | MIT | function-calling runtime + MCP bridge (`mcp/bridge/index.js`) |
 
 We **patched** `llm-functions/mcp/bridge/index.js` (see
-`llm-functions-bridge.patch`, +72/−6) — the upstream bridge only spoke stdio and
-passed MCP schemas through verbatim. Our changes, MIT-licensed like the original:
+`llm-functions-bridge.patch`, +77/−8). The upstream bridge only spoke stdio,
+passed MCP schemas through verbatim, and listened on every interface. Our changes,
+MIT-licensed like the original:
 
 1. **HTTP transports** — connect to a URL-based MCP server via
    `StreamableHTTPClientTransport` (or `SSEClientTransport` when `type: "sse"`),
@@ -34,6 +35,11 @@ passed MCP schemas through verbatim. Our changes, MIT-licensed like the original
    into the value (`{"width":{"width":1024}}`) and loops.
 3. **`sanitizeArgs`** — unwraps a double-wrapped `{"width":{"width":N}}` →`N`
    while preserving genuine object params (e.g. `param_overrides`).
+4. **Loopback bind.** The bridge listens on `MCP_BRIDGE_HOST`, default
+   `127.0.0.1`, instead of upstream's all-interfaces `app.listen(PORT)`. It has
+   no auth and holds a live session to the login-gated comfyui-secure MCP, so it
+   must never be LAN-reachable. The systemd unit also kernel-filters it to
+   localhost. See `docs/adr/0026-secure-mcp-bridge-network-lockdown.md`.
 
 Open WebUI is unaffected: it reaches the same comfyui-secure MCP through **mcpo**
 (typed OpenAPI), a completely separate path. Only this aichat bridge is patched.
