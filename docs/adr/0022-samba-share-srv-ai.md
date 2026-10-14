@@ -44,6 +44,9 @@ loopback + `tailscale0` + `eno1` only.**
     access only, via a dedicated SMB password (separate from the login password).
   - `ufw` rules scope 445 to `tailscale0` + `192.168.4.0/22`; the script also
     `ufw allow 22/tcp` and does **not** auto-enable ufw (avoids an SSH lockout).
+    *(Update 2026-10-14: ufw is now enabled by `scripts/setup-firewall.sh`,
+    [ADR-0028](0028-host-firewall-ufw.md). Its LAN and tailnet allows cover 445, so
+    these rules are redundant but harmless.)*
 - **Access surface:** Tailscale **+ LAN** (owner's choice — faster local throughput),
   accepting that SMB is reachable to trusted LAN hosts in addition to the tailnet.
 - **Scope:** the full `/srv/ai` tree (owner's choice — full cleanup/model management),

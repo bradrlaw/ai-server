@@ -69,7 +69,7 @@ if command -v ufw &>/dev/null; then
   ufw allow 22/tcp                                     >/dev/null || true
   ufw allow in on tailscale0 to any port 445 proto tcp >/dev/null || true
   ufw allow from "$LAN_CIDR" to any port 445 proto tcp >/dev/null || true
-  echo "    rules added (ufw NOT auto-enabled; enable manually with: sudo ufw enable)"
+  echo "    rules added (ufw itself is enabled/managed by scripts/setup-firewall.sh — ADR-0028)"
 fi
 
 echo "==> Enabling smbd, disabling unused nmbd (NetBIOS)"

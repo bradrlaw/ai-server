@@ -44,6 +44,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0025](0025-aichat-terminal-client-mcp.md) | aichat terminal client with comfyui-secure MCP tools | Accepted |
 | [0026](0026-secure-mcp-bridge-network-lockdown.md) | Lock the secure ComfyUI MCP bridges to localhost + mcpo | Accepted |
 | [0027](0027-status-dashboard-login-csrf.md) | Sign-in + CSRF protection for the status dashboard (:9095) | Accepted |
+| [0028](0028-host-firewall-ufw.md) | Host firewall (ufw) with a container→host allowlist | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

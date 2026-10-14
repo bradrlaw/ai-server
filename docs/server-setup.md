@@ -1061,10 +1061,13 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
 - **Open WebUI** talks to it through **mcpo (OpenAPI), not the raw MCP port.** It is
   registered in `docker/mcpo/config.json` as a `streamable-http` server pointing at
   `http://host.docker.internal:9120/mcp`; mcpo re-exposes it as an OpenAPI tool.
-  Add it in **Settings → Integrations → External Tool Servers → Add**:
-  - **URL:** `http://<host-or-tailscale>:8000/llama-swap-mode` — the **mcpo proxy on
-    `:8000`**, *not* `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak).
-    Use the same address your browser reaches Open WebUI by (LAN IP vs Tailscale).
+  Add it as an **admin (global) tool server** in **Admin Panel → Settings → Integrations**:
+  - **URL:** `http://mcpo:8000/llama-swap-mode` — the **mcpo proxy on `:8000`**, *not*
+    `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak). The Open WebUI
+    **container** calls admin tool servers, so use the Docker DNS name. A host address
+    (LAN IP, `aipcub.local`, Tailscale) is rejected by the firewall (ADR-0028). Only a
+    *personal* tool server (user **Settings → Integrations**), which your **browser**
+    calls, uses the host address your browser reaches Open WebUI by.
   - **Auth:** API key = `MCPO_API_KEY` from `docker/.env`.
 
   **Two gotchas:** (1) the host `:9120` service must be **running before mcpo (re)mounts
@@ -1179,9 +1182,12 @@ config.json**. `big` planning can take several minutes (deep reasoning) plus GPU
 The same script also serves these tools over **streamable-http on `:9100`** for the Copilot
 CLI (`PLAN_BUILD_TRANSPORT=streamable-http`) — see [plan-build MCP over HTTP](#plan-build-mcp-over-http-for-copilot-byok).
 
-To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
-Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://<host-ip>:8000/time`; the IP
-**must match the address your browser uses to reach Open WebUI** — LAN vs Tailscale),
+To register in Open WebUI: **Admin Panel → Settings → Integrations** (global; the Open WebUI
+container calls these) → URL **`http://mcpo:8000/<name>`** (e.g. `http://mcpo:8000/time`).
+Use the Docker DNS name, never the host IP or hostname: container→host `:8000` is rejected by
+the firewall (ADR-0028). A *personal* tool server (user **Settings → Integrations**) is called by
+your **browser** instead, so there use `http://<host-ip>:8000/<name>` with the address your
+browser uses for Open WebUI (LAN vs Tailscale).
 Auth = Bearer `MCPO_API_KEY`. Gotchas: the Integrations row may not show a tool **count**
 even when working (cosmetic); external tool servers do **not** appear in the `+` menu —
 enable them per-chat via the **tools/🔧 icon next to `+`**; set the model's **Function
@@ -1341,7 +1347,7 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through mcpo (bearer
 `MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at
 `http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
-(Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).
+(Admin Panel → Settings → Integrations → `http://mcpo:8000/comfyui`).
 
 ## aichat — terminal LLM client + comfyui image gen (ADR-0025)
 
@@ -1535,25 +1541,83 @@ fenced with per-unit systemd IP filters (`IPAddressAllow`/`IPAddressDeny`). Thes
 regardless of ufw's state. Verify: `scripts/verify-mcp-lockdown.sh`.
 
 The box sits behind home-router NAT (`eno1 = <host-ip>/22`), so nothing is
-WAN-reachable unless the router forwards a port. `ufw` (installed) adds
-defense-in-depth: allow only LAN + Tailscale, deny everything else. Run with sudo
-(agents cannot):
+WAN-reachable unless the router forwards a port. **ufw is the second layer
+([ADR-0028](adr/0028-host-firewall-ufw.md)).** It is installed and maintained by a script
+with a dead-man switch. Agents can't sudo, so the owner runs it:
 
 ```bash
-# Order matters — add the allow rules BEFORE enabling, or you can lock out SSH.
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow in on tailscale0            # trust the Tailscale mesh
-sudo ufw allow from <lan-subnet>            # trust the local LAN (all ports)
-# (LAN rule already covers SSH; if you tighten it, keep: sudo ufw allow 22/tcp)
-sudo ufw enable
-sudo ufw status verbose
+scripts/setup-firewall.sh --dry-run        # show the plan (no root needed)
+sudo /srv/ai/scripts/setup-firewall.sh     # pre-flight → plan → apply → verify → type "keep"
+scripts/verify-firewall.sh                 # check any time (sudo adds the rule-level checks)
 ```
 
-This keeps the no-auth `:8188` (and everything else) reachable from your LAN and
-Tailscale devices while blocking any other source. If you ever must reach a
-service from outside, prefer Tailscale over a router port-forward — never expose
-`:8188`. To reset the locked instance's password:
+What it enforces:
+
+| Source | Allowed |
+| --- | --- |
+| Docker containers (`172.16.0.0/12`) → host | **only** TCP `4000` LiteLLM, `8188` ComfyUI open, `9000`/`9001` MCP bridges, `9095` status JSON, `9120` mode MCP. Everything else is **rejected** ("connection refused" right away), including SSH, Samba, `:9100`, `:8675`, `:8189`, `:8190`. |
+| LAN (`192.168.4.0/22`, the ULA `/64`, link-local) | everything |
+| Tailnet (`tailscale0`, plus `41641/udp` for direct connections) | everything |
+| Anywhere else | SSH `22/tcp` only (anti-lockout) |
+| Docker-**published** ports (`:3000`, `:8000`, `:8083`, …) | LAN + tailnet only. These bypass ufw's INPUT rules, so a managed `DOCKER-USER` block in `/etc/ufw/after.rules` drops non-LAN sources arriving on `eno1`. It also **rejects containers** that dial a published port via the host's address from another Docker network (that path is forwarded, so the container rule above never sees it). |
+
+**How the installer stays safe:**
+- It refuses to start unless its pre-flight checks pass, including
+  `verify-firewall.sh --preflight`, and while an earlier run is still unconfirmed or
+  a rollback is running.
+- It snapshots `/etc/ufw`, `/etc/default/ufw`, the chain policies and the
+  `DOCKER-USER` rules, and arms a **300 s auto-rollback** (a transient systemd
+  timer, retried every 30 s if a rollback attempt fails) before changing anything.
+  If any of that changed while the `y`/`N` prompt was waiting, it stops instead,
+  with nothing changed.
+- After applying, it runs the full verifier as root. **Any FAIL, or an
+  inconclusive result (exit 3), rolls back automatically** without asking.
+- Then, from your Mac, **open a NEW SSH session** and load Open WebUI and the
+  dashboard. Type `keep` only if both work.
+- Any other answer, no answer, Ctrl-C, a dropped session or an error rolls back.
+- **Reboot or power loss before `keep`:** a `ufw.service` drop-in
+  (`/etc/systemd/system/ufw.service.d/ai-fw-rollback.conf`, installed by the
+  installer) restores the snapshot's files at boot, before ufw loads them. It does
+  nothing unless a run is unconfirmed (`/etc/ufw/ai-fw-snapshot/PENDING`). If that
+  restore fails, ufw doesn't load at all, so the box boots open and stays
+  reachable over SSH. `systemctl status ufw` shows the failure.
+- Every rollback checks the live result: the files, whether ufw is loaded (or fully
+  unloaded) as before, the chain policies and `DOCKER-USER`. A firewall table it
+  can't read counts as a failure. If anything fails it says `ROLLBACK FAILED`, keeps
+  the snapshot and the `PENDING` marker (so the timer and the next boot retry), and
+  prints the retry command.
+- Re-running is safe (idempotent). Rules you added by hand without an `ai-fw:`
+  comment are never touched.
+
+**Adding a container→host dependency:**
+1. Add the port to `DOCKER_HOST_PORTS` in **both** `scripts/setup-firewall.sh` and
+   `scripts/verify-firewall.sh` (at most 15 ports).
+2. Re-run the installer.
+
+Containers must reach **other containers by Docker DNS name**, e.g. Open WebUI
+tool servers at `http://mcpo:8000/<name>`. Never use the host's IP, `aipcub.local` or
+the Tailscale IP plus a published port: that path goes back through the host and is
+rejected, from the same Docker network and from any other. The verifier flags any
+Open WebUI admin tool server set up that way.
+
+**Undoing it:**
+- During setup, rollback is automatic.
+- Later, `sudo /bin/sh /etc/ufw/ai-fw-snapshot/rollback.sh` restores the state from
+  before the **last** run.
+- In an emergency, run `sudo ufw disable && sudo iptables -F DOCKER-USER`.
+- The boot safety net is inert once a run is kept. To remove it anyway:
+  `sudo rm /etc/systemd/system/ufw.service.d/ai-fw-rollback.conf && sudo systemctl daemon-reload`.
+  The next installer run puts it back.
+
+**Verifier exit codes:** `0` pass, `1` FAIL, `3` inconclusive (run without sudo, so
+the rule-level checks were skipped).
+
+ufw logs blocked packets to the kernel log: `[UFW BLOCK]`, `[AI-FW DOCKER BLOCK]`
+for the non-LAN published-port drop, and `[AI-FW DOCKER XNET]` for containers
+reaching a published port through the host.
+
+Never port-forward `:8188` (or anything else). If you must reach a service from
+outside, use Tailscale. To reset the locked instance's password:
 `sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013).
 
 ## Mounting /srv/ai over SMB (macOS / Windows) — 2026-09-13
@@ -1576,8 +1640,10 @@ sudo /srv/ai/scripts/setup-samba.sh
 It installs Samba, deploys the config (backs up any existing `/etc/samba/smb.conf`,
 validates with `testparm`), prompts once for an SMB password for `brad`
 (separate from the login password), adds `ufw` rules for port 445 on `tailscale0`
-+ the LAN subnet (and `allow 22/tcp`; it does **not** auto-enable ufw, so no SSH
-lockout), then enables `smbd` and disables the unused `nmbd`/NetBIOS daemon.
++ the LAN subnet (and `allow 22/tcp`), then enables `smbd` and disables the unused
+`nmbd`/NetBIOS daemon. It does **not** enable ufw itself. That is
+`scripts/setup-firewall.sh` (ADR-0028), whose LAN and tailnet allows already cover
+445, so these rules are redundant but harmless.
 
 Mount from any device on the tailnet or LAN (use the server's Tailscale IP or its
 LAN IP; find them with `tailscale ip -4` and `ip -4 addr show eno1`):
@@ -1597,8 +1663,9 @@ Log in as **`brad`** with the SMB password set above.
   can't be modified/deleted over SMB as `brad`. Fix per-directory as needed, e.g.
   `sudo chown -R brad:brad /srv/ai/comfyui/models/loras` (the installer prints the
   count of non-`brad`-owned paths).
-- **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`
-  and remove the LAN `ufw` rule.
+- **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`.
+  The firewall trusts the whole LAN (ADR-0028), so the smb.conf binding is what
+  restricts SMB, not the LAN `ufw` 445 rule.
 
 ### Managing SMB accounts & passwords
 

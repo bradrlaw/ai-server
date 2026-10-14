@@ -41,6 +41,12 @@ Read this first, then the detailed docs:
 - **Clock is UTC, owner is US Eastern.** The machine runs `Etc/UTC` but the owner thinks in
   EST/EDT (~4–5 h offset). Any wall-clock scheduling (cron, timers, the quiet-hours window) must
   be timezone-aware — e.g. quiet-hours reads `QUIET_TZ=America/New_York`, not the system clock.
+- **Host firewall (ufw, ADR-0028).** Containers can reach only host TCP
+  `4000,8188,9000,9001,9095,9120`; every other host port is **rejected** for them. A new
+  container→host dependency must be added to `DOCKER_HOST_PORTS` in `scripts/setup-firewall.sh`
+  **and** `scripts/verify-firewall.sh`, then the owner re-runs `sudo scripts/setup-firewall.sh`.
+  Containers reach each other by Docker DNS name (`http://mcpo:8000/...`), never via the host
+  IP/hostname. Check with `scripts/verify-firewall.sh`.
 - **HF downloads:** use `/srv/ai/scripts/hf-dl download <repo> <path> --local-dir <dir>`
   (injects token from keyring, ~150 MB/s Xet). Don't use raw curl (throttled) or `HF_XET_HIGH_PERFORMANCE=1`.
 - **Secure-canvas MCP bridges are localhost/mcpo-only (ADR-0026).**
