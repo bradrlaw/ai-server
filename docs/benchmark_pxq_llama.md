@@ -263,8 +263,9 @@ never becomes ready. MTP would require a base model that ships a multi-token-pre
   SIGKILL) left the NVIDIA **UVM** state corrupt: all *new* CUDA processes then failed
   `ggml_cuda_init: failed to initialize CUDA: unknown error` (torch too), while already-running
   ComfyUI kept working and llama-swap silently fell back to CPU. Recovery needs a privileged
-  reset — [`scripts/gpu-uvm-reset.sh`](../scripts/gpu-uvm-reset.sh) (stop CUDA procs →
-  `rmmod`/`modprobe nvidia_uvm` → restart), or a reboot. All GPU numbers here were captured on
+  reset — [`scripts/gpu-uvm-reset.sh`](../scripts/gpu-uvm-reset.sh) (stop the GPU services →
+  `rmmod`/`modprobe nvidia_uvm` → check a new CUDA context → restart the always-on services),
+  or a reboot. All GPU numbers here were captured on
   a healthy driver (VRAM figures confirm residency).
 - Reddit and the fork's HF weights are inaccessible from this host (blocked / unpublished);
   self-quantization is the working path.

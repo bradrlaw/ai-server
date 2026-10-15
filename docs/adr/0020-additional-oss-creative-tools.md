@@ -126,3 +126,53 @@ install the unit and run `daemon-reload` without enabling it. They then show
 their `[Install] WantedBy=multi-user.target` section, like the on-demand
 `comfyui-qwen`, so enabling stays possible but is never the default. Nothing
 changed live: all three units were already disabled and stopped.
+
+## Addendum 2026-10-15: the UVM reset leaves the on-demand tools stopped (audit C12)
+
+**Problem.** `scripts/gpu-uvm-reset.sh` stopped only llama-swap and the two
+ComfyUI instances. It never stopped the on-demand tools (comfyui-qwen, Fooocus,
+SwarmUI, InvokeAI) or ai-toolkit-ui. It found other holders with
+`nvidia-smi --query-compute-apps`, which misses processes such as an
+`nvidia-smi dmon` left in a shell. Any process still holding `/dev/nvidia-uvm`
+makes `rmmod nvidia_uvm` fail. Under `set -e` the script then exited before its
+restart step and left llama-swap down. Its final check imported torch with the
+system `python3`, which has no torch, so it never checked anything.
+
+**Owner decision.** The reset stops every GPU service but restarts only the
+always-on ones that were running (llama-swap, comfyui-open, comfyui-secure,
+ai-toolkit-ui). The on-demand services stay stopped. The summary lists the ones
+that were running, so they can be started again from the status page. That
+matches how they boot: never on their own.
+
+**Fix.** The script was rewritten:
+- It shows a plan and asks for confirmation (`--yes` without a terminal,
+  `--dry-run` works without root). After the prompt it looks again and stops
+  every GPU unit, which also cancels a pending auto-restart. If a unit won't
+  stop, it leaves the module alone.
+- It kills the remaining `/dev/nvidia-uvm` holders (found with `fuser`; TERM,
+  then KILL, never PID 1) and retries `rmmod`. After `modprobe` it checks that a
+  new CUDA context sees every GPU: `llama-server --list-devices`, run as the
+  binary's owner with `CUDA_DEVICE_ORDER=PCI_BUS_ID`.
+- The restart also runs from an EXIT trap after a failure or interrupt, and it
+  loads `nvidia_uvm` first if it's missing. While it runs, Ctrl-C, TERM and HUP
+  are ignored by the script and by the `modprobe` and `systemctl start` it runs.
+  A terminal Ctrl-C goes to the whole process group, so ignoring it only in the
+  shell would still kill those. Ctrl-\ still kills it. A closed stdout (the SSH
+  session dropped) doesn't stop it either. Each restarted unit must be active
+  afterwards. comfyui-secure's storage condition makes `systemctl start` exit 0
+  without starting it.
+- A lock in `/run` stops two resets from running at once. The lock file is
+  0600: `flock` works on a read-only descriptor, so anyone who could open it
+  could block a reset. Exit status: 0 OK, 1 failed or unverified, 2 usage, not
+  root or locked, 128+signal if interrupted before the restart step.
+
+A mock harness (242 checks, 38 of 38 mutants killed) covers each step. It covers
+interrupts at every step, both to the script and to its process group as a
+terminal sends them, a second Ctrl-C during the restart, and stdout closing
+mid-reset. That last test found one more bug: `reload_uvm` returned the status
+of its last `echo`, so with stdout gone a good reload counted as a failure. It
+also covers stuck, crash-looping and condition-skipped units, and the lock
+file's mode. Two reviews found the process-group Ctrl-C and lock-mode problems,
+both fixed. They also noted that `sudo` runs a script `brad` can edit. Every
+`sudo /srv/ai/scripts/...` step in the runbook works the same way, so that is
+left to a separate decision. It wasn't changed here.

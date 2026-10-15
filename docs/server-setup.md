@@ -324,6 +324,19 @@ journalctl -u llama-swap -e --no-pager               # recent logs
 journalctl -u gpu-fan-control -f                     # follow live
 ```
 
+### GPUs fail with "unknown error" after a crash (poisoned UVM)
+If every *new* CUDA process fails with `ggml_cuda_init: failed to initialize CUDA: unknown
+error` (llama-swap loads models on the CPU, torch sees 0 GPUs) after a GPU process segfaulted
+or was SIGKILLed, reload `nvidia_uvm` instead of rebooting:
+```bash
+scripts/gpu-uvm-reset.sh --dry-run    # what it would stop and kill (no sudo needed)
+sudo scripts/gpu-uvm-reset.sh         # stop GPU services, reload nvidia_uvm, check, restart
+```
+Everything on the GPUs is interrupted. It restarts only the always-on services that were
+running (llama-swap, comfyui-open, comfyui-secure, ai-toolkit-ui) and lists the on-demand ones
+it left stopped (comfyui-qwen, Fooocus, SwarmUI, InvokeAI): start those again from the status
+page. If it ends with "Finished with problems", reboot.
+
 ### Restart the app tier (Docker Compose)
 ```bash
 cd /srv/ai/docker
