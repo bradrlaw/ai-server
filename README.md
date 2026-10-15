@@ -250,26 +250,31 @@ Things I'd change on a second build, learned the hard way:
    indirection layer so a rename isn't a breaking change.** The small-card slot was
    named `fast`, which described its *speed* at the time rather than its *role*. Once the
    P100 died and was swapped for a slower 12 GB Titan X (and eventually some other card),
-   `fast` stopped being our fastest agent — the name is now actively misleading, but
-   renaming it is a breaking change because `fast`/`fast-12b`/`fast-uncensored` string
-   literals crept into ~15+ places: the llama-swap router + mode overlays, the LiteLLM
+   `fast` stopped being our fastest agent and the name became actively misleading. But
+   renaming it is a breaking change, because `fast`/`fast-12b`/`fast-uncensored` string
+   literals had crept into ~15+ places: the llama-swap router + mode overlays, the LiteLLM
    `model_name` entries clients call, `plan_build_mcp.py`, the status-page fast-keeper
    loop, `config/pi/models.json`, the BYOK launcher, and a lot of docs/ADRs. Two lessons:
    (a) pick **stable, role-based** slot names up front (e.g. `small`/`chat`/`coding`/`big`,
    describing the tier not the hardware or a benchmark result); (b) introduce a single
    **alias/indirection layer** (one canonical slot id mapped once to the client-facing
    name, the GGUF path, and the card) so future renames touch one table instead of a
-   dozen files. Tabled the `fast`→`small` rename for now precisely because the blast
-   radius is too large — which is the whole point of this note.
+   dozen files. The `fast`→`small` rename was done on 2026-08-24 (commit `60d64e5`, 29
+   files), and stragglers kept turning up for weeks, in and out of the repo: OpenClaw's
+   runtime config, Open WebUI's per-model settings (keyed by model id, so they were
+   orphaned), the installed ComfyUI `free_gpu` hook copies, and stale docs. That is the
+   whole point of this note.
 
 ## Layout
 
 | Path | Tracked | Contents |
 |------|---------|----------|
+| `AGENTS.md` | ✅ | Orientation and operational traps for AI coding agents working in this repo |
 | `docs/` | ✅ | Runbook (`server-setup.md`), architecture (`architecture.md`), ADRs (`adr/`) |
 | `scripts/` | ✅ | Setup, build, benchmark, and service scripts (fan/power control, CUDA, llama.cpp) |
 | `config/` | ✅ | llama-swap router config, ComfyUI MCP workflow definitions |
-| `docker/` | ✅ | Compose stack for the CPU app tier (LiteLLM, Open WebUI, mcpo, SearXNG, plan-build MCP) |
+| `docker/` | ✅ | Compose stack for the CPU app tier (LiteLLM, Open WebUI, mcpo + plan-build MCP, SearXNG, filebrowser, OpenClaw, Hermes) |
+| `evals/` | ✅ | Repeatable model evals: fixed prompts + rubrics, with every model's raw output kept |
 | `models/`, `venvs/`, `src/`, `datasets/`, … | ❌ (local) | Model weights, virtualenvs, source builds, data |
 
 ## Notable components & scripts

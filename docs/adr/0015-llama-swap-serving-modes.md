@@ -55,6 +55,13 @@ Introduce **serving modes** as a *base + overlay* system:
 
 Modes shipped initially:
 
+> **Reading note (2026-10-15):** this list is the July 2026 snapshot. `fast` below is
+> today's `small` (renamed 2026-08-24, commit `60d64e5`), and idx0 is now the 12 GB
+> Titan X stopgap, not the P100 (ADR-0017). `small` now runs `--parallel 2` at 32k per
+> slot in both heavy-coding and agentic (C9 addendum below), and `coding`'s full context
+> is 160k (163840) since the Qwen3.8 migration. Current values live in
+> `config/modes/*.yaml` and `config/llama-swap.base.yaml`.
+
 - **daily** — base verbatim (all single-slot; coder-next `2`). Boot-preloads
   `fast`; a switch back warms the daily trio (coding + chat + fast).
 - **heavy-coding** — `coding` stays `--parallel 1` (full 180k MTP ctx, interactive
