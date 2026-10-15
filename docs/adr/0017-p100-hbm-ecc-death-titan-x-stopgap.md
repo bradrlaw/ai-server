@@ -228,3 +228,18 @@ When `small` goes back to the 26B MoE, update `MODEL_LABELS["small"]` and the
   passes on `fast_make_plan`.
 - The new script on a throwaway loopback HTTP port answered the same way with the
   service fallback set to `p100` and to `idx0`.
+
+**Open WebUI runtime fix (same day, owner-approved).** Open WebUI's per-model settings
+were still keyed to the pre-rename ids. The plan-build, ComfyUI and Server Mode tools,
+plus the `caller_gpu="p100"` system prompt, sat on an orphaned `fast` entry. `small` had
+no entry, so plan-build calls from `small` were refused. Fixed in the live database
+through the Open WebUI API:
+- created `small` from `fast`'s settings, with the system prompt now passing
+  `caller_gpu="idx0"`;
+- pointed the "Gemma4-comfyui prompts" preset at `small-uncensored` (it was based on
+  `fast-uncensored`, which no longer exists);
+- relabelled `coding` as "Coding (Qwen3.8-27B)";
+- deleted the leftover `fast`, `fast-uncensored` and `chat-uncensored-q4` entries.
+
+`small-uncensored` was left as the owner set it up. A copy of the full model table taken
+before the change is kept outside the repo.
