@@ -35,10 +35,10 @@ __pycache__/
 *_token
 *.secret
 
-# --- ComfyUI MCP workflows: opt-in tracking only (per @bradrlaw) ---
-# New workflow files may contain private prompts/paths, so ignore this directory's
-# contents by default and re-include ONLY the workflows explicitly meant to be
-# shared. To publish a new workflow, add a matching '!' line below.
+# --- ComfyUI MCP workflows: local only (per @bradrlaw) ---
+# Workflow files may contain private prompts/paths, so this directory is ignored.
+# The 8 files re-included below are a frozen early snapshot. Owner policy
+# (2026-10-15, ADR-0012 addendum): add no new '!' lines and commit no workflow edits.
 /config/comfyui-mcp/workflows/*
 !/config/comfyui-mcp/workflows/flux1_krea.json
 !/config/comfyui-mcp/workflows/flux1_krea.meta.json

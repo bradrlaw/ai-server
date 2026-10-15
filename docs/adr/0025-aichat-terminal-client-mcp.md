@@ -49,8 +49,11 @@ attribution README) plus the systemd unit + installer under `scripts/`.
 
 ## Consequences
 - Positive: image generation and multi-model chat from a bare SSH shell; local-only
-  (nothing leaves the box); OWUI/mcpo path untouched; reproducible from the tracked
-  snapshot + upstream `616d8d8`.
+  (nothing leaves the box); OWUI/mcpo path untouched; the client is reproducible from
+  the tracked snapshot + upstream `616d8d8`. *Correction (2026-10-15): the image
+  workflows its default role calls (`krea2_turbo`, `krea2_turbo_bf16`) are local-only
+  and are not in git, by owner policy (ADR-0012 2026-10-15 addendum). A rebuild needs
+  a copy of those files.*
 - Negative / trade-offs: the client lives outside the repo (local dirs), so the
   snapshot must be kept in sync by hand after config changes. The bridge opens a
   single session to its upstream MCP and has **no reconnect logic**, so it must be

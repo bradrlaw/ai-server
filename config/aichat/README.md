@@ -8,7 +8,9 @@ generate images from the shell. Default model is the uncensored chat slot; plain
 Everything the client *runs from* is **local & gitignored** (`~/.local/bin`,
 `~/.config/aichat`, `/srv/ai/tools/llm-functions`). This directory holds the
 **tracked, reproducible snapshot**: config template, role, the MCP bridge patch,
-and the MCP server list. See `docs/adr/0025-aichat-terminal-client-mcp.md` and the
+and the MCP server list. Not included: the ComfyUI workflows the role calls
+(`krea2_turbo`, `krea2_turbo_bf16`), which are local-only by owner policy
+(ADR-0012 2026-10-15 addendum). See `docs/adr/0025-aichat-terminal-client-mcp.md` and the
 "aichat terminal client" section of `docs/server-setup.md` for the full runbook.
 
 ## Upstream open-source components (all MIT, by sigoden)

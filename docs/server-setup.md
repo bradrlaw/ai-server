@@ -340,7 +340,7 @@ docker compose logs -f litellm                       # follow logs
 | Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
 | GPU power caps | `power_limits` in `scripts/gpu-fan-control.config.json` (or the status dashboard's per-GPU power dropdown) | none — the daemon re-reads it every `power_recheck_sec` (30 s) and applies it live; a raw `nvidia-smi -pl` is reverted on the next pass |
 | GPU fan curves / `min_duty` / zones | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup) |
-| New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
+| New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (workflows stay **local**: new files are gitignored and no workflow changes are committed — owner policy, ADR-0012 2026-10-15 addendum) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
 | Enable the OWUI status banner | `install -m 600 scripts/server-status.env.example scripts/server-status.env` (keeps the key private), set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
@@ -1331,8 +1331,11 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   forces the bind host to `0.0.0.0` (upstream hard-codes 127.0.0.1) and (b) allows the mcpo
   `Host: host.docker.internal:9000` header (FastMCP's DNS-rebinding guard else returns **421
   Misdirected Request**) — **no fork of upstream**. Auth-less like ComfyUI → LAN/Tailscale only.
-- **Style library (tracked in this repo):** `config/comfyui-mcp/workflows/` (set via
-  `COMFY_MCP_WORKFLOW_DIR`), so styles are versioned and survive re-cloning. Each **API-format**
+- **Style library (local):** `config/comfyui-mcp/workflows/` (set via
+  `COMFY_MCP_WORKFLOW_DIR`). Git holds only a frozen 8-file early snapshot; newer styles (e.g.
+  `krea2_turbo`/`krea2_turbo_bf16`, which aichat's default role uses) and later edits are
+  local-only, so a re-clone does **not** restore the live library (owner policy, ADR-0012
+  2026-10-15 addendum). Each **API-format**
   `*.json` using `PARAM_<TYPE>_<NAME>` placeholders (e.g. `PARAM_PROMPT`, `PARAM_INT_SEED`,
   `PARAM_INT_WIDTH`) auto-registers its **own MCP tool** named after the file; an optional
   `*.meta.json` sidecar gives it a friendly name/description + parameter defaults. First style:
