@@ -2792,6 +2792,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Under systemd stdout is a pipe, so Python block-buffers it: log lines reached
+    # the journal hours late, stamped with the flush time. Flush per line instead.
+    sys.stdout.reconfigure(line_buffering=True)
     if "--set-password" in sys.argv[1:]:
         sys.exit(_cli_set_password())
     main()
