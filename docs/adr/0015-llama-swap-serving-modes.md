@@ -113,7 +113,8 @@ ADR-0008). This changes the single-slot contexts referenced above:
   not 200k (MTP's extra ~1 GB compute buffer OOMs at 200k). +79% decode.
 - **daily `chat`** — Qwen3.6-35B-A3B-MTP UD-Q6_K, ctx **98304 (96k)**, not 128k. +31% decode.
 
-Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`:
+Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`
+*(the two `model:` overrides below were removed 2026-10-15 — see that addendum)*:
 
 - **heavy-coding `chat`** overrides back to the **non-MTP** file at `--parallel 4`
   / ctx 131072 / spec off — MTP is a single-stream latency win, wasted (and VRAM-costly)
@@ -122,3 +123,41 @@ Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`:
   ctx 204800 / spec off for the same reason.
 
 So MTP is active only where a slot serves one stream at a time.
+
+## Addendum (2026-10-15) — pools inherit the base model file (no `model:` overrides)
+
+The two `model:` overrides above pinned the pools to non-MTP copies that later moved to the
+HDD cold tier (`models/cold` → `/srv/ai/storage-bulk`), and the 2026-08-15 Qwen3.8 migration
+of the base `coding` slot didn't touch them:
+
+- **agentic `coding`** still served the pre-3.8 **Qwen3.6-27B** — a stale model.
+- **heavy-coding `chat`** loaded its 29.3 GB file from the HDD, so a switch into the mode
+  took **3 min 1 s** (chat alone 2 min 31 s).
+
+Decision: the overlays drop `model:` and keep `spec: none`, so each pool loads the same
+NVMe file as its base slot, with the embedded MTP head loaded but unused. The base stays the
+single source of *which model* a slot serves, so a future migration can't miss a mode. The
+`model` override key remains in `llama-swap-mode.py`; no shipped overlay uses it.
+
+MTP stays **off** for both pools because, on this build, it doesn't scale with `--parallel`
+(aggregate tok/s by number of busy slots):
+
+| | MTP on (2026-08-24 sweep) | MTP off (2026-07-21 sweep) |
+|---|---|---|
+| `chat` P=4 — 1 / 2 / 4 busy | 125 / 115 / 124 | 85 / 123 / 153 |
+| `coding` P=2 — 1 / 2 busy | 34 / 32 | 22 / 37 |
+
+(MTP-off `coding` was Qwen3.6-27B, the same architecture as 3.8.) MTP only wins while a
+single slot is busy, so it stays on for the single-slot primaries (daily `coding`/`chat`,
+heavy-coding `coding`).
+
+Measured 2026-10-15 — every slot filled to its full context at once, peak VRAM sampled
+every 200 ms; "free" = 32768 − 274 MiB driver reserve − peak (idx1 also holds
+comfyui-open's ~0.8 GB idle context):
+
+- heavy-coding `chat` P=4 / 131072: 31180 MiB idle → **31350 MiB peak, 1144 MiB free**
+  (the old non-MTP file peaked at 30680 MiB — the unused head costs ~0.7 GB).
+- agentic `coding` (Qwen3.8 Q6_K) P=2 / 204800: 30578 MiB idle → **30814 MiB peak,
+  1680 MiB free**. Single-stream decode 22.4 tok/s (MTP off), as expected.
+- Switch time with the chat file uncached on NVMe: heavy-coding **62 s** (chat 33 s);
+  agentic **34 s**.

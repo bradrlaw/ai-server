@@ -678,6 +678,8 @@ llama-server \
 > MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
 > throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
 > keeps MTP on the single-slot interactive `coding` primary.
+> *(Update 2026-10-15: the pools no longer swap files — they load the base NVMe file with MTP
+> off; fit, switch-time and MTP-vs-`--parallel` data in ADR-0015's 2026-10-15 addendum.)*
 
 ### Chaining `ngram-mod` before `draft-mtp` on the `coding` slot (2026-07-25)
 

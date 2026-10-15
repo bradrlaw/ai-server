@@ -2,19 +2,26 @@
 # ---------------------------------------------------------------------------
 # Interactive coding session that spawns multiple sub-agents.
 #
-#   * PRIMARY (interactive)  -> `coding` (Qwen3.6-27B + MTP, idx1). Stays
-#     single-slot so it keeps its full 180k MTP context for the human-driven,
-#     long-context agentic session — and single-stream is exactly where MTP's
-#     ~+80% decode helps most. NOT overridden here (inherits base: MTP, P=1).
-#   * SUB-AGENT WORKER POOLS -> `chat` (35B-A3B MoE, idx2) and `small` (26B-A4B MoE, idx0)
-#     (Gemma-12B, P100 idx0) get several parallel slots so many delegated
-#     sub-agents run concurrently instead of serializing behind one slot.
+#   * PRIMARY (interactive)  -> `coding` (Qwen3.8-27B + MTP, idx1). NOT
+#     overridden here: it inherits base (single slot, full 160k ctx, MTP on) for
+#     the human-driven, long-context session — single-stream is exactly where
+#     MTP's decode speedup helps most.
+#   * SUB-AGENT WORKER POOLS -> `chat` (Qwen3.6-35B-A3B MoE, idx2) and `small`
+#     (dense Gemma-4-12B, Titan X idx0) get several parallel slots so many
+#     delegated sub-agents run concurrently instead of serializing behind one slot.
 #
-# Why chat P=4 (not 8): the sweep showed chat scales to 194 tok/s @ P=8, but
-# --parallel splits the 131k ctx across slots, so P=8 = 16.4k/slot (too tight
-# for a sub-agent that must read code) vs P=4 = 32.8k/slot @ 156 tok/s — the
-# better balance. `small` (26B-A4B MoE) is VRAM-bound on the P100 -> capped at P=2
-# (ctx 24576, ~15.4GB); P=4 OOMs.
+# Why chat P=4 (not 8): the 2026-07-21 sweep showed chat scales to 194 tok/s @
+# P=8, but --parallel splits the 131k ctx across slots, so P=8 = 16.4k/slot (too
+# tight for a sub-agent that must read code) vs P=4 = 32.8k/slot @ ~155 tok/s —
+# the better balance.
+# Why MTP OFF for the pool: on this build MTP doesn't scale with --parallel. With
+# MTP chat stays at ~115-125 tok/s total however many slots are busy (2026-08-24
+# sweep, P=1..8); without it P=4 gives ~85 (1 busy) / ~123 (2) / ~155 (4+). MTP
+# only wins while a single sub-agent is busy. The pool still loads the base NVMe
+# file (its embedded MTP head just sits unused, ~0.7 GB) — this used to point at
+# a non-MTP copy on the HDD cold tier, so every switch spent ~2.5 min loading it.
+# `small` keeps P=2 at ctx 24576 (12k/slot), the setting sized for the earlier
+# 26B MoE on the 16 GB P100; the dense 12B may have room for more (untested).
 # concurrencyLimit is raised so many sub-agents don't hit llama-swap's default
 # limit of 10 (which returns HTTP 429).
 #
@@ -26,20 +33,21 @@
 name: heavy-coding
 label: "Heavy coding (interactive + sub-agent pools)"
 description: >
-  Primary interactive coding on `coding` (full 180k MTP ctx, single slot) with
-  parallel sub-agent worker pools on `chat` (P=4) and `small` (P=2, MoE VRAM-bound).
+  Primary interactive coding on `coding` (full 160k MTP ctx, single slot) with
+  parallel sub-agent worker pools on `chat` (P=4, 32k/slot) and `small` (P=2, 12k/slot).
+# No `model:` overrides: pools inherit the base (NVMe) model files, so a model
+# migration in the base can't leave a mode serving a stale file.
 overrides:
   chat:
     parallel: 4
     concurrencyLimit: 12
     ctx_size: 131072
-    spec: none    # MTP off for the batched sub-agent pool (helps single-stream, not P=4)
-    model: ${models_dir}/cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf  # non-MTP file (no unused head); on bulk cold tier (loaded on demand)
+    spec: none    # MTP off for the batched sub-agent pool (see above)
   small:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
-    spec: none   # MTP is single-stream only; strip the draft head for the P=2 pool
+    spec: none   # no-op while the Titan X stopgap runs `small` without a draft; keeps the pool draft-free if it returns
 # Warm all three so the primary + both worker pools are ready immediately.
 preload:
   - coding

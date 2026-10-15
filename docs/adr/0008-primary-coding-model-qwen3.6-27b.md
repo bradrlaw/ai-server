@@ -73,4 +73,6 @@ head, +0.35 GB) with `--spec-type draft-mtp --spec-draft-n-max 2`.
   capped at **180k (184320)** — near-full prefill peaks 32.02/32 GB (~0.75 GB free).
 - MTP is a single-stream latency win, so the `agentic` mode (coding at `--parallel 2`)
   overrides back to the non-MTP file at 200k with spec off; `heavy-coding` keeps MTP
-  on the single-slot interactive primary.
+  on the single-slot interactive primary. *(Update 2026-10-15: `agentic` now keeps the
+  base `coding` file — Qwen3.8-27B since 2026-08-15 — and only turns MTP off; the pinned
+  non-MTP Qwen3.6 file had gone stale on the HDD cold tier. ADR-0015 2026-10-15 addendum.)*

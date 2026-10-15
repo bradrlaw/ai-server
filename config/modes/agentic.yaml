@@ -3,20 +3,24 @@
 # Pure autonomous / agentic workloads: many unattended agents and their tool
 # calls fanning out at once, favouring THROUGHPUT over a single huge context.
 #
-# Residency = matrix set `qg` (coding idx1 + gemma-26b idx2 + small P100 idx0),
+# Residency = matrix set `qg` (coding idx1 + gemma-26b idx2 + small idx0),
 # so this mode loads `gemma-26b` on idx2 INSTEAD of `chat` (they share idx2 and
 # evict each other). All three sit on separate cards → co-resident, no conflict.
 #
-#   * `coding` (Qwen3.6-27B Q6_K, idx1)  -> P=2. Two slots for concurrent
-#     automated coding tasks while each still gets a decently large window
-#     (204800 / 2 = ~100k per slot). The sweep ran coding to P=8 on one card
-#     (30.2/32GB) so P=2 is comfortably safe.
+#   * `coding` (Qwen3.8-27B Q6_K, idx1)  -> P=2, MTP off. Two slots for
+#     concurrent automated coding tasks while each still gets a large window
+#     (204800 / 2 = ~100k per slot). MTP off because on this build it doesn't
+#     scale with --parallel: with MTP, coding stays at ~32-35 tok/s total however
+#     many slots are busy (2026-08-24 sweep); without it P=2 gives ~22 (1 busy) /
+#     ~37 (2 busy). It loads the base NVMe file (embedded MTP head unused). This
+#     used to pin the pre-3.8 Qwen3.6-27B on the HDD cold tier — a stale model
+#     the Qwen3.8 migration missed, and a slow switch.
 #   * `gemma-26b` (Gemma-4-26B-A4B MoE, idx2) -> P=8. The throughput champ
 #     (~281 tok/s aggregate @ P=8, ~19/32GB) blitzes through many focused,
 #     small-context agent tasks (131072 / 8 = ~16k per slot).
-#   * `small` (Gemma-4-26B-A4B MoE, P100 idx0) -> P=2. A couple of slots with a safe
-#     window (131072 / 2 = ~64k per slot); P100 caps at P=4 (OOM at P=8) so
-#     P=2 leaves headroom.
+#   * `small` (dense Gemma-4-12B, Titan X idx0) -> P=2 at ctx 24576 (12k/slot),
+#     the setting sized for the earlier 26B MoE on the 16 GB P100; the dense 12B
+#     may have room for more (untested).
 #
 # concurrencyLimit is raised above --parallel on each so bursts of agent
 # requests queue instead of hitting llama-swap's default limit of 10 (HTTP 429).
@@ -27,14 +31,15 @@ label: "Agentic (autonomous multi-agent throughput)"
 description: >
   Autonomous agent workloads: coding P=2 (~100k/slot) for concurrent automated
   coding, gemma-26b P=8 (~16k/slot, ~281 tok/s) for fast focused agent tasks,
-  and small P=2 (~32k/slot, MoE) on the P100. Loads gemma-26b in place of chat.
+  and small P=2 (~12k/slot) on the Titan X. Loads gemma-26b in place of chat.
+# No `model:` overrides: pools inherit the base (NVMe) model files, so a model
+# migration in the base can't leave a mode serving a stale file.
 overrides:
   coding:
     parallel: 2
     concurrencyLimit: 8
-    ctx_size: 204800    # non-MTP file gets its full 200k back (204800 / 2 = ~100k/slot)
-    spec: none          # MTP is a single-stream latency win; useless for a P=2 throughput pool
-    model: ${models_dir}/cold/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf  # non-MTP file (no unused head, fits 200k @ P=2); on bulk cold tier (loaded on demand)
+    ctx_size: 204800    # 204800 / 2 = ~100k/slot
+    spec: none          # MTP off for the P=2 throughput pool (see above)
   gemma-26b:
     parallel: 8
     concurrencyLimit: 16
@@ -42,7 +47,7 @@ overrides:
     parallel: 2
     ctx_size: 24576
     concurrencyLimit: 8
-    spec: none   # MTP is single-stream only; strip the draft head for the P=2 pool
+    spec: none   # no-op while the Titan X stopgap runs `small` without a draft; keeps the pool draft-free if it returns
 # Warm all three so the whole agent worker set is ready immediately. gemma-26b
 # is warmed here (not chat) — requesting it evicts chat from idx2.
 preload:
