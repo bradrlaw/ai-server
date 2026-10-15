@@ -75,3 +75,63 @@ gateway, so one fix covers OpenClaw, Hermes, Open WebUI tools, Copilot BYOK and 
   inside an anchored pattern.
 - Rejected: patching llama.cpp (a local patch to carry through every rebuild); per-client fixes
   (each covers only one client).
+
+## Addendum (2026-10-15) — scoped secrets, non-root mcpo, one master key (audit B5)
+
+**Context.** `litellm` and `mcpo` loaded all of `docker/.env` through `env_file`, so each held
+all 8 secrets: the OpenClaw gateway token, the Hermes dashboard password and so on. mcpo was the
+riskiest holder. It runs LLM-driven tools (fetch, git, plan-build) as root with all of `/srv/ai`
+mounted read-only. Container root ignores file modes, so it could also read every brad-only 0600
+secret file. Its own API key sat on its command line and in its healthcheck, where compose had
+pasted the value in at parse time. Every host account can read both with `ps`.
+
+**Decision.**
+- Each service gets only the `.env` keys it uses, through compose `environment:` interpolation.
+  No `env_file: ./.env`. LiteLLM gets `LITELLM_MASTER_KEY`. mcpo gets `MCPO_API_KEY` plus
+  `LITELLM_MASTER_KEY` for plan-build. The other services already listed their keys explicitly.
+- mcpo runs as uid/gid 10001 (no host account) with `no-new-privileges`, since the image ships
+  setuid `su` and `mount`. `HOME` is a new `mcpo-home` volume that holds the uv cache, which keeps
+  the 2026-07-26 boot-race guard. A one-shot `mcpo-init` (root, no network) chowns it. The old
+  root-owned `mcpo-uv-cache` volume is deleted.
+- The API key reaches mcpo through its environment. mcpo's `--api-key` has no env fallback, so
+  the entrypoint is a python one-liner that adds the key to `sys.argv` inside the process. The
+  healthcheck uses `$$MCPO_API_KEY`, which the container shell expands at check time; `printf`
+  is a builtin and curl reads the header from stdin (`-H @-`), so no argv holds the key.
+- **Keep one master key for now (owner decision).** The 2026-07-02 update planned per-client
+  virtual keys with budgets. They need LiteLLM's Postgres-backed key store, which this deployment
+  doesn't run. One key serves Open WebUI, OpenClaw, Hermes, aichat, pi, Copilot BYOK, the
+  eval/bench scripts, and plan-build (in mcpo and in the host `plan-build-mcp.service`). Todo
+  `litellm-virtual-keys` tracks the revisit.
+
+**Found while testing, and fixed.** plan-build ran `uv run --with mcp` in mcpo's working dir
+`/app`, which is mcpo's own uv project. So on every start uv re-locked `/app/uv.lock` and
+re-synced mcpo's venv to it. As root this silently worked: the live venv held mcp 1.17.0
+instead of the shipped 1.26.0, older fastapi/pydantic/starlette/uvicorn/typer, and pytest, all
+swapped in under the running server. A `docker restart` keeps that layer and would have booted
+mcpo on those versions. As uid 10001 the sync fails and plan-build doesn't start. Running
+`uv run --no-project` fixes both: the script runs on the image's own env, which already has
+`mcp`, and `/app` stays untouched. The `UV_CACHE_DIR=/tmp/uv-cache` override is gone too.
+
+**Verification (live 2026-10-15).** First, a throwaway uid-10001 container passed with the new
+settings, including an offline start from the cache (`--network none`). After
+`docker compose up -d mcpo-init mcpo litellm`:
+- Both containers were healthy in about 24 s, and all 7 MCP servers connected, including
+  `comfyui-secure` over `mcp-secure`.
+- `time`, `git_log`, `fetch`, `current_mode` and `comfyui-secure/get_defaults` return 200.
+  A request with no key gets 401.
+- Every mcpo process runs as uid 10001 with NoNewPrivs set. No `.env` secret appears in any
+  host command line (before: 1) or in the container config.
+- mcpo can no longer read `docker/.env`, either ComfyUI-Login PASSWORD or `.secret-key.txt`,
+  `hermes/config.yaml`, `var/status-service/auth.json` or `scripts/server-status.env`.
+- `/app` has no changes.
+- LiteLLM lists 9 models and answers a `small` chat. Open WebUI and OpenClaw reach it with
+  their keys.
+
+**Residuals.**
+- mcpo hands its whole environment to every stdio child, and the `uvx` servers are unpinned
+  PyPI packages. A compromised package would get the master key. That is the main argument for
+  virtual keys.
+- uid 10001 can still read world-readable files under `/srv/ai`, such as the 0775 private
+  ComfyUI output dirs.
+- The host `plan-build-mcp.service` loads the whole `.env` through `EnvironmentFile`. It runs as
+  brad, who owns the file, so no boundary is crossed.

@@ -11,8 +11,12 @@ services:
     container_name: litellm
     restart: unless-stopped
     network_mode: host
-    env_file:
-      - ./.env
+    # Secrets: each service gets only the ./.env keys it uses, interpolated by
+    # compose — never `env_file: ./.env`, which hands every secret to every
+    # container (audit B5, ADR-0007 addendum). LiteLLM reads only its master key
+    # (config.yaml general_settings.master_key: os.environ/LITELLM_MASTER_KEY).
+    environment:
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY}"
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
       - ./litellm/custom_hooks.py:/app/custom_hooks.py:ro
@@ -79,54 +83,79 @@ services:
   # mcp-server-time/fetch/git from PyPI; at boot, before the network is ready,
   # those fetches fail, the subprocesses die (become zombies), and mcpo's async
   # loop busy-spins on the dead stdout pipes → a pegged CPU core. Two guards:
-  #   1. mcpo-uv-cache volume → uvx starts from cache (fast, no PyPI round-trip),
-  #      so the subprocesses no longer die on a boot-time network race.
+  #   1. mcpo-home volume (HOME, holding the uv cache) → uvx starts from cache
+  #      (fast, no PyPI round-trip), so the subprocesses no longer die on a
+  #      boot-time network race.
   #   2. healthcheck does a REAL `time` tool call (a bare /docs GET returns 200
   #      even while spinning) so a dead-subprocess spin is detected; the autoheal
   #      sidecar then restarts the container automatically.
+  #
+  # Least privilege (audit B5, ADR-0007 addendum). mcpo runs LLM-driven tools
+  # with all of /srv/ai mounted, so:
+  #   - It runs as uid/gid 10001 (no such host account). Container root ignores
+  #     file modes, so a root mcpo could read every 0600 secret under /srv/ai
+  #     (docker/.env, ComfyUI-Login PASSWORDs, hermes/config.yaml, ...).
+  #   - It gets only its own API key + the LiteLLM key for plan-build, not ./.env.
+  #   - The API key is NOT on the command line, where any host account can read
+  #     it (`ps`). mcpo's --api-key has no env fallback, so the entrypoint is a
+  #     python one-liner that adds it to sys.argv inside the process.
+  #   - mcpo-init (one-shot, root) makes the fresh volume writable for uid 10001.
+  mcpo-init:
+    image: ghcr.io/open-webui/mcpo:main
+    container_name: mcpo-init
+    restart: "no"
+    network_mode: none
+    user: "0:0"
+    entrypoint: ["chown", "10001:10001", "/home/mcpo"]
+    volumes:
+      - mcpo-home:/home/mcpo
+
   mcpo:
     image: ghcr.io/open-webui/mcpo:main
     container_name: mcpo
     restart: unless-stopped
+    depends_on:
+      mcpo-init:
+        condition: service_completed_successfully
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
     labels:
       - "autoheal=true"
     ports:
       - "8000:8000"
-    # LITELLM_MASTER_KEY (+ others) from .env enter mcpo's env and are inherited
-    # by the stdio MCP subprocesses it spawns (mcpo passes {**os.environ, **cfg.env}),
-    # so the plan-build server reads the key from os.environ — no secret in the
-    # git-tracked config.json.
-    env_file:
-      - ./.env
+    # mcpo passes {**os.environ, **cfg.env} to the stdio MCP servers it spawns,
+    # so plan-build reads LITELLM_MASTER_KEY from os.environ — no secret in the
+    # git-tracked config.json. Every stdio child sees both keys.
+    environment:
+      HOME: /home/mcpo
+      MCPO_API_KEY: "${MCPO_API_KEY}"
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY}"
     # host.docker.internal -> host gateway, so the plan-build server can reach the
     # LiteLLM gateway (network_mode: host, bound on the host at :4000).
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command:
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8000"
-      - "--api-key"
-      - "${MCPO_API_KEY}"
-      - "--config"
-      - "/config/config.json"
+    entrypoint: ["python3", "-c", "import os, sys; from mcpo import app; sys.argv = ['mcpo', '--api-key', os.environ['MCPO_API_KEY'], *sys.argv[1:]]; sys.exit(app())"]
+    command: ["--host", "0.0.0.0", "--port", "8000", "--config", "/config/config.json"]
     volumes:
       - ./mcpo:/config:ro
       # Read-only mount of the ai-server repo so the `git` MCP server can
       # inspect it (log/diff/status/show). RO by design: LLM-driven agents
       # cannot commit/mutate the real repo. Add more repos as extra :ro mounts.
       - /srv/ai:/repos/ai-server:ro
-      # Persistent uv cache so `uvx` stdio MCP servers start from cache instead
-      # of re-downloading from PyPI on every restart (see boot-race note above).
-      - mcpo-uv-cache:/root/.cache/uv
+      # HOME for uid 10001. Holds the uv cache, so `uvx` stdio MCP servers start
+      # from cache instead of re-downloading from PyPI (see boot-race note above).
+      - mcpo-home:/home/mcpo
     # Liveness probe that actually EXERCISES a stdio subprocess end-to-end: a
     # dead/zombie subprocess makes this call hang or error even though /docs
-    # still returns 200. $MCPO_API_KEY comes from ./.env via env_file. On
-    # sustained failure the container is marked unhealthy and the autoheal
-    # sidecar restarts it. Generous start_period covers a cold (uncached) boot.
+    # still returns 200. On sustained failure the container is marked unhealthy
+    # and the autoheal sidecar restarts it. Generous start_period covers a cold
+    # (uncached) boot. `$$` makes the container shell expand the key at check
+    # time; a single `$` would make compose paste the literal key into the
+    # container config and the sh/curl command lines. printf is a shell builtin
+    # and curl reads the header from stdin (-H @-), so no argv holds the key.
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 8 -X POST http://127.0.0.1:8000/time/get_current_time -H \"Authorization: Bearer $MCPO_API_KEY\" -H 'Content-Type: application/json' -d '{\"timezone\":\"UTC\"}' >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "printf 'Authorization: Bearer %s\\n' \"$$MCPO_API_KEY\" | curl -fsS --max-time 8 -X POST http://127.0.0.1:8000/time/get_current_time -H @- -H 'Content-Type: application/json' -d '{\"timezone\":\"UTC\"}' >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -307,6 +336,7 @@ volumes:
     name: open-webui-data
   filebrowser-data:
     name: filebrowser-data
-  # uv cache for mcpo's stdio MCP servers (see mcpo boot-race note).
-  mcpo-uv-cache:
-    name: mcpo-uv-cache
+  # HOME (uv cache) for the non-root mcpo; owned by uid 10001 via mcpo-init.
+  # Replaces the old root-owned mcpo-uv-cache volume (see mcpo notes).
+  mcpo-home:
+    name: mcpo-home

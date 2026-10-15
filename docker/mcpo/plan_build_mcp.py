@@ -19,7 +19,8 @@ each other in as needed; the `small` chat model on the P100 is never evicted, so
 the conversation that invokes these tools keeps responding. Callers can override
 the planner (`small`/`chat`/`big`) or coder per call.
 
-Runtime: launched by mcpo via `uv run --with mcp` inside the mcpo container.
+Runtime: launched by mcpo via `uv run --no-project --with mcp` inside the mcpo
+container (see config.json `//_deps` for why --no-project is required).
 It talks to the LiteLLM gateway (host :4000, reached at host.docker.internal).
 Secrets (LiteLLM master key) come from the container environment, never args.
 """

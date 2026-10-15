@@ -55,12 +55,13 @@ done
 # the :9000/:9001 services are up to (re)establish the 'comfyui'/'comfyui-secure'
 # connections. `up -d` (not just restart) so compose creates the internal `mcp-secure`
 # network and recreates mcpo whenever its network attachments changed — the secure
-# bridge only admits mcpo over that network. Run as the repo owner so it uses brad's
-# docker/compose context.
+# bridge only admits mcpo over that network. No --no-deps: mcpo-init must run first to
+# chown mcpo's HOME volume for its non-root uid (ADR-0007 2026-10-15 addendum). Run as the
+# repo owner so it uses brad's docker/compose context.
 if command -v docker >/dev/null 2>&1; then
-  sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose up -d --no-deps mcpo' || \
+  sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose up -d mcpo' || \
     sudo -u brad sh -lc 'cd /srv/ai/docker && docker compose restart mcpo' || \
-    echo "NOTE: could not update mcpo automatically — run: cd /srv/ai/docker && docker compose up -d --no-deps mcpo"
+    echo "NOTE: could not update mcpo automatically — run: cd /srv/ai/docker && docker compose up -d mcpo"
 fi
 
 echo

@@ -141,7 +141,9 @@ any of these files.
 
 **Residuals.**
 - **Root containers ignore file modes.** mcpo runs as root and mounts all of
-  `/srv/ai` read-only, so it can still read these files (audit B5).
+  `/srv/ai` read-only, so it can still read these files (audit B5). *(Fixed
+  2026-10-15: mcpo runs as uid 10001 and can't read them. See the ADR-0007
+  2026-10-15 addendum.)*
 - **Journal.** Past and future `use token=` lines stay in the journal, which root
   and the `adm`/`systemd-journal` groups can read (brad is in `adm`). It is not
   world-readable. To drop the line, add `LogFilterPatterns=~use token=` to both

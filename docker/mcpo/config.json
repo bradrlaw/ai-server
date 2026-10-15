@@ -23,12 +23,11 @@
       }
     },
     "plan-build": {
-      "//": "In-house planner->coder pipeline (docker/mcpo/plan_build_mcp.py, mounted at /config). Tools: make_plan, plan_and_build, implement_spec. Calls the LiteLLM gateway via host.docker.internal:4000; reads LITELLM_MASTER_KEY from inherited env (set via the mcpo service env_file) so no secret lives here.",
-      "//_deps": "uv creates an ephemeral venv with the `mcp` package on first launch; UV_CACHE_DIR points at a writable path since /config is read-only.",
+      "//": "In-house planner->coder pipeline (docker/mcpo/plan_build_mcp.py, mounted at /config). Tools: make_plan, plan_and_build, implement_spec. Calls the LiteLLM gateway via host.docker.internal:4000; reads LITELLM_MASTER_KEY from inherited env (set in the mcpo service `environment:`) so no secret lives here.",
+      "//_deps": "Runs on the mcpo image's own Python env, which already ships `mcp` (`--with mcp` only builds a cached overlay env if a future image drops it). --no-project is REQUIRED: the working dir /app is mcpo's own uv project, and without it uv re-locks /app/uv.lock and re-syncs mcpo's /app/.venv to that stale lock on every start. As root that silently downgraded mcp/fastapi/pydantic under the running server; as uid 10001 it fails (Permission denied). uv cache = $HOME/.cache/uv on the mcpo-home volume.",
       "command": "uv",
-      "args": ["run", "--with", "mcp", "/config/plan_build_mcp.py"],
+      "args": ["run", "--no-project", "--with", "mcp", "/config/plan_build_mcp.py"],
       "env": {
-        "UV_CACHE_DIR": "/tmp/uv-cache",
         "LITELLM_BASE": "http://host.docker.internal:4000/v1"
       }
     },

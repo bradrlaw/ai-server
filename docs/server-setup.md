@@ -1161,6 +1161,15 @@ Published on `0.0.0.0:8000` (API-key protected) because Open WebUI fetches/valid
 specs and the browser may too — the URL must be reachable from the client, not just the
 open-webui backend.
 
+_Least privilege (audit B5, ADR-0007 2026-10-15 addendum):_ mcpo runs as uid/gid **10001**
+(no host account) with `no-new-privileges`. Container root ignores file modes, so a root
+mcpo could read every brad-only secret under the `/srv/ai` mount; uid 10001 can't. It gets
+only `MCPO_API_KEY` and `LITELLM_MASTER_KEY` through compose `environment:` (never
+`env_file: ./.env`). The API key goes in through a python entrypoint rather than the command
+line, where any host account could read it with `ps`. `HOME=/home/mcpo` is the `mcpo-home`
+volume (uv cache), which the one-shot `mcpo-init` service chowns to 10001;
+`docker compose up -d mcpo` runs it first. Check: `docker exec mcpo id` → `uid=10001`.
+
 _git server notes:_ `/srv/ai` is bind-mounted **read-only** at `/repos/ai-server` (compose
 mcpo `volumes`). Read ops (log/diff/status/show) work; `git_commit`/`git_add` fail by design
 (`Read-only file system`) — no LLM-driven mutation of the real repo. The container user ≠
@@ -1171,8 +1180,10 @@ picks up config.json edits, not new env/volumes.
 
 _plan-build server (in-house planner→coder pipeline):_ source
 `docker/mcpo/plan_build_mcp.py` (mounted at `/config`), launched with
-`uv run --with mcp` (uv builds an ephemeral venv with the `mcp` package on first start;
-`UV_CACHE_DIR=/tmp/uv-cache` since `/config` is read-only). It exposes three tools that call
+`uv run --no-project --with mcp`, which runs it on the mcpo image's own Python env (it already
+ships `mcp`). `--no-project` is required: mcpo's working dir `/app` is its own uv project, and
+without the flag uv re-syncs mcpo's venv to a stale lockfile on every start (see config.json
+`//_deps`). It exposes three tools that call
 the **LiteLLM gateway** and do the heavy lifting on the V100s while the `small` chat model
 (P100, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
@@ -1197,7 +1208,8 @@ it two ways: (1) in Open WebUI, enable this tool **only on the `small` model**; 
 `caller_gpu="p100"`."_ **This
 needs container networking + the gateway key:** the mcpo service adds
 `extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
-`:4000`) and `env_file: ./.env`; mcpo passes `{**os.environ, **cfg.env}` to the stdio child,
+`:4000`) and passes `LITELLM_MASTER_KEY` in its `environment:`; mcpo passes
+`{**os.environ, **cfg.env}` to the stdio child,
 so `LITELLM_MASTER_KEY` reaches the tool via inherited env — **no secret in the git-tracked
 config.json**. `big` planning can take several minutes (deep reasoning) plus GPU swaps;
 `PLAN_BUILD_TIMEOUT` (default 1800s) bounds the HTTP call. Verified live 2026-07-04:

@@ -186,7 +186,7 @@ if [[ $SECTION == all || $SECTION == secure ]]; then
             -f '{{.Internal}} {{range .IPAM.Config}}{{.Subnet}} {{.Gateway}}{{end}}' 2>/dev/null)
     read -r internal subnet mcp_gw <<<"$net"
     if [[ -z $net ]]; then
-      bad "network '$MCP_NET' missing (run: cd /srv/ai/docker && docker compose up -d --no-deps mcpo)"
+      bad "network '$MCP_NET' missing (run: cd /srv/ai/docker && docker compose up -d mcpo)"
     else
       [[ $internal == true ]] && ok "'$MCP_NET' is internal (no default route) — $subnet gw $mcp_gw" \
                               || bad "'$MCP_NET' is NOT internal"
