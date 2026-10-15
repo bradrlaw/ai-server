@@ -153,3 +153,5 @@ any of these files.
   for `:8189`; for `:8190`, delete `comfyui-qwen/login/PASSWORD` and restart
   `comfyui-qwen`. After setting the new password on `:8189`, also restart
   `comfyui-mcp-secure`, which reads the token only at start (audit B6).
+  *Owner decision (2026-10-15): no rotation. No other account has had shell
+  access to the machine, so nobody else could have read the files.*

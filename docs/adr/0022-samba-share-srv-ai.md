@@ -113,5 +113,14 @@ docker's MASQUERADE rewrites a locally bound `172.17-19.x` source to the LAN
 address. Docker-bridge link-local (`fe80::/10`) passes Samba's list, but ufw only
 admits link-local on `eno1`.
 
+**Deployed (2026-10-15 06:18 UTC).** The owner ran `sudo scripts/setup-samba.sh`.
+smbd listens on `0.0.0.0:445` and `[::]:445` only (no 139; nmbd disabled), and
+`/etc/samba/smb.conf` matches the repo. The same probes against the live :445
+gave the same results: every LAN, tailnet and loopback source negotiated SMB
+3.1.1, and `172.31.250.1` was refused before SMB parsing. The owner confirmed SMB
+works over Tailscale. The installer leaves ufw alone, so two older `445` rules
+(tailscale0, and `192.168.4.0/22`) remain. They are redundant: the ADR-0028
+firewall already admits all tailnet and LAN traffic.
+
 **Consequence.** If the LAN subnet changes, update `hosts allow` (ufw re-detects its
 own). Never return to per-interface binding without re-checking both pitfalls above.

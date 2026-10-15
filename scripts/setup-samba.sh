@@ -5,7 +5,7 @@
 # Agents cannot sudo -- run this yourself:
 #     sudo /srv/ai/scripts/setup-samba.sh
 #
-# Idempotent: safe to re-run (re-copies config, re-applies ufw rules). It will
+# Idempotent: safe to re-run (re-copies config, restarts smbd). It will
 # prompt once for the SMB password for user `brad` if one isn't set yet.
 #
 # What it does:
