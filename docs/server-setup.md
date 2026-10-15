@@ -533,7 +533,7 @@ One-time setup (owner sudo — agents cannot):
 # 0) as brad, no sudo: make the login dirs private BEFORE the first start.
 #    ComfyUI-Login would create them world-readable; its PASSWORD hash doubles
 #    as the API bearer token and its plugin dir holds the session-signing key
-#    (ADR-0013, 2026-10-16 addendum):
+#    (ADR-0013, 2026-10-15 addendum):
 install -d -m 0700 /srv/ai/comfyui-qwen/login
 chmod 700 /srv/ai/comfyui-qwen/custom_nodes_qwen/ComfyUI-Login
 
@@ -1717,7 +1717,7 @@ Log in as **`brad`** with the SMB password set above.
   LAN (ADR-0028), so `hosts allow` is what restricts SMB.
 - **Don't go back to `bind interfaces only = yes`**: Samba silently skips
   `tailscale0` (point-to-point, no broadcast flag) and binds the LAN's rotating
-  IPv6 privacy addresses only at startup (ADR-0022, 2026-10-16 addendum).
+  IPv6 privacy addresses only at startup (ADR-0022, 2026-10-15 addendum).
 - **Changed LAN subnet?** Update the `192.168.4.0/22` entry in `hosts allow`.
 
 ### Managing SMB accounts & passwords

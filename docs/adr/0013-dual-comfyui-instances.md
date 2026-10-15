@@ -102,7 +102,7 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
 * Local (gitignored): `comfyui/custom_nodes_secure/ComfyUI-Login`,
   `comfyui/{output,input,temp}-{open,secure}`, `comfyui/user`, `comfyui/login/`
 
-## Addendum 2026-10-16: ComfyUI-Login secret file permissions (audit)
+## Addendum 2026-10-15: ComfyUI-Login secret file permissions (audit)
 
 **Finding.** ComfyUI-Login's secrets were readable by every local user, and by
 any container that mounts these paths:
@@ -119,7 +119,7 @@ any container that mounts these paths:
 The Qwen instance (ADR-0024) has its own copies of all of these. It has no
 ComfyUI-Manager, so it writes no log files.
 
-**Fix (live 2026-10-16, no restarts).**
+**Fix (live 2026-10-15, no restarts).**
 - `comfyui/login`, `comfyui-qwen/login`, `comfyui/user` and both
   `ComfyUI-Login` plugin dirs are now 0700 (owner brad). The directory modes
   are the lasting protection: the plugin recreates `PASSWORD` with the default

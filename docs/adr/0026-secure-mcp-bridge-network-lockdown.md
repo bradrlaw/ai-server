@@ -142,7 +142,7 @@ give mcpo a dedicated path:
     - a password reset doesn't restart `comfyui-mcp-secure`, which reads the
       token once at start (B6);
     - `comfyui/login/PASSWORD` is world-readable (0644; low risk on a
-      single-user box). *(Fixed 2026-10-16: login dirs are 0700, see the
+      single-user box). *(Fixed 2026-10-15: login dirs are 0700, see the
       ADR-0013 addendum.)*
   - If a stdio MCP server that needs network is ever added to the aichat
     bridge's `mcp.json`, extend that unit's `IPAddressAllow` deliberately. Child

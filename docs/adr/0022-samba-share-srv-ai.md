@@ -35,7 +35,7 @@ loopback + `tailscale0` + `eno1` only.**
 - **Security posture:**
   - `bind interfaces only = yes`, `interfaces = lo tailscale0 eno1` — smbd never listens
     on the docker/`br-*` bridges or the public internet. **Port 445 is never exposed to
-    the internet.** *(Superseded 2026-10-16: this binding never covered the tailnet.
+    the internet.** *(Superseded 2026-10-15: this binding never covered the tailnet.
     See the addendum below.)*
   - `server min protocol = SMB3_11`, `smb encrypt = required` — SMB1/2 refused, transport
     encrypted (belt-and-suspenders over the already-encrypted WireGuard tailnet, and the
@@ -68,7 +68,7 @@ loopback + `tailscale0` + `eno1` only.**
   - `smb encrypt = required` could block a legacy client; documented relaxation to
     `desired` if needed.
 
-## Addendum 2026-10-16: listen on all addresses, filter sources (audit B4)
+## Addendum 2026-10-15: listen on all addresses, filter sources (audit B4)
 
 **Finding.** SMB over Tailscale never worked: smbd listened on loopback and the LAN
 only, never on `100.97.143.29`. Two Samba behaviours (4.19.5) defeated
@@ -103,7 +103,7 @@ Samba synthesize a broadcast interface). That still leaves stale IPv6 listeners,
 smbd ordered after `tailscaled`, and breaks if the tailnet IP changes. Dropping
 Tailscale from the docs was also rejected, because remote access is the point.
 
-**Verification (2026-10-16, before deploying).** The repo `smb.conf` ran in an
+**Verification (2026-10-15, before deploying).** The repo `smb.conf` ran in an
 unprivileged throwaway smbd on a high port. From each local source address an
 SMB 3.1.1 NEGOTIATE succeeded: loopback v4/v6, LAN v4, LAN ULA (stable and
 temporary), LAN link-local, tailnet v4/v6/link-local. From `172.31.250.1` (a
