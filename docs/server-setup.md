@@ -1666,9 +1666,10 @@ Windows Explorer via **Samba (SMB3)**. Config is repo-tracked and installed by a
 sudo script; rationale is in [ADR-0022](adr/0022-samba-share-srv-ai.md).
 
 - Canonical config: [`config/smb.conf`](../config/smb.conf) (SMB3-only,
-  `smb encrypt = required`, bound to `lo tailscale0 eno1` — **never** the docker
-  bridges or the public internet; single share `srv-ai` → `/srv/ai`, macOS
-  `vfs_fruit` interop).
+  `smb encrypt = required`, port 445 only; listens on all addresses but
+  `hosts allow` admits only loopback, the LAN, the tailnet and IPv6
+  ULA/link-local, **never** the docker networks or the public internet; single
+  share `srv-ai` → `/srv/ai`, macOS `vfs_fruit` interop).
 - Installer: [`scripts/setup-samba.sh`](../scripts/setup-samba.sh) — idempotent;
   agents cannot sudo, so run it yourself:
 
@@ -1678,11 +1679,12 @@ sudo /srv/ai/scripts/setup-samba.sh
 
 It installs Samba, deploys the config (backs up any existing `/etc/samba/smb.conf`,
 validates with `testparm`), prompts once for an SMB password for `brad`
-(separate from the login password), adds `ufw` rules for port 445 on `tailscale0`
-+ the LAN subnet (and `allow 22/tcp`), then enables `smbd` and disables the unused
-`nmbd`/NetBIOS daemon. It does **not** enable ufw itself. That is
-`scripts/setup-firewall.sh` (ADR-0028), whose LAN and tailnet allows already cover
-445, so these rules are redundant but harmless.
+(separate from the login password), then enables `smbd`, disables the unused
+`nmbd`/NetBIOS daemon and checks that smbd listens on `0.0.0.0:445 [::]:445`.
+It makes no firewall changes: `scripts/setup-firewall.sh` (ADR-0028) already
+allows the LAN and the tailnet on every port. (Older versions of this script added
+ufw rules for 445 on `tailscale0` and the LAN subnet; they are redundant and
+harmless.)
 
 Mount from any device on the tailnet or LAN (use the server's Tailscale IP or its
 LAN IP; find them with `tailscale ip -4` and `ip -4 addr show eno1`):
@@ -1695,16 +1697,21 @@ Windows  Explorer address bar →             \\<server-ip>\srv-ai
 Log in as **`brad`** with the SMB password set above.
 
 **Caveats.**
-- **Not internet-facing** — SMB listens only on loopback + Tailscale + LAN.
+- **Not internet-facing**: SMB admits only loopback, LAN, tailnet and IPv6
+  ULA/link-local sources (`hosts allow`), behind ufw.
   Encryption is required; if a legacy client can't mount, relax `smb encrypt` to
   `desired` in `config/smb.conf` and re-run the installer.
 - **Root-owned files** under `/srv/ai` (some model/LoRA files created via sudo)
   can't be modified/deleted over SMB as `brad`. Fix per-directory as needed, e.g.
   `sudo chown -R brad:brad /srv/ai/comfyui/models/loras` (the installer prints the
   count of non-`brad`-owned paths).
-- **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`.
-  The firewall trusts the whole LAN (ADR-0028), so the smb.conf binding is what
-  restricts SMB, not the LAN `ufw` 445 rule.
+- **Tightening to tailnet-only:** in `config/smb.conf`, reduce `hosts allow` to
+  `127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48`. The firewall trusts the whole
+  LAN (ADR-0028), so `hosts allow` is what restricts SMB.
+- **Don't go back to `bind interfaces only = yes`**: Samba silently skips
+  `tailscale0` (point-to-point, no broadcast flag) and binds the LAN's rotating
+  IPv6 privacy addresses only at startup (ADR-0022, 2026-10-16 addendum).
+- **Changed LAN subnet?** Update the `192.168.4.0/22` entry in `hosts allow`.
 
 ### Managing SMB accounts & passwords
 

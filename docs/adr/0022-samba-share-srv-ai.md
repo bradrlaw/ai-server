@@ -35,7 +35,8 @@ loopback + `tailscale0` + `eno1` only.**
 - **Security posture:**
   - `bind interfaces only = yes`, `interfaces = lo tailscale0 eno1` — smbd never listens
     on the docker/`br-*` bridges or the public internet. **Port 445 is never exposed to
-    the internet.**
+    the internet.** *(Superseded 2026-10-16: this binding never covered the tailnet.
+    See the addendum below.)*
   - `server min protocol = SMB3_11`, `smb encrypt = required` — SMB1/2 refused, transport
     encrypted (belt-and-suspenders over the already-encrypted WireGuard tailnet, and the
     only crypto layer on the LAN path). Modern Finder / Windows 10/11 negotiate this
@@ -66,3 +67,51 @@ loopback + `tailscale0` + `eno1` only.**
     LAN `ufw` rule if that changes.
   - `smb encrypt = required` could block a legacy client; documented relaxation to
     `desired` if needed.
+
+## Addendum 2026-10-16: listen on all addresses, filter sources (audit B4)
+
+**Finding.** SMB over Tailscale never worked: smbd listened on loopback and the LAN
+only, never on `100.97.143.29`. Two Samba behaviours (4.19.5) defeated
+`bind interfaces only = yes`:
+- **`tailscale0` is skipped.** It is a point-to-point interface without
+  `IFF_BROADCAST`, and Samba's interface probe (`source3/lib/interface.c`,
+  `add_interface`) drops such interfaces ("not adding non-broadcast interface") even
+  when they are listed by name. Listing the address as `100.97.143.29/32` doesn't
+  help: it resolves back to the same probed interface and is dropped again.
+- **Addresses are bound once, at startup.** smbd opens one socket per address when
+  it starts and never re-binds. `eno1` uses IPv6 privacy addresses, which rotate
+  daily, so after a few weeks 7 of its 8 LAN IPv6 listeners were on privacy
+  addresses that had already rotated out.
+
+**Decision.** `bind interfaces only = no` (smbd listens on `0.0.0.0:445` and
+`[::]:445`), and access is restricted by source address with
+`hosts allow = 127.0.0.1 ::1 192.168.4.0/22 100.64.0.0/10 fc00::/7 fe80::/10` plus
+`hosts deny = ALL`. Samba checks this on every connection before parsing a single
+SMB packet; denied clients get a NetBIOS negative session response and the
+connection closes. `fc00::/7` covers both the router-assigned LAN ULA prefix and
+the tailnet's `fd7a:115c:a1e0::/48`; ufw narrows it to the detected LAN prefix.
+Docker networks (`172.16.0.0/12`) are not listed, and ufw (ADR-0028) rejects
+container → host 445 as well, so there are two independent layers. `smb ports = 445`
+drops the legacy NetBIOS session port 139 (nmbd was already disabled).
+`interfaces = lo eno1` now only scopes the addresses advertised for SMB3 multichannel
+(the mDNS registration covers all interfaces either way). `setup-samba.sh` no longer
+adds its own IPv4-only ufw rules (ADR-0028 owns the firewall). It now checks that
+smbd really listens on the wildcard addresses after the restart.
+
+Rejected alternatives: keep the binding and add `100.97.143.29/10` (a wide mask makes
+Samba synthesize a broadcast interface). That still leaves stale IPv6 listeners, needs
+smbd ordered after `tailscaled`, and breaks if the tailnet IP changes. Dropping
+Tailscale from the docs was also rejected, because remote access is the point.
+
+**Verification (2026-10-16, before deploying).** The repo `smb.conf` ran in an
+unprivileged throwaway smbd on a high port. From each local source address an
+SMB 3.1.1 NEGOTIATE succeeded: loopback v4/v6, LAN v4, LAN ULA (stable and
+temporary), LAN link-local, tailnet v4/v6/link-local. From `172.31.250.1` (a
+non-NAT docker network) to the loopback, LAN and tailnet addresses it was denied
+with "Connection denied". Probing other docker subnets this way is not possible:
+docker's MASQUERADE rewrites a locally bound `172.17-19.x` source to the LAN
+address. Docker-bridge link-local (`fe80::/10`) passes Samba's list, but ufw only
+admits link-local on `eno1`.
+
+**Consequence.** If the LAN subnet changes, update `hosts allow` (ufw re-detects its
+own). Never return to per-interface binding without re-checking both pitfalls above.
