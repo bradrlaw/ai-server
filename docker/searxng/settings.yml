@@ -1,6 +1,11 @@
 # SearXNG settings for the /srv/ai app tier. Private metasearch backend for
 # Open WebUI web search. JSON output format is REQUIRED for Open WebUI.
 # Docs: https://docs.searxng.org/admin/settings/
+#
+# Open WebUI's admin setting (Settings -> Web Search -> SearXNG Query URL) must be
+# the INTERNAL address http://searxng:8080/search?q=<query>. The value saved in the
+# admin UI overrides SEARXNG_QUERY_URL from docker-compose.yml, and localhost:8888
+# is the host-only debug port: inside the open-webui container it is refused.
 use_default_settings: true
 
 server:
@@ -18,3 +23,17 @@ search:
 
 ui:
   static_use_hash: true
+
+# Engines: everything not listed keeps SearXNG's defaults. Scraper engines break
+# or get CAPTCHA'd / rate-limited as sites change, and search then comes back
+# EMPTY with no error in Open WebUI (2026-10-15: on the 2026-07-02 image every
+# enabled engine failed: Google 0 results, DuckDuckGo/Startpage CAPTCHA, Brave 429).
+# The image refresh brought a working `google cse`; Bing and Yahoo also answered
+# from this IP, so they are enabled as fallbacks. When results dry up, check
+#   curl -s 'http://127.0.0.1:8888/search?q=test&format=json' | jq .unresponsive_engines
+# and refresh the image: docker compose pull searxng && docker compose up -d searxng
+engines:
+  - name: bing
+    disabled: false
+  - name: yahoo
+    disabled: false

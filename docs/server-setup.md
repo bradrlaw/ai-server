@@ -1205,6 +1205,25 @@ dir in the volume (embedding + whisper models, ~1 GB) is **not** user images —
 `SEARXNG_SECRET` (settings.yml keeps the literal `ultrasecretkey` placeholder). Verified:
 `/search?q=...&format=json` returns results.
 
+- **Query URL:** in Open WebUI, Admin → Settings → Web Search → SearXNG Query URL
+  must be `http://searxng:8080/search?q=<query>` (the internal address).
+  - Open WebUI saves admin-UI settings in its DB, and the saved value overrides the
+    compose `SEARXNG_QUERY_URL`.
+  - `localhost:8888` is the host-only debug port; inside the `open-webui` container it is
+    refused. That was the 2026-10-15 "web search doesn't work" report.
+- **Engine rot:** scraper engines break, or get CAPTCHA'd or rate-limited, as sites change.
+  When that happens, web search returns **nothing**, and Open WebUI shows no error.
+  - On 2026-10-15 the 2026-07-02 image had zero working engines: Google returned 0
+    results, DuckDuckGo and Startpage hit CAPTCHAs, and Brave returned 429.
+  - Refreshing the image brought a working `google cse`. `settings.yml` also enables
+    Bing and Yahoo as fallbacks.
+  - Health check:
+    `curl -s 'http://127.0.0.1:8888/search?q=test&format=json' | jq -c '[(.results|length), .unresponsive_engines]'`.
+  - Fix when results dry up: `docker compose pull searxng && docker compose up -d searxng`.
+- **Editing `settings.yml`:** the file is owned by the image's uid 977, so edit it through the
+  container: `docker exec -i searxng sh -c 'cat > /etc/searxng/settings.yml' < new.yml`,
+  then `docker compose restart searxng`.
+
 **mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
 format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
