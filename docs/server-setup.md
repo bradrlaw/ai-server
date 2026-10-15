@@ -875,6 +875,22 @@ model errors mid-session — every later request then replays it and 400s the wh
 `content` (accepted by llama-server), so one bad turn no longer bricks a session and no context
 is lost. Mounted read-only into the container; restart `litellm` after editing.
 
+**Tool-schema sanitizer (same hook, 2026-10-15):** llama.cpp compiles tool-parameter and
+`response_format` JSON schemas into a sampling grammar, and one incompatible keyword anywhere
+400s the whole request. It rejects an unanchored `pattern` (`JSON schema conversion failed:
+Pattern must start with '^' and end with '$'`) and a length/item bound big enough to become a
+~2000-rule repetition (`Failed to initialize samplers: failed to parse grammar`; the llama-server
+log says `number of repetitions exceeds sane defaults`). OpenClaw's owner-only `cron` tool, sent
+for admin-scoped clients such as the Control UI, has both (`pattern "\S"`, `maxLength 65536`), so
+every Control UI chat failed on the Qwen slots. The hook drops unanchored `pattern`s and any
+`minLength`/`maxLength` (string types) or `minItems`/`maxItems` of 1000 or more. Measured
+cutoffs: string `maxLength` 2000 and array `maxItems` 1999 (with `minItems` 0) already fail, so
+1000 leaves margin.
+Each distinct drop is logged once: `docker logs litellm 2>&1 | grep "dropped JSON-schema"`. The
+grammar only gets looser; OpenClaw still validates every tool call against its own schema and
+returns violations to the model as tool errors. Direct `:9090` callers are not covered. See the
+ADR-0007 2026-10-15 addendum.
+
 ## GitHub Copilot CLI via BYOK (2026-07-02)
 
 Copilot CLI supports OpenAI-compatible endpoints (BYOK). It points at the LiteLLM gateway.

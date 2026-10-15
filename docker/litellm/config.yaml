@@ -56,9 +56,11 @@ litellm_settings:
   drop_params: true
   # Model loads can take ~30-70s (cold + BF16). Don't time out early.
   request_timeout: 600
-  # Pre-call hook: give content-less assistant messages an empty content so
-  # llama-server doesn't 400 the whole session on one poisoned transcript turn.
-  # (see custom_hooks.py)
+  # Pre-call hook (see custom_hooks.py): give content-less assistant messages an
+  # empty content (llama-server 400s a session on one poisoned transcript turn),
+  # turn off Qwen3 thinking for Open WebUI "### Task:" calls, and drop the
+  # tool/response_format JSON-schema keywords llama.cpp's grammar compiler
+  # rejects (unanchored pattern; length/item bounds >= 1000).
   callbacks: custom_hooks.proxy_handler_instance
 
 general_settings:
