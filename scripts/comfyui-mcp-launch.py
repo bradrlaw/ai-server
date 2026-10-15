@@ -21,7 +21,8 @@ Config via env (see comfyui-mcp.service):
   COMFY_MCP_AUTH_TOKEN_FILE  path to a file whose FIRST LINE is that token (e.g. the
                            secure instance's comfyui/login/PASSWORD). Preferred over
                            COMFY_MCP_AUTH_TOKEN so the secret never lands in a unit
-                           file or env, and auto-tracks a password change. Ignored if
+                           file or env. Re-read whenever the file changes, so a
+                           password change needs no bridge restart. Ignored if
                            COMFY_MCP_AUTH_TOKEN is set.
 """
 import os
@@ -35,20 +36,36 @@ sys.path.insert(0, SRC)
 os.chdir(SRC)
 
 
-def _load_auth_token() -> str:
-    """Bearer token for a login-gated ComfyUI, from env or a file's first line."""
-    tok = os.getenv("COMFY_MCP_AUTH_TOKEN", "").strip()
-    if tok:
-        return tok
-    path = os.getenv("COMFY_MCP_AUTH_TOKEN_FILE", "").strip()
-    if path:
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                return fh.readline().strip()
-        except OSError as exc:  # missing/unreadable -> run unauthenticated (degraded)
-            print(f"[comfyui-mcp] auth token file {path!r} unreadable: {exc}",
+_AUTH_TOKEN_ENV = os.getenv("COMFY_MCP_AUTH_TOKEN", "").strip()
+_AUTH_TOKEN_FILE = os.getenv("COMFY_MCP_AUTH_TOKEN_FILE", "").strip()
+_auth_file = {"key": None, "token": ""}  # last read of _AUTH_TOKEN_FILE
+
+
+def _auth_token() -> str:
+    """Bearer token for a login-gated ComfyUI: COMFY_MCP_AUTH_TOKEN, else the first
+    line of COMFY_MCP_AUTH_TOKEN_FILE.
+
+    The file is re-read whenever its inode/size/mtime changes. A password reset
+    (scripts/reset-comfyui-password.sh, then a new password set at /login) replaces
+    the file, so the next ComfyUI call already uses the new token (audit B6). While
+    the file is missing or unreadable the token is "" and calls go out without auth.
+    """
+    if _AUTH_TOKEN_ENV:
+        return _AUTH_TOKEN_ENV
+    try:
+        st = os.stat(_AUTH_TOKEN_FILE)
+        key = (st.st_ino, st.st_size, st.st_mtime_ns)
+        if key != _auth_file["key"]:
+            with open(_AUTH_TOKEN_FILE, "r", encoding="utf-8") as fh:
+                token = fh.readline().strip()
+            print(f"[comfyui-mcp] auth token read from {_AUTH_TOKEN_FILE!r}", flush=True)
+            _auth_file.update(key=key, token=token)
+    except OSError as exc:  # missing/unreadable -> unauthenticated until it reappears
+        if _auth_file["key"] != "unreadable":
+            print(f"[comfyui-mcp] auth token file {_AUTH_TOKEN_FILE!r} unreadable: {exc}",
                   file=sys.stderr, flush=True)
-    return ""
+        _auth_file.update(key="unreadable", token="")
+    return _auth_file["token"]
 
 
 # The (vendored) upstream talks to ComfyUI with module-level requests.get/post/head
@@ -58,10 +75,11 @@ def _load_auth_token() -> str:
 # `Authorization: Bearer <token>` for requests aimed at the ComfyUI host — including
 # the import-time availability probe (so the bridge starts NON-degraded on secure)
 # and the server-side asset HEAD/GET used to size/preview outputs. Installed BEFORE
-# `import server` for exactly that reason. No-op when no token is configured, so the
+# `import server` for exactly that reason. The token is looked up per request
+# (_auth_token), so the wrapper is installed whenever a token source is configured,
+# even if the file is missing at start. No-op when none is configured, so the
 # open (:8188, auth-less) bridge behaves exactly as before.
-_AUTH_TOKEN = _load_auth_token()
-if _AUTH_TOKEN:
+if _AUTH_TOKEN_ENV or _AUTH_TOKEN_FILE:
     import requests
 
     # Authenticate requests to EITHER the connection host (COMFYUI_URL, used for
@@ -83,9 +101,10 @@ if _AUTH_TOKEN:
             same_host = urlsplit(url).netloc in _AUTH_HOSTPORTS
         except Exception:
             same_host = False
-        if same_host:
+        token = _auth_token() if same_host else ""
+        if token:
             headers = dict(kwargs.get("headers") or {})
-            headers.setdefault("Authorization", f"Bearer {_AUTH_TOKEN}")
+            headers.setdefault("Authorization", f"Bearer {token}")
             kwargs["headers"] = headers
         return _orig_request(self, method, url, *args, **kwargs)
 

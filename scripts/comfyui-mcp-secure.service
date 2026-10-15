@@ -16,9 +16,10 @@ Group=brad
 WorkingDirectory=/srv/ai/src/comfyui-mcp-server
 # ComfyUI endpoint the bridge talks to — the SECURE instance on localhost.
 Environment=COMFYUI_URL=http://127.0.0.1:8189
-# Bearer token for the login gate is read at startup from the SECURE instance's
-# password file (first line == token). Keeping it a FILE means the secret never lands
-# in this unit or in git, and it auto-tracks a password change (scripts/reset-comfyui-password.sh).
+# Bearer token for the login gate is read from the SECURE instance's password file
+# (first line == token) and re-read whenever that file changes. Keeping it a FILE means
+# the secret never lands in this unit or in git, and a password reset
+# (scripts/reset-comfyui-password.sh) reaches the bridge without restarting it.
 Environment=COMFY_MCP_AUTH_TOKEN_FILE=/srv/ai/comfyui/login/PASSWORD
 # Style workflow library — shared with the open bridge (tracked in the ai-server repo).
 Environment=COMFY_MCP_WORKFLOW_DIR=/srv/ai/config/comfyui-mcp/workflows

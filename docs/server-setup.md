@@ -1373,7 +1373,8 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   that was down at its startup**, so the install script bounces mcpo after the service is up.
 - **Secure twin (`comfyui-mcp-secure`, `:9001` → login-gated `:8189`; ADR-0026):** the same
   bridge and launcher, installed by the same script. It injects the ComfyUI-Login token from
-  `comfyui/login/PASSWORD`. Because it holds that credential and has **no auth of its own**, it
+  `comfyui/login/PASSWORD` and re-reads the file whenever it changes, so a password reset needs
+  no bridge restart. Because it holds that credential and has **no auth of its own**, it
   is **not** LAN/Tailscale-reachable:
   - A systemd IP filter (`IPAddressAllow`/`IPAddressDeny` in the unit) admits only localhost
     (e.g. the aichat bridge) and the internal `mcp-secure` Docker network (`172.31.250.0/29`).
@@ -1711,7 +1712,8 @@ reaching a published port through the host.
 
 Never port-forward `:8188` (or anything else). If you must reach a service from
 outside, use Tailscale. To reset the locked instance's password:
-`sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013).
+`sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013), then set the new
+one at `:8189/login`. The secure MCP bridge picks it up by itself.
 
 ## Mounting /srv/ai over SMB (macOS / Windows) — 2026-09-13
 

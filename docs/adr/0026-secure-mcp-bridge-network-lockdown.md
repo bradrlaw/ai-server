@@ -140,7 +140,8 @@ give mcpo a dedicated path:
     - ufw (B2);
     - status-page auth (B3);
     - a password reset doesn't restart `comfyui-mcp-secure`, which reads the
-      token once at start (B6);
+      token once at start (B6). *(Fixed 2026-10-15: the bridge re-reads the
+      token file when it changes. See the addendum below.)*
     - `comfyui/login/PASSWORD` is world-readable (0644; low risk on a
       single-user box). *(Fixed 2026-10-15: login dirs are 0700, see the
       ADR-0013 addendum.)*
@@ -167,3 +168,59 @@ give mcpo a dedicated path:
   in mcpo and the llm-functions bridge. Possible later as defense-in-depth. The
   network lockdown removes the exposure now with no client changes beyond one
   URL.
+
+## Addendum 2026-10-15: the bridge re-reads the token on change (audit B6)
+
+**Problem.** The launcher (`scripts/comfyui-mcp-launch.py`) read the token from
+`comfyui/login/PASSWORD` once, at start. `scripts/reset-comfyui-password.sh`
+restarts only `comfyui-secure`. After a reset, the bridge kept sending the old
+token, so Open WebUI's `comfyui-secure` tools and aichat got 401 until someone
+restarted `comfyui-mcp-secure`. The unit comment claimed it "auto-tracks a
+password change"; it didn't. A bridge that started while the file was missing
+never added auth at all, even after the file appeared.
+
+**Fix.** The launcher looks the token up on every request to the ComfyUI host.
+It re-reads the file only when its inode, size or mtime changes, and logs one
+`auth token read from ...` line per read (never the token). While the file is
+missing, requests go out without an `Authorization` header (one log line, not
+one per request). The auth wrapper is installed whenever a token source is
+configured, even if the file is missing at start. Host scoping is unchanged:
+only `COMFYUI_URL` and `COMFY_MCP_PUBLIC_URL` get the token, never an
+`input_image` URL on another host. The open bridge (no token configured) is
+unchanged.
+
+A reset now works like this:
+1. The script deletes the file and restarts `comfyui-secure`.
+2. Bridge calls fail with 401 until a new password is set.
+3. The owner sets the new password at `/login`.
+4. The bridge's next call uses the new token. ComfyUI-Login reloads its own
+   cached token on the first request after the file reappears.
+
+**Alternatives rejected.**
+- Restart the bridge from the reset script: the new password doesn't exist yet
+  at that point; the owner sets it later in the browser.
+- A systemd `.path` unit that restarts the bridge on change: two more units to
+  install with sudo, and every restart also bounces mcpo (ExecStartPost) and
+  aichat (`PartOf=`).
+- Retry once on 401 with a re-read token: needs to replay request bodies
+  (uploads are streams). A stat per request is simpler and cheap.
+
+**Also in the reset script:** since the C4 change, `comfyui-secure` has
+`ConditionPathIsMountPoint=/srv/ai/storage`. With the encrypted storage locked,
+`systemctl restart` skips the start and still exits 0. The script now checks
+`is-active` and says to unlock the storage first, instead of pointing at a
+login page that isn't up.
+
+**Verified.** An end-to-end harness ran the real launcher and the vendored
+bridge against a fake ComfyUI-Login, driven by a real MCP client: 19/19 checks
+pass. It covers token change by delete/recreate and by in-place rewrite (same
+size), the missing-file window, a start without the file, env-token precedence,
+third-party `input_image` hosts, the open bridge, and no token in the logs. The
+pre-fix launcher fails 8 of them; 10/10 mutants are caught. The reset script
+passed a stubbed-`systemctl` test (10/10). The condition-skip exit code was
+confirmed with a throwaway user unit (`restart` rc 0, `is-active` rc 3).
+
+**Deploy:** `sudo /srv/ai/scripts/install-comfyui-mcp-service.sh`. It installs
+the unit (only its comment changed), restarts both bridges and re-runs the
+lockdown check. aichat-mcp-bridge follows via `PartOf=` and mcpo is bounced.
+`sudo systemctl restart comfyui-mcp-secure` alone also loads the new launcher.
