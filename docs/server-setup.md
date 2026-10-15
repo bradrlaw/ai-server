@@ -556,7 +556,11 @@ Full design + rationale in **ADR-0024**. Key facts:
 - App tree `/srv/ai/comfyui-qwen`, venv `/srv/ai/venvs/comfyui-qwen` (**torch 2.8.0+cu128** —
   `comfy-kitchen` needs torch ≥ 2.7; cu128 still ships Volta sm_70 kernels).
 - Pinned to **idx1 (V100 #1), shared with `comfyui-open`**; the `free_gpu` node evicts the
-  idx1 LLM (`coding`) on generate.
+  idx1 LLM (`coding`) on generate but never warms it back (`FREE_GPU_RESTORE=` is empty).
+  While this unit runs, `comfyui-open` still releases its own cached models when idle but
+  doesn't warm `coding` back. Once this unit stops, `comfyui-open` warms `coding` back
+  (`FREE_GPU_YIELD_TO`, audit C8). Don't render on both instances at once: each can need
+  ~29 GB of the 32 GB card.
 - **Login-gated** (ComfyUI-Login in `custom_nodes_qwen`); set the password on first visit to
   `:8190/login`. Shares `/srv/ai/comfyui/models` via `scripts/comfyui-qwen-extra-paths.yaml`;
   separate `output-qwen`/`input-qwen`/`temp-qwen`/user dir.
@@ -1327,23 +1331,45 @@ network only. Start/stop: `sudo systemctl start|stop comfyui`.
 `comfyui-open`/`comfyui-secure`) and `comfyui-qwen/custom_nodes_qwen/free_gpu.py`; both copies are
 refreshed by `install-comfyui-instances.sh` and take effect on each instance's next start — adds an
 aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), frees the
-V100 ComfyUI needs, then runs the generation. ComfyUI is pinned to **idx1 (the `coding` card)**,
-so the hook unloads **only** the model(s) squatting there via llama-swap's per-model endpoint
-(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `small` (idx0) resident** so
-family chat stays responsive during image gen. Models to keep are set by the `FREE_GPU_KEEP` env
-(default `chat,small`); everything else running (`coding`, or a split `big`/`coder-next`) is
-evicted and reloads on-demand. It triggers **only on generate**, not on page loads. Configurable
-via `LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
+GPU that instance needs, then runs the generation. `comfyui-open` and `comfyui-qwen` are pinned to
+**idx1 (the `coding` card)** and `comfyui-secure` to **idx2 (the `chat` card)**, so each instance's
+hook unloads **only** the model(s) squatting on its card via llama-swap's per-model endpoint
+(`POST /api/models/unload/<model>`). The idx1 instances keep `chat` (idx2) and `small` (idx0)
+resident, so family chat stays responsive during image gen. Models to keep are set per unit by the
+`FREE_GPU_KEEP` env (code default `chat,small`; the idx1 units also keep `gemma-26b` and
+`small-uncensored`). Everything else running (`coding`, or a split `big`/`coder-next`) is evicted
+and reloads on demand. It triggers **only on generate**, not on page loads. Configurable via
+`LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
 (idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/small untouched) — log shows
 `free_gpu: unloading ['coding'] before generation (keeping ['chat', 'small'])`.
 
 **Idle watchdog (reverse direction).** ComfyUI caches its models in VRAM after a run, which
-would keep idx1 occupied and block `coding` from reloading. The same hook runs a background task
-that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
-(`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release idx1,
-then warms `FREE_GPU_RESTORE` (default `coding`) back onto the card via llama-swap — so the box
-returns to its daily resident state (coding + chat + small) with no manual step. Runs at most once
-per idle period; set `FREE_GPU_IDLE_SECS=0` to disable.
+would keep the card occupied and block the LLM from reloading. The same hook runs a background
+task that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
+(`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release the
+card, then warms `FREE_GPU_RESTORE` back via llama-swap: `coding` for `comfyui-open`, `chat` for
+`comfyui-secure`, nothing for `comfyui-qwen` (empty). That returns the box to its daily resident
+state (coding + chat + small) with no manual step. Runs at most once per idle period; set
+`FREE_GPU_IDLE_SECS=0` to disable.
+
+**Shared idx1 (`FREE_GPU_YIELD_TO`, audit C8).** `comfyui-qwen` (on-demand, ~29 GB per render)
+shares idx1 with the always-on `comfyui-open`. Before this fix, `comfyui-open`'s watchdog could warm
+`coding` (~30 GB) back mid-render and OOM the Qwen job. `comfyui-open` therefore sets
+`FREE_GPU_YIELD_TO=comfyui-qwen.service`. Every 30 s check runs `systemctl is-active` on that unit.
+While the unit is in any state other than `inactive`/`failed`, `comfyui-open` still releases its own
+cached models when idle, but doesn't warm `coding`. If the state can't be read, the hook treats
+the unit as running and doesn't warm. A unit systemd doesn't know reads as `inactive`, so at
+startup the hook warns about any misspelt `FREE_GPU_YIELD_TO` unit. Once the unit stops,
+`comfyui-open` warms `coding` back within one check, as soon as it has itself been idle for
+`FREE_GPU_IDLE_SECS`. It does this even if `comfyui-open` rendered nothing meanwhile, because Qwen
+renders evicted `coding`. Journal lines:
+`idle watchdog running (... yield_to=['comfyui-qwen.service'])` at start, then
+`comfyui-qwen.service is active; won't warm ['coding'] back meanwhile` and later
+`comfyui-qwen.service no longer running; idle restore resumes` + `warmed coding back onto its card`.
+This only coordinates the warm-up. Rendering on both idx1 instances at once can still OOM. The
+status service's warm-ups don't check for `comfyui-qwen` either: at the end of the quiet-hours
+window, and on every `server-status` start outside the window. Don't restart `server-status`
+during a Qwen render.
 
 **Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
 `comfyui/custom_nodes/comfyui-manager` (the install script clones it + installs its deps into the
@@ -1418,8 +1444,8 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   `get/set_defaults`, publish tools. Long renders return `{"status":"running","prompt_id":…}` —
   poll `get_job(prompt_id=…)`. Ideal for agents/long-running processes.
 - **GPU coordination:** the tool hits ComfyUI's `/prompt`, so the existing `free_gpu` hook still
-  fires (unloads idx1's LLM keeping chat+small, idle watchdog restores `coding`) regardless of
-  caller.
+  fires regardless of caller: it unloads the LLM on that instance's card and the idle watchdog warms
+  it back (see "Auto-free the GPU" above).
 - **Displaying images inline:** mcpo serializes an MCP `ImageContent` (what `view_image`'s
   `FastMCPImage` produces) into an inert data-URI **string**; Open WebUI feeds that to the model
   as text and never renders it. So every generation tool response includes a **`markdown`** field

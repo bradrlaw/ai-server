@@ -27,7 +27,8 @@ store**, and wire it into the status page like the existing instances.
   `CUDA_VISIBLE_DEVICES=1`. The bundled `free_gpu` node (copied into
   `custom_nodes_qwen`) evicts the idx1 LLM occupant (`coding`) via llama-swap on
   each generate; `FREE_GPU_KEEP=chat,gemma-26b,small,small-uncensored`,
-  `FREE_GPU_RESTORE=coding` (mirrors `comfyui-open`).
+  `FREE_GPU_RESTORE=coding` (mirrors `comfyui-open`; now empty, see the
+  2026-10-15 C8 addendum).
 - **Port:** 8190. **Login-gated** via ComfyUI-Login in `custom_nodes_qwen` (own
   `login/PASSWORD`), mirroring `comfyui-secure`.
 - **Shared:** the model tree, via `scripts/comfyui-qwen-extra-paths.yaml`
@@ -85,7 +86,9 @@ because (a) idx1 still held the `coding` LLM (fixed by the `free_gpu` node) and
   H3 0.30.1 tree. The model store stays single-copy (shared).
 - Qwen-Image 2.1 must run login-gated on :8190; it shares idx1 with `comfyui-open`,
   so the two on-demand image instances should not generate simultaneously (each
-  evicts the other's idx1 LLM but not each other).
+  evicts the other's idx1 LLM but not each other). (`comfyui-open` is always-on;
+  its idle warm-up of `coding` now waits for this unit to stop, see the
+  2026-10-15 C8 addendum.)
 - When a 16 GB+ card returns to idx0 (see AGENTS.md), this instance could move off
   the shared idx1.
 
@@ -148,3 +151,82 @@ stale file on 2026-09-25. Both now match `scripts/comfyui-free-gpu-node.py`.
 Only comments and the unused `FREE_GPU_KEEP` default changed, because every
 unit sets that variable. `install-comfyui-instances.sh` now installs both
 copies, so they can't drift again.
+
+## Addendum 2026-10-15: `comfyui-open` waits for `comfyui-qwen` before warming `coding` (audit C8)
+
+**Bug.** Both idx1 instances had `FREE_GPU_RESTORE=coding`. Each instance's idle
+watchdog warms `coding` (~30 GB) back onto idx1 five minutes after its own last
+render, without checking the other instance. If `comfyui-open` went idle during a
+Qwen render (~29 GB), it would load `coding` onto the same card and OOM the
+render. The reverse happened when this instance went idle while `comfyui-open`
+rendered.
+
+**Fix (owner's design).** This instance is only ever started and stopped by
+hand, so whether its service is running is the signal. There is no job-level
+coordination.
+- `comfyui-open.service` sets `FREE_GPU_YIELD_TO=comfyui-qwen.service`. Every
+  30 s the watchdog runs `systemctl is-active` on that unit, which needs no sudo.
+  While the unit is in any state other than `inactive`/`failed`, `comfyui-open`
+  doesn't warm `coding`. It still releases its own cached models after the idle
+  window. If the state can't be read (error, timeout, unexpected output), the
+  hook fails closed and treats the unit as running.
+- Seeing the unit running also marks a warm-up as owed, because Qwen renders
+  evict `coding`. After the owner stops this unit, `comfyui-open` warms `coding`
+  back within one 30 s check. It waits until it has itself been idle for
+  `FREE_GPU_IDLE_SECS` and nothing is queued.
+- This unit sets `FREE_GPU_RESTORE=` (empty), so it never warms anything back.
+  Its watchdog only releases its own cached models. The owner chose this so
+  that only the always-on instance restores `coding`.
+- The owner first proposed that `comfyui-open` do nothing at all while this unit
+  runs. We kept the release of its own models, and the owner agreed. Otherwise
+  models cached by an earlier `comfyui-open` render would stay on idx1 for the
+  whole Qwen session, and the Qwen renders would OOM anyway.
+- Eviction on generate is unchanged on both instances. It only unloads LLMs,
+  which never hurts the other instance on the card.
+- `comfyui-secure` (idx2) sets no `FREE_GPU_YIELD_TO`. With the variable unset,
+  the hook behaves exactly as before.
+
+A code review of the change led to three hardening fixes in the same commit:
+- At startup the watchdog runs `systemctl show -p LoadState` on the
+  `FREE_GPU_YIELD_TO` units and warns about any that are `not-found`. A
+  misspelt unit reads as `inactive`, so it would never hold back the warm-up.
+- The watchdog now saves its "done" state before it awaits the warm-up. A
+  render queued during the minute or so that `coding` takes to load used to be
+  overwritten when the warm-up returned. That render then never got its own
+  idle release and warm-up.
+- A warm-up that gets an HTTP error from llama-swap, such as a failed load, is
+  now logged as `failed to warm`. It used to be logged as `warmed ... back`.
+
+Accepted residuals from that review:
+- The unit's state is read about a second before the warm-up is sent.
+- A failed own release isn't retried until the next render.
+- The warm-up can be missed if `comfyui-open` restarts within 30 s of this
+  unit stopping. `coding` then loads on first use.
+
+**Not covered.**
+- Rendering on both idx1 instances at once can still OOM (see Consequences).
+- The status service warms `coding`/`chat` at the end of the quiet-hours window
+  (`_exit_window`) and on every `server-status` start outside the window
+  (`QUIET_WARM_ON_START`, which includes now, while quiet hours is paused).
+  Neither path checks for this unit. Avoid restarting `server-status` during a
+  Qwen render.
+- A chat request for `coding` during a Qwen render still loads it onto idx1,
+  because llama-swap loads models on demand.
+
+**Tests.** Stubbed harness (fake `systemctl` on PATH, fake llama-swap HTTP server,
+fake clock), run under both ComfyUI venvs: 77 checks pass, and 22 of 22
+mutants are killed. Among the checks:
+- the yield across every `is-active` state
+- fail-closed on error, hang and a missing binary
+- a warm-up owed when only this unit ran
+- waiting out a render and the idle window after this unit stops
+- no warm-up after a failed release
+- a render queued during the warm-up
+- an HTTP 5xx from the warm-up
+- the startup typo warning
+- one log line per state change
+
+The harness also loads the hook with the `FREE_GPU_*` values parsed from the
+three unit files. The hook's `systemctl` calls were also run once, read-only,
+against the real `systemctl` as `brad`. A running `comfyui-qwen.service` held
+back the warm-up, and a misspelt unit was warned about.
