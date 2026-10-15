@@ -3,20 +3,22 @@
 # tensor split. No sudo required.
 #
 # Hardware notes (see /srv/ai/docs/server-setup.md):
-#   nvidia-smi index order (PCI_BUS_ID): 0=P100, 1=V100, 2=V100
+#   nvidia-smi index order (PCI_BUS_ID): 0=Titan X (stopgap; P100 died 2026-07-27), 1=V100, 2=V100
 #   V100s have NO NVLink -> tensor split crosses PCIe gen3 (PHB).
-#   Each V100 = 32 GB. Q6_K (~21 GB) fits ONE card; BF16 (~54 GB) needs BOTH.
+#   Each V100 = 32 GB. UD-Q6_K (~29 GB) fits ONE card; BF16 (~69 GB) is more than
+#   both (64 GB), so its runs are expected to fail (OOM) and are skipped over.
 #
-# Usage: ./bench-qwen3.6-27b.sh [output_dir]
+# Usage: ./bench-qwen3.6-35b-a3b.sh [output_dir]
 set -euo pipefail
 
-MODEL_DIR=/srv/ai/models/qwen3.6-35b-a3b
+# Cold tier (bulk HDD): `chat` serves the -MTP repo's UD-Q6_K from NVMe; this
+# non-MTP file and the BF16 pair are kept as benchmark baselines / requant sources.
+MODEL_DIR=/srv/ai/models/cold/qwen3.6-35b-a3b
 BIN=/srv/ai/src/llama.cpp/build/bin/llama-bench
 Q6K="$MODEL_DIR/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
-# BF16 pair moved to the bulk HDD (cold tier) — it can't be served on 2×V100
-# (69 GB > 64 GB VRAM), so it only exists as a requant/bench source. See
-# docs/benchmarking.md "MoE benchmark — Qwen3.6-35B-A3B". Sharded; loader finds shard 2.
-BF16="/srv/ai/storage-bulk/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
+# BF16 can't be served on 2×V100 (69 GB > 64 GB VRAM). See docs/benchmarking.md
+# "MoE benchmark — Qwen3.6-35B-A3B". Sharded; loader finds shard 2.
+BF16="$MODEL_DIR/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
 
 OUT_DIR="${1:-$MODEL_DIR/bench-$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$OUT_DIR"
