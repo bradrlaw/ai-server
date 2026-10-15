@@ -149,3 +149,45 @@ since a dense >32k-ctx fallback is useful again then:
 3. Re-add its entries in `docker/litellm/config.yaml`,
    `config/aichat/config.example.yaml`, `scripts/copilot-byok.sh` and
    `scripts/eval-run-copilot.py`.
+
+## Addendum (2026-10-15) — build script now matches decision 3 (audit C1)
+
+`scripts/build-llama.sh` was never updated for decision 3. It still configured
+`CMAKE_CUDA_ARCHITECTURES="60;70"` after deleting `build/`. The 2026-07-27
+`52;60;61;70` build had been configured by hand. Rerunning the script would have
+produced a binary with no sm_52 code, so every idx0 model on the Titan X would have
+failed to load. llama-swap also had no binary at all while the build ran, and a
+failed build would have left nothing to fall back to.
+
+The owner chose to make the rebuild non-destructive:
+
+- **Archs:** the script defaults to `52;60;61;70`. `ARCHS` overrides it, numbers only.
+- **Staging:** it builds into `build.new/` with `CMAKE_BUILD_RPATH_USE_ORIGIN=ON`, so
+  binaries find their libraries via `$ORIGIN` and the tree still works after a rename.
+  The old build used an absolute RUNPATH into `build/bin`.
+- **Checks before going live:** the new `llama-server --version` runs, `ldd` resolves
+  every llama/ggml library from the new tree, and `cuobjdump --list-elf
+  libggml-cuda.so` shows code for every arch in `ARCHS`. If any check fails, `build/`
+  is left untouched.
+- **Swap:** it renames `build/` to `build.prev-<commit>-<UTC time>/`, moves the new
+  tree in, and re-checks. If the re-check fails it swaps back. Only the newest
+  `build.prev-*` is kept; `build.bak-*` copies such as the `60;70` one above are never
+  touched. Models that are already loaded keep running the old files until
+  llama-swap next starts them.
+- **P100 carveout (ADR-0014):** the script applies the patch if it's missing and stops
+  if it no longer applies. `SKIP_P100_PATCH=1` builds without it, which is acceptable
+  only while no P100 is installed.
+- **Other changes:** the script no longer passes the deprecated no-op `LLAMA_CURL`,
+  and it holds a `flock` so two runs can't share `build.new/`.
+
+**Validation.**
+- A mock harness passed 30 checks and killed all 11 mutants.
+- A real run succeeded in 1 min 33 s (mostly ccache hits): same source (4f31eedb0 plus
+  the carveout), code for sm_52/60/61/70, `$ORIGIN` RUNPATH, and the previous build
+  kept as `build.prev-4f31eedb0-20261015T083322Z`.
+- `llama-bench` with the 0.5B test model ran on the Titan X (compute capability 5.2)
+  from the new tree: pp64 about 1888 t/s, tg16 about 185 t/s.
+
+Note: the `build.bak-sm60_70-…` copy has an absolute RUNPATH into `build/bin`. Only
+use it by renaming it to `build/`; run in place, it would load the live build's
+libraries.

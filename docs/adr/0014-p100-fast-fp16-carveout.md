@@ -68,7 +68,9 @@ three `FAST_FP16` gates in `ggml/src/ggml-cuda/common.cuh`:
 * `fast_fp16_hardware_available()`: `... && cc != 610 && cc != 600`
 
 The patch is saved at `scripts/patches/p100-fast-fp16-carveout.patch` and must be
-re-applied after any llama.cpp update, followed by a rebuild.
+re-applied after any llama.cpp update, followed by a rebuild. *(Since 2026-10-15
+`scripts/build-llama.sh` does this: it applies the patch if it's missing and stops if
+the patch no longer applies. `SKIP_P100_PATCH=1` overrides. See the ADR-0017 addendum.)*
 
 ## Consequences
 

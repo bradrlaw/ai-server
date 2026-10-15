@@ -32,7 +32,9 @@ Install via toolkit-only metapackage per ADR-0002.
   for current PyTorch releases.
 - Negative: Pascal/Volta are deprecated in 12.x - a *future* CUDA (13+) will not
   support these GPUs at all, capping the long-term ceiling (hardware-bound anyway).
-- Follow-up: build engines with `CUDA_ARCHITECTURES="60;70"`.
+- Follow-up: build engines with `CUDA_ARCHITECTURES="60;70"`. *(Updated 2026-07-27:
+  `52;60;61;70` for the Maxwell Titan X stopgap, ADR-0017; `scripts/build-llama.sh`
+  builds it.)*
 
 ## Alternatives considered
 - **Stay on CUDA 13.3** - rejected; does not support sm_60/sm_70 at all.

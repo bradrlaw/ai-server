@@ -178,8 +178,9 @@ Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** wit
 
 ### llama.cpp  (already cloned at `/srv/ai/src/llama.cpp`)
 - **Best Volta/Pascal support of any engine.** GGUF quants, multi-GPU split, and an
-  OpenAI-compatible `llama-server`. Build with `-DGGML_CUDA=ON` and arch
-  `CMAKE_CUDA_ARCHITECTURES="60;70"`.
+  OpenAI-compatible `llama-server`. Build with `scripts/build-llama.sh`: `-DGGML_CUDA=ON`
+  and `CMAKE_CUDA_ARCHITECTURES="52;60;61;70"` (was `60;70` until the Titan X stopgap,
+  ADR-0017).
 - Good first validation target. Likely the **primary** engine for V100 coding models
   too (Q4/Q5/Q6 GGUF lets a ~70B model fit across 2×V100=64GB).
 
@@ -278,6 +279,9 @@ less fragile and engines independently upgradable.
    Binaries in `/srv/ai/src/llama.cpp/build/bin/` (llama-server/cli/bench/embedding).
    Verified: detects all 3 GPUs; inference OK on V100 (~402 tg t/s) and P100
    (~233 tg t/s) with a 0.5B Q4_K_M test model.
+   *(Rebuilt 2026-07-27 for archs `52;60;61;70` after the P100 died (ADR-0017). Since
+   2026-10-15 the script builds into a staging folder before swapping; see "llama.cpp
+   usage notes" below.)*
 5. ⏭️ Stand up **NVIDIA Container Toolkit** + Docker; reproduce llama.cpp in a container.
 6. ⏭️ Evaluate **vLLM** on the V100s (containerized); benchmark vs llama.cpp.
 7. ⏭️ Wire up **OpenAI-style API** + router (LiteLLM); systemd services.
@@ -661,7 +665,19 @@ sudo systemctl poweroff
 ```
 
 ## llama.cpp usage notes (learned during bring-up)
-- **Build:** `scripts/build-llama.sh` — clean rebuild, arch `60;70`, curl+ccache on.
+- **Build:** `scripts/build-llama.sh` — clean build of archs `52;60;61;70` (ccache on).
+  It is non-destructive:
+  - It re-applies the P100 carveout patch (ADR-0014) if it's missing. If the patch no
+    longer applies, the script stops; `SKIP_P100_PATCH=1` builds without it.
+  - It builds into `build.new/` while the live `build/` keeps serving.
+  - It checks that the new `llama-server` runs, loads its libraries from its own folder,
+    and that `libggml-cuda.so` has code for every arch.
+  - Only then does it rename `build/` to `build.prev-<commit>-<time>/` and put the new
+    build in place. Only the newest `build.prev-*` is kept.
+
+  Models that are already loaded keep the old binary until llama-swap next starts them.
+  To roll back: `mv build build.bad && mv build.prev-<…> build`. To update llama.cpp:
+  `git checkout -- ggml/src/ggml-cuda/common.cuh && git pull`, then rerun the script.
 - **GPU selection:** set `CUDA_DEVICE_ORDER=PCI_BUS_ID` so `CUDA_VISIBLE_DEVICES`
   indices match nvidia-smi (0=P100, 1/2=V100). Otherwise CUDA reorders V100s first.
 - **`-hf` auto-download hits HTTP 401** (HF API now requires auth for the commit

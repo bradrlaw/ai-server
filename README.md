@@ -287,7 +287,7 @@ Things others running older multi-GPU boxes may find reusable:
 | `scripts/gpu-fan-control.py` (+ `.service`, `.config.json`) | Temperature-driven **shroud-fan control + self-healing power caps** (drives off V100 HBM temp; re-caps GPUs that fall off/return on the bus). |
 | `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`; the dashboard and its actions need a sign-in — set the password with `--set-password`, ADR-0027) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), keeps the **`small` model warm on the P100**, and can run an optional **quiet-hours deep-idle window** (unloads models + stops the running ComfyUI instances overnight to drop the V100s out of P0; restores them at window end). |
 | `docker/open-webui/functions/server_status_inlet.py` | Open WebUI **new-chat status banner** — shows what's running at the start of each chat, sourced from the status service. |
-| `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_60/sm_70** with the P100 fp16-precision carveout applied. |
+| `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_52/sm_60/sm_61/sm_70** (Maxwell Titan X stopgap, Pascal, Volta) and apply the P100 fp16-precision carveout if missing. The build goes into a staging folder and is checked (it runs, and has code for every arch) before it replaces the live build; the previous build is kept for rollback. |
 | `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from `llama-swap.yaml` so it never drifts. |
 | `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
 | `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |
@@ -325,7 +325,7 @@ separately by their respective creators and are not redistributed here.)
 
 | Project | Link | How it's used |
 |---------|------|---------------|
-| llama.cpp | https://github.com/ggml-org/llama.cpp | GGUF LLM inference engine; built from source for the P100 (sm_60) and V100 (sm_70) GPUs. |
+| llama.cpp | https://github.com/ggml-org/llama.cpp | GGUF LLM inference engine; built from source for sm_52/60/61/70: the Titan X stopgap (sm_52), a P100 (sm_60) and the V100s (sm_70). |
 | llama-swap | https://github.com/mostlygeek/llama-swap | Model router / on-demand loader in front of llama.cpp; the matrix router picks co-resident model sets per GPU. |
 | ComfyUI | https://github.com/comfyanonymous/ComfyUI | Node-based image/video generation server (run as two native instances: open + password-locked). |
 | comfyui-mcp-server | https://github.com/joenorton/comfyui-mcp-server | Exposes ComfyUI style workflows as MCP tools (vendored at upstream `e0101b2`; local fixes in `scripts/patches/comfyui-mcp-server-local.patch`). |
