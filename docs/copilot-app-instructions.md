@@ -111,8 +111,8 @@ UPS is why the server was moved off it.)
 - **Exact lowercase model ids** — LiteLLM is case-sensitive; `Chat` → `400 Invalid model name`.
 - **Do NOT expose the `plan-build` MCP to a review/multi-subagent session.** Its tools are
   serial (blocking calls) and the heavy ones swap `big`/`coder-next` onto **both V100s**,
-  evicting the `coding`/`chat` models the subagents run on (the P100-only guard is bypassed
-  by the HTTP service's `PLAN_BUILD_CALLER_GPU=p100` fallback). Symptom: a reviewer stalls
+  evicting the `coding`/`chat` models the subagents run on (the idx0-only guard is bypassed
+  by the HTTP service's `PLAN_BUILD_CALLER_GPU=idx0` fallback). Symptom: a reviewer stalls
   at ~2k generated tokens as its model is evicted mid-flight. Turn plan-build off for these
   sessions (or `COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher).
 - **One heavy session/subagent per V100.** Don't point two heavy tasks at the same model —

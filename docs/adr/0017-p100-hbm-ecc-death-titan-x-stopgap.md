@@ -191,3 +191,40 @@ The owner chose to make the rebuild non-destructive:
 Note: the `build.bak-sm60_70-…` copy has an absolute RUNPATH into `build/bin`. Only
 use it by renaming it to `build/`; run in place, it would load the live build's
 libraries.
+
+## Addendum (2026-10-15) — plan-build names idx0, not the P100 (audit C10)
+
+The plan-build MCP tools (`docker/mcpo/plan_build_mcp.py`) were never updated for this
+ADR. Their descriptions, refusal messages and output bylines still said `small` runs
+"on the P100", and told callers to pass `caller_gpu="p100"`. Two labels were also stale
+since the 2026-08-15 Qwen3.8 migration: `coding` said "Qwen3.6-27B" and `big` said
+"Qwen3.6-27B BF16".
+
+The owner chose names that don't depend on which card is in idx0, since that card has
+changed once and will change again:
+
+- **Token:** callers pass `caller_gpu="idx0"` (the slot in nvidia-smi / PCI order). The
+  guard still accepts `p100` as an alias, so the existing Open WebUI system prompt and
+  the installed `:9100` unit keep working unchanged. V100 callers of the `fast_*` tools
+  still pass `v100`.
+- **Defaults:** `PLAN_BUILD_SAFE_GPUS` is now `idx0,p100` (was `p100`),
+  `PLAN_BUILD_FAST_SAFE_GPUS` is `idx0,p100,v100`, and `plan-build-mcp.service` sets
+  `PLAN_BUILD_CALLER_GPU=idx0`.
+- **Labels:** `small` is "Gemma-4-12B, idx0", `coding` "Qwen3.8-27B", `big` "Qwen3.8-27B
+  UD-Q8_K_XL". `chat` and `coder-next` were already right.
+- Refusal messages still don't list the accepted tokens, so a refused model isn't told
+  what to retry with.
+
+When `small` goes back to the 26B MoE, update `MODEL_LABELS["small"]` and the
+`Gemma-4-12B` mentions in the tool docstrings.
+
+**Validation.**
+- A harness (stubbed LiteLLM) passed 166 checks: guard tokens for all 7 tools, env
+  overrides, the service fallback with both `idx0` and `p100`, bylines matched against
+  the model files in `config/llama-swap.base.yaml`, and no P100 / Qwen3.6-27B / BF16 in
+  any tool description. The pre-fix file failed 119 checks; all 14 mutants were killed.
+- Live through mcpo after a restart: the OpenAPI spec has no stale text; `idx0` and
+  `p100` pass the guard on `make_plan`; `v100` and an empty value are refused; `v100`
+  passes on `fast_make_plan`.
+- The new script on a throwaway loopback HTTP port answered the same way with the
+  service fallback set to `p100` and to `idx0`.

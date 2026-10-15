@@ -1048,7 +1048,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
    - **Do NOT expose the `plan-build` MCP to a review/parallel session.** Its tools are
      **serial** (blocking `_chat` calls) and the heavy ones swap `big`/`coder-next` onto
      **both V100s**, evicting the `coding`/`chat` models the review subagents are running on
-     (the P100-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=p100`
+     (the idx0-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=idx0`
      fallback). Symptom seen live: one reviewer stalled at ~2k generated tokens while its
      model was evicted mid-flight. Disable the plan-build MCP for review sessions
      (`COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher, or turn it off in the app's MCP/tools
@@ -1083,8 +1083,8 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   Manual: `copilot mcp add --transport http plan-build http://<host-or-tailscale>:9100/mcp`.
 - **`caller_gpu` over a shared endpoint:** the guard (see mcpo section) normally requires each
   call to report `caller_gpu` so a driver model can't evict itself. A shared HTTP service can't
-  know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=p100`
-  — i.e. it assumes clients drive the P100 `small` chat model, letting `big`/`coder-next` swap
+  know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=idx0`
+  — i.e. it assumes clients drive the idx0 `small` chat model, letting `big`/`coder-next` swap
   onto the V100s without evicting the caller. **If a BYOK session instead drives a V100 model**
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
@@ -1215,9 +1215,9 @@ _plan-build server (in-house planner→coder pipeline):_ source
 `uv run --no-project --with mcp`, which runs it on the mcpo image's own Python env (it already
 ships `mcp`). `--no-project` is required: mcpo's working dir `/app` is its own uv project, and
 without the flag uv re-syncs mcpo's venv to a stale lockfile on every start (see config.json
-`//_deps`). It exposes three tools that call
+`//_deps`). It exposes seven tools that call
 the **LiteLLM gateway** and do the heavy lifting on the V100s while the `small` chat model
-(P100, never evicted) invokes them and relays output:
+(idx0, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
 `fast_plan_and_build` (the interactive path: plan with `chat` + implement with `coding` — the
@@ -1231,13 +1231,15 @@ resident). Planner
 (`big`/`chat`/`small`) and coder are overridable per call. Because `big` and `coder-next`
 both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
 `coder-next` in (evicting `big`); `small` stays resident so the chat keeps responding. **So it
-must only be called from a P100-exclusive model** — a V100 caller (coding/chat/big) would
+must only be called from an idx0-exclusive model** — a V100 caller (coding/chat/big) would
 evict *itself* mid-call and break the conversation. The tool can't see its caller through the
 MCP protocol, so it takes a **`caller_gpu`** arg the model reports (via its system prompt) and
-refuses anything not P100-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `p100`). Enforce
+refuses anything not idx0-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `idx0,p100`;
+`p100` is the pre-2026-10-15 value, kept as an alias for idx0 so older prompts still work —
+the P100 itself died, ADR-0017). Enforce
 it two ways: (1) in Open WebUI, enable this tool **only on the `small` model**; (2) add to the
 `small` model's system prompt: _"When calling any plan-build tool, always pass
-`caller_gpu="p100"`."_ **This
+`caller_gpu="idx0"`."_ **This
 needs container networking + the gateway key:** the mcpo service adds
 `extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
 `:4000`) and passes `LITELLM_MASTER_KEY` in its `environment:`; mcpo passes
