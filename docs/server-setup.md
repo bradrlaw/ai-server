@@ -1422,7 +1422,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `https://<host>.<tailnet>.ts.net/` via Tailscale Serve, or `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
+| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -1472,29 +1472,21 @@ and injects the LiteLLM key into Hermes' live config.
   device identity`). `gateway.controlUi.allowInsecureAuth` (set in our config, and
   flagged by OpenClaw's security warning at startup) doesn't help: it only applies to a
   loopback peer, and behind Docker's port mapping every browser arrives from the bridge
-  IP. Two ways in:
-  - **Tailscale Serve (HTTPS, any tailnet device incl. phone)** — one-time setup:
-    1. Tailscale admin console → **DNS**: MagicDNS on, **HTTPS Certificates → Enable**.
-       This publishes the machine's tailnet name in public Certificate Transparency logs.
-    2. `sudo tailscale serve --bg --https=443 http://127.0.0.1:18789` — tailnet-only
-       (not Funnel), persists across reboots. Check with `tailscale serve status`;
-       remove with `sudo tailscale serve --https=443 off`.
-    3. Open `https://<host>.<tailnet>.ts.net/`, paste `OPENCLAW_GATEWAY_TOKEN`
-       (`docker/.env`), then approve the browser's one-time pairing on the server:
-       `docker exec openclaw node openclaw.mjs devices list` →
-       `… devices approve <requestId>` (once per browser profile).
-    No OpenClaw config change is needed: proxied requests arrive from the docker
-    bridge, not loopback, so OpenClaw applies its normal remote flow (token + pairing),
-    and `.ts.net` origins pass its origin check. Tailscale identity login
-    (`gateway.auth.allowTailscale`) doesn't apply because there is no `tailscale` CLI in
-    the container. ufw already allows `tailscale0` (ADR-0028).
-  - **SSH tunnel** — `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`, then
-    `http://localhost:18789`. `localhost` is a secure context, and OpenClaw treats a
-    token-authenticated `localhost` browser arriving via the docker bridge as
-    container-local, so it auto-approves the pairing.
-  The status page's OpenClaw link follows this automatically: it shows the Serve URL
-  whenever `tailscale serve` proxies an HTTPS port to `127.0.0.1:18789` (re-checked
-  every 60 s), otherwise `localhost:18789` marked "SSH tunnel" (ADR-0016 addendum).
+  IP. **Use an SSH tunnel** (chosen 2026-07-21, kept 2026-10-15 — ADR-0016 addendum):
+  - On your computer: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`, then open
+    `http://localhost:18789` (the status page links there, marked "SSH tunnel"). Paste
+    `OPENCLAW_GATEWAY_TOKEN` (`docker/.env`) on first login. `localhost` is a secure
+    context, and OpenClaw treats a token-authenticated `localhost` browser arriving via
+    the docker bridge as container-local, so it pairs the browser automatically.
+  - Always-on (Mac): a LaunchAgent (`~/Library/LaunchAgents/com.openclaw.tunnel.plist`,
+    `RunAtLoad` + `KeepAlive`, recipe from 2026-07-21) can run `ssh -N` against a
+    key-auth `~/.ssh/config` host carrying `LocalForward 18789 127.0.0.1:18789`; check
+    it with `launchctl list | grep openclaw`. Simpler: add that `LocalForward` line to
+    the host you normally SSH in with, so the tunnel is open whenever a session is
+    (extra sessions just warn that the port is already in use).
+  - Not used: Tailscale Serve HTTPS (works, but enabling tailnet HTTPS certificates
+    permanently publishes the machine's tailnet name in public Certificate Transparency
+    logs) and `dangerouslyDisableDeviceAuth` (drops the device check for every client).
 - **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
   never the in-app self-updater (ephemeral container layer). The auto-updater is
   off by default. The "Update available" startup banner checks the **npm** registry

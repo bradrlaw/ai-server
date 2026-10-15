@@ -69,51 +69,42 @@ swap.
 - **Build a bespoke gateway** — rejected: both mature MIT projects already cover
   channels, memory, and tool orchestration; not worth reinventing.
 
-## Addendum (2026-10-15) — Control UI remote access via Tailscale Serve
+## Addendum (2026-10-15) — Control UI remote access stays on the SSH tunnel
 
 The OpenClaw Control UI needs a secure browser context (HTTPS or `localhost`) for its
 WebCrypto device identity. Over plain HTTP from the LAN the page loads, but the gateway
-then refuses the login (`1008 control ui requires device identity`); the owner's Mac hit
-this at `http://aipcub.local:18789` on 2026-10-14. The status page linked to
-`http://localhost:18789`, which only works while an SSH tunnel is open, and it said
-nothing about needing one.
+then refuses the login (`1008 control ui requires device identity`). The owner's Mac hit
+this at `http://aipcub.local:18789` on 2026-10-14: the SSH tunnel chosen on 2026-07-21
+wasn't running, and the status page's `http://localhost:18789` link didn't say it needs
+one.
 
 Decision:
 
-- **Tailscale Serve is the supported remote path.** It gives tailnet-only HTTPS with a
-  publicly trusted certificate (`sudo tailscale serve --bg --https=443
-  http://127.0.0.1:18789`, after enabling HTTPS certificates for the tailnet). The SSH
-  tunnel stays as the zero-setup fallback. OpenClaw's config doesn't change. Serve
-  requests reach the container from the docker bridge with proxy headers, so they get
-  the normal remote flow: gateway token plus a one-time device-pairing approval
-  (`openclaw devices approve`). `.ts.net` origins pass the origin check. A
-  token-authenticated `localhost` browser (the tunnel) counts as container-local and is
-  auto-approved.
-- **The status page follows whichever is set up.** If `tailscale serve` proxies an
-  HTTPS port to a Services row's health port, that row links to the Serve URL (read
-  from `tailscale serve status --json`, cached 60 s; any failure means "no Serve").
-  Otherwise a `localhost` link shows an "SSH tunnel" hint with the tunnel command. This
-  works for every service, not just OpenClaw.
+- **Keep the SSH tunnel** (`ssh -N -L 18789:127.0.0.1:18789 …`, then
+  `http://localhost:18789`) as the way in from another machine. OpenClaw counts a
+  token-authenticated `localhost` browser as container-local, so it pairs the browser
+  without a manual approval. The owner's Mac browser has been paired since 2026-07-21.
+- **The status page marks the link "SSH tunnel"**, with the exact tunnel command in its
+  tooltip.
 
 Rejected:
 
+- **Tailscale Serve HTTPS** (`tailscale serve --https=443 http://127.0.0.1:18789`). It
+  would work without an OpenClaw change: Serve keeps the `.ts.net` Host header, so the
+  origin check passes, and each browser needs one `openclaw devices approve`. But
+  enabling tailnet HTTPS certificates publishes the machine's tailnet DNS name in public
+  Certificate Transparency logs, which are permanent. The owner declined.
 - `gateway.controlUi.dangerouslyDisableDeviceAuth` — turns off the device-identity
   check for every client. A severe security downgrade.
 - `gateway.controlUi.allowInsecureAuth` — still set in our config from the July setup,
   but it only applies to a loopback peer, and behind Docker's port mapping every
-  browser arrives from the bridge IP. It never bypasses the secure-context requirement;
-  OpenClaw's own audit warns about it and recommends Serve or `localhost` instead.
-  Turning it off is a no-op cleanup, left to the owner.
-- Self-signed TLS on the gateway or a reverse proxy with our own CA — every device
-  would need to trust the CA. Serve's certificate is already trusted.
-- Tailscale identity-header login (`gateway.auth.allowTailscale`) — the gateway must
-  see a loopback peer and verify the user with the `tailscale` CLI. In Docker it sees
-  the bridge IP, and the image has no `tailscale` CLI.
+  browser arrives from the bridge IP. OpenClaw's own audit warns about it. Turning it
+  off is a no-op cleanup, left to the owner.
 
-Consequences:
+Possible later, if tunnel-free or phone access is wanted:
 
-- Enabling HTTPS certificates publishes the machine's tailnet DNS name (not its
-  address) in public Certificate Transparency logs. The service itself stays
-  tailnet-only.
-- `tailscale serve` changes need sudo.
-- Each new browser profile needs one pairing approval.
+- An HTTPS reverse proxy with a private CA. Private-CA certificates aren't publicly
+  logged, but each device must trust that CA.
+- On a desktop Chromium browser only, the per-browser flag
+  `unsafely-treat-insecure-origin-as-secure` for the server's URL. This sends the token
+  over plain HTTP unless the URL is the Tailscale address.
