@@ -18,9 +18,10 @@
 #   * `gemma-26b` (Gemma-4-26B-A4B MoE, idx2) -> P=8. The throughput champ
 #     (~281 tok/s aggregate @ P=8, ~19/32GB) blitzes through many focused,
 #     small-context agent tasks (131072 / 8 = ~16k per slot).
-#   * `small` (dense Gemma-4-12B, Titan X idx0) -> P=2 at ctx 24576 (12k/slot),
-#     the setting sized for the earlier 26B MoE on the 16 GB P100; the dense 12B
-#     may have room for more (untested).
+#   * `small` (dense Gemma-4-12B, Titan X idx0) -> P=2 at ctx 65536 (32k/slot,
+#     the same per-request window as daily, which clients assume). Fit-tested
+#     with both slots full: peak 10308 of 12288 MiB (see heavy-coding.yaml). Drop
+#     back to 24576 (12k/slot) if `small` returns to the 26B MoE on a 16 GB card.
 #
 # concurrencyLimit is raised above --parallel on each so bursts of agent
 # requests queue instead of hitting llama-swap's default limit of 10 (HTTP 429).
@@ -31,7 +32,7 @@ label: "Agentic (autonomous multi-agent throughput)"
 description: >
   Autonomous agent workloads: coding P=2 (~100k/slot) for concurrent automated
   coding, gemma-26b P=8 (~16k/slot, ~281 tok/s) for fast focused agent tasks,
-  and small P=2 (~12k/slot) on the Titan X. Loads gemma-26b in place of chat.
+  and small P=2 (32k/slot) on the Titan X. Loads gemma-26b in place of chat.
 # No `model:` overrides: pools inherit the base (NVMe) model files, so a model
 # migration in the base can't leave a mode serving a stale file.
 overrides:
@@ -45,7 +46,7 @@ overrides:
     concurrencyLimit: 16
   small:
     parallel: 2
-    ctx_size: 24576
+    ctx_size: 65536   # 65536 / 2 = 32k/slot (dense 12B on the Titan X; 24576 for the MoE on a 16 GB card)
     concurrencyLimit: 8
     spec: none   # no-op while the Titan X stopgap runs `small` without a draft; keeps the pool draft-free if it returns
 # Warm all three so the whole agent worker set is ready immediately. gemma-26b

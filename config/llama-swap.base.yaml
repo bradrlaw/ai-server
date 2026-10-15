@@ -212,7 +212,10 @@ models:
   # Required") and was replaced by a stopgap 12GB GTX TITAN X (Maxwell sm_52).
   # The 26B MoE UD-Q4_K_XL (~15.9GB) does NOT fit 12GB, so `small` temporarily
   # serves the dense 12B (~6.3GB, fits with comfortable headroom). RESTORE the
-  # MoE block below when a 16GB+ card (P100/V100) returns to idx0.
+  # MoE block below when a 16GB+ card (P100/V100) returns to idx0. On a 16GB card
+  # also drop the heavy-coding/agentic `small` overlays back to ctx_size 24576
+  # (12k/slot): 2026-10-15 raised them to 65536 (32k/slot) for the dense 12B
+  # (audit C9), more than the MoE can hold (see the fit envelope above).
   #   --model ${models_dir}/gemma-4-26b-a4b/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
   #   --batch-size 2048 --ubatch-size 1024
   #   --model-draft ${models_dir}/gemma-4-26b-a4b/mtp-draft/gemma-4-26B-A4B-it-assistant-Q8_0.gguf

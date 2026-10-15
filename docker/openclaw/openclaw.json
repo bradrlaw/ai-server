@@ -9,8 +9,9 @@
 // (daily mode): chat 98304, coding 163840, small 32768. Never claim more than the
 // server holds, or prompts hit llama.cpp's "exceeds the available context size"
 // instead of compacting. The parallel modes shrink per-slot ctx (heavy-coding chat
-// 32k, agentic coding 100k, small 12k); OpenClaw recognizes that llama.cpp overflow
-// error. assistants-seed.sh never overwrites the live copy — edit it in place too.
+// 32k, agentic coding 100k; small keeps 32k in every mode); OpenClaw recognizes
+// that llama.cpp overflow error. assistants-seed.sh never overwrites the live
+// copy — edit it in place too.
 {
   "agents": {
     "defaults": {

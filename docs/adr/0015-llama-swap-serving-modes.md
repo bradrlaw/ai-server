@@ -161,3 +161,45 @@ comfyui-open's ~0.8 GB idle context):
   1680 MiB free**. Single-stream decode 22.4 tok/s (MTP off), as expected.
 - Switch time with the chat file uncached on NVMe: heavy-coding **62 s** (chat 33 s);
   agentic **34 s**.
+
+## Addendum (2026-10-15) — `small` pools get 32k per slot (audit C9)
+
+heavy-coding and agentic ran `small` at ctx 24576 @ P=2, i.e. **12,288 tokens per
+request**. That cap was sized for the 26B MoE (~15.3 GB) on the 16 GB P100. Since the P100
+died, `small` serves the dense Gemma-4-12B on the 12 GB Titan X stopgap (ADR-0017), and
+every client assumes daily's 32k window:
+
+- OpenClaw/pi `contextWindow` is 32768.
+- Copilot BYOK budgets a 20480-token prompt plus 8192 output.
+
+The mismatch surfaced once Open WebUI's Small regained its tools (moved from the orphaned
+`fast` entry during C10). Those tools come to ~14k tokens:
+
+- ComfyUI-MCP: 22 tools, ~7.7k tokens.
+- plan-build: ~3.1k tokens.
+- Server Mode: ~0.5k tokens.
+- Open WebUI's built-in tools on top.
+
+So `fast_make_plan` in heavy-coding failed with *"request (14086 tokens) exceeds the
+available context size (12288 tokens)"*.
+
+Decision (owner): both overlays now run `small` at **ctx 65536 @ P=2 = 32k per slot**,
+the same per-request window as daily. The dense 12B can afford it because only its 8
+global-attention layers (1 KV head, 512-dim K/V) grow with context. The measured cost is
++487 MiB for 40,960 more tokens, ~12 KiB/token. Its 40 sliding-window layers stay at the
+1024-token window.
+
+Measured 2026-10-15 in heavy-coding. agentic renders an identical `small` block, and idx0
+holds only `small` in both modes, so the result covers both:
+
+- Idle VRAM: 9588 MiB → **10075 MiB**.
+- Both slots filled with 32,704-token prompts at once: **10308 MiB peak of 12288, ~1.9 GB
+  free** (after the 90 MiB driver reserve).
+- The mode switch reloaded all three models in 30 s.
+- The owner's case now succeeds: a 13,858-token request via LiteLLM returns 200.
+- Prefill on the Maxwell card is slow. A cold ~14k-token prompt takes **~113 s**
+  (~120 tok/s). With both slots busy, each gets 86–102 tok/s. Follow-ups that reuse the
+  cached prefix answer in ~1 s.
+
+If `small` returns to the 26B MoE on a 16 GB card, drop both overlays back to 24576. The MoE
+OOMed at 48k+ even at P=1. Both overlays and the base's TEMPORARY block say so.

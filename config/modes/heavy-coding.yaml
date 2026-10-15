@@ -20,8 +20,15 @@
 # only wins while a single sub-agent is busy. The pool still loads the base NVMe
 # file (its embedded MTP head just sits unused, ~0.7 GB) — this used to point at
 # a non-MTP copy on the HDD cold tier, so every switch spent ~2.5 min loading it.
-# `small` keeps P=2 at ctx 24576 (12k/slot), the setting sized for the earlier
-# 26B MoE on the 16 GB P100; the dense 12B may have room for more (untested).
+# `small` runs P=2 at ctx 65536 = 32k/slot, the same per-request window as daily,
+# because clients size prompts for 32k (OpenClaw/pi contextWindow, Copilot BYOK,
+# Open WebUI's Small with ~14k tokens of tool schemas attached — at 12k/slot that
+# overflowed). It used to be 24576 (12k/slot), a cap sized for the 26B MoE on the
+# 16 GB P100. The dense 12B on the 12 GB Titan X has room: only its 8 global-
+# attention layers grow with ctx (measured ~12 KiB/token). Fit test 2026-10-15 (both
+# slots filled with 32.7k-token prompts at once): idle 10075 MiB, peak 10308 of
+# 12288 MiB (~1.9 GB free). If `small` goes back to the MoE on a 16 GB card, drop
+# ctx_size back to 24576 (the MoE OOMed at 48k+ even at P=1).
 # concurrencyLimit is raised so many sub-agents don't hit llama-swap's default
 # limit of 10 (which returns HTTP 429).
 #
@@ -34,7 +41,7 @@ name: heavy-coding
 label: "Heavy coding (interactive + sub-agent pools)"
 description: >
   Primary interactive coding on `coding` (full 160k MTP ctx, single slot) with
-  parallel sub-agent worker pools on `chat` (P=4, 32k/slot) and `small` (P=2, 12k/slot).
+  parallel sub-agent worker pools on `chat` (P=4, 32k/slot) and `small` (P=2, 32k/slot).
 # No `model:` overrides: pools inherit the base (NVMe) model files, so a model
 # migration in the base can't leave a mode serving a stale file.
 overrides:
@@ -45,7 +52,7 @@ overrides:
     spec: none    # MTP off for the batched sub-agent pool (see above)
   small:
     parallel: 2
-    ctx_size: 24576
+    ctx_size: 65536   # 65536 / 2 = 32k/slot (dense 12B on the Titan X; 24576 for the MoE on a 16 GB card)
     concurrencyLimit: 8
     spec: none   # no-op while the Titan X stopgap runs `small` without a draft; keeps the pool draft-free if it returns
 # Warm all three so the primary + both worker pools are ready immediately.
