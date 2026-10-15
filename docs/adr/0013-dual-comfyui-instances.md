@@ -101,3 +101,53 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
   `:8188` has no auth and must stay LAN/Tailscale-only (ufw ruleset provided)
 * Local (gitignored): `comfyui/custom_nodes_secure/ComfyUI-Login`,
   `comfyui/{output,input,temp}-{open,secure}`, `comfyui/user`, `comfyui/login/`
+
+## Addendum 2026-10-16: ComfyUI-Login secret file permissions (audit)
+
+**Finding.** ComfyUI-Login's secrets were readable by every local user, and by
+any container that mounts these paths:
+- The first line of `login/PASSWORD` (0644) is the bcrypt hash of the password,
+  and the plugin accepts that hash as an API **bearer token**. That is how the
+  secure MCP bridge authenticates (ADR-0026). So reading the file grants full
+  access to the instance without knowing the password.
+- On every start the plugin logs `For direct API calls, use token=<hash>`. The
+  line goes to the journal and to ComfyUI-Manager's `user/comfyui_<port>.log`
+  files (0644).
+- `.secret-key.txt` (signs the session cookies, rotated every 30 days) sits in
+  the plugin's own directory.
+
+The Qwen instance (ADR-0024) has its own copies of all of these. It has no
+ComfyUI-Manager, so it writes no log files.
+
+**Fix (live 2026-10-16, no restarts).**
+- `comfyui/login`, `comfyui-qwen/login`, `comfyui/user` and both
+  `ComfyUI-Login` plugin dirs are now 0700 (owner brad). The directory modes
+  are the lasting protection: the plugin recreates `PASSWORD` with the default
+  umask (0644) after a reset, and the log files are recreated on every start.
+  Both land inside a 0700 directory.
+- The existing files are also 0600: both `PASSWORD` files, both
+  `.secret-key.txt` files and the three `comfyui_8189*.log` files.
+- `scripts/install-comfyui-instances.sh` now enforces these modes, and the
+  `comfyui-qwen` runbook has a pre-start step (`docs/server-setup.md`).
+- Same audit, same pattern: `scripts/server-status.env` (gitignored, holds the
+  Open WebUI admin API key for the status banner) was 0664. It is now 0600, and
+  the docs create it with `install -m 600`.
+
+Every reader runs as brad: comfyui-secure, comfyui-qwen, comfyui-mcp-secure,
+server-status and aichat-mcp-bridge. Verified afterwards: `:8189` and `:8190`
+serve `/login` (200), refuse requests without a token (401) and accept the token
+(200). A container running as uid 65534 with `/srv/ai` mounted can no longer read
+any of these files.
+
+**Residuals.**
+- **Root containers ignore file modes.** mcpo runs as root and mounts all of
+  `/srv/ai` read-only, so it can still read these files (audit B5).
+- **Journal.** Past and future `use token=` lines stay in the journal, which root
+  and the `adm`/`systemd-journal` groups can read (brad is in `adm`). It is not
+  world-readable. To drop the line, add `LogFilterPatterns=~use token=` to both
+  units (systemd 255; needs sudo). Not done.
+- **Rotation is optional.** The old tokens were readable by any local account
+  until now. To rotate, reset the password: `scripts/reset-comfyui-password.sh`
+  for `:8189`; for `:8190`, delete `comfyui-qwen/login/PASSWORD` and restart
+  `comfyui-qwen`. After setting the new password on `:8189`, also restart
+  `comfyui-mcp-secure`, which reads the token only at start (audit B6).

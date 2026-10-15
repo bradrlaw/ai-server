@@ -343,7 +343,7 @@ docker compose logs -f litellm                       # follow logs
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
-| Enable the OWUI status banner | `cp scripts/server-status.env.example scripts/server-status.env`, set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
+| Enable the OWUI status banner | `install -m 600 scripts/server-status.env.example scripts/server-status.env` (keeps the key private), set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
 | Status dashboard password | — | `python3 scripts/server-status-service.py --set-password` as `brad` (no sudo/restart; signs every browser out) — see [sign-in](#status-dashboard-sign-in-adr-0027) |
 
 ### Check state / warm the daily models
@@ -530,6 +530,13 @@ Full design + rationale in **ADR-0024**. Key facts:
 
 One-time setup (owner sudo — agents cannot):
 ```bash
+# 0) as brad, no sudo: make the login dirs private BEFORE the first start.
+#    ComfyUI-Login would create them world-readable; its PASSWORD hash doubles
+#    as the API bearer token and its plugin dir holds the session-signing key
+#    (ADR-0013, 2026-10-16 addendum):
+install -d -m 0700 /srv/ai/comfyui-qwen/login
+chmod 700 /srv/ai/comfyui-qwen/custom_nodes_qwen/ComfyUI-Login
+
 # 1) install the on-demand unit (NOT enabled at boot — start it from the dashboard):
 sudo cp scripts/comfyui-qwen.service /etc/systemd/system/
 sudo systemctl daemon-reload
