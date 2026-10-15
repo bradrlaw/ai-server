@@ -3,6 +3,15 @@ Description=ComfyUI (LOCKED) — password-gated generative media server on V100 
 Documentation=https://github.com/comfyanonymous/ComfyUI
 After=network-online.target nvidia-persistenced.service
 Wants=network-online.target nvidia-persistenced.service
+# input/output/temp-secure are symlinks into the encrypted volume (/srv/ai/storage),
+# which stays locked after every boot until `sudo scripts/storage-crypt.sh unlock`.
+# Only start when it is mounted, so secure assets can never land on the unencrypted
+# root disk. A Condition (not RequiresMountsFor=) makes a start while locked a quick
+# "skipped" no-op: RequiresMountsFor pulled the mount into the boot transaction and
+# made systemd wait 90 s for the locked disk (boot reached graphical.target at
+# 1min 30s) before failing. storage-crypt.sh unlock starts this unit after mounting.
+After=srv-ai-storage.mount
+ConditionPathIsMountPoint=/srv/ai/storage
 
 [Service]
 Type=simple
@@ -10,18 +19,14 @@ User=brad
 Group=brad
 WorkingDirectory=/srv/ai/comfyui
 # Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
-# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+# cards as nvidia-smi (idx0=Titan X stopgap, idx1/2=V100).
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
-# Primary card = V100 #2 (idx2 = the `chat` card). idx1 is ALSO made visible as a
-# secondary so heavy jobs can park a component (e.g. the MiniMax-H3 ~15 GB text
-# encoder) on it via ComfyUI-MultiGPU loaders and keep the diffusion model fully
-# resident on idx2 (no CPU/PCIe offload). Order matters with CUDA_DEVICE_ORDER
-# above: cuda:0 = idx2 (diffusion home, unchanged default), cuda:1 = idx1.
-# MANUAL RECIPE for dual-GPU jobs: idx1 normally serves LLMs (coding/gemma-31b/
-# chat-uncensored) and hosts comfyui-open, so BEFORE such a run stop comfyui-open
-# and clear idx1's llama-swap models, then target cuda:1 for the text encoder.
-# Non-MultiGPU workflows are unaffected: they default to cuda:0 (idx2) as before.
-Environment=CUDA_VISIBLE_DEVICES=2,1
+# LOCKED instance: pin to V100 #2 (idx2 = the `chat` card) so it never contends
+# for GPU with the OPEN instance (idx1). Single GPU by owner decision (ADR-0013,
+# 2026-10-15 addendum); dual-V100 component placement (CUDA_VISIBLE_DEVICES=2,1 +
+# --reserve-vram 2 + ComfyUI-MultiGPU loaders) is a future item — recipe in
+# docs/server-setup.md "Dual-V100 for oversized ComfyUI models".
+Environment=CUDA_VISIBLE_DEVICES=2
 # Reduce allocator fragmentation so large activation spikes (e.g. MiniMax-H3 DiT
 # attention on longer clips) can reuse reserved-but-unallocated VRAM instead of
 # OOMing. See the H3 OOM analysis: 2.44 GiB alloc failed with ~2.76 GiB reserved
@@ -45,15 +50,8 @@ EnvironmentFile=-/run/comfyui-fp16/secure.env
 # The PASSWORD lives at /srv/ai/comfyui/login/PASSWORD (delete it to reset).
 # Shared: models/, custom_nodes/, --user-directory (workflows + settings).
 # Separate: output/input/temp (isolates assets from the open instance).
-#
-# --reserve-vram 2: keep this LOW. The big MiniMax r2v models no longer share
-# idx2 — text encoder + VAEs go to idx1 via ComfyUI-MultiGPU loaders — so the
-# 21.6 GB diffusion model fits fully resident on idx2 with room to spare. A
-# large reserve would force ComfyUI to evict+stream diffusion weights from CPU
-# every sampling step (~4 GB/s rxpci PCIe tax). Bump only if idx2 OOMs.
 ExecStart=/srv/ai/venvs/comfyui/bin/python /srv/ai/comfyui/main.py \
   --listen 0.0.0.0 --port 8189 \
-  --reserve-vram 2 \
   --extra-model-paths-config /srv/ai/scripts/comfyui-secure-extra-paths.yaml \
   --output-directory /srv/ai/comfyui/output-secure \
   --input-directory /srv/ai/comfyui/input-secure \

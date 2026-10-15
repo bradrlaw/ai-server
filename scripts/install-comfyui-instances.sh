@@ -43,6 +43,15 @@ systemctl disable comfyui.service 2>/dev/null || true
 echo "==> Installing new unit files"
 install -m 0644 "$SRC/comfyui-open.service"   "$DEST/comfyui-open.service"
 install -m 0644 "$SRC/comfyui-secure.service" "$DEST/comfyui-secure.service"
+# The encrypted-volume guard now lives in comfyui-secure.service itself
+# (ConditionPathIsMountPoint=/srv/ai/storage). Drop the old hand-installed
+# RequiresMountsFor drop-in: it made boot wait 90 s for the locked disk.
+LEGACY_DROPIN="$DEST/comfyui-secure.service.d/require-storage.conf"
+if [[ -f "$LEGACY_DROPIN" ]]; then
+  echo "==> Removing legacy drop-in $LEGACY_DROPIN (guard is in the unit now)"
+  rm -f "$LEGACY_DROPIN"
+  rmdir --ignore-fail-on-non-empty "$DEST/comfyui-secure.service.d"
+fi
 
 echo "==> Reloading systemd, enabling and (re)starting both instances"
 systemctl daemon-reload

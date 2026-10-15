@@ -79,15 +79,17 @@ its own V100 via `CUDA_VISIBLE_DEVICES` (+ `CUDA_DEVICE_ORDER=PCI_BUS_ID`):
 * ComfyUI-Login is "basic protection" (its own words) — a shared password, not
   per-user isolation. If true per-user asset separation is later needed, revisit
   ComfyUI-Usgromana or one-instance-per-user.
-* **`comfyui-secure` will not come up on its own after a reboot.** Its drop-in
-  `RequiresMountsFor=/srv/ai/storage` means that at boot — while the encrypted
-  volume is still locked (manual passphrase, ADR: `storage-crypt.sh`) — its start
-  job fails on the missing mount, and systemd does **not** auto-retry once the
-  volume is later unlocked. `scripts/storage-crypt.sh unlock` therefore starts
-  `comfyui-secure` as its final step (best-effort, same as its filebrowser
-  recreate), so unlocking the volume also brings the secure instance up. The
-  dashboard's "▶ Start ComfyUI" button is the manual equivalent. `comfyui-open`
-  has no encrypted dependency and comes up at boot normally.
+* **`comfyui-secure` will not come up on its own after a reboot.** Its unit has
+  `ConditionPathIsMountPoint=/srv/ai/storage` (a hand-installed
+  `RequiresMountsFor=/srv/ai/storage` drop-in until 2026-10-15 — see that
+  addendum), so at boot — while the encrypted volume is still locked (manual
+  passphrase, ADR: `storage-crypt.sh`) — its start is skipped, and systemd does
+  **not** re-check once the volume is later unlocked. `scripts/storage-crypt.sh
+  unlock` therefore starts `comfyui-secure` as its final step (best-effort, same
+  as its filebrowser recreate), so unlocking the volume also brings the secure
+  instance up. The dashboard's "▶ Start" button on the secure row is the manual
+  equivalent. `comfyui-open` has no encrypted dependency and comes up at boot
+  normally.
 
 ## Files
 
@@ -155,3 +157,65 @@ any of these files.
   `comfyui-mcp-secure`, which reads the token only at start (audit B6).
   *Owner decision (2026-10-15): no rotation. No other account has had shell
   access to the machine, so nobody else could have read the files.*
+
+## Addendum 2026-10-15: secure instance stays single-GPU; storage guard moved into the unit (audit C4)
+
+**Drift.** The installed and repo copies of `comfyui-secure.service` disagreed:
+- **Repo:** dual-GPU — `CUDA_VISIBLE_DEVICES=2,1` and `--reserve-vram 2`, so
+  ComfyUI-MultiGPU loaders could park the MiniMax-H3 text encoder and VAEs on
+  idx1. This came from `42913f8`, which reached main through PR #45 on
+  2026-10-11.
+- **Installed (2026-08-27):** single-GPU (`CUDA_VISIBLE_DEVICES=2`, no reserve).
+  It still listed the dropped `chat-uncensored-q4` in `FREE_GPU_KEEP`.
+
+The encrypted-volume guard existed only as a hand-installed drop-in
+(`comfyui-secure.service.d/require-storage.conf`). It was not in the repo, and
+the installer did not install it.
+
+**Decision (owner, 2026-10-15): one GPU for now.**
+- The repo unit is back to `CUDA_VISIBLE_DEVICES=2` with no `--reserve-vram`,
+  which is what has actually run since 2026-08-27.
+- Dual-V100 component placement is a future item. Its recipe stays in
+  `docs/server-setup.md`, marked not active.
+- ComfyUI-MultiGPU stays installed. No saved workflow uses its loaders.
+
+**Storage guard: `ConditionPathIsMountPoint`, not `RequiresMountsFor`.** The
+unit now carries `After=srv-ai-storage.mount` and
+`ConditionPathIsMountPoint=/srv/ai/storage`. Like the drop-in, this means the
+instance only starts while the volume is mounted, so its `*-secure` symlinks
+can't point into an empty, unencrypted mountpoint directory. The drop-in had two
+costs that the condition avoids:
+- **90 s boot wait.** The unit is enabled at boot, so `RequiresMountsFor` pulled
+  the `noauto` mount into the boot transaction. The LUKS-backed device only
+  appears after a manual unlock, so systemd waited out its 90 s device timeout
+  and then logged "Dependency failed for comfyui-secure.service". `systemd-analyze`
+  for the 2026-08-24 boot: `graphical.target` reached at 1 min 30 s, while
+  docker was up at about 9 s. SSH is socket-activated and was not delayed.
+- **Hanging starts.** Any `systemctl start comfyui-secure` while the volume was
+  locked, such as a quiet-hours restore, hung for 90 s and then failed.
+
+A start while locked is now logged as "skipped because of an unmet condition
+check" and returns 0 immediately. This was checked with a transient unit: a
+mounted path runs, and a non-mountpoint is skipped with rc 0 in about 10 ms.
+`install-comfyui-instances.sh` deletes the legacy drop-in. Unlock still has to
+start the unit itself, because systemd does not re-check a skipped condition.
+
+**Lock path.** `storage-crypt.sh lock` now stops `comfyui-secure` and the
+`filebrowser` container before it unmounts, mirroring unlock (which starts and
+recreates them). Before:
+- comfyui-secure kept running against dangling paths.
+- filebrowser's bind mounts of the secure dirs kept the filesystem busy, so
+  `cryptsetup close` would fail.
+
+The order was mock-tested (stop, stop, umount, close; a busy umount still
+aborts before close). It was not run live, because that would lock the volume.
+
+**Apply (sudo).** Run this when the secure instance is idle. The fp16 flag in
+`/run/comfyui-fp16/secure.env` survives the restart:
+```bash
+sudo install -m0644 /srv/ai/scripts/comfyui-secure.service /etc/systemd/system/
+sudo rm /etc/systemd/system/comfyui-secure.service.d/require-storage.conf
+sudo rmdir /etc/systemd/system/comfyui-secure.service.d
+sudo systemctl daemon-reload && sudo systemctl restart comfyui-secure
+```
+`install-comfyui-instances.sh` does the same, but it restarts both instances.

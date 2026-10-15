@@ -400,7 +400,11 @@ python3 /srv/ai/scripts/server-status-service.py --set-password
 - **Plain HTTP:** the password crosses the LAN unencrypted (Tailscale traffic is encrypted),
   so don't reuse one from elsewhere.
 
-### Dual-V100 for oversized ComfyUI models (component placement)
+### Dual-V100 for oversized ComfyUI models (component placement — future, not active)
+> **Not active.** By the owner's decision of 2026-10-15, `comfyui-secure` runs on **one GPU**:
+> `CUDA_VISIBLE_DEVICES=2`, no `--reserve-vram`. See the ADR-0013 2026-10-15 addendum. This
+> section is the recipe for enabling dual-GPU placement later. ComfyUI-MultiGPU stays installed.
+
 Some models don't fit one 32 GB V100 even quantized. The MiniMax-H3 reference-to-video
 graph loads a **21.6 GB** int8 diffusion model **+** a **15 GB** Qwen3-VL text encoder **+**
 ~5 GB of VAEs — ~42 GB total. On one card ComfyUI evicts weights to CPU and streams them
@@ -408,10 +412,11 @@ back **every sampling step** (measured ~4 GB/s `rxpci` on the slow PCIe gen3 x8 
 dominates wall-clock. The fix is to **place whole components on separate cards** (no model is
 split — see the no-NVLink rule of thumb: split by component, never one model across cards).
 
-`comfyui-secure` is pinned to `CUDA_VISIBLE_DEVICES=2,1` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` →
-`cuda:0` = idx2, `cuda:1` = idx1) and runs `--reserve-vram 2` (low, so the diffusion model
-stays fully resident on idx2). The [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)
-node pack adds a `device` dropdown to the loaders. In the workflow:
+To enable it, change `scripts/comfyui-secure.service` to `CUDA_VISIBLE_DEVICES=2,1`
+(`CUDA_DEVICE_ORDER=PCI_BUS_ID` → `cuda:0` = idx2, `cuda:1` = idx1) and add `--reserve-vram 2`
+(low, so the diffusion model stays fully resident on idx2), then reinstall the unit. The
+[ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU) node pack adds a `device`
+dropdown to the loaders. In the workflow:
 
 | Loader | Swap to | device |
 |--------|---------|--------|

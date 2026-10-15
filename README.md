@@ -371,7 +371,7 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 | ComfyUI-WanVideoWrapper | https://github.com/kijai/ComfyUI-WanVideoWrapper | WAN text/image-to-video generation with block-swap and VAE tiling for the 32 GB V100. |
 | ComfyUI-MiniMax-H3-Turbo | https://github.com/larryvrh/ComfyUI-MiniMax-H3-Turbo | MiniMax-H3 video nodes + 4-step turbo LoRA sampler used by the native (int8) H3 workflows. |
 | ComfyUI-MMAudio | https://github.com/kijai/ComfyUI-MMAudio | Video-to-audio Foley: generates sound matched to a generated clip (used in the Wan+MMAudio and add-audio-to-video workflows). |
-| ComfyUI-MultiGPU | https://github.com/pollockjj/ComfyUI-MultiGPU | Per-component device placement so oversized H3 models (DiT + Qwen3-VL text encoder + VAEs) fit across both V100s. |
+| ComfyUI-MultiGPU | https://github.com/pollockjj/ComfyUI-MultiGPU | Per-loader device selection so a big model's components can be split across both V100s (e.g. MiniMax-H3: text encoder + VAEs on idx1, diffusion model resident on idx2 — no PCIe offload). Installed but **not active**: `comfyui-secure` is single-GPU for now (ADR-0013). |
 | ComfyUI-VideoHelperSuite | https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite | Video load/combine/preview nodes underpinning the video-gen workflows. |
 | ComfyUI-Frame-Interpolation | https://github.com/Fannovel16/ComfyUI-Frame-Interpolation | Frame interpolation for generated video. |
 | rgthree-comfy | https://github.com/rgthree/rgthree-comfy | Quality-of-life nodes incl. the Power Lora Loader used by style workflows. |
@@ -381,7 +381,6 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 | ComfyUI_Text_Translation | https://github.com/TFL-TFL/ComfyUI_Text_Translation | In-graph prompt translation. |
 | ComfyUI-llama-cpp_vlm | https://github.com/mickeylan/ComfyUI-llama-cpp_vlm | Runs local VLM (GGUF + mmproj) inference inside ComfyUI for image captioning/analysis. |
 | ComfyUI-Login | https://github.com/liusida/ComfyUI-Login | Password authentication for the locked ComfyUI instance. |
-| ComfyUI-MultiGPU | https://github.com/pollockjj/ComfyUI-MultiGPU | Per-loader device selection so a big model's components can be split across both V100s (e.g. MiniMax-H3: text encoder + VAEs on idx1, diffusion model resident on idx2 — no PCIe offload). |
 | llama-cpp-python (JamePeng fork) | https://github.com/JamePeng/llama-cpp-python | Python bindings backing the VLM node; built from source (v0.3.40) for sm_60/sm_70. |
 
 ### Tooling & infrastructure
