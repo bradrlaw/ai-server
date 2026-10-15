@@ -203,3 +203,18 @@ holds only `small` in both modes, so the result covers both:
 
 If `small` returns to the 26B MoE on a 16 GB card, drop both overlays back to 24576. The MoE
 OOMed at 48k+ even at P=1. Both overlays and the base's TEMPORARY block say so.
+
+## Addendum (2026-10-15) — rendering leaves comments alone (audit C14)
+
+A model "block" in the renderer runs from its key to the next model key, so it
+also holds the comment header of the *next* model. The override regexes edited
+those comments: the live heavy-coding file said `RESTORE --ctx-size 65536`
+under `small-uncensored` (base: 131072, `small`'s override leaked in), and
+`spec: none` cut `(--spec-type draft-mtp)` out of a sentence.
+`scripts/llama-swap-mode.py` now skips comment lines in `_apply_overrides` and
+`effective_config`, and a block also ends at the next top-level key, so the last
+model can't reach `routing:`/`hooks:`. Every mode renders the same YAML as
+before, and its comments now match the base. Covered by a harness: real modes vs
+the old renderer, a synthetic base with flag text in comments, and 7/7 mutants
+killed. The live file picks this up on the next mode switch; writing it reloads
+llama-swap, so it wasn't re-rendered just for comments.

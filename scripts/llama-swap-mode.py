@@ -45,6 +45,22 @@ SWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip("/")
 
 MARKER_RE = re.compile(r"^#\s*ACTIVE-MODE:\s*([A-Za-z0-9_-]+)")
 KEY_RE = re.compile(r'^  "([a-z0-9-]+)":\s*$')
+TOP_RE = re.compile(r"^[A-Za-z_]")  # top-level key (routing:, hooks:) ends the last model
+
+
+def _is_comment(line: str) -> bool:
+    return line.lstrip().startswith("#")
+
+
+def _block_end(lines: list[str], j: int) -> int:
+    """Index just past a model block that starts before `j`.
+
+    A block still includes the comment header of the NEXT model, so every edit and
+    parse below skips comment lines (base comments must render unchanged).
+    """
+    while j < len(lines) and not KEY_RE.match(lines[j]) and not TOP_RE.match(lines[j]):
+        j += 1
+    return j
 
 
 # --------------------------------------------------------------------------- #
@@ -82,18 +98,18 @@ def load_mode(mode: str) -> dict:
 # rendering
 # --------------------------------------------------------------------------- #
 def _apply_overrides(block: list[str], ov: dict) -> list[str]:
-    """Edit a single model's YAML block in place per an override dict."""
+    """Edit a single model's YAML block in place per an override dict (never comments)."""
     if "parallel" in ov:
         for k, bl in enumerate(block):
-            if "--parallel" in bl:
+            if "--parallel" in bl and not _is_comment(bl):
                 block[k] = re.sub(r"--parallel\s+\d+", f"--parallel {ov['parallel']}", bl)
     if "ctx_size" in ov:
         for k, bl in enumerate(block):
-            if "--ctx-size" in bl:
+            if "--ctx-size" in bl and not _is_comment(bl):
                 block[k] = re.sub(r"--ctx-size\s+\d+", f"--ctx-size {ov['ctx_size']}", bl)
     if "model" in ov:
         for k, bl in enumerate(block):
-            if "--model" in bl:
+            if "--model" in bl and not _is_comment(bl):
                 block[k] = re.sub(r"(--model\s+)\S+", rf"\g<1>{ov['model']}", bl)
     if "spec" in ov:
         # spec: none / false  -> strip ALL speculative-decode flags (--spec-type,
@@ -107,6 +123,9 @@ def _apply_overrides(block: list[str], ov: dict) -> list[str]:
                     r"--model-draft\s+\S+", r"--n-gpu-layers-draft\s+\d+"]
             new_block = []
             for bl in block:
+                if _is_comment(bl):
+                    new_block.append(bl)
+                    continue
                 stripped = bl
                 for pat in pats:
                     stripped = re.sub(pat, "", stripped)
@@ -118,7 +137,7 @@ def _apply_overrides(block: list[str], ov: dict) -> list[str]:
         elif ":" in str(want):
             stype, nmax = str(want).split(":", 1)
             for k, bl in enumerate(block):
-                if "--spec-type" in bl:
+                if "--spec-type" in bl and not _is_comment(bl):
                     block[k] = re.sub(r"--spec-type\s+\S+\s+--spec-draft-n-max\s+\d+",
                                       f"--spec-type {stype} --spec-draft-n-max {nmax}", bl)
     if "concurrencyLimit" in ov:
@@ -171,12 +190,8 @@ def render(mode: str) -> str:
         line = lines[i]
         m = KEY_RE.match(line)
         if m and m.group(1) in overrides:
-            block = [line]
-            j = i + 1
-            while j < n and not KEY_RE.match(lines[j]):
-                block.append(lines[j])
-                j += 1
-            out.extend(_apply_overrides(block, overrides[m.group(1)]))
+            j = _block_end(lines, i + 1)
+            out.extend(_apply_overrides(lines[i:j], overrides[m.group(1)]))
             i = j
         else:
             out.append(line)
@@ -225,12 +240,8 @@ def effective_config(path: str = ACTIVE) -> dict:
         m = KEY_RE.match(lines[i])
         if m:
             name = m.group(1)
-            j = i + 1
-            block = []
-            while j < n and not KEY_RE.match(lines[j]):
-                block.append(lines[j])
-                j += 1
-            text = "".join(block)
+            j = _block_end(lines, i + 1)
+            text = "".join(b for b in lines[i + 1:j] if not _is_comment(b))
             info: dict = {}
             if (mm := re.search(r"--parallel\s+(\d+)", text)):
                 info["parallel"] = int(mm.group(1))
