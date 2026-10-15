@@ -96,10 +96,11 @@ Done. To run the UI (port 7865, loopback only):
   cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
     /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 0.0.0.0
 
-  as a service (needs sudo):
+  as a service (needs sudo). It runs on demand, so do NOT enable it at boot:
       sudo cp /srv/ai/scripts/fooocus.service /etc/systemd/system/
       sudo systemctl daemon-reload
-      sudo systemctl enable --now fooocus
+      # start/stop it from the status page (Services: Start / Stop), or:
+      sudo systemctl start fooocus
 
 NOTES
   - Fooocus's ldm_patched default port is 8188 (== ComfyUI!). ALWAYS pass

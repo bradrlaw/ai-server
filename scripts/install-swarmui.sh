@@ -101,10 +101,12 @@ cat <<EOF
 SwarmUI is built and the ComfyUI backend is pre-staged on cu124/torch-2.6 (sm_70),
 pinned to ComfyUI ${COMFY_TAG}. Two steps remain (they need you, not the agent):
 
-  1) Install + start the service (needs sudo):
+  1) Install the service and start it for the wizard (needs sudo). It runs on
+     demand, so do NOT enable it at boot; later, start/stop it from the status
+     page (Services: Start / Stop):
        sudo cp ${AI_ROOT}/scripts/swarmui.service /etc/systemd/system/
        sudo systemctl daemon-reload
-       sudo systemctl enable --now swarmui
+       sudo systemctl start swarmui
        # logs: journalctl -u swarmui -f
 
   2) Open http://<server>:7801 and complete the one-time install wizard:

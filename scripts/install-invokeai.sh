@@ -118,11 +118,12 @@ Done. To run the UI (port 9091, all interfaces):
   INVOKEAI_ROOT=/srv/ai/invokeai CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 \
     /srv/ai/venvs/invokeai/bin/invokeai-web --root /srv/ai/invokeai
 
-  as a service (needs sudo):
+  as a service (needs sudo). It runs on demand, so do NOT enable it at boot:
       sudo cp /srv/ai/scripts/invokeai.service /etc/systemd/system/
       sudo systemctl daemon-reload
-      sudo systemctl enable --now invokeai
       sudo systemctl restart server-status   # pick up the status-page entry
+      # start/stop it from the status page (Services: Start / Stop), or:
+      sudo systemctl start invokeai
 
 NOTES
   - Pinned to InvokeAI v5.11.0 on purpose: it is the last release targeting

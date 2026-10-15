@@ -15,7 +15,7 @@ on them.
   will fail with *"no kernel image is available for execution on the device"*. See
   ADR-0003.
 - Services are native systemd units under `scripts/`. The agent can't `sudo`, so
-  **you install/enable them by hand** (commands below).
+  **you install them by hand** (commands below).
 - The three **image-gen** tools (Fooocus/SwarmUI/InvokeAI) each hold VRAM on a V100
   while running and can OOM the LLM/ComfyUI tiers, so they are run **on demand**:
   keep their units **disabled at boot** and start/stop them from the status
@@ -164,12 +164,12 @@ cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
 > Always pass `--port 7865` (the service and one-liner above do). Omitting it
 > collides with the running ComfyUI.
 
-As a service (needs sudo):
+As a service (needs sudo). It runs **on demand**, so don't enable it at boot:
 
 ```bash
 sudo cp /srv/ai/scripts/fooocus.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now fooocus
+sudo systemctl start fooocus      # or the status page's ▶ Start; ⏹ Stop when done
 # logs: journalctl -u fooocus -f
 ```
 
@@ -249,13 +249,14 @@ It clones to `/srv/ai/SwarmUI`, installs user-local .NET 10, builds SwarmUI
 (Release), pre-stages `dlbackend/ComfyUI` @ `v0.30.1` with the cu124 torch trio +
 its requirements, and verifies the backend boots on a V100.
 
-**Run it (port 7801).** As a service (needs sudo):
+**Run it (port 7801).** As a service (needs sudo). It runs **on demand**, so don't
+enable it at boot:
 
 ```bash
 sudo cp /srv/ai/scripts/swarmui.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now swarmui
 sudo systemctl restart server-status   # pick up the new status-page entry
+sudo systemctl start swarmui           # or the status page's ▶ Start; ⏹ Stop when done
 # logs: journalctl -u swarmui -f
 ```
 
@@ -397,13 +398,14 @@ It creates `/srv/ai/venvs/invokeai`, installs the cu124 torch, installs
 `/srv/ai/invokeai` + `invokeai.yaml` (host `0.0.0.0`, port `9091`, `attention_type:
 torch-sdp`), and verifies `invokeai-web` answers on `:9091`.
 
-**Run it (port 9091).** As a service (needs sudo):
+**Run it (port 9091).** As a service (needs sudo). It runs **on demand**, so don't
+enable it at boot:
 
 ```bash
 sudo cp /srv/ai/scripts/invokeai.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now invokeai
 sudo systemctl restart server-status   # pick up the new status-page entry
+sudo systemctl start invokeai          # or the status page's ▶ Start; ⏹ Stop when done
 # logs: journalctl -u invokeai -f
 ```
 

@@ -109,3 +109,20 @@ the referenced files must not be moved out of the ComfyUI tree. See
   instances, and still needs the model-path mapping for the browser. Self-start +
   shared model paths keeps them isolated while sharing weights. (Details in
   Consequences and `docs/optional-tools.md`.)
+
+## Addendum 2026-10-15: the image-gen tools stay off at boot (audit C13)
+
+**Owner decision.** Fooocus, SwarmUI and InvokeAI are disabled at boot and only
+start when someone starts them, from the status page (Services ▶ Start / ⏹ Stop)
+or with `sudo systemctl start <unit>`. The runtime already behaved this way. The
+units are disabled, quiet hours only stops them, and `scripts/gpu-uvm-reset.sh`
+leaves them stopped after a UVM reload. But the install scripts and
+`docs/optional-tools.md` still told you to run `systemctl enable --now`, so a
+fresh install would have made them start at every boot.
+
+**Fix.** The three installers and the three snippets in `optional-tools.md` now
+install the unit and run `daemon-reload` without enabling it. They then show
+`sudo systemctl start` (or the status page) for a first run. The unit files keep
+their `[Install] WantedBy=multi-user.target` section, like the on-demand
+`comfyui-qwen`, so enabling stays possible but is never the default. Nothing
+changed live: all three units were already disabled and stopped.
