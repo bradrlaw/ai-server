@@ -17,7 +17,7 @@ on GPU idx2, and must **not** modify the shared MCP/mcpo path that Open WebUI us
 
 ## Decision
 Install **`aichat`** (sigoden, MIT) as the terminal client, configured against the
-LiteLLM gateway with all 11 served models. Wire in the comfyui-secure MCP tools via
+LiteLLM gateway, listing every model it serves. Wire in the comfyui-secure MCP tools via
 **`llm-functions`** + **`argc`** (both sigoden, MIT), running the `llm-functions`
 **MCP bridge** as a boot-persistent systemd service that re-exposes the tools for
 aichat's function-calling.

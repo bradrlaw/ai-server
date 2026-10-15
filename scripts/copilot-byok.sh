@@ -30,7 +30,7 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 #     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
 #     big        262144  reasoning
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
-#     small      32768   NON-thinking (Gemma-4-12B dense on Titan X; small-12b fallback)
+#     small      32768   NON-thinking (Gemma-4-12B dense on the idx0 Titan X stopgap)
 case "$COPILOT_MODEL" in
   coding)     def_prompt=114688; def_output=32768 ;;   # 147456 <= 163840 (~16k spare); 3.8 ctx dropped 184320->163840
   chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
@@ -41,7 +41,6 @@ case "$COPILOT_MODEL" in
   # request after idle eviction (ttl 300) blocks ~5min on the 49.6GB HDD read.
   coder-next) def_prompt=98304;  def_output=32768 ;;
   small)      def_prompt=20480;  def_output=8192  ;;   # dense 12B on Titan X, ctx 32768 (20480+8192, ~4k spare)
-  small-12b)  def_prompt=20480;  def_output=8192  ;;   # dense 12B fallback, ctx 32768 (~4k spare)
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"

@@ -68,3 +68,52 @@ swap.
   their agentic/skill-writing code loops directly on the host.
 - **Build a bespoke gateway** — rejected: both mature MIT projects already cover
   channels, memory, and tool orchestration; not worth reinventing.
+
+## Addendum (2026-10-15) — Control UI remote access via Tailscale Serve
+
+The OpenClaw Control UI needs a secure browser context (HTTPS or `localhost`) for its
+WebCrypto device identity. Over plain HTTP from the LAN the page loads, but the gateway
+then refuses the login (`1008 control ui requires device identity`); the owner's Mac hit
+this at `http://aipcub.local:18789` on 2026-10-14. The status page linked to
+`http://localhost:18789`, which only works while an SSH tunnel is open, and it said
+nothing about needing one.
+
+Decision:
+
+- **Tailscale Serve is the supported remote path.** It gives tailnet-only HTTPS with a
+  publicly trusted certificate (`sudo tailscale serve --bg --https=443
+  http://127.0.0.1:18789`, after enabling HTTPS certificates for the tailnet). The SSH
+  tunnel stays as the zero-setup fallback. OpenClaw's config doesn't change. Serve
+  requests reach the container from the docker bridge with proxy headers, so they get
+  the normal remote flow: gateway token plus a one-time device-pairing approval
+  (`openclaw devices approve`). `.ts.net` origins pass the origin check. A
+  token-authenticated `localhost` browser (the tunnel) counts as container-local and is
+  auto-approved.
+- **The status page follows whichever is set up.** If `tailscale serve` proxies an
+  HTTPS port to a Services row's health port, that row links to the Serve URL (read
+  from `tailscale serve status --json`, cached 60 s; any failure means "no Serve").
+  Otherwise a `localhost` link shows an "SSH tunnel" hint with the tunnel command. This
+  works for every service, not just OpenClaw.
+
+Rejected:
+
+- `gateway.controlUi.dangerouslyDisableDeviceAuth` — turns off the device-identity
+  check for every client. A severe security downgrade.
+- `gateway.controlUi.allowInsecureAuth` — still set in our config from the July setup,
+  but it only applies to a loopback peer, and behind Docker's port mapping every
+  browser arrives from the bridge IP. It never bypasses the secure-context requirement;
+  OpenClaw's own audit warns about it and recommends Serve or `localhost` instead.
+  Turning it off is a no-op cleanup, left to the owner.
+- Self-signed TLS on the gateway or a reverse proxy with our own CA — every device
+  would need to trust the CA. Serve's certificate is already trusted.
+- Tailscale identity-header login (`gateway.auth.allowTailscale`) — the gateway must
+  see a loopback peer and verify the user with the `tailscale` CLI. In Docker it sees
+  the bridge IP, and the image has no `tailscale` CLI.
+
+Consequences:
+
+- Enabling HTTPS certificates publishes the machine's tailnet DNS name (not its
+  address) in public Certificate Transparency logs. The service itself stays
+  tailnet-only.
+- `tailscale serve` changes need sudo.
+- Each new browser profile needs one pairing approval.

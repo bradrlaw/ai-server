@@ -5,6 +5,12 @@
 // apiKey + gateway token are ENV REFERENCES (LITELLM_API_KEY / OPENCLAW_GATEWAY_TOKEN,
 // supplied by the compose service). Models are served by the native llama-swap
 // router behind LiteLLM on the host (:4000), reached via host.docker.internal.
+// contextWindow = the model's per-request --ctx-size in config/llama-swap.base.yaml
+// (daily mode): chat 98304, coding 163840, small 32768. Never claim more than the
+// server holds, or prompts hit llama.cpp's "exceeds the available context size"
+// instead of compacting. The parallel modes shrink per-slot ctx (heavy-coding chat
+// 32k, agentic coding 100k, small 12k); OpenClaw recognizes that llama.cpp overflow
+// error. assistants-seed.sh never overwrites the live copy — edit it in place too.
 {
   "agents": {
     "defaults": {
@@ -62,7 +68,7 @@
           {
             "id": "chat",
             "name": "Qwen3.6-35B-A3B (chat)",
-            "contextWindow": 262144,
+            "contextWindow": 98304,
             "maxTokens": 32768,
             "input": [
               "text"
@@ -71,8 +77,8 @@
           },
           {
             "id": "coding",
-            "name": "Qwen3.6-27B (coding)",
-            "contextWindow": 204800,
+            "name": "Qwen3.8-27B (coding)",
+            "contextWindow": 163840,
             "maxTokens": 32768,
             "input": [
               "text"
@@ -82,7 +88,7 @@
           {
             "id": "small",
             "name": "Gemma-4-12B (small)",
-            "contextWindow": 131072,
+            "contextWindow": 32768,
             "maxTokens": 8192,
             "input": [
               "text"

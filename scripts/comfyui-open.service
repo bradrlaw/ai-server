@@ -21,7 +21,7 @@ Environment=CUDA_VISIBLE_DEVICES=1
 # but unallocated on the 32 GB V100).
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
+# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q6) on generate;
 # keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
 # and idx0 (small, small-uncensored). Dual-card big/coder-next are intentionally
 # omitted so they get freed (they occupy idx1). Keep in sync with llama-swap.yaml.

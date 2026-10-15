@@ -796,15 +796,14 @@ Native on-demand model router in front of `llama-server`, OpenAI-compatible. Bin
 `llama-swap.service` (binds `127.0.0.1:9090`, runs as `brad`, `-watch-config`).
 Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
-**Models / GPU map** (`CUDA_DEVICE_ORDER=PCI_BUS_ID`; idx0=P100, idx1/2=V100):
+**Models / GPU map** (`CUDA_DEVICE_ORDER=PCI_BUS_ID`; idx0=Titan X stopgap (was P100), idx1/2=V100):
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
 | `coding` | Qwen3.8-27B **Q6_K + MTP**         | idx1        | 163840 | ~30.7 GB (q8_0 KV, MTP self-spec) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
 | `big`    | Qwen3.8-27B **UD-Q8_K_XL + MTP** (split) | idx1+idx2   | 262144 | ~51 GB (23+28), f16 KV, ttl 300s |
-| `small`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
-| `small-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `small` |
+| `small`   | **Gemma-4-12B** dense QAT UD-Q4_K_XL | idx0 (Titan X) | 32768 | ~6.3 GB weights, always-on, `--reasoning-budget 0`, MTP draft stripped (crashes on Maxwell). Titan X stopgap: the Gemma-4-26B-A4B MoE returns with a 16 GB+ card (ADR-0017); the old `small-12b` fallback was removed as a duplicate meanwhile |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
@@ -821,7 +820,6 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 | `big`              | `big (Qwen3.8-27B UD-Q8_K_XL)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
 | `small`             | `small (Gemma-4-26B-A4B MoE)` |
-| `small-12b`         | `small-12b (Gemma-4-12B dense)` |
 
 (The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
 `MODEL_LABELS` map — keep the two in sync if a model is swapped.)
@@ -908,12 +906,11 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 
 | `COPILOT_MODEL` | ctx-size | reasoning | `MAX_PROMPT_TOKENS` | `MAX_OUTPUT_TOKENS` | prompt+output |
 |-----------------|---------:|-----------|--------------------:|--------------------:|--------------:|
-| `coding`     | 184320 | yes | 131072 | 32768 | 163840 (~20k spare) |
+| `coding`     | 163840 | yes | 114688 | 32768 | 147456 (~16k spare) |
 | `chat`       | 98304 | yes |  57344 | 24576 | 81920 (~16k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
 | `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
 | `small`       | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
-| `small-12b`   | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
 | *(other)*    | — | — | 32768 | 8192 | conservative fallback |
 
 Notes:
@@ -1425,7 +1422,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
+| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `https://<host>.<tailnet>.ts.net/` via Tailscale Serve, or `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -1451,6 +1448,13 @@ and injects the LiteLLM key into Hermes' live config.
   `baseUrl: http://host.docker.internal:4000`, `apiKey: "${LITELLM_API_KEY}"`,
   `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`small`;
   `agents.defaults.model.primary = litellm/chat`, `fallbacks = [litellm/coding]`.
+- Each model's `contextWindow` is the server's per-request `--ctx-size` in daily mode
+  (`chat` 98304, `coding` 163840, `small` 32768), never more — a larger claim makes
+  OpenClaw send prompts llama.cpp rejects instead of compacting first. Seeding never
+  overwrites the live config, so after a ctx change also edit
+  `openclaw/state/openclaw.json` (+ `.last-good`) and
+  `openclaw/state/agents/main/agent/plugins/litellm/catalog.json` with the container
+  stopped.
 - **Must** set `gateway.mode: "local"`, `gateway.bind: "lan"` and an
   `OPENCLAW_GATEWAY_TOKEN` (env SecretRef) — a loopback bind makes the published
   port unreachable; a LAN bind without a token is refused.
@@ -1463,10 +1467,34 @@ and injects the LiteLLM key into Hermes' live config.
   openclaw.mjs doctor`. Three persistent dirs: `state`, `workspace`, `auth-secrets`.
 - Verified live 2026-07-21: `openclaw agent --agent main -m "…"` →
   `winnerProvider: litellm, winnerModel: chat, result: success`.
-- **Control UI needs a secure browser context** (WebCrypto device identity):
-  reach it over an SSH tunnel to `http://localhost:18789`, not the LAN hostname.
-  `gateway.controlUi.allowInsecureAuth` only helps an on-host (loopback) browser;
-  a remote LAN browser additionally fails the `isLocalClient` check.
+- **Control UI needs a secure browser context** (WebCrypto device identity): plain
+  `http://<host>:18789` loads, but its login is refused (`1008 control ui requires
+  device identity`). `gateway.controlUi.allowInsecureAuth` (set in our config, and
+  flagged by OpenClaw's security warning at startup) doesn't help: it only applies to a
+  loopback peer, and behind Docker's port mapping every browser arrives from the bridge
+  IP. Two ways in:
+  - **Tailscale Serve (HTTPS, any tailnet device incl. phone)** — one-time setup:
+    1. Tailscale admin console → **DNS**: MagicDNS on, **HTTPS Certificates → Enable**.
+       This publishes the machine's tailnet name in public Certificate Transparency logs.
+    2. `sudo tailscale serve --bg --https=443 http://127.0.0.1:18789` — tailnet-only
+       (not Funnel), persists across reboots. Check with `tailscale serve status`;
+       remove with `sudo tailscale serve --https=443 off`.
+    3. Open `https://<host>.<tailnet>.ts.net/`, paste `OPENCLAW_GATEWAY_TOKEN`
+       (`docker/.env`), then approve the browser's one-time pairing on the server:
+       `docker exec openclaw node openclaw.mjs devices list` →
+       `… devices approve <requestId>` (once per browser profile).
+    No OpenClaw config change is needed: proxied requests arrive from the docker
+    bridge, not loopback, so OpenClaw applies its normal remote flow (token + pairing),
+    and `.ts.net` origins pass its origin check. Tailscale identity login
+    (`gateway.auth.allowTailscale`) doesn't apply because there is no `tailscale` CLI in
+    the container. ufw already allows `tailscale0` (ADR-0028).
+  - **SSH tunnel** — `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`, then
+    `http://localhost:18789`. `localhost` is a secure context, and OpenClaw treats a
+    token-authenticated `localhost` browser arriving via the docker bridge as
+    container-local, so it auto-approves the pairing.
+  The status page's OpenClaw link follows this automatically: it shows the Serve URL
+  whenever `tailscale serve` proxies an HTTPS port to `127.0.0.1:18789` (re-checked
+  every 60 s), otherwise `localhost:18789` marked "SSH tunnel" (ADR-0016 addendum).
 - **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
   never the in-app self-updater (ephemeral container layer). The auto-updater is
   off by default. The "Update available" startup banner checks the **npm** registry

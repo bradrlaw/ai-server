@@ -123,3 +123,29 @@ and re-seating every power connector changed nothing. The card is not recoverabl
 * **Buy a replacement immediately** — the user may choose another P100 or a third
   V100 later; the stopgap + preserved build + preserved MoE config make that a
   clean swap-back without blocking on a purchase now.
+
+## Addendum (2026-10-15) — `small-12b` removed for the stopgap
+
+After the 2026-08-24 rename (`fast*` → `small*`), `small-12b` and `small` served the
+same Gemma-4-12B GGUF with the same command (32k ctx, no MTP draft). The extra slot
+only cost something:
+
+- It was never in the llama-swap matrix vars, so its eviction behaviour against
+  `small`/`small-uncensored` on idx0 was undefined.
+- It added an id to every client list (LiteLLM, aichat, Copilot BYOK, eval runners)
+  that served nothing different.
+
+Decision: remove `small-12b` from the router, LiteLLM, and the client templates for
+the rest of the stopgap.
+
+Restore it when a 16 GB+ card returns to idx0 and `small` goes back to the 26B MoE,
+since a dense >32k-ctx fallback is useful again then:
+
+1. Take the last full block — 128k ctx, 12B MTP draft at `n_max=1`, `ttl: 600`. It is
+   `fast-12b` in `git show 792ac46^:config/llama-swap.base.yaml`; rename it
+   `small-12b`.
+2. Add `f12: small-12b` to the matrix vars and make the idx0 slot `(f | fu | f12)` in
+   every set.
+3. Re-add its entries in `docker/litellm/config.yaml`,
+   `config/aichat/config.example.yaml`, `scripts/copilot-byok.sh` and
+   `scripts/eval-run-copilot.py`.

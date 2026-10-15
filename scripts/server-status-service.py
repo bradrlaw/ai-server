@@ -121,8 +121,10 @@ COMFYUI_URLS = os.environ.get(
 #     hostname (http://<browser-host>:<port>) so LAN and Tailscale both resolve; or
 #   - a full URL (e.g. http://localhost:18789): used verbatim (for services that
 #     require a specific origin, e.g. OpenClaw's Control UI needs a secure context
-#     and is reached over an SSH tunnel to localhost).
+#     — HTTPS or localhost — so the fallback is an SSH tunnel to localhost).
 #   - blank: no link.
+# Whatever the 3rd field says, if `tailscale serve` publishes an HTTPS URL that
+# proxies to the health URL's port, the link becomes that URL (see _ts_serve_links).
 # Health is always checked from the host (127.0.0.1). Any HTTP response (incl.
 # 401/403 for auth-gated UIs) counts as "up"; only a connection failure is "down".
 SERVICES = os.environ.get(
@@ -775,12 +777,84 @@ def collect_comfyui() -> list:
     return out
 
 
+TS_SERVE_CACHE_SECS = float(os.environ.get("STATUS_TS_SERVE_CACHE_SECS", "60"))
+_ts_serve_cache: dict = {"at": 0.0, "links": {}}
+_LOOPBACK_NAMES = {"127.0.0.1", "localhost", "::1"}
+
+
+def _parse_ts_serve(cfg) -> dict:
+    """Map local port -> https URL for every `tailscale serve` web handler that
+    proxies to a loopback port. The Web/Handlers shape repeats under Foreground
+    sessions and Services, so the whole config is walked."""
+    links: dict = {}
+
+    def walk(node):
+        if isinstance(node, list):
+            for v in node:
+                walk(v)
+            return
+        if not isinstance(node, dict):
+            return
+        web = node.get("Web")
+        if isinstance(web, dict):
+            for hostport, site in web.items():
+                host, _, sport = str(hostport).rpartition(":")
+                handlers = site.get("Handlers") if isinstance(site, dict) else None
+                if "." not in host or not sport.isdigit() or not isinstance(handlers, dict):
+                    continue
+                base = f"https://{host}" + ("" if sport == "443" else f":{sport}")
+                for mount, h in handlers.items():
+                    proxy = h.get("Proxy") if isinstance(h, dict) else None
+                    if not isinstance(proxy, str) or not proxy:
+                        continue
+                    target = urllib.parse.urlsplit(proxy if "://" in proxy else "http://" + proxy)
+                    try:
+                        tport = target.port
+                    except ValueError:
+                        continue
+                    if tport and target.hostname in _LOOPBACK_NAMES:
+                        mount = str(mount)
+                        links.setdefault(tport, base + (mount if mount.startswith("/") else "/"))
+        for v in node.values():
+            walk(v)
+
+    walk(cfg)
+    return links
+
+
+def _ts_serve_links() -> dict:
+    """Ports published over HTTPS by `tailscale serve` (cached). A real tailnet
+    HTTPS origin is a secure context, which OpenClaw's Control UI needs for its
+    device-identity login — http://<host>:18789 is refused. Reading the Serve
+    config needs no operator rights; any failure just means no Serve links."""
+    now = time.time()
+    if now - _ts_serve_cache["at"] < TS_SERVE_CACHE_SECS:
+        return _ts_serve_cache["links"]
+    links: dict = {}
+    try:
+        proc = subprocess.run(
+            ["tailscale", "serve", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            links = _parse_ts_serve(json.loads(proc.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        links = {}
+    _ts_serve_cache.update(at=now, links=links)
+    return links
+
+
 def collect_services() -> list:
     """Health-check the configured app-tier services (SERVICES env). Each entry:
-    {name, up, code, port, link}. up=True for any HTTP response (auth-gated UIs
-    return 401/403 but are still 'up'); up=False only on connection failure. The
-    3rd config field is either a port (client builds http://<browser-host>:<port>),
-    a full URL (used verbatim, e.g. an SSH-tunnel localhost link), or blank."""
+    {name, up, code, port, link, hint}. up=True for any HTTP response (auth-gated
+    UIs return 401/403 but are still 'up'); up=False only on connection failure.
+    The 3rd config field is either a port (client builds http://<browser-host>:<port>),
+    a full URL (used verbatim, e.g. an SSH-tunnel localhost link), or blank. A
+    Tailscale Serve HTTPS URL for the health port overrides it; a localhost link
+    that is not served gets an SSH-tunnel hint."""
+    serve_links = _ts_serve_links()
     out = []
     for item in SERVICES.split(","):
         item = item.strip()
@@ -795,6 +869,23 @@ def collect_services() -> list:
         code, _ = _http_status(health)
         port = int(link_spec) if link_spec.isdigit() else None
         link = link_spec if link_spec.startswith(("http://", "https://")) else None
+        hint = None
+        try:
+            health_port = urllib.parse.urlsplit(health).port
+        except ValueError:
+            health_port = None
+        if health_port in serve_links:
+            link, port = serve_links[health_port], None
+        elif link and urllib.parse.urlsplit(link).hostname in _LOOPBACK_NAMES:
+            try:
+                lp = urllib.parse.urlsplit(link).port or 80
+            except ValueError:
+                lp = 80
+            hint = (
+                f"localhost link: needs an SSH tunnel (ssh -N -L {lp}:127.0.0.1:{lp} "
+                f"{getpass.getuser()}@{os.uname().nodename}) or Tailscale Serve "
+                f"(docs/server-setup.md)"
+            )
         unit = MANAGED_UNIT_BY_NAME.get(name)
         out.append(
             {
@@ -803,6 +894,7 @@ def collect_services() -> list:
                 "code": code,
                 "port": port,
                 "link": link,
+                "hint": hint,
                 "unit": unit,
                 "managed": unit is not None,
             }
@@ -1931,8 +2023,10 @@ async function refresh(){  try{
     // services (app-tier health + click-through links) with ComfyUI folded in
     const svc = d.services || [];
     const comfy = d.comfyui || [];
-    const linkHtml = (link, port) =>
-      link ? `<a href="${esc(link)}" target="_blank" style="color:#4b8ce0">${esc(link.replace('https://','').replace('http://',''))}</a>`
+    const attr = s => esc(s).replace(/"/g,'&quot;');
+    const linkHtml = (link, port, hint) =>
+      link ? `<a href="${attr(link)}" target="_blank" style="color:#4b8ce0">${esc(link.replace('https://','').replace('http://',''))}</a>`
+        + (hint ? ` <span class="sub" title="${attr(hint)}">· SSH tunnel</span>` : '')
       : port!=null ? `<a href="http://${location.hostname}:${port}" target="_blank" style="color:#4b8ce0">:${port}</a>`
       : '<span class="sub">–</span>';
     const canServiceAct = d.actions && d.actions.services;
@@ -1946,7 +2040,7 @@ async function refresh(){  try{
           ? `<button class="act" onclick="serviceAction('${esc(s.name)}','stop')">⏹ Stop</button>`
           : `<button class="act" onclick="serviceAction('${esc(s.name)}','start')">▶ Start</button>`;
       }
-      return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${linkHtml(s.link, s.port)}</td><td>${act}</td></tr>`;
+      return `<tr><td>${esc(s.name)}</td><td>${p}${code}</td><td>${linkHtml(s.link, s.port, s.hint)}</td><td>${act}</td></tr>`;
     });
     const comfyRows = comfy.map(c=>{
       let state;
