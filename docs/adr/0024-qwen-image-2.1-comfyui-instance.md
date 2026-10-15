@@ -95,3 +95,32 @@ because (a) idx1 still held the `coding` LLM (fixed by the `free_gpu` node) and
   ~2× slower denoise on Volta. Kept the int8 encoder as a fallback only.
 - **bf16 diffusion + int8 encoder** (Option B) — viable, but full bf16 (C) fits in
   29 GB once DynamicVRAM is disabled, so we kept the higher-quality encoder.
+
+## Addendum 2026-10-15: quiet hours no longer starts `comfyui-qwen` every morning (audit C7)
+
+**Bug.** Adding `comfyui-qwen` to `QUIET_COMFYUI_UNITS` (Status page, above) gave it
+quiet-hours VRAM release, but the window end ran `systemctl start` on **every**
+configured unit. Once quiet hours was unpaused, this on-demand instance would
+have started each morning and held idx1 next to `comfyui-open`/`coding`. It
+would also have started `comfyui-secure` while the encrypted volume was locked.
+Quiet hours has been paused since 2026-09-05, so this never actually happened.
+
+**Fix (`server-status-service.py`).**
+- At window start the service stops only the units that are running, one
+  `systemctl stop` per unit, and records which ones in
+  `/srv/ai/var/status-service/quiet-comfyui-stopped`.
+- At window end it restarts exactly those, one per unit.
+- Per-unit commands match the existing single-unit sudoers lines, so the
+  sudoers file is unchanged. The 3-unit line remains only for the API call
+  without `unit`.
+- The list survives a `server-status` restart mid-window, and a window end
+  missed while the service was down is restored on the next start. A list from
+  before the last reboot is ignored.
+
+Covered by a stubbed harness: 22 checks, plus 7 mutants, all killed. Live
+behaviour is unchanged until quiet hours is unpaused.
+
+**Owner note (audit E2).** Quiet hours stays paused, and `comfyui-secure` keeps
+running with `--fp16-unet` for now. The owner will change both from the status
+page when ready. The window end clears fp16 on every instance, so the first
+unpaused night turns fp16 off.

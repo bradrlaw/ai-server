@@ -181,8 +181,9 @@ SMALL_KEEPER_TIMEOUT = float(os.environ.get("SMALL_KEEPER_TIMEOUT", "120"))
 
 # --- Quiet hours (deep-idle window) -----------------------------------------
 # Boundary-triggered, load-once semantics: when the window BEGINS we unload the
-# daily models and stop ComfyUI once so the V100s drop out of P0 to true cold
-# idle; when it ENDS we start ComfyUI and re-warm the daily models once. DURING
+# daily models and stop the running ComfyUI units once so the V100s drop out of
+# P0 to true cold idle; when it ENDS we restart only the units we stopped and
+# re-warm the daily models once. DURING
 # the window we do nothing — a client LLM request loads its model on demand via
 # llama-swap and it simply stays resident until the window ends. We deliberately
 # do NOT poll activity, wake ComfyUI, or re-idle mid-window: restarting ComfyUI
@@ -379,6 +380,14 @@ _QUIET_SUPPRESS_KEEPER = threading.Event()
 _QUIET_PAUSED = threading.Event()
 QUIET_STATE_FILE = os.environ.get(
     "QUIET_STATE_FILE", "/srv/ai/var/status-service/quiet-paused"
+)
+# ComfyUI units that quiet hours stopped at window start. The window end restarts
+# ONLY these, so on-demand instances (comfyui-qwen, ADR-0024) and anything you had
+# stopped yourself stay off. Persisted so a service restart mid-window still
+# restores them; a list written before the current boot is ignored (the reboot
+# already put every unit back to its boot default).
+QUIET_COMFYUI_STOPPED_FILE = os.environ.get(
+    "QUIET_COMFYUI_STOPPED_FILE", "/srv/ai/var/status-service/quiet-comfyui-stopped"
 )
 
 
@@ -1413,8 +1422,9 @@ def _systemctl_units(units: list, action: str) -> tuple[bool, str]:
 
 
 def _comfyui_ctl(action: str) -> tuple[bool, str]:
-    """Start/stop the configured ComfyUI units. Used by both quiet hours and the
-    dashboard action button."""
+    """Start/stop ALL configured ComfyUI units in one command (POST
+    /actions/comfyui without `unit`, kept for API back-compat). Quiet hours acts
+    per unit instead, so it only restores what it stopped."""
     if not QUIET_COMFYUI_UNITS:
         return False, "no ComfyUI units configured"
     return _systemctl_units(QUIET_COMFYUI_UNITS, action)
@@ -1578,14 +1588,49 @@ def _set_gpu_power_limit(index: int, watts: int) -> tuple[bool, str]:
     return True, f"GPU{index} cap set to {watts}W (applies within ~{FAN_RECHECK_SEC}s)"
 
 
-def _comfyui(action: str) -> None:
-    """Quiet-hours ComfyUI control — no-op when quiet-hours ComfyUI management is
-    disabled. The dashboard button uses _comfyui_ctl directly instead."""
-    if not QUIET_STOP_COMFYUI or not QUIET_COMFYUI_UNITS:
-        return
-    ok, detail = _comfyui_ctl(action)
-    if not ok:
-        print(f"[quiet] comfyui {action} failed: {detail}")
+def _boot_time() -> float:
+    """Kernel boot time (epoch seconds) from /proc/stat; 0.0 if unavailable."""
+    try:
+        with open("/proc/stat", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("btime "):
+                    return float(line.split()[1])
+    except (OSError, ValueError):
+        pass
+    return 0.0
+
+
+def _load_quiet_stopped() -> list:
+    """Units quiet hours stopped earlier THIS boot (see QUIET_COMFYUI_STOPPED_FILE)."""
+    try:
+        if os.stat(QUIET_COMFYUI_STOPPED_FILE).st_mtime < _boot_time():
+            _save_quiet_stopped([])  # stale: written before the last reboot
+            return []
+        with open(QUIET_COMFYUI_STOPPED_FILE, encoding="utf-8") as f:
+            return [u for u in f.read().split() if u in QUIET_COMFYUI_UNITS]
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        print(f"[quiet] read {QUIET_COMFYUI_STOPPED_FILE} failed: {exc}")
+        return []
+
+
+def _save_quiet_stopped(units: list) -> None:
+    """Persist (or, for an empty list, clear) the units quiet hours stopped."""
+    try:
+        if units:
+            os.makedirs(os.path.dirname(QUIET_COMFYUI_STOPPED_FILE), exist_ok=True)
+            tmp = QUIET_COMFYUI_STOPPED_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(units) + "\n")
+            os.replace(tmp, QUIET_COMFYUI_STOPPED_FILE)
+        else:
+            try:
+                os.remove(QUIET_COMFYUI_STOPPED_FILE)
+            except FileNotFoundError:
+                pass
+    except OSError as exc:
+        print(f"[quiet] persist {QUIET_COMFYUI_STOPPED_FILE} failed: {exc}")
 
 
 def _enter_deep_idle() -> None:
@@ -1593,7 +1638,17 @@ def _enter_deep_idle() -> None:
     _QUIET_SUPPRESS_KEEPER.set()
     if QUIET_UNLOAD_MODELS:
         _unload_all_models()
-    _comfyui("stop")
+    if QUIET_STOP_COMFYUI and QUIET_COMFYUI_UNITS:
+        # Record what is running BEFORE stopping it, merged with any list from
+        # earlier this boot (service restarted mid-window, units already stopped).
+        # One unit per command: the sudoers rule allows single units or the full
+        # configured set, not arbitrary subsets.
+        running = [u for u in QUIET_COMFYUI_UNITS if _unit_is_active(u)]
+        _save_quiet_stopped(list(dict.fromkeys(_load_quiet_stopped() + running)))
+        for unit in running:
+            ok, detail = _systemctl_units([unit], "stop")
+            if not ok:
+                print(f"[quiet] stop {unit} failed: {detail}")
     _stop_managed_services()
     _set_power_state("deep-idle", "quiet hours")
 
@@ -1602,7 +1657,14 @@ def _exit_window() -> None:
     print("[quiet] window ended — restoring active state")
     _QUIET_SUPPRESS_KEEPER.clear()
     _reset_comfyui_fp16_all()
-    _comfyui("start")
+    if QUIET_STOP_COMFYUI:
+        units = _load_quiet_stopped()
+        print(f"[quiet] restarting ComfyUI units it stopped: {', '.join(units) or 'none'}")
+        for unit in units:
+            ok, detail = _systemctl_units([unit], "start")
+            if not ok:
+                print(f"[quiet] start {unit} failed: {detail}")
+        _save_quiet_stopped([])
     for m in QUIET_WARM_ON_EXIT:
         _warm_model(m)
     _set_power_state("active", "")
@@ -1632,12 +1694,19 @@ def _quiet_hours_loop():
     def effective_in_window() -> bool:
         return _in_window(_quiet_now(), start, end) and not _QUIET_PAUSED.is_set()
 
+    # A stopped-units list from earlier this boot while we start OUTSIDE the
+    # window means its end was missed (service down across it, or paused while
+    # down): start in "idle" so the first tick runs the normal restore.
+    if not effective_in_window() and _load_quiet_stopped():
+        print("[quiet] window end was missed while the service was down — restoring")
+        phase = "idle"
+
     # On a fresh boot / service restart OUTSIDE the quiet window, warm the daily
     # models once. Nothing else does: the llama-swap on_startup hook only preloads
     # `small`, and _exit_window (which warms coding/chat) only fires on an in->out
     # transition that never happens when we boot already outside the window. If we
     # boot INSIDE the window, leave them cold — the loop enters deep idle below.
-    if QUIET_WARM_ON_START and not effective_in_window():
+    if QUIET_WARM_ON_START and phase == "active" and not effective_in_window():
         print(
             "[quiet] booted outside quiet window — warming "
             f"{', '.join(QUIET_WARM_ON_START)}"

@@ -436,16 +436,26 @@ win is HBM capacity, not concurrent compute.
 
 ### Quiet-hours deep-idle window
 The `server-status` service can run an optional overnight window that drops the box to the
-true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). On
-entering the window it **unloads the daily models and stops both ComfyUI units** so the
-V100s fall out of P0. LLM requests still auto-wake llama-swap on demand; when a client is
-active during the window the service **restarts ComfyUI** so the box is fully ready. It
-re-idles once **GPU SM utilization stays below `QUIET_ACTIVE_SM_PCT`% (default 5) for
-`QUIET_ACTIVITY_GRACE` seconds** (default 600) — utilization is used rather than "a model
-is loaded" because `coding`/`chat` have no ttl and would otherwise pin the box awake all
-window. On re-idle the models are unloaded and ComfyUI stopped again; the next client
-request reloads on demand. At window end the daily set (`coding`, `chat`) is re-warmed and
-the `small` keeper resumes.
+true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). It acts
+only at the window's two boundaries:
+- **Window start:** it unloads the daily models and pauses the `small` keeper. It stops every
+  running ComfyUI unit in `QUIET_COMFYUI_UNITS` (one `systemctl stop` per unit) and records
+  which ones it stopped in `/srv/ai/var/status-service/quiet-comfyui-stopped`. Running
+  managed creative tools (Fooocus/SwarmUI/InvokeAI) are stopped too. The V100s then fall out
+  of P0.
+- **During the window:** nothing is polled. An LLM request still loads its model on demand,
+  and that model stays loaded until the window ends. ComfyUI stays stopped; use the
+  dashboard's per-row **▶ Start** if you need it.
+- **Window end:** it clears every instance's native-fp16 flag, then restarts **only the
+  ComfyUI units it stopped**. On-demand `comfyui-qwen` and anything you had stopped yourself
+  stay off (audit C7). It re-warms the daily set (`coding`, `chat`) and resumes the `small`
+  keeper. Managed creative tools are not restarted.
+
+The recorded list survives a `server-status` restart in the middle of the window. If the
+service was down when the window ended, it does the restore when it next starts. A list
+written before the last reboot is ignored, because the reboot already reset the units.
+**Pausing** quiet hours from the dashboard while the box is idle runs the same window-end
+restore immediately.
 
 Disabled by default. To enable:
 ```bash
@@ -461,7 +471,7 @@ sudo systemctl restart server-status
 ```
 > **Note:** the window is evaluated in `QUIET_TZ` (or system local time if unset). This box's
 > clock is `Etc/UTC`, so set `QUIET_TZ` to your wall-clock zone or the window will be hours off.
-The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) in
+The current mode is reported as `power_mode` (`active` / `deep-idle`) in
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.
 
@@ -469,12 +479,13 @@ The dashboard's **Services** section gives every controllable row its own **▶ 
 **⏹ Stop** button in the **Action** column. For ComfyUI, `comfyui-open` and `comfyui-secure`
 are listed as separate rows and can be started/stopped **independently**
 (`POST /actions/comfyui?action=start|stop&unit=comfyui-open`) — handy for waking one
-instance during the deep-idle window without SSHing in. Omitting `unit` still controls both
-together (what quiet hours uses). These reuse the scoped sudoers rule and are gated by
-`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only) and by the
-dashboard sign-in. The
-sudoers file grants both the pair command (quiet hours) and the single-unit commands
-(independent buttons).
+instance during the deep-idle window without SSHing in. Omitting `unit` controls all
+configured units in one command (API back-compat; no button uses it). These reuse the scoped
+sudoers rule and are gated by `STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep
+the page read-only) and by the dashboard sign-in. The sudoers file allows the all-units
+command and the single-unit commands. The buttons and quiet hours both use single-unit
+commands; sudo matches the exact command line, so an arbitrary subset of units would be
+refused.
 
 #### ComfyUI native-fp16 toggle (`--fp16-unet`, per instance)
 
