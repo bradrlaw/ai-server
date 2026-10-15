@@ -124,3 +124,27 @@ behaviour is unchanged until quiet hours is unpaused.
 running with `--fp16-unet` for now. The owner will change both from the status
 page when ready. The window end clears fp16 on every instance, so the first
 unpaused night turns fp16 off.
+
+## Addendum 2026-10-15: Qwen renders aren't imported as bridge workflows (audit C16)
+
+The workflow importer (`scripts/comfyui_workflow_import.py`, also behind the
+status page's "ComfyUI workflow sync" panel) does not scan
+`comfyui-qwen/output-qwen` by default. This is deliberate. The MCP bridges
+render on `comfyui-open` and `comfyui-secure`, which run the older H3-pinned
+ComfyUI tree without the Qwen-Image 2.1 nodes. An imported Qwen workflow would
+be offered to chat as a tool and then fail at render time.
+
+If a prefix only matches renders in that folder, the importer now says so,
+instead of reporting that nothing matched. A workflow that doesn't need the new
+nodes can still be imported by giving the render's full path. A stubbed harness
+covers this with 19 checks and 7 mutants, all killed; the pre-change importer
+fails 8 of the checks. A live dry run against the real folders gave the new
+message.
+
+Same pass: the `free_gpu` hook had drifted. The shared copy used by
+open/secure was never refreshed after the 2026-08-24 `fast` → `small` rename.
+This instance's copy (`custom_nodes_qwen/free_gpu.py`) was copied from that
+stale file on 2026-09-25. Both now match `scripts/comfyui-free-gpu-node.py`.
+Only comments and the unused `FREE_GPU_KEEP` default changed, because every
+unit sets that variable. `install-comfyui-instances.sh` now installs both
+copies, so they can't drift again.

@@ -575,6 +575,8 @@ One-time setup (owner sudo — agents cannot):
 #    (ADR-0013, 2026-10-15 addendum):
 install -d -m 0700 /srv/ai/comfyui-qwen/login
 chmod 700 /srv/ai/comfyui-qwen/custom_nodes_qwen/ComfyUI-Login
+#    and copy in the free_gpu hook (install-comfyui-instances.sh refreshes it later):
+install -m 0644 scripts/comfyui-free-gpu-node.py /srv/ai/comfyui-qwen/custom_nodes_qwen/free_gpu.py
 
 # 1) install the on-demand unit (NOT enabled at boot — start it from the dashboard):
 sudo cp scripts/comfyui-qwen.service /etc/systemd/system/
@@ -1321,11 +1323,13 @@ exposes the UI on LAN/Tailscale — **ComfyUI has no auth**, so keep it on the p
 network only. Start/stop: `sudo systemctl start|stop comfyui`.
 
 **Auto-free the GPU (no manual step, keeps chat loaded).** A tiny ComfyUI server hook —
-`scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` — adds an
+`scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` (shared by
+`comfyui-open`/`comfyui-secure`) and `comfyui-qwen/custom_nodes_qwen/free_gpu.py`; both copies are
+refreshed by `install-comfyui-instances.sh` and take effect on each instance's next start — adds an
 aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), frees the
 V100 ComfyUI needs, then runs the generation. ComfyUI is pinned to **idx1 (the `coding` card)**,
 so the hook unloads **only** the model(s) squatting there via llama-swap's per-model endpoint
-(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `small` (P100) resident** so
+(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `small` (idx0) resident** so
 family chat stays responsive during image gen. Models to keep are set by the `FREE_GPU_KEEP` env
 (default `chat,small`); everything else running (`coding`, or a split `big`/`coder-next`) is
 evicted and reloads on-demand. It triggers **only on generate**, not on page loads. Configurable

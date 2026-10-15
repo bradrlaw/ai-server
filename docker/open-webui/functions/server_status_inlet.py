@@ -2,14 +2,14 @@
 title: Server Status (new-chat banner)
 author: bradrlaw (ai-server)
 description: On the first message of a new chat, fetch live server state and surface it
-    so the user sees "what's currently running" up front. Pulls loaded models from
-    llama-swap (/running, /v1/models) and active image/video jobs from the ComfyUI
-    instances (/queue). Optionally enriches with GPU/host data from a status JSON API
-    (the detailed web status page) if one is configured. By default it injects a compact
-    system-context block so the assistant opens its first reply with the status, and also
-    emits a transient status banner via the event emitter. All network calls are best
-    effort with short timeouts — a down service never blocks the chat.
-version: 1.0.0
+    so the user sees "what's currently running" up front. The source is the host-side
+    status service's JSON API (loaded models, GPU/host data, ComfyUI queues). If that is
+    unreachable it falls back to polling the ComfyUI instances (/queue) directly, plus
+    llama-swap (/running, /v1/models) when a reachable llama-swap URL is configured. By
+    default it shows a transient status banner via the event emitter; it can also inject
+    a system-context block so the assistant opens its first reply with the status. All
+    network calls are best effort with short timeouts — a down service never blocks the chat.
+version: 1.1.0
 required_open_webui_version: 0.5.0
 """
 
@@ -27,8 +27,12 @@ class Filter:
             description="Show live server status at the start of each new chat.",
         )
         llama_swap_url: str = Field(
-            default="http://host.docker.internal:9090",
-            description="llama-swap management base URL (reachable from the OWUI container).",
+            default="",
+            description=(
+                "Fallback only: llama-swap management base URL, polled when the status API "
+                "is unreachable. Empty by default because llama-swap binds 127.0.0.1:9090, "
+                "which the OWUI container can't reach; the status API reports models instead."
+            ),
         )
         comfyui_urls: str = Field(
             default="open=http://host.docker.internal:8188",
@@ -44,7 +48,7 @@ class Filter:
                 "Primary source: JSON status endpoint served by the host-side status "
                 "service (scripts/server-status-service.py). When reachable it provides "
                 "models, ComfyUI, and GPU data. If empty/unreachable, the filter falls "
-                "back to the direct llama-swap/ComfyUI URLs below."
+                "back to the direct ComfyUI (and llama-swap, if set) URLs."
             ),
         )
         inject_mode: str = Field(
@@ -225,14 +229,20 @@ class Filter:
         # Prefer the host-side status service (reachable from the container and the
         # only source that can report GPU stats).
         api = (self.valves.status_api_url or "").strip()
+        api_down = False
         if api:
             data = self._get_json(api)
             if isinstance(data, dict):
                 rendered = self._render_from_api(data)
                 if rendered:
                     return rendered
+            else:
+                api_down = True
         # Fallback: query llama-swap / ComfyUI directly (no GPU data).
         sections = [self._models_status(), self._comfy_status()]
+        if api_down and not (self.valves.llama_swap_url or "").strip():
+            # Without llama-swap there's no model line, so say why it's missing.
+            sections.insert(0, "**Status service:** unreachable (no model/GPU data)")
         sections = [s for s in sections if s]
         if not sections:
             return None

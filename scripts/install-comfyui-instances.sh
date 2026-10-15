@@ -19,7 +19,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 echo "==> Sanity checks"
-for f in comfyui-open.service comfyui-secure.service comfyui-secure-extra-paths.yaml; do
+for f in comfyui-open.service comfyui-secure.service comfyui-secure-extra-paths.yaml comfyui-free-gpu-node.py; do
   [[ -f "$SRC/$f" ]] || { echo "missing $SRC/$f" >&2; exit 1; }
 done
 [[ -d "$COMFY/custom_nodes_secure/ComfyUI-Login" ]] || {
@@ -35,6 +35,16 @@ echo "==> Keeping ComfyUI-Login secrets private (login/, user/, plugin dir -> 07
 # PASSWORD as 0644 after a reset, so the 0700 dirs are the lasting protection.
 install -d -m 0700 -o brad -g brad "$COMFY/login"
 chmod 0700 "$COMFY/user" "$COMFY/custom_nodes_secure/ComfyUI-Login"   # plugin dir holds .secret-key.txt
+
+echo "==> Installing the free_gpu hook (custom node that frees the card before a render)"
+# Shared by both instances (one custom_nodes tree). comfyui-qwen loads its own copy
+# from custom_nodes_qwen; refresh it too so the two never drift (it picks it up on
+# its next start).
+install -m 0644 -o brad -g brad "$SRC/comfyui-free-gpu-node.py" "$COMFY/custom_nodes/free_gpu.py"
+QWEN_NODES=/srv/ai/comfyui-qwen/custom_nodes_qwen
+if [[ -d "$QWEN_NODES" ]]; then
+  install -m 0644 -o brad -g brad "$SRC/comfyui-free-gpu-node.py" "$QWEN_NODES/free_gpu.py"
+fi
 
 echo "==> Stopping & disabling the old single-instance comfyui.service (if present)"
 systemctl stop    comfyui.service 2>/dev/null || true

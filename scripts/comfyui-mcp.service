@@ -2,9 +2,10 @@
 Description=ComfyUI MCP server — bridges ComfyUI to MCP clients (mcpo / agents) for /srv/ai
 Documentation=https://github.com/joenorton/comfyui-mcp-server
 # Bridge only (no GPU); wants ComfyUI reachable. It retries on startup if ComfyUI
-# is not yet up, but ordering after it avoids noisy restarts on boot.
+# is not yet up, but ordering after it avoids noisy restarts on boot. comfyui-open is
+# the instance at COMFYUI_URL (:8188); the old single-instance comfyui.service is superseded.
 # docker.service is ordered before us so the ExecStartPost mcpo bounce (below) works.
-After=network-online.target comfyui.service docker.service
+After=network-online.target comfyui-open.service docker.service
 Wants=network-online.target
 
 [Service]
