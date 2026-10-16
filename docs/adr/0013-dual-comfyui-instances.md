@@ -165,6 +165,10 @@ any of these files.
   `comfyui-mcp-secure` restart.)*
   *Owner decision (2026-10-15): no rotation. No other account has had shell
   access to the machine, so nobody else could have read the files.*
+- **SMB.** The directory modes don't protect these files on the SMB share,
+  because smbd serves it as brad. Since 2026-10-16 the share's `veto files`
+  hides `PASSWORD`, `.secret-key.txt` and the `comfyui_*.log` files instead
+  (ADR-0022 addendum, audit E8).
 
 ## Addendum 2026-10-15: secure instance stays single-GPU; storage guard moved into the unit (audit C4)
 

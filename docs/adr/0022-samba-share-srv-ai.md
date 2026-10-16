@@ -124,3 +124,127 @@ firewall already admits all tailnet and LAN traffic.
 
 **Consequence.** If the LAN subnet changes, update `hosts allow` (ufw re-detects its
 own). Never return to per-interface binding without re-checking both pitfalls above.
+
+## Addendum 2026-10-16: hide credential stores from the share (audit E8)
+
+**Finding.** The share served all of `/srv/ai` to anyone with brad's SMB password,
+including every credential store on the box and, while unlocked, the encrypted
+volume. The 0700/0600 modes from the ADR-0013 addendum don't help here: smbd serves
+the share as brad, who owns these files. A scan of every visible file for the secret
+values held in those stores (117 values from 22 store files; 640,259 files, 32.1 GB; plus
+the contents of the backup archives and the git history of the 7 repos under
+`/srv/ai`) found three more copies:
+- `comfyui/user/comfyui_8189.log` (and `.prev`, `.prev2`): the secure instance's API
+  token. ComfyUI-Login logs it on every start, and ComfyUI-Manager copies startup
+  output to `user/comfyui_<port>.log` (ADR-0013).
+- `storage-bulk/backups/owui/owui-data-20260806-032115.tgz`, a one-off Open WebUI
+  volume backup (root-owned, 0644). Its `webui.db` held the LiteLLM master key, the
+  mcpo API key and the Open WebUI API key, plus 24 chats and 33 uploads.
+- `storage-bulk/backups/comfyui/20260803-065113/comfyui-user.tgz`: older copies of the
+  same logs, with the same token.
+
+All other hits were false positives: PEM armour lines (`-----BEGIN ...-----`; no key
+body matched) and a stored field whose value is just the env-var name
+`OPENCLAW_GATEWAY_TOKEN`.
+
+**Decision (owner, 2026-10-16).** Hide every credential store, not only the two the
+audit named, with Samba `veto files` on `[srv-ai]`:
+
+| Name | Hides |
+|---|---|
+| `.env` | `docker/.env` (gateway keys and tokens) |
+| `server-status.env` | the status service's Open WebUI API key |
+| `auth.json` | the status dashboard password hash |
+| `PASSWORD`, `.secret-key.txt` | ComfyUI-Login, all instances |
+| `aitk_db.db*` | ai-toolkit's database and its `-wal`/`-shm` files (hold the HF token) |
+| `auth-secrets`, `state` | OpenClaw credentials and device identity |
+| `openclaw.bak-*` | copies of the above made by upgrades |
+| `hermes` | Hermes home (its config holds the LiteLLM key) |
+| `backups` | every backup folder |
+| `comfyui_*.log` | ComfyUI-Manager logs |
+| `storage` | the encrypted volume while unlocked |
+| `input-secure`, `output-secure`, `temp-secure` | ComfyUI's links into `storage/` |
+
+- **Backups:** the owner deleted both August backups ("the rule will protect future
+  backups"). Future backups go in a folder named `backups`; `storage-bulk/backups/`
+  is kept for that and is now mode 0700.
+- **Manager logs:** hidden by name. Manager's file logging stays on.
+- `delete veto files = no` (the default, pinned): a folder that holds hidden items
+  can't be deleted over SMB, instead of silently taking the hidden items with it.
+- Not used: `hide files`. It only sets the DOS hidden attribute, so the item is
+  listed whenever a client shows hidden files, and it stays openable.
+
+**How a veto behaves (Samba 4.19.5, read in the source and tested).** A vetoed name
+is invisible and unopenable: listings skip it, and open, create, overwrite, mkdir,
+rename-to and delete all answer "not found". Samba checks every path component
+(case-insensitive, `*` and `?` wildcards, any depth), so nothing under a vetoed
+folder is reachable, whether through a symlink into it, a `./` or `../` spelling, an
+alternate data stream, an 8.3 short name or a search pattern. Links that leave the
+share are refused (`wide links = no`), and SMB clients can't create real symlinks.
+
+**Limits.**
+- It matches names, not targets. A copy or hardlink under another name is visible,
+  and so is a symlink with an innocent name that points straight at a hidden item
+  (Samba follows the last path component without checking its target). None exist
+  today; `scripts/verify-smb-veto.py` checks for them.
+- Every same-named item is hidden too: `docker/hermes/` (the Hermes template),
+  `comfyui/backups/` (`comfyui-snapshot.sh` package lists), `tools/llm-functions/.env`
+  (no secrets), the open instance's `comfyui_8188*.log` and the old
+  `comfyui_8199*.log`, plus 15 items inside dependency and cache trees. Use SSH for
+  these.
+- SSH still sees everything. filebrowser (`:8083`, own login) mounts the secure input
+  and output folders on purpose (ADR-0023) and none of the stores.
+- ComfyUI's asset databases (`comfyui/user/comfyui-*.db`) stay visible. They hold no
+  assets today. If ComfyUI starts indexing secure renders there, the file names will
+  show.
+
+**Found on the way: mcpo held a copy of the unlocked volume.** mcpo bind-mounts
+`/srv/ai` read-only at `/repos/ai-server` for its `git` MCP server. Docker binds are
+recursive by default, and the volume was unlocked when mcpo last started
+(2026-10-15 15:05 UTC), so mcpo got its own copy of the volume's mount (and of
+`storage-bulk`). 855 files in it were readable by mcpo's uid 10001; before the B5
+change earlier that day, mcpo ran as root. A host `umount` leaves such a copy in
+place, so `storage-crypt.sh lock` would unmount on the host and then fail at
+`cryptsetup close` (device in use), leaving the volume decrypted. Fixed with the
+owner's approval:
+- The bind is now non-recursive (`bind: recursive: disabled`). mcpo sees the repo,
+  but `storage/` and `storage-bulk/` are empty folders inside it. After the recreate
+  (2026-10-16 05:18 UTC), mcpo had no copy of either mount, all 7 MCP routes
+  answered, `git_status` and `git_log` worked, and `scripts/verify-mcp-lockdown.sh`
+  gave 31 passed, 0 failed, 1 skipped, as before.
+- When `cryptsetup close` fails, `storage-crypt.sh lock` now lists the processes and
+  containers that still have the volume mounted, and `status` shows them under "also
+  mounted in". While unlocked that is normally just filebrowser, which `lock` stops
+  first. Tested with `cryptsetup`, `mountpoint` and `require_root` stubbed: busy with
+  a holder (listed, exit 1), busy without one (exit 1), success (exit 0).
+
+**Verification (before deploying).**
+- An unprivileged throwaway smbd on 127.0.0.1 served the real tree read-only with the
+  repo's veto list, next to a copy of the share without it and a synthetic share:
+  181 checks passed, 0 failed, 5 informational. They covered listings, opening every
+  vetoed path (refused on the share, readable on the copy without the veto), case,
+  stream, `./` and `../` spellings, search patterns, 8.3 names, symlinks into, at and
+  out of hidden items, the new names against lookalikes (`comfyui.log`,
+  `comfyui-8189.log`, `backups.txt` and `old-backups` stay visible), and write, rename
+  and delete attempts (refused, disk unchanged).
+- `scripts/verify-smb-veto.py` (new; read-only, stdlib only, no sudo) checks that the
+  deployed config matches the repo, that `delete veto files` and `wide links` are off,
+  that every store on its list is hidden, and that no visible symlink, hardlink or bind
+  mount exposes a hidden item. With `--repo-only`: 35 passed, 0 failed.
+
+**Deploy.** `sudo /srv/ai/scripts/setup-samba.sh` (restarts smbd, so mounted clients
+reconnect), then `scripts/verify-smb-veto.py`.
+
+**Exposure.** The Open WebUI backup kept the LiteLLM master key, the mcpo API key and
+the Open WebUI API key readable over SMB (as brad) and from inside mcpo from
+2026-08-06 until it was deleted on 2026-10-16. During this audit the agent also
+printed the LiteLLM master key into its own session log (`~/.copilot`, mode 0700).
+No other account has had shell access (owner, 2026-10-15).
+
+**Keeping it working.**
+- New credential store: add its name to `veto files` in `config/smb.conf` and to
+  `STORES` in the verify script, re-run the installer, then run the verify script.
+- Back up into a folder named `backups` with mode 0700 (audit E7 builds on this).
+- Never create a link or hardlink under another name that points at a hidden item.
+- A container that bind-mounts `/srv/ai`, or any parent of `storage/`, must use a
+  non-recursive bind, as mcpo does.

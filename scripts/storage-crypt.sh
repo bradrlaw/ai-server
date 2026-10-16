@@ -37,6 +37,27 @@ require_disk() {
   fi
 }
 
+# Processes in OTHER mount namespaces that still have the volume mounted, one
+# line each. A container whose bind mount covers ${MOUNT} recursively (the docker
+# default) holds its own copy of the mount: umount on the host leaves it, and
+# cryptsetup close then fails with "device busy". Best-effort; complete as root.
+mount_holders() {
+  local self p ns id name seen=" "
+  self=$(readlink /proc/self/ns/mnt)
+  for p in /proc/[0-9]*; do
+    grep -qs " ${MAPPER_DEV} " "${p}/mountinfo" || continue
+    ns=$(readlink "${p}/ns/mnt" 2>/dev/null) || continue
+    [[ "${ns}" == "${self}" || "${seen}" == *" ${ns} "* ]] && continue
+    seen+="${ns} "
+    id=$(grep -o -m1 'docker-[0-9a-f]\{64\}' "${p}/cgroup" 2>/dev/null | cut -c8-) || true
+    name=""
+    if [[ -n "${id}" ]]; then
+      name=$(docker inspect --format '{{.Name}}' "${id}" 2>/dev/null | tr -d /) || true
+    fi
+    echo "pid ${p#/proc/} ($(cat "${p}/comm" 2>/dev/null))${name:+, container ${name}}"
+  done
+}
+
 cmd_setup() {
   require_root
   require_disk
@@ -151,7 +172,16 @@ cmd_lock() {
   fi
   if [[ -b "${MAPPER_DEV}" ]]; then
     echo ">> closing LUKS container"
-    cryptsetup close "${MAPPER}"
+    if ! cryptsetup close "${MAPPER}"; then
+      echo "error: ${MAPPER} is still in use, so the volume stays OPEN (decrypted)." >&2
+      local holders
+      holders=$(mount_holders)
+      if [[ -n "${holders}" ]]; then
+        echo "       Still mounted in (stop these, then re-run lock):" >&2
+        sed 's/^/         /' <<<"${holders}" >&2
+      fi
+      exit 1
+    fi
   fi
   echo "locked."
 }
@@ -168,6 +198,14 @@ cmd_status() {
     df -h "${MOUNT}" | tail -1 | awk '{print "         used "$3" / "$2" ("$5")"}'
   else
     echo "mount:   not mounted"
+  fi
+  if [[ -b "${MAPPER_DEV}" ]]; then
+    local holders
+    holders=$(mount_holders)
+    if [[ -n "${holders}" ]]; then
+      echo "also mounted in:"
+      sed 's/^/         /' <<<"${holders}"
+    fi
   fi
 }
 

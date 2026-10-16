@@ -247,7 +247,12 @@ less fragile and engines independently upgradable.
    passphrase unlock via `scripts/storage-crypt.sh`, `noauto`) for secrets/private
    media; (c) **unsecured bulk** Seagate 1TB (ext4 `LABEL=aibulk` →
    `/srv/ai/storage-bulk`, fstab `defaults,nofail`) for model weights and other large
-   non-secret data. Prefer `/srv/ai/storage-bulk` for big model downloads to keep `/`
+   non-secret data. **Gotcha (encrypted tier):** a container that bind-mounts `/srv/ai`
+   (or any parent of `storage/`) with docker's default recursive bind gets its own copy
+   of the unlocked volume, and `storage-crypt.sh lock` then can't close it. Use
+   `bind: recursive: disabled`, as mcpo does; `sudo scripts/storage-crypt.sh status`
+   lists any holder (ADR-0022 2026-10-16 addendum). Prefer `/srv/ai/storage-bulk` for
+   big model downloads to keep `/`
    free. **Model cold-tier:** `/srv/ai/models/cold` is a symlink →
    `/srv/ai/storage-bulk/models` — hot/served model dirs stay directly under
    `/srv/ai/models/`; rarely-used, base-weight, or superseded-quant dirs (e.g. the plain
@@ -367,7 +372,7 @@ docker compose logs -f litellm                       # follow logs
 | GPU power caps | `power_limits` in `scripts/gpu-fan-control.config.json` (or the status dashboard's per-GPU power dropdown) | none — the daemon re-reads it every `power_recheck_sec` (30 s) and applies it live; a raw `nvidia-smi -pl` is reverted on the next pass |
 | GPU fan curves / `min_duty` / zones | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup) |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (workflows stay **local**: new files are gitignored and no workflow changes are committed — owner policy, ADR-0012 2026-10-15 addendum) |
-| Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
+| Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/` (hidden on the SMB share, like every `backups` folder)); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
 | Enable the OWUI status banner | `install -m 600 scripts/server-status.env.example scripts/server-status.env` (keeps the key private), set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
 | Status dashboard password | — | `python3 scripts/server-status-service.py --set-password` as `brad` (no sudo/restart; signs every browser out) — see [sign-in](#status-dashboard-sign-in-adr-0027) |
@@ -1872,6 +1877,20 @@ Log in as **`brad`** with the SMB password set above.
   `tailscale0` (point-to-point, no broadcast flag) and binds the LAN's rotating
   IPv6 privacy addresses only at startup (ADR-0022, 2026-10-15 addendum).
 - **Changed LAN subnet?** Update the `192.168.4.0/22` entry in `hosts allow`.
+- **Credential stores are hidden** (`veto files`, ADR-0022 2026-10-16 addendum):
+  `docker/.env`, `scripts/server-status.env`, the dashboard's `auth.json`,
+  ComfyUI-Login's `PASSWORD`/`.secret-key.txt`, ai-toolkit's `aitk_db.db*`,
+  OpenClaw's `auth-secrets/`/`state/`/`openclaw.bak-*`, `hermes/`, every `backups`
+  folder, ComfyUI-Manager's `comfyui_*.log` and the encrypted `storage/` volume
+  (with ComfyUI's `*-secure` links) are invisible and can't be opened or created
+  over SMB. The match is by name at any depth, so same-named items are hidden too
+  (e.g. `docker/hermes/`, `comfyui/backups/`). Use SSH for all of these.
+- **Keep it that way:** put backups in a folder named `backups` (mode 0700, e.g.
+  `storage-bulk/backups/`), and never link or hardlink a hidden item under another
+  name (Samba checks names, not targets). For a new secret file, add its name to
+  `veto files` and to `STORES` in `scripts/verify-smb-veto.py`, then re-run the
+  installer. Check with `scripts/verify-smb-veto.py` (read-only, no sudo; add
+  `--repo-only` before deploying a change).
 
 ### Managing SMB accounts & passwords
 

@@ -143,7 +143,17 @@ services:
       # Read-only mount of the ai-server repo so the `git` MCP server can
       # inspect it (log/diff/status/show). RO by design: LLM-driven agents
       # cannot commit/mutate the real repo. Add more repos as extra :ro mounts.
-      - /srv/ai:/repos/ai-server:ro
+      # Non-recursive: the filesystems mounted under /srv/ai (the encrypted
+      # storage/ volume, storage-bulk/) appear as empty dirs. The default
+      # recursive bind copied the unlocked volume into mcpo (readable by uid
+      # 10001), and that copy kept `storage-crypt.sh lock` from closing it
+      # (ADR-0022, 2026-10-16 addendum).
+      - type: bind
+        source: /srv/ai
+        target: /repos/ai-server
+        read_only: true
+        bind:
+          recursive: disabled
       # HOME for uid 10001. Holds the uv cache, so `uvx` stdio MCP servers start
       # from cache instead of re-downloading from PyPI (see boot-race note above).
       - mcpo-home:/home/mcpo

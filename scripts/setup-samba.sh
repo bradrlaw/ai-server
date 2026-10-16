@@ -91,6 +91,9 @@ echo "                                          (or  smb://192.168.4.57/srv-ai )
 echo "  Windows Explorer address bar ->  \\\\100.97.143.29\\srv-ai"
 echo "  Log in as '$SHARE_USER' with the SMB password set above."
 echo
+echo "Check that the credential stores are hidden (read-only, no sudo needed):"
+echo "  /srv/ai/scripts/verify-smb-veto.py"
+echo
 # Heads-up about root-owned files that brad won't be able to delete over SMB.
 ROOT_OWNED=$(find /srv/ai -xdev ! -user "$SHARE_USER" 2>/dev/null | wc -l || echo 0)
 if [[ "$ROOT_OWNED" -gt 0 ]]; then
