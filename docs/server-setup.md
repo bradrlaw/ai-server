@@ -946,6 +946,26 @@ hence host mode.) Config `docker/litellm/config.yaml` maps model names `coding`/
 Requests without a key get 401. Verified 2026-07-02: `/v1/models` lists all three; full path
 client→LiteLLM(:4000)→llama-swap(:9090)→llama-server returns correct output.
 
+**Rotating the master key.** Put the new key (`sk-` plus random) in `docker/.env`, then
+update the copies that hold it literally:
+- `/srv/ai/hermes/config.yaml` (`model.api_key`) and `~/.config/aichat/config.yaml`.
+- Open WebUI's connection key. Open WebUI stores it in its database (`openai.api_keys`),
+  which wins over the `OPENAI_API_KEY` env var after the first start. Change it in
+  Admin Panel → Settings → Connections. Or GET `/openai/config` and POST the whole body
+  back to `/openai/config/update` with only the key changed.
+
+Then restart what reads it:
+- `docker compose up -d litellm open-webui mcpo openclaw` (they get it through compose
+  `environment:`).
+- `docker compose restart hermes`.
+- `sudo systemctl restart plan-build-mcp` (it loads `docker/.env` only at start).
+
+`copilot-byok.sh` and the other scripts read `docker/.env` on every run. Clients that
+set `LITELLM_MASTER_KEY` themselves (pi on the Mac) need the new value. LiteLLM has no
+database here, so the old key stops working when the container restarts; it then gets
+the same 400 (`no_db_connection`) as any unknown key. Last rotated 2026-10-16
+(ADR-0022, E8 addendum).
+
 **Client setup** (Copilot CLI / VS Code / any OpenAI client):
 - Base URL: `http://<server-or-tailscale-ip>:4000/v1`
 - API key: the `LITELLM_MASTER_KEY`

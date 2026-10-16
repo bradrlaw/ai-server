@@ -238,8 +238,17 @@ reconnect), then `scripts/verify-smb-veto.py`.
 **Exposure.** The Open WebUI backup kept the LiteLLM master key, the mcpo API key and
 the Open WebUI API key readable over SMB (as brad) and from inside mcpo from
 2026-08-06 until it was deleted on 2026-10-16. During this audit the agent also
-printed the LiteLLM master key into its own session log (`~/.copilot`, mode 0700).
-No other account has had shell access (owner, 2026-10-15).
+printed the LiteLLM master key into its session log (`~/.copilot`, mode 0700) and
+its model conversation. No other account has had shell access (owner, 2026-10-15).
+
+**Rotation (owner, 2026-10-16).** The LiteLLM master key was rotated at 05:48Z.
+The new key is in `docker/.env`, `hermes/config.yaml`, `~/.config/aichat/config.yaml`
+and Open WebUI's stored connection key. litellm, open-webui, mcpo and openclaw were
+recreated, hermes restarted. `plan-build-mcp` loads `docker/.env` only at start, so it
+needs `sudo systemctl restart plan-build-mcp`. The old key now gets the same 400 as
+an unknown key. Open WebUI, Hermes, aichat and OpenClaw were checked end to end. The
+mcpo and Open WebUI API keys were not rotated (owner). Procedure: runbook,
+"Rotating the master key".
 
 **Keeping it working.**
 - New credential store: add its name to `veto files` in `config/smb.conf` and to
