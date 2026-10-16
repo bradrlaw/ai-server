@@ -139,9 +139,11 @@ on the other), from audit items A4–A8:
    the board circuit the BIOS configured. Details:
    [server-setup.md "Fan headers"](../server-setup.md#fan-headers-voltage-mode-splitters-current-2026-10-16).
 
-3. **Side fan and `identify-fan.sh` (A6).** The 210 mm side fan's `fan3` reads 0 rpm because
-   its 3-pin plug gives the board no speed signal (owner, 2026-10-16). It can only be checked by
-   eye, so the re-wiring checklist says to look. `identify-fan.sh` had several fixes:
+3. **Side fan and `identify-fan.sh` (A6).** The 210 mm side fan (Cooler Master
+   A23030-07CB-3MN-F1) spins, but `fan3` reads 0 rpm, and `identify-fan.sh` found no tach on
+   `pwm3` on 2026-07-01 either. No spec sheet says whether the fan has a speed sensor; the
+   owner will check the BIOS reading during the shroud swap. Until then it can only be checked
+   by eye, so the re-wiring checklist says to look. `identify-fan.sh` had several fixes:
    - It now stops `gpu-fan-control` during its test and restarts it afterwards. Before, it
      fought the daemon over `pwm4`/`pwm5` and measured garbage for them.
    - Ctrl-C no longer resumes the loop.
