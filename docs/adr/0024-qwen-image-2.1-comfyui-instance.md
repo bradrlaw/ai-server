@@ -41,8 +41,10 @@ store**, and wire it into the status page like the existing instances.
 (`comfy_kitchen/backends/eager/conv3d.py` registers a `torch.library.custom_op`
 with a `stride: list[int]` param that 2.6's `infer_schema` rejects). We use
 **torch 2.8.0+cu128**, whose wheel still ships **sm_70 (Volta)** kernels
-(`get_arch_list()` → `sm_70 … sm_120`). cu128 is still CUDA 12.x, so it keeps
-Volta (only CUDA 13 dropped it). comfy-kitchen's optimized int8/fp8 CUDA kernels
+(`get_arch_list()` → `sm_70 … sm_120`). That is a property of torch 2.8's cu128
+build, not of CUDA 12.x: torch 2.7's cu128 build and those from 2.11 on have no sm_70
+(this line first said "only CUDA 13 dropped it"; see the 2026-10-15 addendum).
+comfy-kitchen's optimized int8/fp8 CUDA kernels
 stay **disabled** on Volta (it wants cu130) and fall back to eager — irrelevant
 for our bf16 weights, which run the fp16 tensor-core path.
 
@@ -230,3 +232,23 @@ The harness also loads the hook with the `FREE_GPU_*` values parsed from the
 three unit files. The hook's `systemctl` calls were also run once, read-only,
 against the real `systemctl` as `brad`. A running `comfyui-qwen.service` held
 back the warm-up, and a misspelt unit was warned about.
+
+## Addendum 2026-10-15: only some cu128 wheels keep sm_70 (audit D5)
+
+**Correction.** The torch section said cu128 keeps Volta because it is still CUDA 12.x,
+and that only CUDA 13 dropped sm_70. PyTorch's build scripts say otherwise. torch 2.7's
+cu128 build starts at sm_75. 2.8–2.10 put sm_70 back on purpose
+(pytorch/pytorch#157517). From 2.11 the cu128/cu129 builds start at sm_75 again. Only
+cu126 has kept sm_70 in every release. The full table is in
+[`../optional-tools.md`](../optional-tools.md#which-torch-wheels-run-on-the-v100s-sm_70).
+
+**What it means here.** torch 2.8.0+cu128 is still right for this instance (measured
+2026-10-15: `sm_70 sm_75 sm_80 sm_86 sm_90 sm_100 sm_120`). But no script pins it,
+ComfyUI's `requirements.txt` lists `torch` unpinned, and PyPI's default torch wheel has
+been cu130 since 2.11. So anything that upgrades torch in `venvs/comfyui-qwen` (a bare
+`pip install -U`, or a custom node that requires a newer torch) can land on a wheel with
+no sm_70.
+Keep the torch/torchvision/torchaudio trio where it is. Before restarting the unit after
+an update, check that
+`CUDA_VISIBLE_DEVICES= /srv/ai/venvs/comfyui-qwen/bin/python -c "import torch; print(torch._C._cuda_getArchFlags())"`
+still lists `sm_70`.

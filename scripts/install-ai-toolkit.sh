@@ -6,7 +6,7 @@
 # ai-toolkit's own installer (the "AI Toolkit Manager", and its manual
 # requirements) pins **torch 2.13.0 + cu130** (CUDA 13.0) aimed at Blackwell/
 # sm120. CUDA 13.x wheels DROP the sm_70 (Volta) and sm_60 (Pascal) GPU kernels,
-# so the stock install will not run on this server's Tesla V100/P100 — you'd get
+# so the stock install will not run on this server's Tesla V100s — you'd get
 # "CUDA error: no kernel image is available for execution on the device".
 #
 # This script installs the tool against the **cu124 / torch 2.6.0** wheel (the

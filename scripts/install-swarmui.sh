@@ -10,7 +10,7 @@
 #
 # WHY THIS SCRIPT EXISTS (the Volta caveats)
 # ------------------------------------------
-# Two traps on this V100/P100 (sm_70/sm_60) server, both handled here WITHOUT
+# Two traps on this V100 (sm_70) server, both handled here WITHOUT
 # editing any SwarmUI file (so a future `git pull` of SwarmUI stays clean):
 #
 #   1. Backend torch. SwarmUI's ComfyUI-backend installer
@@ -23,9 +23,11 @@
 #
 #   2. ComfyUI version. Latest ComfyUI master pulls `comfy-kitchen>=0.2.28`, whose
 #      `na3d` custom op uses `list[int]` typing that torch 2.6's infer_schema
-#      rejects (needs torch>=2.7, which has no sm_70). We pin the backend ComfyUI
-#      to **v0.30.1** (the same tag our native ComfyUI runs, comfy-kitchen 0.2.26),
-#      which imports cleanly on torch 2.6. SwarmUI's backend AutoUpdate defaults to
+#      rejects (needs torch>=2.7; an sm_70 one exists -- e.g. 2.8+cu128, which
+#      comfyui-qwen runs -- but not the cu130 wheel SwarmUI's installer pulls).
+#      We pin the backend ComfyUI to **v0.30.1** (the same tag our native ComfyUI
+#      runs, comfy-kitchen 0.2.26), which imports cleanly on torch 2.6, so the
+#      backend stays on the shared cu124 build. SwarmUI's backend AutoUpdate defaults to
 #      "false" and we sit on a detached tag, so it won't drift back to master.
 #
 # Requires: git, python3.12, wget, curl (all present). No sudo (dotnet installs

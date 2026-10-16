@@ -6,14 +6,17 @@ the LLM serving stack. Rationale, isolation strategy and the port map are in
 repo as a build guide, install any subset you like; the core stack does not depend
 on them.
 
-**Common ground rules on this hardware (Tesla V100/P100, sm_70/sm_60, CUDA 12.x):**
+**Common ground rules on this hardware (2× Tesla V100 = sm_70, CUDA 12.x; idx0 is the
+GTX Titan X stopgap, sm_52 — ADR-0017):**
 - Each tool gets its **own venv** and its **own port** — nothing shares a Python
   environment or process with llama-swap / ComfyUI.
-- Each tool must run on the **cu124 / torch 2.6.0** wheel (the ComfyUI-proven build
-  whose kernel list includes `sm_70`/`sm_60`). The tools' own installers increasingly
-  pin **CUDA 13.x / torch ≥2.7** wheels that **drop Volta/Pascal kernels** — those
-  will fail with *"no kernel image is available for execution on the device"*. See
-  ADR-0003.
+- Each tool runs on the **cu124 / torch 2.6.0** wheel (the ComfyUI-proven build whose
+  kernel list includes `sm_70`, plus `sm_50`/`sm_60`). The tools' own installers
+  increasingly pin torch wheels **without `sm_70`** — those fail with *"no kernel image
+  is available for execution on the device"*. Whether a wheel has `sm_70` depends on
+  its **CUDA variant *and* torch version**, not simply on "torch ≥ 2.7" — see
+  [which torch wheels run on the V100s](#which-torch-wheels-run-on-the-v100s-sm_70)
+  below, and ADR-0003.
 - Services are native systemd units under `scripts/`. The agent can't `sudo`, so
   **you install them by hand** (commands below).
 - The three **image-gen** tools (Fooocus/SwarmUI/InvokeAI) each hold VRAM on a V100
@@ -29,6 +32,32 @@ on them.
 | SwarmUI | image gen (ComfyUI-backed) | 7801 | installed |
 | InvokeAI | image gen (canvas/pro) | 9091 | installed |
 
+### Which torch wheels run on the V100s (sm_70)
+
+PyTorch picks each wheel's GPU kernels per **CUDA variant and release**, so neither
+"torch ≥ 2.7" nor "only CUDA 13" is the right rule. From the upstream build scripts
+(`.ci/manywheel/build_cuda.sh` on `release/2.6`–`2.12`, `build_env_setup.py` on
+`release/2.13`/`2.14`; x86_64 wheels, checked 2026-10-15):
+
+| torch | cu124 / cu126 | cu128 / cu129 | cu130 and newer |
+|---|---|---|---|
+| 2.6 | ✅ sm_50 · 60 · 70 … | — | — |
+| 2.7 | ✅ | ❌ sm_75+ only | — |
+| 2.8 – 2.10 | ✅ | ✅ sm_70+ (no sm_50/60) | ❌ sm_75+ (2.9+) |
+| 2.11 – 2.14 | ✅ cu126 | ❌ sm_75+ | ❌ sm_75+ |
+
+- **cu126 (and older) is the only variant that has kept `sm_70` in every release**;
+  cu126 wheels exist through torch 2.14.1.
+- The **default PyPI wheel has been cu130 since torch 2.11** (2.8–2.10 were cu128; checked
+  in each release's PyPI metadata), so a bare `pip install -U torch` in any of these venvs
+  pulls a wheel with **no `sm_70`**. Always pass the `--index-url` of a known-good variant.
+- `sm_50` covers the Titan X (sm_52); `sm_60` only matters if a P100 returns to idx0.
+- Check a venv before trusting it (no GPU needed):
+  `CUDA_VISIBLE_DEVICES= <venv>/bin/python -c "import torch; print(torch.__version__, torch._C._cuda_getArchFlags())"`.
+  Measured 2026-10-15: `ai-toolkit`, `comfyui`, `fooocus`, `invokeai` and the SwarmUI
+  backend venv are 2.6.0+cu124 (`sm_50 sm_60 sm_70 …`); `comfyui-qwen` is
+  2.8.0+cu128 (`sm_70 … sm_120`, ADR-0024).
+
 ---
 
 ## ai-toolkit (training)
@@ -42,7 +71,7 @@ generation).
 **Why these versions (the Volta caveat).** ai-toolkit's own installer (the
 "AI Toolkit Manager", and its manual `requirements`) pins **torch 2.13.0 + cu130**
 aimed at Blackwell/sm120. CUDA 13.x wheels dropped the `sm_70`/`sm_60` kernels, so
-the stock install cannot run on our V100/P100. We install against **torch 2.6.0 +
+the stock install cannot run on our V100s. We install against **torch 2.6.0 +
 cu124** instead and reconcile the torch-version-locked deps to that line:
 
 | Upstream pin | Installed here | Why |
@@ -99,10 +128,11 @@ HF_TOKEN=hf_xxx   # optional, for gated models like FLUX.1-dev
 
 **GPU / device.** The service sets `CUDA_DEVICE_ORDER=PCI_BUS_ID`, so a job's
 `device: cuda:1` / `cuda:2` maps to the V100s as numbered by `nvidia-smi`
-(idx0=P100, idx1/2=V100). Training is heavy — run it when the target V100 isn't
-busy serving an LLM (e.g. switch llama-swap to a mode that frees idx2, or stop the
-relevant model). The 32 GB V100s can do FLUX.1 / SDXL LoRA; the P100 (16 GB) is too
-small for most modern training.
+(idx0=GTX Titan X stopgap, was the P100; idx1/2=V100). Training is heavy — run it
+when the target V100 isn't busy serving an LLM (e.g. switch llama-swap to a mode that
+frees idx2, or stop the relevant model). The 32 GB V100s can do FLUX.1 / SDXL LoRA;
+the 12 GB Titan X on idx0 is too small for most modern training (and busy serving
+`small`).
 
 **Limitations on Volta.**
 - **Video/audio training** (Wan, MiniMax-H3, Ace-Step) needs system FFmpeg for
@@ -224,13 +254,13 @@ and the .NET 10 SDK installs **user-local** to `~/.dotnet` (no sudo, no
 system-wide runtime).
 
 **Why these versions (the Volta caveats).** Two stock-install traps on this
-V100/P100 box, both handled by the installer **without editing any SwarmUI file**
+V100 box, both handled by the installer **without editing any SwarmUI file**
 (so a future `git pull` of SwarmUI stays clean — see their `AGENTS.md`):
 
 | Upstream default | Installed here | Why |
 |---|---|---|
 | backend `torch` from **cu130** index (`comfy-install-linux.sh`) | pre-staged `torch 2.6.0+cu124` in the backend venv | cu130 drops sm_70/sm_60 → "no kernel image". Comfy's installer installs torch **without `-U`**, so if the trio is already present it reports "already satisfied" and skips the cu130 pull |
-| backend ComfyUI @ **master** (`comfy-kitchen ≥0.2.28`) | pinned to **v0.30.1** (`comfy-kitchen 0.2.26`) | 0.2.28's `na3d` custom op uses `list[int]` typing that torch 2.6's `infer_schema` rejects (needs torch ≥2.7, no sm_70). v0.30.1 imports clean on torch 2.6 — same tag our native ComfyUI runs |
+| backend ComfyUI @ **master** (`comfy-kitchen ≥0.2.28`) | pinned to **v0.30.1** (`comfy-kitchen 0.2.26`) | 0.2.28's `na3d` custom op uses `list[int]` typing that torch 2.6's `infer_schema` rejects (needs torch ≥2.7). v0.30.1 imports clean on torch 2.6 — same tag our native ComfyUI runs, so the backend stays on the shared cu124 build. (A newer backend would need an sm_70 torch ≥2.7 such as 2.8+cu128 — what `comfyui-qwen` runs, ADR-0024 — not the cu130 wheel its installer picks; see the [wheel table](#which-torch-wheels-run-on-the-v100s-sm_70).) |
 
 > **Pre-stage all three wheels.** The cu130-skip only works if `torch`,
 > `torchvision` **and** `torchaudio` are all already present — a partial pre-stage
@@ -372,7 +402,7 @@ handled by the installer:
 
 | Upstream default | Installed here | Why |
 |---|---|---|
-| InvokeAI **main** requires `torch>=2.7`, `cuda` extra pins `torch==2.7.1+cu128` | InvokeAI **v5.11.0** + `torch 2.6.0+cu124` | cu128 / torch≥2.7 drop sm_70 → "no kernel image" on the V100s. v5.11.0 is the newest release targeting `torch~=2.6.0`, which keeps sm_70 |
+| InvokeAI **main** requires `torch>=2.7`; its `cuda` extra pinned `torch==2.7.1+cu128` at install time (2026-08-08) and pins `torch==2.13.0+cu130` as of v6.14.2 (checked 2026-10-15) | InvokeAI **v5.11.0** + `torch 2.6.0+cu124` | neither pinned wheel has sm_70 (torch 2.7's cu128 build and every cu130 build start at sm_75) → "no kernel image" on the V100s. v5.11.0 is the newest release targeting `torch~=2.6.0`, whose cu124 wheel keeps sm_70 |
 | `transformers`/`pydantic`/`fastapi`/… loosely pinned | pinned via a constraints file from v5.11.0's own `uv.lock` | a 2026 index resolves them to future majors (transformers 5.x, numpy 2.x) that break InvokeAI 5.11.0 |
 
 The constraints file ([`scripts/invokeai-constraints.txt`](../scripts/invokeai-constraints.txt),
@@ -382,9 +412,12 @@ fastapi 0.115.12, …). The one lock pin unavailable on PyPI, `pypatchmatch==1.0
 (yanked), is bumped to `1.0.2`. Because torch 2.6.0+cu124 is pre-installed and
 satisfies `torch~=2.6.0`, pip leaves it untouched (no cu-agnostic re-fetch).
 
-> **Do NOT `pip install -U invokeai`.** An upgrade past v5.11.0 pulls torch≥2.7
-> (cu128), which has no sm_70 kernels and will break generation on the V100s. Pin
-> stays at v5.11.0 until the hardware changes.
+> **Do NOT `pip install -U invokeai`.** An upgrade past v5.11.0 needs torch ≥2.7, and
+> the wheels it would pull — the `cuda` extra's `2.13.0+cu130`, or PyPI's default (cu130
+> since torch 2.11) — have no sm_70 kernels, so generation breaks on the V100s. Pin
+> stays at v5.11.0; moving past it means pairing a newer InvokeAI with an sm_70-capable
+> torch (see the [wheel table](#which-torch-wheels-run-on-the-v100s-sm_70)) and
+> re-testing, not a plain upgrade.
 
 **Install (reproducible).** Codified in
 [`scripts/install-invokeai.sh`](../scripts/install-invokeai.sh):

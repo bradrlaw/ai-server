@@ -25,7 +25,9 @@ Constraints that shape the install:
   on the V100s/P100, ComfyUI on the V100s) or the Docker app tier. → each tool gets
   its **own venv** and its **own port**; none share a process or Python env.
 - **Volta/Pascal + CUDA 12.x only** (ADR-0003). Modern image tools increasingly pin
-  CUDA 13.x / torch ≥2.7 wheels that **drop sm_70/sm_60 kernels**. Each tool must be
+  torch wheels that **drop sm_70/sm_60 kernels**: every cu130 build, plus torch 2.7's
+  cu128 build and the cu128/cu129 builds from 2.11 on. (This line first said "CUDA 13.x
+  / torch ≥2.7"; corrected in the 2026-10-15 addendum below.) Each tool must be
   installed against a **cu124 / torch 2.6.0** build (the ComfyUI-proven one) — see
   the per-tool notes in [`../optional-tools.md`](../optional-tools.md).
 - **Agent cannot sudo.** Builds/venvs are user-space; each tool ships a systemd unit
@@ -176,3 +178,29 @@ file's mode. Two reviews found the process-group Ctrl-C and lock-mode problems,
 both fixed. They also noted that `sudo` runs a script `brad` can edit. Every
 `sudo /srv/ai/scripts/...` step in the runbook works the same way, so that is
 left to a separate decision. It wasn't changed here.
+
+## Addendum 2026-10-15: which torch wheels lack sm_70 (audit D5)
+
+**Correction.** The Context section said the tools' installers pin "CUDA 13.x / torch
+≥2.7" wheels that drop sm_70. "torch ≥2.7" was too broad. PyTorch picks each wheel's
+kernels per CUDA variant *and* release (`.ci/manywheel/build_cuda.sh`, and
+`build_env_setup.py` from 2.13):
+
+- Every cu130 build starts at sm_75.
+- torch 2.7's cu128 build starts at sm_75, and so do the cu128/cu129 builds from 2.11 on.
+- torch 2.8–2.10 put sm_70 back into cu128/cu129 on purpose (pytorch/pytorch#157517).
+  That is why `comfyui-qwen` runs torch 2.8.0+cu128 on a V100 (ADR-0024).
+- cu126 has kept sm_50/60/70 in every release; its wheels exist through torch 2.14.1.
+
+PyPI's default torch wheel has been cu130 since 2.11, so a bare `pip install -U` that
+drags torch up breaks any of these venvs. InvokeAI's `cuda` extra moved from
+`torch==2.7.1+cu128` (at install, 2026-08-08) to `torch==2.13.0+cu130` (v6.14.2);
+neither has sm_70. The table and the check command are in
+[`../optional-tools.md`](../optional-tools.md#which-torch-wheels-run-on-the-v100s-sm_70).
+
+**The decision stands.** The tools stay on torch 2.6.0+cu124: it is proven here, and it
+also covers sm_50 (the idx0 Titan X) and sm_60 (a returning P100). A tool that needs
+torch ≥2.7 could use a cu126 wheel, or a 2.8–2.10 cu128 one, after a re-test. Measured
+2026-10-15 with `torch._C._cuda_getArchFlags()`: the ai-toolkit, Fooocus and InvokeAI
+venvs and SwarmUI's backend venv all report `sm_50 sm_60 sm_70 …`. Only the installer
+comments and the docs changed.

@@ -5,7 +5,8 @@
 #
 # CUDA 12.9 is the newest CUDA that still builds for Pascal (sm_60) and Volta
 # (sm_70) — those were removed in CUDA 13. PyTorch ships stable cu129 wheels
-# (torch 2.8–2.12), and llama.cpp/vLLM support 12.9.
+# (torch 2.8–2.13; only 2.8–2.10's include sm_70, none sm_60 — see the wheel
+# table in docs/optional-tools.md), and llama.cpp/vLLM support 12.9.
 #
 # Safe by design:
 #   * Installs the TOOLKIT-only metapackage (cuda-toolkit-12-9) — NOT the `cuda`
