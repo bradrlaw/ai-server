@@ -865,10 +865,9 @@ stall events since it started; hover the Fan cell to see the count.
 
 ### After re-wiring fans (checklist)
 1. Case open: the summed fan-label current per header is ≤ 1 A (see above); no SATA PWM hub
-   on a voltage header; note which header each GPU's fan(s) went on. Check that the 210 mm
-   side fan (`pwm3`; its `fan3` read **0 rpm** on 2026-10-16) actually spins, and whether
-   its tach lead is connected. It's on BIOS auto and not a daemon zone, so 0 rpm only matters
-   if it isn't spinning.
+   on a voltage header; note which header each GPU's fan(s) went on. Check by eye that the
+   210 mm side fan (`pwm3`) spins: its 3-pin plug gives the board no speed signal, so `fan3`
+   always reads 0 rpm and nothing alarms if it stops. It's on BIOS auto, not a daemon zone.
 2. After boot, with the GPUs idle: `sudo scripts/identify-fan.sh` → set each zone's `pwm` (and
    `tach` if it says so, or `null` for a fan without a tach).
 3. `sudo scripts/install-fan-service.sh` (validates, shows each tach's rpm, restarts the
