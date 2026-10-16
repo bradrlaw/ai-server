@@ -14,6 +14,11 @@ RestartSec=3
 # If the daemon stops for any reason, the script hands fans back to BIOS auto;
 # on-failure restart re-establishes active control quickly.
 Nice=-5
+# /run/gpu-fan-control/state.json: the per-tick fan/stall snapshot the status
+# page reads (world-readable). systemd removes the directory when the daemon
+# stops, so a missing file means "not running" (fans are on BIOS auto then).
+RuntimeDirectory=gpu-fan-control
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target

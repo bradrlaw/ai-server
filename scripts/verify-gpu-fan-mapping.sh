@@ -5,14 +5,18 @@
 # The GPU that gets COLDER is physically under the maxed fan; repeat per zone.
 # This does NOT rely on the daemon's control logic (no circular proof).
 #
-# Also checks each fan's tach at FLOOR vs MAX: a fan that doesn't speed up is
-# dead/unplugged, has no tach wire (e.g. the non-tach leg of a splitter), or is a
-# 3-pin DC fan on a PWM-mode header (pwmN_mode=1 -> it runs ~100% regardless).
+# Also checks each fan's tach (the zone's "tach", default fanN_input) at FLOOR vs
+# MAX: a fan that doesn't speed up is dead/unplugged, has no tach wire (e.g. the
+# non-tach leg of a Y-splitter), or gets no speed control. On this board only
+# CPUFAN1 is PWM-mode (a 3-pin fan there runs ~100%); the other headers are
+# voltage-mode, where the usual cause is a SATA/molex-powered PWM hub (fans fed
+# 12 V, and pin 4 carries no PWM signal) -- use a plain Y-splitter instead.
 #
 # Run with the GPUs idle (no inference / ComfyUI jobs) after any fan re-wiring.
 # Safe: stops the daemon during the test, floors (never 0) the untested fans,
-# leaves monitor-only zones alone, aborts if a GPU core passes ABORT_C, and
-# ALWAYS restores + restarts the service on exit (including Ctrl-C / error).
+# leaves monitor-only zones alone, aborts if a tested GPU's core passes ABORT_C
+# or its HBM passes ABORT_HBM_C, and ALWAYS restores + restarts the service on
+# exit (including Ctrl-C / error).
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "Run with sudo." >&2; exit 1; }
 
@@ -21,13 +25,16 @@ MAX=255
 FLOOR=${FLOOR:-90}        # ~35% duty floor, never stall
 SETTLE=${SETTLE:-45}      # seconds to let temps settle per phase
 ABORT_C=${ABORT_C:-70}    # restore + bail if any tested GPU core exceeds this
+ABORT_HBM_C=${ABORT_HBM_C:-80}   # ... or its HBM (V100 HBM throttles ~85 C)
 
-# Controlled single-GPU zones: "hwmon_name pwmN gpu" (monitor_only zones skipped).
+# Controlled single-GPU zones: "hwmon_name pwmN gpu tach" (monitor_only zones
+# skipped; tach "-" = the zone's "tach" is null).
 mapfile -t ZONES < <(python3 - "$CONFIG" <<'PY'
 import json, sys
 for z in json.load(open(sys.argv[1])).get("zones", []):
     if not z.get("monitor_only") and z.get("pwm") and len(z.get("gpus", [])) == 1:
-        print(z.get("hwmon_name", "nct6775"), z["pwm"], z["gpus"][0])
+        tach = z["tach"] if "tach" in z else f"fan{z['pwm'][3:]}_input"
+        print(z.get("hwmon_name", "nct6775"), z["pwm"], z["gpus"][0], tach or "-")
 PY
 )
 (( ${#ZONES[@]} >= 2 )) || { echo "Need >= 2 controlled single-GPU zones in $CONFIG (found ${#ZONES[@]})." >&2; exit 1; }
@@ -39,28 +46,33 @@ find_hwmon() {  # by name, like the daemon (hwmonN numbering isn't stable)
 }
 declare -a PWM FAN GPU LBL SAVED
 for i in "${!ZONES[@]}"; do
-  read -r hwname pwm gpu <<<"${ZONES[$i]}"
+  read -r hwname pwm gpu tach <<<"${ZONES[$i]}"
   hw=$(find_hwmon "$hwname") || { echo "hwmon '$hwname' not found" >&2; exit 1; }
   [[ -w "$hw/$pwm" ]] || { echo "Missing $hw/$pwm" >&2; exit 1; }
-  PWM[$i]="$hw/$pwm"; FAN[$i]="$hw/fan${pwm#pwm}_input"; GPU[$i]=$gpu; LBL[$i]=$pwm
-  echo "config: ${pwm} (mode $(cat "$hw/${pwm}_mode" 2>/dev/null || echo ?) = $( [[ "$(cat "$hw/${pwm}_mode" 2>/dev/null)" == 1 ]] && echo PWM || echo DC)) -> GPU$gpu   [$hw]"
+  PWM[$i]="$hw/$pwm"; GPU[$i]=$gpu; LBL[$i]=$pwm
+  FAN[$i]=$([[ $tach == - ]] && echo "" || echo "$hw/$tach")   # "" -> rpm reads 0
+  # (no pwmN_mode shown: on the nct6792 pwm2-5 always read 1; the header decides)
+  echo "config: ${pwm} -> GPU$gpu, tach ${tach/#-/none}   [$hw]"
 done
 GPUS=$(printf '%s\n' "${GPU[@]}" | sort -nu | paste -sd' ')
-
-echo "Stopping gpu-fan-control.service for the duration of the test..."
-systemctl stop gpu-fan-control.service || true
-for i in "${!PWM[@]}"; do SAVED[$i]="$(cat "${PWM[$i]}_enable" 2>/dev/null || echo 5)"; done
 
 restore() {
   trap - EXIT INT TERM
   echo; echo "Restoring fan control and restarting service..."
-  for i in "${!PWM[@]}"; do echo "${SAVED[$i]:-5}" > "${PWM[$i]}_enable" 2>/dev/null || true; done
+  for i in "${!PWM[@]}"; do
+    [[ -n "${SAVED[$i]:-}" ]] || continue   # not saved yet = not touched yet
+    echo "${SAVED[$i]}" > "${PWM[$i]}_enable" 2>/dev/null || true
+  done
   systemctl start gpu-fan-control.service || true
   if systemctl is-active --quiet gpu-fan-control.service; then echo "Done. gpu-fan-control active."
   else echo "WARNING: gpu-fan-control NOT active — run: sudo systemctl start gpu-fan-control" >&2; fi
 }
 trap restore EXIT
 trap 'exit 130' INT TERM
+
+echo "Stopping gpu-fan-control.service for the duration of the test..."
+systemctl stop gpu-fan-control.service   # set -e: if it won't stop, exit before touching a fan
+for i in "${!PWM[@]}"; do SAVED[$i]="$(cat "${PWM[$i]}_enable" 2>/dev/null || echo 5)"; done
 
 set_manual() { echo 1 > "$1_enable"; echo "$2" > "$1"; }
 declare -A CORE HBM
@@ -81,6 +93,8 @@ phase() {  # $1 = zone index to MAX; all other zones FLOOR
     for g in $GPUS; do
       line+="GPU$g=${CORE[$g]}C(hbm ${HBM[$g]})  "
       if (( CORE[$g] > ABORT_C )); then echo "GPU$g core ${CORE[$g]}C > ${ABORT_C}C — GPUs not idle? aborting" >&2; exit 1; fi
+      if [[ ${HBM[$g]} =~ ^[0-9]+$ ]] && (( HBM[$g] > ABORT_HBM_C )); then
+        echo "GPU$g HBM ${HBM[$g]}C > ${ABORT_HBM_C}C — GPUs not idle? aborting" >&2; exit 1; fi
     done
     fans=""; for i in "${!FAN[@]}"; do fans+="${LBL[$i]}:$(rpm "${FAN[$i]}") "; done
     printf "  %2ds  %s rpm[%s]\n" "$t" "$line" "${fans% }"
@@ -113,9 +127,9 @@ for k, (pwm, cfg_gpu) in sorted(zones.items()):
     phys = min(delta, key=delta.get)
     r = rpm.get(k, {}); lo, hi = r.get("floor", 0), r.get("max", 0)
     if hi == 0:
-        fan = "NO TACH at MAX (dead/unplugged, or tach not wired e.g. splitter's non-tach leg)"
+        fan = "NO TACH at MAX (dead/unplugged, tach not wired e.g. splitter's non-tach leg, or zone tach null)"
     elif hi < lo * 1.15 + 100:
-        fan = f"NO SPEED CHANGE {lo}->{hi} rpm (3-pin DC fan on a PWM-mode header? stalled?)"
+        fan = f"NO SPEED CHANGE {lo}->{hi} rpm (on a SATA/molex-powered PWM hub? stalled?)"
     else:
         fan = f"responds {lo}->{hi} rpm"
     print(f"{pwm}: fan {fan}")

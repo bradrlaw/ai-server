@@ -299,6 +299,10 @@ GPU_POWER_ACTIONS_ENABLED = os.environ.get(
 # daemon's reconcile cadence (only used to tell the user how soon a change applies).
 FAN_CONFIG = os.environ.get("FAN_CONFIG", "/srv/ai/scripts/gpu-fan-control.config.json")
 FAN_RECHECK_SEC = int(os.environ.get("FAN_RECHECK_SEC", "30"))
+# The fan daemon's per-tick snapshot (duty / tach rpm / stall alarm per zone) and
+# its unit. systemd removes the state file's directory when the daemon stops.
+FAN_STATE_FILE = os.environ.get("FAN_STATE_FILE", "/run/gpu-fan-control/state.json")
+FAN_UNIT = os.environ.get("FAN_UNIT", "gpu-fan-control.service")
 # Dropdown range offered on the dashboard (watts). Clamped per-card to the GPU's
 # own nvidia-smi min/max power limits before rendering.
 GPU_POWER_MIN_W = int(os.environ.get("GPU_POWER_MIN_W", "150"))
@@ -924,6 +928,62 @@ def _configured_power_limits() -> dict:
     return out
 
 
+def collect_fans() -> dict:
+    """The fan daemon's live state, judged: {"state", "msg", "age", "zones"}.
+
+    state: ok | stall (a fan is held at 100% by the stall alarm) | fault (the
+    daemon is in fail-safe: nvidia-smi or a zone update failing; fans at 100%)
+    | stale (snapshot older than a few ticks: daemon hung) | down (daemon not
+    running: the shroud fans are on BIOS auto) | unknown (unit active but no
+    state file, e.g. a daemon started before the stall alarm existed).
+    "zones" (the daemon's per-zone snapshots) is filled only when fresh.
+    """
+    try:
+        with open(FAN_STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")
+    except FileNotFoundError:
+        if _unit_is_active(FAN_UNIT):
+            return {"state": "unknown", "age": None, "zones": [],
+                    "msg": "fan daemon publishes no state (started before the stall "
+                           "alarm? sudo /srv/ai/scripts/install-fan-service.sh)"}
+        return {"state": "down", "age": None, "zones": [],
+                "msg": "fan daemon (gpu-fan-control) not running: the GPU shroud fans "
+                       "are on BIOS auto, which follows the CPU, not the GPUs"}
+    except Exception as exc:  # noqa: BLE001 - best effort
+        return {"state": "unknown", "age": None, "zones": [],
+                "msg": f"fan state unreadable: {exc}"}
+    try:
+        age = max(0.0, time.time() - float(data.get("ts")))
+        interval = float(data.get("interval") or 4)
+    except (TypeError, ValueError):
+        age, interval = None, 4.0
+    if age is None or age > max(15.0, 4 * interval):
+        old = "undated" if age is None else f"{age:.0f}s old"
+        return {"state": "stale", "age": age, "zones": [],
+                "msg": f"fan daemon state is {old} (daemon hung?)"}
+    zones = [z for z in (data.get("zones") or []) if isinstance(z, dict)]
+    stalled = [str(z.get("name", "?")) for z in zones if z.get("stalled")]
+    faults = [str(data["fault"])] if data.get("fault") else []
+    faults += [f"{z.get('name', '?')}: {z['error']}" for z in zones if z.get("error")]
+    msg = []
+    if stalled:
+        msg.append("FAN STALL: " + ", ".join(stalled) + " (held at 100% until it spins)")
+    msg += faults
+    state = "stall" if stalled else ("fault" if faults else "ok")
+    return {"state": state, "msg": "; ".join(msg), "age": round(age, 1), "zones": zones}
+
+
+def _fan_alert(fans: dict | None) -> str:
+    """Short alert for the summary line / OWUI banner; "" when all is well."""
+    st = (fans or {}).get("state")
+    if st == "stall":
+        return (fans.get("msg") or "FAN STALL").split(";")[0]
+    return {"fault": "fan daemon in fail-safe (fans 100%)", "stale": "fan daemon hung?",
+            "down": "fan daemon DOWN (GPU fans on BIOS auto)"}.get(st, "")
+
+
 _cpu_prev = {"total": None, "idle": None}
 
 
@@ -1037,7 +1097,8 @@ def collect_host() -> dict:
     }
 
 
-def _summary(models: dict, comfyui: list, gpus: list, host: dict | None = None) -> str:
+def _summary(models: dict, comfyui: list, gpus: list, host: dict | None = None,
+             fans: dict | None = None) -> str:
     if not models.get("reachable"):
         mtxt = "llama-swap unreachable"
     elif models["loaded"]:
@@ -1045,6 +1106,9 @@ def _summary(models: dict, comfyui: list, gpus: list, host: dict | None = None) 
     else:
         mtxt = "no models loaded (idle)"
     parts = [mtxt]
+    alert = _fan_alert(fans)
+    if alert:
+        parts.insert(0, "⚠ " + alert)
     busy = [c["label"] for c in comfyui if c.get("state") == "busy"]
     if busy:
         parts.append("ComfyUI busy: " + ", ".join(busy))
@@ -1070,13 +1134,19 @@ def build_status() -> dict:
     comfyui = collect_comfyui()
     gpus = collect_gpus()
     host = collect_host()
+    fans = collect_fans()
+    # Each GPU gets the fan zone(s) cooling it (a shroud with two fans on two
+    # headers is two zones for the same GPU).
+    for g in gpus:
+        g["fans"] = [z for z in fans["zones"] if g.get("index") in (z.get("gpus") or [])]
     return {
         "timestamp": int(time.time()),
-        "summary": _summary(models, comfyui, gpus, host),
+        "summary": _summary(models, comfyui, gpus, host, fans),
         "models": models,
         "comfyui": comfyui,
         "services": collect_services(),
         "gpus": gpus,
+        "fans": {k: fans[k] for k in ("state", "msg", "age")},
         "host": host,
         "power_mode": _power_state["mode"],
         "workflows": collect_workflows() if WORKFLOW_SYNC_ENABLED else [],
@@ -1211,6 +1281,9 @@ def banner_text(status: dict) -> str:
         else:
             mtxt = "Models: idle"
     parts = [mtxt]
+    alert = _fan_alert(status.get("fans"))
+    if alert:
+        parts.insert(0, "⚠️ " + alert)
 
     gpus = status.get("gpus") or []
     if gpus:
@@ -1276,7 +1349,8 @@ def _owui_push_banner() -> bool:
     status = cached_status()
     banner = {
         "id": OWUI_BANNER_ID,
-        "type": OWUI_BANNER_TYPE,
+        # a fan alarm turns the bar amber so it isn't mistaken for routine status
+        "type": "warning" if _fan_alert(status.get("fans")) else OWUI_BANNER_TYPE,
         "title": "",
         "content": banner_text(status),
         "dismissible": OWUI_BANNER_DISMISSIBLE,
@@ -1903,6 +1977,24 @@ function toast(text, bad){
   const dwell = bad? 6000 : 4000;
   setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 300); }, dwell);
 }
+function fanCell(g){
+  // the fan daemon's zone(s) cooling this GPU (status.json gpus[].fans)
+  const fs = g.fans || [];
+  if(!fs.length) return '<td>–</td>';
+  const attr = s => esc(s).replace(/"/g,'&quot;');
+  return '<td class="g">' + fs.map(f=>{
+    const tip = attr(f.name + ': ' + (f.pwm||'no pwm') +
+      (f.tach ? ' / '+f.tach+', stall alarm < '+f.stall_rpm+' rpm' : ' / no tach') +
+      (f.stalls ? ' · '+f.stalls+' stall(s) since the daemon started' : ''));
+    let t;
+    if(f.monitor_only) t = 'own fan' + (f.gpufan!=null ? ' '+f.gpufan+'%' : '');
+    else if(f.stalled) t = `<span class="pill bad">STALL${f.rpm!=null ? ' '+f.rpm+' rpm' : ''} → 100%</span>`;
+    else if(f.error) t = '<span class="pill bad">error → 100%</span>';
+    else t = (f.duty!=null ? f.duty+'%' : '–') +
+      (f.rpm!=null ? ' · '+f.rpm+' rpm' : (f.tach ? '' : ' <span class="hsub">no tach</span>'));
+    return `<span title="${tip}">${t}</span>`;
+  }).join('<br>') + '</td>';
+}
 function bar(label, pct, txt){
   const p = (pct!=null)? Math.max(0, Math.min(100, pct)) : 0;
   const cls = p>=90? 'bad' : (p>=70? 'busy' : '');
@@ -1979,8 +2071,11 @@ async function refresh(){  try{
     // gpus
     const gpuAct = d.actions && d.actions.gpu_power;
     const plimRange = (d.actions && d.actions.gpu_power_range) || [150,250,25];
+    const fd = d.fans || {};
+    const fanWarn = (fd.state && fd.state!=='ok') ?
+      `<div class="sub" style="margin-top:8px"><span class="pill ${fd.state==='unknown'?'busy':'bad'}">fans: ${esc(fd.state)}</span> ${esc(fd.msg||'')}</div>` : '';
     document.getElementById('gpus').innerHTML = d.gpus.length ?
-      '<table><tr><th>#</th><th>Name</th><th>Util</th><th>VRAM</th><th>Limit</th><th>Power</th><th>Temp</th></tr>' +
+      '<table><tr><th>#</th><th>Name</th><th>Util</th><th>VRAM</th><th>Limit</th><th>Power</th><th>Temp</th><th>Fan</th></tr>' +
       d.gpus.map(g=>{
         const memPct = (g.mem_used!=null&&g.mem_total)? Math.round(100*g.mem_used/g.mem_total):0;
         return `<tr><td>${g.index}</td><td>${esc(g.name)}</td>`+
@@ -1988,9 +2083,9 @@ async function refresh(){  try{
         `<td><span class="bar"><i style="width:${memPct}%"></i></span> ${g.mem_used??'–'}/${g.mem_total??'–'} MB</td>`+
         gpuLimitCell(g, gpuAct, plimRange)+
         `<td>${g.power!=null?g.power+' W':'–'}</td>`+
-        `<td>${g.temp!=null?g.temp+'°C':'–'}</td></tr>`;
-      }).join('') + '</table>'
-      : pill('unavailable');
+        `<td>${g.temp!=null?g.temp+'°C':'–'}</td>`+fanCell(g)+`</tr>`;
+      }).join('') + '</table>' + fanWarn
+      : pill('unavailable') + fanWarn;
     // host (cpu/ram/disk)
     const h = d.host || {};
     if(h && (h.cpu_pct!=null || h.mem || (h.disk&&h.disk.length))){

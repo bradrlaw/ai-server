@@ -13,7 +13,7 @@
 #
 # Defaults: 75s load window, outdir docs/data/thermal/, models "coding chat"
 # (idx1 + idx2 V100s). Add/replace models to target other cards, e.g.
-#   scripts/gpu-dmon-load-capture.sh 90 /tmp/cap fast        # P100 idx0
+#   scripts/gpu-dmon-load-capture.sh 90 /tmp/cap small       # idx0 (Titan X stopgap)
 #   scripts/gpu-dmon-load-capture.sh 90 /tmp/cap coding chat # both V100s
 set -u
 cd "$(dirname "$0")/.."
@@ -52,10 +52,11 @@ echo ">> load window done; waiting for in-flight requests to finish"
 for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done
 wait 2>/dev/null
 
-python3 - "$IDLE" "$LOAD" <<'PY'
+python3 - "$IDLE" "$LOAD" "$(nvidia-smi --query-gpu=index,name --format=csv,noheader 2>/dev/null)" <<'PY'
 import sys, statistics as st
+from collections import defaultdict
 def parse(path):
-    g={0:[],1:[],2:[]}; m={0:[],1:[],2:[]}; p={0:[],1:[],2:[]}; sm={0:[],1:[],2:[]}
+    g=defaultdict(list); m=defaultdict(list); p=defaultdict(list); sm=defaultdict(list)
     for ln in open(path):
         if ln.startswith('#'): continue
         c=ln.split()
@@ -69,21 +70,29 @@ def parse(path):
     return g,m,p,sm
 ig,im,ip,ism = parse(sys.argv[1])
 lg,lm,lp,lsm = parse(sys.argv[2])
-name={0:'P100 idx0',1:'V100 idx1',2:'V100 idx2'}
+def short(n):  # "Tesla V100-PCIE-32GB" -> "V100", "NVIDIA GeForce GTX TITAN X" -> "TITAN X"
+    for w in ("NVIDIA ", "Tesla ", "GeForce ", "GTX ", "RTX "):
+        n = n.replace(w, "")
+    return n.split("-")[0].strip()
+name = {}
+for ln in sys.argv[3].splitlines():
+    i, _, n = ln.partition(",")
+    if i.strip().isdigit():
+        name[int(i)] = f"{short(n)} idx{int(i)}"
 def mean(x): return st.mean(x) if x else float('nan')
 def mx(x): return max(x) if x else float('nan')
 # drop first 5 load samples (thermal ramp) for the steady comparison
 def steady(x): return x[5:] if len(x)>8 else x
-print(f"\n{'GPU':11} {'idle gt':>7} {'load gt':>10} {'idle mt':>8} {'load mt(max)':>13} {'load sm%':>9} {'load W':>7}")
-for i in (0,1,2):
+print(f"\n{'GPU':13} {'idle gt':>7} {'load gt':>10} {'idle mt':>8} {'load mt(max)':>13} {'load sm%':>9} {'load W':>7}")
+for i in sorted(lg):
     if not lg[i]: continue
     lgt=steady(lg[i]); lmt=steady(lm[i]) if lm[i] else []
     gi=mean(ig[i]); gl=mean(lgt)
     mi=mean(im[i]) if im[i] else float('nan'); ml=mean(lmt) if lmt else float('nan'); mmx=mx(lmt) if lmt else float('nan')
     dm = (ml-mi) if lmt and im[i] else float('nan')
-    print(f"{name[i]:11} {gi:7.1f} {gl:6.1f}(+{gl-gi:.1f}) {mi:8.1f} "
+    print(f"{name.get(i, f'GPU idx{i}'):13} {gi:7.1f} {gl:6.1f}(+{gl-gi:.1f}) {mi:8.1f} "
           f"{ml:6.1f}/{mmx:.0f}(+{dm:.1f}) {mean(lsm[i]):9.0f} {mean(lp[i]):7.0f}")
 print("\n(gt=core temp, mt=HBM/memory temp; load values skip first 5 ramp samples.")
-print(" HBM throttles ~85C on the V100s — that's the number the side fan protects.)")
+print(" HBM throttles ~85C on the V100s — that's the number the shroud + side fans protect.)")
 PY
 echo ">> logs: $IDLE  $LOAD"

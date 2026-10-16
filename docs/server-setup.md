@@ -41,7 +41,7 @@ Last updated: 2026-06-30
 
 | Component    | Detail |
 |--------------|--------|
-| Motherboard  | MSI X99A Gaming Titanium Pro (LGA2011-3, X99 chipset) |
+| Motherboard  | MSI X99A XPOWER GAMING TITANIUM (MS-7A21; LGA2011-3, X99 chipset) |
 | CPU          | Intel Core i7-6950X (10C/20T, Broadwell-E, 40 PCIe lanes, ~140W TDP) |
 | RAM          | 128 GB |
 | Storage      | **Boot/root:** Intel 2 TB SSD (NVMe, `/dev/nvme0n1`, PCIe slot 4) — `/`, ~1.1T. **Encrypted:** ADATA SU760 512 GB SATA (LUKS2 `aidata` → `/srv/ai/storage`, manual unlock) on SATA7. **Bulk (unsecured):** Seagate ST1000DM003 1 TB SATA (ext4 `aibulk` → `/srv/ai/storage-bulk`) on SATA8 — models & other large non-secret data |
@@ -370,7 +370,7 @@ docker compose logs -f litellm                       # follow logs
 | Switch serving mode (daily / heavy-coding / agentic) | — | `scripts/llama-swap-mode.py set agentic` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the [`llama-swap-mode` MCP](#llama-swap-mode-mcp-switch-serving-modes-from-a-client) (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
 | Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
 | GPU power caps | `power_limits` in `scripts/gpu-fan-control.config.json` (or the status dashboard's per-GPU power dropdown) | none — the daemon re-reads it every `power_recheck_sec` (30 s) and applies it live; a raw `nvidia-smi -pl` is reverted on the next pass |
-| GPU fan curves / `min_duty` / zones | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup) |
+| GPU fan curves / `min_duty` / zones / `tach` / `stall_rpm` | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup; `sudo scripts/install-fan-service.sh` validates first, then restarts) |
 | New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (workflows stay **local**: new files are gitignored and no workflow changes are committed — owner policy, ADR-0012 2026-10-15 addendum) |
 | Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/` (hidden on the SMB share, like every `backups` folder)); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
@@ -642,10 +642,15 @@ or clearing `MANAGED_SERVICES` hides the buttons.
 
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
-V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
+V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C. The status page's GPU
+table has a **Fan** column (duty % and tach rpm per GPU, red **STALL** when the stall alarm
+holds a fan at 100 %, "own fan" for the self-cooled Titan X), read from the daemon's
+`/run/gpu-fan-control/state.json`; a stalled fan or a stopped daemon also shows on the
+summary line and turns the Open WebUI status banner amber.
 ```bash
-# Easiest: follow the fan daemon's own log — it prints per-GPU temps and the fan
-# duty %% it applies each tick:
+# Easiest: follow the fan daemon's own log — it prints per-GPU temps, the fan duty %
+# it applies and the tach rpm each tick (e.g. `c41/m40C->41%@7336rpm`; ` STALL` while
+# the stall alarm holds that fan at 100%):
 journalctl -u gpu-fan-control -f
 
 # GPU power + core (gtemp) + HBM (mtemp) + clocks, refreshing:
@@ -733,22 +738,34 @@ context-window and `--ubatch-size` tuning, the Gemma-4 numbers) and the concurre
 
 ## GPU fan control (shroud fans) — runbook (2026-07-01)
 Passive Tesla cards throttle under load (seen via `nvidia-smi dmon`). Shroud fans
-are on the board's **4-pin PWM headers** (Nuvoton nct6775). Control = GPU temp
-(nvidia-smi) → PWM. See ADR-0009. Scripts in `/srv/ai/scripts/`:
+are on the board's fan headers (Nuvoton NCT6792D, `nct6775` driver), which are
+**voltage-mode** except CPUFAN1 (see [Fan headers](#fan-headers-voltage-mode-splitters-current-2026-10-16)).
+Control = GPU temp (nvidia-smi) → header duty. See ADR-0009. Scripts in `/srv/ai/scripts/`:
 
 1. **`sudo ./setup-fan-sensors.sh`** — installs lm-sensors, loads `nct6775`
    (adds `acpi_enforce_resources=lax` to GRUB if the chip won't bind → **reboot**,
    then re-run). Prints the exposed `pwmN` channels + fan RPMs.
-2. **`sudo ./identify-fan.sh`** — pulses each `pwmN` low→high so you can see which
-   channel spins each card's shroud fan. Restores auto on exit.
+2. **`sudo ./identify-fan.sh`** (GPUs idle) — pulses each `pwmN` low→high and shows which
+   tach (`fanN_input`) responds and how fast it peaks (15k-class shroud fan / blower /
+   case fan). Stops `gpu-fan-control` for the test and restarts it on exit; restores the
+   previous modes. If a pwm's responding tach isn't the same-numbered `fanN`, it says
+   which `"tach"` the zone needs.
 3. Edit **`gpu-fan-control.config.json`** — set each zone's `pwm` to the channel
    found in step 2 (GPU idx: 0=Titan X stopgap (was P100), 1=V100, 2=V100). Curve = [tempC, duty%],
-   min 35%, 100% by 80 °C.
-4. **`sudo ./install-fan-service.sh`** — installs+starts `gpu-fan-control.service`.
-   Logs: `journalctl -u gpu-fan-control -f`.
+   min 35 %, 100 % at 70 °C. Optional per zone: `tach` / `stall_rpm` (see
+   [Stall alarm](#fan-stall-alarm-2026-10-16)).
+4. **`sudo ./install-fan-service.sh`** — validates the config (pwm channels, tach inputs
+   and their current rpm, `stall_rpm`, power caps), installs + (re)starts
+   `gpu-fan-control.service`. Logs: `journalctl -u gpu-fan-control -f`.
 
 Daemon = `gpu-fan-control.py` (stdlib only). Fail-safe: forces fans to **100%** on
-any error/`nvidia-smi` failure; hands back to BIOS auto on clean stop.
+any error/`nvidia-smi` failure (including an `nvidia-smi` call that hangs > 15 s); hands
+back to BIOS auto on clean stop.
+
+**Config changes need a restart**, except `power_limits` (re-read every 30 s and applied
+live — that's how the status page's power dropdown works). Curve, `min_duty`, zones,
+`tach`, `stall_rpm`, `interval_sec`: `sudo systemctl restart gpu-fan-control`, or re-run
+`sudo ./install-fan-service.sh`, which validates first.
 
 ### Fan wiring + curves (confirmed from Windows FanControl, 2026-07-01)
 Fans: 40x28mm high-static-pressure. V100 fans 15k rpm max; P100 fan 6k rpm max
@@ -776,14 +793,90 @@ cools GPU2** — the *opposite* of the initial `identify-fan.sh` guess. Lesson: 
 a fan's RPM track a GPU's temp under the running daemon is **circular** — it only
 proves the daemon drives that pwm from that GPU, not which card the fan physically
 sits on. Always confirm with the forced-fan cross-test. (`identify-fan.sh` is still
-useful for pwm↔tach discovery and the P100/case/side-fan classification.)
+useful for pwm↔tach discovery and the shroud-fan/blower/case-fan classification.)
 
 **Re-run it after any fan/shroud re-wiring:** `sudo scripts/verify-gpu-fan-mapping.sh`
 (GPUs idle; ~2-3 min). It reads the zones from `gpu-fan-control.config.json` (hwmon found
 by name), maxes each zone's fan in turn, and reports per zone whether the fan **responds**
-(tach at floor vs max — flags a dead fan, a missing tach, or a 3-pin DC fan on a
-PWM-mode header) and whether it physically cools the GPU the config says (OK / MISMATCH).
-Exit 0 only if everything matches.
+(tach at floor vs max, using the zone's `tach` — flags a dead fan, a missing tach, or a fan
+with no speed control, e.g. one on a SATA-powered PWM hub) and whether it physically cools
+the GPU the config says (OK / MISMATCH). Exit 0 only if everything matches. It stops the
+daemon for the test (and exits untouched if it won't stop) and aborts if a tested GPU's core
+passes 70 °C or its HBM 80 °C (`ABORT_C` / `ABORT_HBM_C`), i.e. the GPUs weren't idle.
+
+### Fan headers: voltage mode, splitters, current (2026-10-16)
+From the board manual (MSI X99A XPOWER GAMING TITANIUM, MS-7A21, p48):
+
+| Header | Pins | Control mode |
+|---|---|---|
+| CPUFAN1 | 4 | **PWM** (constant 12 V + PWM signal on pin 4) — the only PWM-mode header |
+| SYSFAN1, PUMPFAN1, OPTFAN1, OPTFAN2 | 4 | **Voltage** (pin 2 = variable voltage, pin 4 not connected) |
+| SYSFAN2, SYSFAN3 | 3 | **Voltage** |
+
+The chip exposes only `pwm1`–`pwm5` for these 7 headers and the manual doesn't say which
+header is which `pwmN` — map them with `identify-fan.sh` (and `verify-gpu-fan-mapping.sh`
+for which GPU a fan cools). What follows for the shroud fans (all on voltage-mode headers):
+- **The duty is a voltage.** A 3-pin fan or a blower *is* speed-controlled there. A 4-pin
+  PWM fan works too: its PWM input floats (full duty) and the header voltage sets the speed.
+  The manual's "a 3-pin fan runs at 100 %" warning applies to CPUFAN1 only.
+- **Low duty may not START a fan.** 35 % ≈ 4.2 V keeps a spinning fan turning but may not
+  start a stopped one (blowers especially). The [stall alarm](#fan-stall-alarm-2026-10-16)
+  catches that and holds 100 % until it spins; if it keeps happening, raise that zone's
+  `min_duty`.
+- **No SATA/molex-powered PWM hub** on these headers: it feeds the fans 12 V and passes on
+  only the PWM signal, which isn't there — the fans run 100 % permanently (safe, but loud
+  and uncontrolled). Use a plain (passive) Y-splitter, a hub that follows the header
+  *voltage*, or one header per fan.
+- **Current.** MSI publishes no per-header rating for this board. Assume the common
+  **1 A (12 W)** and keep the summed fan-label current of each header under it. A 15k-rpm
+  40 mm fan is often 0.5–1.2 A and blowers can draw more, so check the labels: a pair that
+  doesn't fit goes on two headers.
+- **Two fans on one GPU:** with a Y-splitter only one tach (the splitter's tach leg) is
+  read, so that fan is the one the stall alarm watches. With two headers, add a second zone
+  for the same GPU (same curve, its own `pwm`/`tach`). Both fans then get the stall alarm.
+  `verify-gpu-fan-mapping.sh` checks each of the two zones in turn; with only half the pair
+  maxed per phase the margin is smaller, so use `SETTLE=90` if it reports INCONCLUSIVE.
+- `pwmN_mode` is left alone. The BIOS sets it to match the board's wiring, and on the
+  nct6792 the kernel can only change it for `pwm1` (`pwm2`–`pwm5` always read 1 = "PWM",
+  whatever the header really does), so that value tells you nothing about the header.
+
+### Fan stall alarm (2026-10-16)
+Each driven zone watches its fan's tach: by default `fanN_input` for `pwmN`. Per-zone
+config can override that with `"tach": "fanM_input"`, or set `"tach": null` for a fan with no
+tach (or the non-tach leg of a Y-splitter). The threshold is `"stall_rpm"` (default 300;
+0 = show the rpm with no alarm). A fan reading below `stall_rpm` for **3 ticks (~12 s)**
+while its duty is **≥ 25 %** is **stalled**. The daemon then:
+- logs `WARNING <zone>: fan STALLED ...`, holds that zone at **100 %** (which also kick-starts
+  a fan that can't start at a low voltage), and marks the tick line ` STALL`;
+- shows it on the status page (red **STALL** in the GPU table's Fan column, plus the summary
+  line), and turns the Open WebUI status banner amber with "FAN STALL: <zone>";
+- once the tach reads ≥ `stall_rpm` for 3 ticks, logs `fan stall cleared` and returns the zone
+  to its curve (not latched). If it stalls again after every recovery, the fan can't start
+  or keep running at `min_duty` on its voltage header: raise `min_duty`.
+
+Below 25 % duty a fan may legitimately stop on a voltage header, so it isn't checked
+there. A tach that can't be read is logged once, and the zone just has no rpm reading.
+A bad `tach` only disables the alarm, and a bad `stall_rpm` (not an integer 0–20000) falls
+back to 300; neither stops fan control. `install-fan-service.sh` rejects both, and two zones
+on one `pwm`, and shows each tach's current rpm. If a tach reads below `stall_rpm` at
+install time, it warns that the daemon will hold that zone at 100 %. Run
+`journalctl -u gpu-fan-control | grep -i stall` to see the history. The daemon also counts
+stall events since it started; hover the Fan cell to see the count.
+
+### After re-wiring fans (checklist)
+1. Case open: the summed fan-label current per header is ≤ 1 A (see above); no SATA PWM hub
+   on a voltage header; note which header each GPU's fan(s) went on. Check that the 210 mm
+   side fan (`pwm3`; its `fan3` read **0 rpm** on 2026-10-16) actually spins, and whether
+   its tach lead is connected. It's on BIOS auto and not a daemon zone, so 0 rpm only matters
+   if it isn't spinning.
+2. After boot, with the GPUs idle: `sudo scripts/identify-fan.sh` → set each zone's `pwm` (and
+   `tach` if it says so, or `null` for a fan without a tach).
+3. `sudo scripts/install-fan-service.sh` (validates, shows each tach's rpm, restarts the
+   daemon), then `sudo scripts/verify-gpu-fan-mapping.sh` (GPUs idle; every zone OK) and
+   `sudo scripts/verify-gpu-state.sh`.
+4. Watch the status page Fan column (or `journalctl -u gpu-fan-control -f`) for a few minutes:
+   no STALL at idle (`min_duty`). Then A/B under load with `scripts/power-cap-sweep.py`
+   and `scripts/gpu-dmon-load-capture.sh`.
 
 ### Fan control drives off HBM MEMORY temp (2026-07-01)
 The daemon controls each V100 zone on **max(core, memory)** temp, not core alone.
