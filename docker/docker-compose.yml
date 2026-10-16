@@ -76,7 +76,8 @@ services:
   # config.json is the versioned MCP inventory. NOTE: --hot-reload was removed —
   # mcpo's file watcher polls in a tight loop over the read-only /config bind
   # mount (inotify doesn't propagate across the mount), pegging a CPU core. Edit
-  # config.json then `docker compose up -d mcpo` (or restart) to pick up changes.
+  # config.json then `docker compose restart mcpo` to pick up changes (`up -d`
+  # leaves an unchanged container running on the old inventory).
   #
   # Boot-race hardening (2026-07-26): mcpo spawns its stdio MCP servers via
   # `uvx`/`uv`. Without a persistent uv cache, every (re)start re-downloads

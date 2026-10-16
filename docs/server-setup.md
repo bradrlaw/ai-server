@@ -23,7 +23,7 @@ Last updated: 2026-06-30
 - [8. Intended workload split (user's plan — sound)](#8-intended-workload-split-users-plan--sound)
 - [9. Additional considerations / things to verify](#9-additional-considerations--things-to-verify)
 - [10. Proposed task order](#10-proposed-task-order)
-- [Quick reference — current state (2026-06-30)](#quick-reference--current-state-2026-06-30)
+- [Quick reference — current state (2026-10-15)](#quick-reference--current-state-2026-10-15)
 - [Operator cheat-sheet — common commands](#operator-cheat-sheet--common-commands)
 - [llama.cpp usage notes (learned during bring-up)](#llamacpp-usage-notes-learned-during-bring-up)
 - [Benchmarks → see benchmarking.md](#benchmarks--see-benchmarkingmd)
@@ -47,13 +47,13 @@ Last updated: 2026-06-30
 | Storage      | **Boot/root:** Intel 2 TB SSD (NVMe, `/dev/nvme0n1`, PCIe slot 4) — `/`, ~1.1T. **Encrypted:** ADATA SU760 512 GB SATA (LUKS2 `aidata` → `/srv/ai/storage`, manual unlock) on SATA7. **Bulk (unsecured):** Seagate ST1000DM003 1 TB SATA (ext4 `aibulk` → `/srv/ai/storage-bulk`) on SATA8 — models & other large non-secret data |
 | GPU 1        | NVIDIA Tesla V100-PCIE-32GB — slot 1 — compute cap **7.0** (Volta) |
 | GPU 2        | NVIDIA Tesla V100-PCIE-32GB — slot 3 — compute cap **7.0** (Volta) |
-| GPU 3        | NVIDIA Tesla P100-PCIE-16GB — slot 6 — compute cap **6.0** (Pascal) |
+| GPU 3        | NVIDIA GeForce GTX Titan X 12 GB — slot 6 — compute cap **5.2** (Maxwell). **Stopgap** since 2026-07-27: the Tesla P100-PCIE-16GB (cc 6.0) that held this slot died ([ADR-0017](adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)) |
 
 ### GPU enumeration (Linux, driver 580)
-- `GPU 0` = **P100** 16GB  (PCI 01:00.0)
+- `GPU 0` = **GTX Titan X** 12GB  (PCI 01:00.0) — stopgap; was the **P100** 16GB
 - `GPU 1` = **V100** 32GB  (PCI 03:00.0)
 - `GPU 2` = **V100** 32GB  (PCI 04:00.0)
-- Total VRAM: 32 + 32 + 16 = **80 GB**
+- Total VRAM: 32 + 32 + 12 = **76 GB** (80 GB with the P100)
 
 ### Interconnect topology
 - `nvidia-smi topo -m`: all pairs = **PHB** (PCIe via host bridge). **No NVLink**
@@ -130,15 +130,16 @@ A previous (ChatGPT-guided) install put **CUDA Toolkit 13.3** on the system:
 **CUDA 13 dropped support for Pascal and Volta.** Verified empirically:
 `nvcc --list-gpu-code` on 13.3 lists only `sm_75, sm_80, sm_86, sm_87, sm_88,
 sm_89, sm_90, sm_100, sm_103, sm_110, sm_120, sm_121`.
-Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** with CUDA 13.
+Our GPUs were **`sm_60` (P100)** and **`sm_70` (V100)**; the Titan X stopgap that replaced the
+P100 is **`sm_52`** → **not buildable** with CUDA 13.
 
-### Required fix
+### Required fix (done 2026-07-01: CUDA **12.9**, [ADR-0003](adr/0003-use-cuda-12.9-not-13.md))
 1. **Cleanly remove all CUDA 13 toolkit packages** (leave the 580 driver intact).
-2. **Install CUDA 12.x toolkit** (12.x still supports sm_60 + sm_70). Recommended:
-   **CUDA 12.6** (broad framework compatibility) or **12.8** (newer; good vLLM/torch
-   wheel coverage). Avoid the `cuda` / `cuda-toolkit` *meta* package that drags in a
-   driver — install the **versioned toolkit metapackage** `cuda-toolkit-12-6`
-   (or `-12-8`) **only**, so the 580 driver is untouched.
+2. **Install CUDA 12.x toolkit** (12.x still supports sm_52 + sm_60 + sm_70). The plan named
+   **CUDA 12.6** (broad framework compatibility) or **12.8**; ADR-0003 chose **12.9**, installed
+   by `scripts/install-cuda129.sh`. Avoid the `cuda` / `cuda-toolkit` *meta* package that drags
+   in a driver — install the **versioned toolkit metapackage** (`cuda-toolkit-12-9`) **only**,
+   so the 580 driver is untouched.
 3. Fix `/usr/local/cuda` symlink → `cuda-12.x`; set `PATH`/`LD_LIBRARY_PATH`.
 4. Install **cuDNN for CUDA 12.x** (needed by some frameworks).
 
@@ -288,27 +289,29 @@ less fragile and engines independently upgradable.
    *(Rebuilt 2026-07-27 for archs `52;60;61;70` after the P100 died (ADR-0017). Since
    2026-10-15 the script builds into a staging folder before swapping; see "llama.cpp
    usage notes" below.)*
-5. ⏭️ Stand up **NVIDIA Container Toolkit** + Docker; reproduce llama.cpp in a container.
-6. ⏭️ Evaluate **vLLM** on the V100s (containerized); benchmark vs llama.cpp.
-7. ⏭️ Wire up **OpenAI-style API** + router (LiteLLM); systemd services.
-8. ⏭️ Cooling/fan-control + thermal/power validation under sustained load.
+5. ✅ **Docker + NVIDIA Container Toolkit** (`scripts/install-docker-nvidia.sh`). llama.cpp
+   stayed native; the CPU app tier runs in Docker Compose (ADR-0006).
+6. ✅ Evaluated **vLLM** on the V100s: it runs, but the track was dropped 2026-07-18 (ADR-0004).
+7. ✅ **LiteLLM** gateway on `:4000` (ADR-0007) in front of llama-swap; systemd services.
+8. ✅ Cooling/fan control + power caps (`gpu-fan-control`, ADR-0009) and the power-cap
+   sweeps below.
 
 ---
 
-## Quick reference — current state (2026-06-30)
+## Quick reference — current state (2026-10-15)
 ```
-OS:      Ubuntu 24.04.4 LTS, kernel 6.8.0-124-generic
-Driver:  nvidia-driver-580-server 580.159.03  (KEEP)
+OS:      Ubuntu 24.04.4 LTS, kernel 6.8.0-136-generic
+Driver:  nvidia-driver-580-server 580.173.02  (KEEP)
 CUDA:    12.9.86 installed ✅ (cuDNN 9.23.2); /usr/local/cuda -> cuda-12.9
-nvcc:    /usr/local/cuda/bin/nvcc → 12.9 (targets sm_50..sm_121 incl sm_60/sm_70)
-GPUs:    nvidia-smi order: 0=P100  1=V100  2=V100  (all OK on 580)
-         CUDA runtime order (fastest-first): 0=V100 1=V100 2=P100
+nvcc:    /usr/local/cuda/bin/nvcc → 12.9 (targets sm_50..sm_121 incl sm_52/sm_60/sm_70)
+GPUs:    nvidia-smi order: 0=Titan X (stopgap, was P100)  1=V100  2=V100
+         CUDA runtime order (fastest-first): 0=V100 1=V100 2=Titan X
          → set CUDA_DEVICE_ORDER=PCI_BUS_ID to align with nvidia-smi
 NVLink:  none (all PHB / PCIe gen3)
 gcc:     13.3.0
 llama.cpp clone: /srv/ai/src/llama.cpp
-llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (server/cli/bench/embedding)
-docker:  not installed yet (for NVIDIA Container Toolkit step)
+llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (built by scripts/build-llama.sh)
+docker:  29.6.1 + Compose v5.3.0, NVIDIA Container Toolkit 1.19.1 (CPU app tier)
 ```
 
 ## Operator cheat-sheet — common commands
@@ -554,7 +557,9 @@ Qwen-Image 2.1 unified generate+edit model. It is isolated from the H3-pinned 0.
 (which can't be upgraded without breaking the H3 fp16 nodes) but **shares the model store**.
 Full design + rationale in **ADR-0024**. Key facts:
 - App tree `/srv/ai/comfyui-qwen`, venv `/srv/ai/venvs/comfyui-qwen` (**torch 2.8.0+cu128** —
-  `comfy-kitchen` needs torch ≥ 2.7; cu128 still ships Volta sm_70 kernels).
+  `comfy-kitchen` needs torch ≥ 2.7; torch 2.8's cu128 wheel still ships Volta sm_70 kernels,
+  but 2.11+'s and PyPI's cu130 default don't, so don't let torch drift up here — see the
+  [wheel table](optional-tools.md#which-torch-wheels-run-on-the-v100s-sm_70)).
 - Pinned to **idx1 (V100 #1), shared with `comfyui-open`**; the `free_gpu` node evicts the
   idx1 LLM (`coding`) on generate but never warms it back (`FREE_GPU_RESTORE=` is empty).
   While this unit runs, `comfyui-open` still releases its own cached models when idle but
@@ -599,7 +604,7 @@ sudo systemctl daemon-reload && sudo systemctl restart server-status
 # 4) start it (or use the dashboard ▶ Start button on the comfyui-qwen row):
 sudo systemctl start comfyui-qwen
 ```
-First run: open `https://<host>:8190/login`, set a password, then load a
+First run: open `http://<host>:8190/login` (plain HTTP, no TLS on this port), set a password, then load a
 **Qwen-Image 2.1** template (Templates → search "Qwen Image 2.1") and run a t2i / edit.
 
 #### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
@@ -643,17 +648,18 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put
 
 # Combined view: GPU temps + actual shroud fan RPM (passive Teslas report no fan to
 # nvidia-smi, so RPM comes from lm-sensors)
-#   shroud map: fan5 = V100 idx1 (bus03), fan4 = V100 idx2 (bus04), fan1 = P100 idx0
+#   shroud map: fan5 = V100 idx1 (bus03), fan4 = V100 idx2 (bus04), fan1 = idx0's old P100
+#   fan (BIOS auto while the self-cooled Titan X stopgap holds idx0)
 watch -n2 'CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi \
   --query-gpu=index,name,temperature.gpu,temperature.memory,power.draw --format=csv,noheader; \
-  echo "-- shroud fans (fan5=V100-idx1, fan4=V100-idx2, fan1=P100-idx0) --"; \
+  echo "-- shroud fans (fan5=V100-idx1, fan4=V100-idx2, fan1=old-P100-fan) --"; \
   sensors | grep -E "fan[145]:"'
 ```
 
 ### Re-run benchmarks
 `scripts/bench-models.sh` re-runs llama.cpp benchmarks for any subset of the served
-models. The model registry (gguf path, GPU pinning, split mode) is read straight from
-`config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
+models. The model registry (gguf path, GPU pinning, split mode) is read straight from the
+live, rendered `config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
 ```bash
 scripts/bench-models.sh --list                 # show model names + GPU pinning
 scripts/bench-models.sh                         # bench the daily set (coding chat small)
@@ -704,7 +710,7 @@ sudo systemctl poweroff
   To roll back: `mv build build.bad && mv build.prev-<…> build`. To update llama.cpp:
   `git checkout -- ggml/src/ggml-cuda/common.cuh && git pull`, then rerun the script.
 - **GPU selection:** set `CUDA_DEVICE_ORDER=PCI_BUS_ID` so `CUDA_VISIBLE_DEVICES`
-  indices match nvidia-smi (0=P100, 1/2=V100). Otherwise CUDA reorders V100s first.
+  indices match nvidia-smi (0=Titan X stopgap, 1/2=V100). Otherwise CUDA reorders V100s first.
 - **`-hf` auto-download hits HTTP 401** (HF API now requires auth for the commit
   lookup). Workaround: download GGUFs directly via `curl` into `/srv/ai/models`
   and pass with `-m`, or configure an HF token later.
@@ -731,7 +737,7 @@ are on the board's **4-pin PWM headers** (Nuvoton nct6775). Control = GPU temp
 2. **`sudo ./identify-fan.sh`** — pulses each `pwmN` low→high so you can see which
    channel spins each card's shroud fan. Restores auto on exit.
 3. Edit **`gpu-fan-control.config.json`** — set each zone's `pwm` to the channel
-   found in step 2 (GPU idx: 0=P100, 1=V100, 2=V100). Curve = [tempC, duty%],
+   found in step 2 (GPU idx: 0=Titan X stopgap (was P100), 1=V100, 2=V100). Curve = [tempC, duty%],
    min 35%, 100% by 80 °C.
 4. **`sudo ./install-fan-service.sh`** — installs+starts `gpu-fan-control.service`.
    Logs: `journalctl -u gpu-fan-control -f`.
@@ -741,14 +747,19 @@ any error/`nvidia-smi` failure; hands back to BIOS auto on clean stop.
 
 ### Fan wiring + curves (confirmed from Windows FanControl, 2026-07-01)
 Fans: 40x28mm high-static-pressure. V100 fans 15k rpm max; P100 fan 6k rpm max
-(quieter). Ambient 72-76 °F. CPU on Cooler Master block via CPU_FAN; case has
+(quieter; idle on BIOS auto while the self-cooled Titan X stopgap holds idx0). Ambient 72-76 °F. CPU on Cooler Master block via CPU_FAN; case has
 adequate airflow.
 
 | GPU (nvidia-smi) | PCI bus | Card   | pwm channel | Idle→Load | Duty     |
 |------------------|---------|--------|-------------|-----------|----------|
 | GPU1             | 03      | V100   | **pwm5**    | 39→70 °C  | 35→100 % |
 | GPU2             | 04      | V100   | **pwm4**    | 39→70 °C  | 35→100 % |
-| GPU0             | 01      | P100   | pwm1        | 38→70 °C  | 70→100 % |
+| GPU0             | 01      | Titan X (stopgap) | pwm1 → BIOS auto | — | monitor only |
+
+Since 2026-07-27 the idx0 zone is `monitor_only`: the GTX Titan X cools itself with its own
+blower (logged as `gpufan%`), so the daemon hands `pwm1`, the dead P100's fan, back to BIOS
+auto. The P100 curve was 38→70 °C, 70→100 %; it is kept as `_restore_p100_curve` in the config
+for when a passive card returns to idx0.
 
 Curves are linear between idle and load temp (hold min below idle, 100% at/above
 70 °C) — encoded in `gpu-fan-control.config.json`.
@@ -773,8 +784,8 @@ Exit 0 only if everything matches.
 The daemon controls each V100 zone on **max(core, memory)** temp, not core alone.
 Reason: the V100's HBM2 `temperature.memory` runs ~15-20 °C HOTTER than the core and
 is the throttle limiter (~85 °C). Controlling on core (64 °C ≈ 87% fan) let the HBM
-cook. Now the fan pins 100% as memory climbs. (P100 reports `temperature.memory`=N/A
-→ uses core.) Log format: `c<core>/m<mem>C->duty%`.
+cook. Now the fan pins 100% as memory climbs. (Cards without an HBM sensor, such as the P100
+and the Titan X stopgap, report `temperature.memory`=N/A → core is used.) Log format: `c<core>/m<mem>C->duty%`.
 
 **Physical cooling ceiling (important):** even at 100% fan (15k rpm) the 40 mm shroud
 cannot dissipate a full 245 W memory-bound load — under `llama-bench -p 2048` (a
@@ -790,7 +801,7 @@ Enable `nvidia-smi -pm 1` (persistence) so caps survive. Tune per-card if desire
 
 ### Power-cap sweep results + automatic caps at boot (2026-07-01)
 `power-cap-sweep.sh` sweeps caps and benches prefill+decode, recording peak temps and
-throughput. Results (Qwen3.6-27B on V100s, Qwen3.5-9B Q8_0 on P100):
+throughput. Results (2026-07-01; Qwen3.6-27B on V100s, Qwen3.5-9B Q8_0 on the P100, since dead):
 
 > **Tool update (2026-10):** the sweep is now `scripts/power-cap-sweep.py` (the `.sh` is a
 > back-compat shim). It sets each cap **through the daemon's config** (no sudo; the old raw
@@ -812,6 +823,10 @@ load regardless of cap — **never throttles** (15 °C headroom). Both V100s peg
 soft-throttle at ≥200W; **175W holds ~83-84 °C at ~91% decode throughput**. Decode is
 HBM-bandwidth-bound (mem clock locked 877 MHz), so capping power costs mostly prefill,
 little token-gen. P100 200W is a longevity/noise trim at ~0% throughput cost.
+
+The idx0 200 W cap carried over to the Titan X stopgap. A 250 W sustained-load test on
+2026-07-27 showed why that is fine: Maxwell GPU Boost holds an 83 °C target and self-trims to
+~200 W / ~1126 MHz, so 200 W and 250 W converge (see `_power_limits_note` in the config).
 
 **These caps are now applied automatically at boot** by the `gpu-fan-control` service via
 a top-level `power_limits` object in `gpu-fan-control.config.json`:
@@ -888,11 +903,15 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 (The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
 `MODEL_LABELS` map — keep the two in sync if a model is swapped.)
 
-**Routing = matrix (3 cards).** `f`(small, P100) is in every set so it's never evicted and runs
-CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
-`gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
-(big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+small(P100) all
-co-resident; after the 2026-07-22 swap `small` (MoE) uses ~15.3 GB on the P100 (was ~7.7 GB as the 12B). `small` answers immediately (Gemma reasoning disabled).
+**Routing = matrix (3 cards).** The idx0 slot `(f | fu)` (`small` or `small-uncensored`) is in
+every set, so it's never evicted by V100 traffic and runs CONCURRENTLY with the V100 models.
+V100 sets: `qq: c & h` (daily), `qg: c & y`, `gq: x & h`, `gg: x & y` (any Qwen/Gemma pairing
+across idx1/idx2), `qw: w & h`, `max: b` (big splits both V100s), `cn: n` (coder-next, both
+V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+small(P100) all co-resident; after the
+2026-07-22 swap `small` (MoE) used ~15.3 GB on the P100 (was ~7.7 GB as the 12B). Since the
+P100 died (2026-07-27) idx0 is the 12 GB Titan X stopgap and `small` is the dense 12B again
+(~6.3 GB weights; peak ~10.3 GB with heavy-coding's 2 × 32k slots). `small` answers
+immediately (Gemma reasoning disabled).
 
 **Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
 `small` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
@@ -1015,7 +1034,7 @@ different GPU — so the driver keeps reasoning while subagents work **in parall
 | --- | --- | --- |
 | V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
 | V100 idx2 | `chat` | task/general subagent |
-| P100 idx0 | `small` (Gemma-4-26B-A4B MoE) | explore/search subagent (always warm) |
+| idx0 (Titan X stopgap) | `small` (Gemma-4-12B dense; the 26B MoE while the P100 lived) | explore/search subagent (always warm) |
 
 Because `small`/`chat` live on separate cards from the driver, subagents run with no
 contention, no eviction, and (for `small`) zero cold-start (the status service's keeper
@@ -1155,8 +1174,10 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
   down (logs `Failed to create server 'llama-swap-mode'`), so after installing the
   service run `cd /srv/ai/docker && docker compose restart mcpo`. Verify with
   `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/llama-swap-mode/docs`
-  (expect `200`). (2) `--hot-reload` picks up config.json *edits*, but reviving a
-  previously-failed HTTP backend needs the restart.
+  (expect `200`). (2) mcpo runs **without** `--hot-reload` (dropped 2026-07-25, `baf8ac4`:
+  its file watcher spun a CPU core on the read-only `/config` bind mount), so a
+  config.json edit also needs `docker compose restart mcpo`. A plain `up -d` leaves an
+  unchanged container running on the old inventory.
 - **Copilot CLI / BYOK:** register the **raw MCP** endpoint (`:9120/mcp`) directly — it
   is **not** auto-added by `copilot-byok.sh`:
   `copilot mcp add --transport http llama-swap-mode http://<host-or-tailscale>:9120/mcp`
@@ -1179,7 +1200,7 @@ is reached from containers via `host.docker.internal:4000`.
 
 | Service     | Image                              | Access                     | Purpose |
 |-------------|------------------------------------|----------------------------|---------|
-| open-webui  | ghcr.io/open-webui/open-webui:v0.10.2 | `http://<host>:3000`    | Family chat UI + accounts |
+| open-webui  | ghcr.io/open-webui/open-webui:v0.11.0 | `http://<host>:3000`    | Family chat UI + accounts |
 | searxng     | searxng/searxng:latest             | `127.0.0.1:8888` (debug)   | Private web search (JSON) |
 | mcpo        | ghcr.io/open-webui/mcpo:main       | `0.0.0.0:8000` / `mcpo:8000` | MCP→OpenAPI proxy (ADR-0011) |
 
@@ -1225,7 +1246,8 @@ dir in the volume (embedding + whisper models, ~1 GB) is **not** user images —
   then `docker compose restart searxng`.
 
 **mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
-format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
+format), tracked in git; edits apply on `docker compose restart mcpo` (no `--hot-reload`, see
+the gotchas above). Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
 (Python servers work; Node/`npx` needs a node-enabled image). Registered servers:
 `time`, `fetch` (URL→markdown), `git` (inspect the ai-server repo) — all `uvx` — plus
@@ -1251,8 +1273,8 @@ mcpo `volumes`). Read ops (log/diff/status/show) work; `git_commit`/`git_add` fa
 (`Read-only file system`) — no LLM-driven mutation of the real repo. The container user ≠
 host owner (uid 1000), so the git server sets `safe.directory` via `GIT_CONFIG_*` env in
 config.json (avoids git's "dubious ownership" error without writing host files). **Adding a
-repo/volume mount requires `docker compose up -d --force-recreate mcpo`** — hot-reload only
-picks up config.json edits, not new env/volumes.
+repo/volume mount requires `docker compose up -d --force-recreate mcpo`**. A restart only
+re-reads config.json; new env/volumes need the container recreated.
 
 _plan-build server (in-house planner→coder pipeline):_ source
 `docker/mcpo/plan_build_mcp.py` (mounted at `/config`), launched with
@@ -1415,10 +1437,17 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 **agent / long-running** use, we expose ComfyUI as MCP tools via the vendored
 [joenorton/comfyui-mcp-server](https://github.com/joenorton/comfyui-mcp-server).
 
-- **Clone (updatable):** `/srv/ai/src/comfyui-mcp-server` (gitignored). Kept pristine except one
-  local commit — a real bug fix (`_load_workflows` didn't skip `.meta.json` sidecars → startup
-  crash; parity with `get_workflow_catalog`), pinned on upstream `e0101b2`, candidate to upstream.
-  Update with `git -C /srv/ai/src/comfyui-mcp-server pull --rebase`.
+- **Clone (updatable):** `/srv/ai/src/comfyui-mcp-server` (gitignored). Four local commits
+  (2026-07-05) on upstream `e0101b2`:
+  - `4a70818` bug fix: `_load_workflows` didn't skip `.meta.json` sidecars → startup crash
+    (parity with `get_workflow_catalog`). Candidate to upstream.
+  - `148e3d9` generation results carry a ready-to-render `markdown` image link, and
+    `view_image` returns markdown when `COMFY_MCP_RETURN_MARKDOWN` is set. mcpo turns MCP
+    image content into an inert data URI that Open WebUI never renders.
+  - `82bb418` + `2a15fde` tool-description wording: require the leading `!` for inline
+    images; drop the placeholder-host example.
+
+  Update with `git -C /srv/ai/src/comfyui-mcp-server pull --rebase`, which replays these four.
 - **Venv:** `/srv/ai/venvs/comfyui-mcp` (`--without-pip` + get-pip; deps `requests`, `mcp[cli]`,
   `Pillow`).
 - **Service:** `scripts/comfyui-mcp.service` (install via
@@ -1427,7 +1456,7 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   A tracked launcher `scripts/comfyui-mcp-launch.py` imports upstream's `mcp` object and (a)
   forces the bind host to `0.0.0.0` (upstream hard-codes 127.0.0.1) and (b) allows the mcpo
   `Host: host.docker.internal:9000` header (FastMCP's DNS-rebinding guard else returns **421
-  Misdirected Request**) — **no fork of upstream**. Auth-less like ComfyUI → LAN/Tailscale only.
+  Misdirected Request**) — no upstream patch needed for these two. Auth-less like ComfyUI → LAN/Tailscale only.
 - **Style library (local):** `config/comfyui-mcp/workflows/` (set via
   `COMFY_MCP_WORKFLOW_DIR`). Git holds only a frozen 8-file early snapshot; newer styles (e.g.
   `krea2_turbo`/`krea2_turbo_bf16`, which aichat's default role uses) and later edits are
@@ -1586,8 +1615,8 @@ and injects the LiteLLM key into Hermes' live config.
 **OpenClaw** (`ghcr.io/openclaw/openclaw`, Node daemon, runs as `node`/uid 1000):
 - Config = JSON5 at `/srv/ai/openclaw/state/openclaw.json` (writable; OpenClaw runs
   schema migrations). A dedicated `litellm` provider (`api: openai-completions`,
-  `baseUrl: http://host.docker.internal:4000`, `apiKey: "${LITELLM_API_KEY}"`,
-  `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`small`;
+  `baseUrl: http://host.docker.internal:4000/v1`, `apiKey: "${LITELLM_API_KEY}"`)
+  lists `chat`/`coding`/`small`;
   `agents.defaults.model.primary = litellm/chat`, `fallbacks = [litellm/coding]`.
 - Each model's `contextWindow` is the server's per-request `--ctx-size` in daily mode
   (`chat` 98304, `coding` 163840, `small` 32768), never more — a larger claim makes
@@ -1628,8 +1657,11 @@ and injects the LiteLLM key into Hermes' live config.
   - Not used: Tailscale Serve HTTPS (works, but enabling tailnet HTTPS certificates
     permanently publishes the machine's tailnet name in public Certificate Transparency
     logs) and `dangerouslyDisableDeviceAuth` (drops the device check for every client).
-- **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
-  never the in-app self-updater (ephemeral container layer). The auto-updater is
+- **Update deliberately by rebuilding the local image**, never with the in-app
+  self-updater (ephemeral container layer). The image is built locally
+  (`ai-server/openclaw:<tag>`, see the image-extension bullet below), so
+  `docker compose pull` doesn't update it. Bump the tag, then
+  `docker compose build openclaw && docker compose up -d openclaw`. The auto-updater is
   off by default. The "Update available" startup banner checks the **npm** registry
   (`2026.7.1-2`), whose `-N` patch suffix is **not** published as a GHCR image tag,
   so it's a cross-channel false positive for the container — silenced with
@@ -1652,8 +1684,10 @@ and injects the LiteLLM key into Hermes' live config.
   (github/gh-issues); compose builds it as `ai-server/openclaw:<tag>`. **User-installed
   skill *content*** (ClawHub/git) already persists under the mounted `state` dir
   (`~/.openclaw/plugin-skills`, `skill-workshop`) — no extra volume needed; only
-  dependency *binaries* need the image extension. Bump `BASE_IMAGE` in the Dockerfile
-  in lockstep with the compose tag when updating, then `docker compose build openclaw`.
+  dependency *binaries* need the image extension. When updating, bump the tag in all three
+  places together: compose `build.args.BASE_IMAGE` (this is the value used, since a build arg
+  overrides the Dockerfile's default), compose `image:`, and the Dockerfile's
+  `ARG BASE_IMAGE`. Then `docker compose build openclaw`.
 
 **Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
 - **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web

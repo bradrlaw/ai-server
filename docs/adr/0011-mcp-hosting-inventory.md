@@ -26,7 +26,9 @@ Host MCP servers **on this machine** (CPU app tier), and manage them centrally w
   `mcpServers` format) is the **source of truth** for what MCP servers exist. It is
   tracked in git. Adding/removing a server = edit this file.
 - **Hot reload:** mcpo runs with `--hot-reload`, so inventory edits apply without
-  downtime.
+  downtime. *(Updated 2026-10-15, audit D8: `--hot-reload` was dropped on 2026-07-25
+  (`baf8ac4`) because mcpo's file watcher spun a CPU core on the read-only config bind
+  mount. Inventory edits now apply on `docker compose restart mcpo`.)*
 - **Exposure:** each MCP server becomes an authenticated OpenAPI route
   (`http://mcpo:8000/<name>` on the `ai` network; `127.0.0.1:8000` for debug) with
   auto-generated docs at `/<name>/docs`. Auth via `MCPO_API_KEY` (in `.env`).
