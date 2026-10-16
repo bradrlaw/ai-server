@@ -20,11 +20,11 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0001](0001-keep-all-work-under-srv-ai.md) | Keep all work under `/srv/ai` | Accepted |
 | [0002](0002-preserve-580-driver-decouple-toolkit.md) | Preserve nvidia-580-server driver; decouple CUDA toolkit | Accepted |
 | [0003](0003-use-cuda-12.9-not-13.md) | Use CUDA 12.9 (not 13.x) for Pascal/Volta support | Accepted |
-| [0004](0004-llama-cpp-primary-vllm-secondary.md) | llama.cpp as primary engine, vLLM secondary | Accepted |
+| [0004](0004-llama-cpp-primary-vllm-secondary.md) | llama.cpp as primary engine, vLLM secondary | Accepted (vLLM track abandoned 2026-07-18) |
 | [0005](0005-gpu-workload-split.md) | GPU workload split (P100 aux, V100 primary) | Accepted |
 | [0006](0006-containerize-inference-stack.md) | Containerize the inference stack | Accepted (hybrid) |
 | [0007](0007-litellm-openai-api-gateway.md) | LiteLLM as OpenAI-style API gateway/router | Accepted |
-| [0008](0008-primary-coding-model-qwen3.6-27b.md) | Primary coding model = Qwen3.6-27B dense (35B-A3B MoE alt) | Accepted |
+| [0008](0008-primary-coding-model-qwen3.6-27b.md) | Primary coding model = Qwen3.6-27B dense (35B-A3B MoE alt) | Superseded by 0029 (coding); MoE `chat` stands |
 | [0009](0009-gpu-shroud-fan-control.md) | GPU shroud fan control via nct6775 PWM + nvidia-smi temps | Accepted |
 | [0010](0010-overall-serving-architecture.md) | Overall serving architecture (gateway + on-demand router + aux) | Accepted |
 | [0011](0011-mcp-hosting-inventory.md) | MCP server hosting & inventory (mcpo) | Accepted |
@@ -45,6 +45,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0026](0026-secure-mcp-bridge-network-lockdown.md) | Lock the secure ComfyUI MCP bridges to localhost + mcpo | Accepted |
 | [0027](0027-status-dashboard-login-csrf.md) | Sign-in + CSRF protection for the status dashboard (:9095) | Accepted |
 | [0028](0028-host-firewall-ufw.md) | Host firewall (ufw) with a container→host allowlist | Accepted |
+| [0029](0029-qwen3.8-27b-migration.md) | Migrate `coding` + `big` to Qwen3.8-27B (`reasoning_effort=medium`) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

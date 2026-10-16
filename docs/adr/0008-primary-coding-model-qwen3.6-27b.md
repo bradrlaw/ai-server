@@ -1,6 +1,8 @@
 # ADR-0008: Primary coding model = Qwen3.6-27B (dense), with Qwen3.6-35B-A3B (MoE) as fast alternative
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0029](0029-qwen3.8-27b-migration.md) for the coding model
+  (`coding` + `big` moved to Qwen3.8-27B on 2026-08-15). The Qwen3.6-35B-A3B MoE choice still
+  stands; it serves the `chat` slot.
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 

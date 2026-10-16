@@ -118,6 +118,8 @@ ADR-0008). This changes the single-slot contexts referenced above:
 
 - **daily / heavy-coding `coding`** — Qwen3.6-27B-MTP Q6_K, ctx **184320 (180k)**,
   not 200k (MTP's extra ~1 GB compute buffer OOMs at 200k). +79% decode.
+  *(Superseded 2026-08-15: `coding` is Qwen3.8-27B Q6_K at **163840 (160k)** with
+  `n_max 3` — [ADR-0029](0029-qwen3.8-27b-migration.md).)*
 - **daily `chat`** — Qwen3.6-35B-A3B-MTP UD-Q6_K, ctx **98304 (96k)**, not 128k. +31% decode.
 
 Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`

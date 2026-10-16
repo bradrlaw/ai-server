@@ -5,6 +5,10 @@ fork of `ik_llama.cpp` by *poisonxa16 (PXA)* that adds custom **PXQ** quantizati
 and per-card auto-tuning (`PXA_ENHANCE`). This file is intentionally separate from
 [`benchmarking.md`](benchmarking.md); nothing here changes our daily serving stack.
 
+> **Historical P100 results:** the P100 (idx0) results here (§7, §14) predate its death on
+> 2026-07-27 ([ADR-0017](adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)). idx0 is now a 12 GB
+> GTX Titan X stopgap; the V100 results are unaffected.
+
 **TL;DR**
 
 - **Apples-to-apples (identical Q6_K weights, same V100):** the fork's engine alone runs the
