@@ -245,10 +245,18 @@ its model conversation. No other account has had shell access (owner, 2026-10-15
 The new key is in `docker/.env`, `hermes/config.yaml`, `~/.config/aichat/config.yaml`
 and Open WebUI's stored connection key. litellm, open-webui, mcpo and openclaw were
 recreated, hermes restarted. `plan-build-mcp` loads `docker/.env` only at start, so it
-needs `sudo systemctl restart plan-build-mcp`. The old key now gets the same 400 as
+also needed `sudo systemctl restart plan-build-mcp`. The old key now gets the same 400 as
 an unknown key. Open WebUI, Hermes, aichat and OpenClaw were checked end to end. The
 mcpo and Open WebUI API keys were not rotated (owner). Procedure: runbook,
 "Rotating the master key".
+
+**Deployed (2026-10-16 06:01 UTC).** The owner restarted `plan-build-mcp` and ran
+`sudo scripts/setup-samba.sh`. `/etc/samba/smb.conf` matches the repo, and
+`scripts/verify-smb-veto.py` passed 38 checks with 0 failures. `plan-build-mcp` runs
+with the new key: a `fast_make_plan` call through `:9100` returned a plan. Since the
+rotation, LiteLLM has rejected only the agent's own old-key and random-key tests, so
+no client was left on the old key. The owner set the new key on the Mac and deleted
+`hermes/config.yaml.bak-20260721T202912Z`, which held the old one.
 
 **Keeping it working.**
 - New credential store: add its name to `veto files` in `config/smb.conf` and to
