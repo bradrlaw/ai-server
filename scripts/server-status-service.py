@@ -35,7 +35,7 @@ Bind address/port and upstreams are configurable via environment variables:
 
 Optional background workers:
   OWUI_API_KEY         set to enable pushing a live status banner into Open WebUI
-  SMALL_KEEPER_ENABLED  (default true) re-warm `small` whenever the P100 slot is empty
+  SMALL_KEEPER_ENABLED  (default true) re-warm `small` whenever the idx0 slot is empty
   SMALL_KEEP_MODEL      (default small)   SMALL_KEEP_ALT (default small-uncensored)
   SMALL_KEEPER_INTERVAL (default 60s)
 """
@@ -163,11 +163,12 @@ OWUI_BANNER_DISMISSIBLE = os.environ.get("OWUI_BANNER_DISMISSIBLE", "false").low
     "yes",
 )
 
-# --- Optional: keep the P100 `small` model always resident ---------------------
-# The P100 (idx0) slot is `(small | small-uncensored)` — mutually exclusive. A
+# --- Optional: keep the idx0 `small` model always resident ---------------------
+# The idx0 slot (Titan X stopgap; was the P100) is `(small | small-uncensored)` —
+# mutually exclusive. A
 # llama-swap restart, or `small-uncensored`'s ttl expiring after use, can leave the
 # card empty until something requests `small`. This keeper re-warms `small` whenever
-# the P100 slot is empty. It never evicts `small-uncensored` (if that is loaded the
+# the idx0 slot is empty. It never evicts `small-uncensored` (if that is loaded the
 # user is actively using it), so it only fires when NEITHER model is resident.
 SMALL_KEEPER_ENABLED = os.environ.get("SMALL_KEEPER_ENABLED", "true").lower() in (
     "1",
@@ -1333,7 +1334,7 @@ def _warm_model(model: str) -> bool:
 
 def _fast_keeper_loop():
     print(
-        f"[keeper] keeping {SMALL_KEEP_MODEL!r} resident on the P100 "
+        f"[keeper] keeping {SMALL_KEEP_MODEL!r} resident on idx0 "
         f"(checked every {SMALL_KEEPER_INTERVAL:.0f}s; yields to {SMALL_KEEP_ALT!r})"
     )
     while True:
@@ -1345,14 +1346,14 @@ def _fast_keeper_loop():
                     for m in (running.get("running") or [])
                     if isinstance(m, dict)
                 }
-                # Only warm when the P100 slot is empty (neither variant loaded),
+                # Only warm when the idx0 slot is empty (neither variant loaded),
                 # so we never evict small-uncensored while it is in use.
                 if (
                     not _QUIET_SUPPRESS_KEEPER.is_set()
                     and SMALL_KEEP_MODEL not in loaded
                     and SMALL_KEEP_ALT not in loaded
                 ):
-                    print(f"[keeper] P100 slot empty — warming {SMALL_KEEP_MODEL!r}")
+                    print(f"[keeper] idx0 slot empty — warming {SMALL_KEEP_MODEL!r}")
                     _warm_model(SMALL_KEEP_MODEL)
         except Exception as exc:  # noqa: BLE001 - keeper must never crash the service
             print(f"[keeper] loop error: {exc}")

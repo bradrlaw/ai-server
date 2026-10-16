@@ -3,7 +3,7 @@
 # The normal, general-purpose state. Every model keeps its base --parallel (1,
 # or 2 for coder-next) so single-request context is maximal and VRAM headroom
 # stays comfortable. This is the base config as-is: no argument overrides, the
-# base preload (small on the P100) is kept.
+# base preload (small on idx0, the Titan X stopgap) is kept.
 #
 # Residency (unchanged from base): coding(idx1) + chat(idx2) + small(idx0)
 # co-resident; the heavier comparison/uncensored/dual-card models swap in on
@@ -16,7 +16,7 @@ description: >
   heavy models on demand.
 # No per-model overrides — render the base verbatim.
 overrides: {}
-# Keep the base startup preload (small on the P100) so a reboot doesn't pin both
+# Keep the base startup preload (small on idx0) so a reboot doesn't pin both
 # V100s. `warm` is what the switcher makes ready NOW — restore the daily working
 # set (coding + chat + small) when switching back to daily.
 preload:

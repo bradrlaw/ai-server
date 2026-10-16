@@ -365,7 +365,7 @@ routing:
     settings:
       matrix:
         # Card map: idx0(Titan X stopgap, was P100)=small|small-uncensored ; idx1(V100)=coding|gemma-31b|chat-uncensored-q6|big ;
-        #           idx2(V100)=chat|gemma-26b|big. P100 slot is `(f | fu)`: `small`
+        #           idx2(V100)=chat|gemma-26b|big. idx0 slot is `(f | fu)`: `small`
         #           and `small-uncensored` are mutually exclusive on idx0 (they
         #           evict each other); one of them coexists with all V100 activity.
         vars:
@@ -383,23 +383,23 @@ routing:
           n: 30   # 50GB Q4 across both V100s is slow to load; prefer keeping it
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
-          # any subset, e.g. just [f], or [c] alone). The P100 slot `(f | fu)`
+          # any subset, e.g. just [f], or [c] alone). The idx0 slot `(f | fu)`
           # expands each set into a `small` and a `small-uncensored` variant, so
-          # exactly one P100 model coexists with V100 activity and requesting the
+          # exactly one idx0 model coexists with V100 activity and requesting the
           # other swaps it in.
-          qq: "c & h & (f | fu)"    # daily: coding(idx1) + chat(idx2) + P100 chat
+          qq: "c & h & (f | fu)"    # daily: coding(idx1) + chat(idx2) + idx0 small
           qg: "c & y & (f | fu)"    # coding vs gemma-26b head-to-head
           gq: "x & h & (f | fu)"    # gemma-31b vs chat head-to-head
-          gg: "x & y & (f | fu)"    # both Gemmas (idx1+idx2) + P100 chat
-          qw: "w & h & (f | fu)"    # uncensored-Q6(idx1) + chat(idx2) + P100 chat
-          max: "b & (f | fu)"       # big(idx1+idx2) + P100 chat
-          cn: "n & (f | fu)"        # coder-next(idx1+idx2) + P100 chat
+          gg: "x & y & (f | fu)"    # both Gemmas (idx1+idx2) + idx0 small
+          qw: "w & h & (f | fu)"    # uncensored-Q6(idx1) + chat(idx2) + idx0 small
+          max: "b & (f | fu)"       # big(idx1+idx2) + idx0 small
+          cn: "n & (f | fu)"        # coder-next(idx1+idx2) + idx0 small
 
-# hooks: run actions on lifecycle events. Preload `small` on startup so the P100
-# (idx0) is never left empty after a llama-swap (re)start — the P100 slot is
+# hooks: run actions on lifecycle events. Preload `small` on startup so idx0
+# is never left empty after a llama-swap (re)start — the idx0 slot is
 # `(f | fu)`, so `small` is the always-ready default there. (This covers restarts;
 # if `small-uncensored` is requested it evicts `small` and, once its ttl expires,
-# the P100 stays empty until `small` is requested again — request `small` to
+# idx0 stays empty until `small` is requested again — request `small` to
 # restore it. Single-model preload = no group needed.)
 hooks:
   on_startup:

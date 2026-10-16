@@ -10,7 +10,7 @@ User=brad
 Group=brad
 WorkingDirectory=/srv/ai/comfyui
 # Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
-# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+# cards as nvidia-smi (idx0=Titan X stopgap, was P100; idx1/2=V100).
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 # Burst workload: pin to V100 #1 (idx1). Generation competes with the `coding`
 # model on this card — the free_gpu hook (custom_nodes/free_gpu.py) auto-unloads
@@ -19,7 +19,7 @@ Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 Environment=CUDA_VISIBLE_DEVICES=1
 # Where the free_gpu hook reaches llama-swap to free the GPU before a run.
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Models the free_gpu hook KEEPS loaded during image gen (they live on idx2/P100,
+# Models the free_gpu hook KEEPS loaded during image gen (they live on idx2/idx0,
 # not on ComfyUI's idx1 card). Only the idx1 occupant (coding/big/coder-next) is
 # unloaded per-run; chat + small stay responsive.
 Environment=FREE_GPU_KEEP=chat,small
