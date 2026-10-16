@@ -4,6 +4,12 @@
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
+> **Later changes (noted 2026-10-15):** the P100 died on 2026-07-27 (HBM2 ECC failure) and idx0
+> is now a 12 GB GTX Titan X stopgap ([ADR-0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md)).
+> The aux services planned for it (embeddings, TTS, STT) were never deployed
+> (architecture.md Phase 4); idx0 serves only the `small*` chat slots. ComfyUI runs on the V100s
+> ([ADR-0013](0013-dual-comfyui-instances.md), [ADR-0024](0024-qwen-image-2.1-comfyui-instance.md)).
+
 ## Context
 Three heterogeneous GPUs, no NVLink (all PCIe gen3 via host bridge, per
 `nvidia-smi topo -m`):

@@ -4,6 +4,11 @@
 * Date: 2026-07-12
 * Deciders: @bradrlaw (+ Copilot CLI)
 
+> **Later changes (noted 2026-10-15):** the P100 died on 2026-07-27
+> ([ADR-0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md)). `scripts/build-llama.sh` still applies
+> this patch, so an sm_60 card returning to idx0 is covered. The patch only gates compute
+> capability 6.0, so the Titan X stopgap (sm_52) and the V100s (sm_70) are unaffected.
+
 ## Context
 
 Our P100 (idx0, sm_60) runs the `fast` and `fast-uncensored` models. llama.cpp's

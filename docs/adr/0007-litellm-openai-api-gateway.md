@@ -1,6 +1,6 @@
 # ADR-0007: LiteLLM as OpenAI-style API gateway/router
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-02, see the update below)
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 

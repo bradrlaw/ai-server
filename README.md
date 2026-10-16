@@ -73,7 +73,9 @@ Capabilities:
 ## Hardware
 
 - **CPU/RAM:** Intel i7-6950X (MSI X99A), 128 GB RAM, 2 TB NVMe
-- **GPUs:** 2× Tesla V100-32GB (sm_70) + 1× Tesla P100-16GB (sm_60), no NVLink (PCIe)
+- **GPUs:** 2× Tesla V100-32GB (sm_70) + 1× GTX Titan X 12 GB (Maxwell sm_52), no NVLink (PCIe).
+  The Titan X is a stopgap in slot 0: the original Tesla P100-16GB (sm_60) died on 2026-07-27
+  ([ADR-0017](docs/adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)).
 - **OS:** Ubuntu 24.04, NVIDIA driver 580-server, CUDA 12.x toolkit
 
 ## Build cost
@@ -99,18 +101,23 @@ a tight budget by using previous-generation datacenter GPUs and a used base PC.
 | CyberPower CP1500PFCLCD PFC Sinewave UPS | 1 | $258 |
 | **Total (all taxes and shipping included)** | | **$3,144** |
 
-† The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC and are no
-longer used.
+† The Titan X GPU and Rosewill 1200W PSU came bundled with the used PC. The PSU is no longer
+used. The Titan X sat unused until the P100 died (2026-07-27); it now fills that slot as a stopgap.
 
 ## Power usage
 
 Measured with `nvidia-smi dmon`. These are **GPU-only** figures — whole-system draw at
 the wall is higher (CPU, motherboard, NVMe, fans, and PSU conversion losses on top).
 
+> **Measured 2026-07-17, with the Tesla P100 in slot 0.** It died on 2026-07-27, and the
+> GTX Titan X stopgap now fills that slot. A warm spot check on 2026-10-15 read ~30 W for the
+> Titan X (SM 135 MHz) and ~37–39 W per V100, ~105 W in total, close to the warm table below.
+> The cold-idle table has not been re-measured.
+
 ### Idle — daily models loaded (warm)
 
-Normal running state: the `small` model resident on the P100 plus `coding` + `chat` on the
-V100s, no active inference.
+Normal running state: the `small` model resident on slot 0 (the P100 at the time) plus
+`coding` + `chat` on the V100s, no active inference.
 
 | GPU | Card | Power | Core temp | Mem temp | SM clock |
 |-----|------|-------|-----------|----------|----------|
@@ -139,7 +146,7 @@ stays pinned at 1230 MHz (its memory clock sits at 877 MHz regardless); with eve
 unloaded the SM clock falls to 135 MHz and draw drops accordingly. Notably, keeping the two
 ComfyUI instances warm alone (LLMs unloaded) is enough to hold both V100s at ~36–37 W — the
 LLMs add only a few watts on top. Power caps applied at boot by the fan-control daemon cap
-the *ceiling* (P100 200 W, V100 175 W each), not this idle floor.
+the *ceiling* (slot 0 200 W, V100 175 W each), not this idle floor.
 
 ### Whole-system idle (at the wall)
 
@@ -283,17 +290,17 @@ Things others running older multi-GPU boxes may find reusable:
 
 | Component | What it gives you |
 |-----------|-------------------|
-| `config/llama-swap.yaml` | Matrix router that auto-swaps **co-resident model sets** across 3 GPUs so daily models stay hot and heavy models swap in on demand. |
+| `config/llama-swap.base.yaml` + `config/modes/*.yaml` | Matrix router that auto-swaps **co-resident model sets** across 3 GPUs so daily models stay hot and heavy models swap in on demand. Edit the base; `scripts/llama-swap-mode.py set <mode>` renders it plus a serving-mode overlay into the live, gitignored `config/llama-swap.yaml` (ADR-0015). |
 | `docker/mcpo/plan_build_mcp.py` | **Plan-and-build MCP tool** — plan a task with one model, implement it with another; GPU-aware so planner + coder stay co-resident (no swap). |
 | `config/comfyui-mcp/workflows/*.json` + `scripts/comfyui-mcp-launch.py` | Turn ComfyUI style workflows into **MCP image/video/song tools** callable by name from chat/agents. |
-| `scripts/install-comfyui-instances.sh` + `comfyui-*.service` | **Dual ComfyUI** setup — an open instance plus a password-locked one — from a single install, as systemd services. |
+| `scripts/install-comfyui-instances.sh` + `comfyui-*.service` | **Multi-instance ComfyUI** — an open instance plus a password-locked one from a single install, as systemd services. A third, on-demand instance (`comfyui-qwen`, Qwen-Image 2.1 on its own ComfyUI tree, ADR-0024) is installed from `comfyui-qwen.service` per the runbook. |
 | `scripts/comfyui-free-gpu-node.py` | ComfyUI node that **unloads llama-swap LLMs and waits for VRAM** to actually free before a render, avoiding OOM on shared GPUs. |
 | `scripts/comfyui-snapshot.sh` | **Reversible snapshots** of the ComfyUI custom-node/pip state so you can undo a bad node-pack install. |
 | `scripts/gpu-fan-control.py` (+ `.service`, `.config.json`) | Temperature-driven **shroud-fan control + self-healing power caps** (drives off V100 HBM temp; re-caps GPUs that fall off/return on the bus). |
-| `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`; the dashboard and its actions need a sign-in — set the password with `--set-password`, ADR-0027) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), keeps the **`small` model warm on the P100**, and can run an optional **quiet-hours deep-idle window** (unloads models + stops the running ComfyUI instances overnight to drop the V100s out of P0; restores them at window end). |
+| `scripts/server-status-service.py` (+ `server-status.service`) | Host-side **status service** (JSON + HTML on `:9095`; the dashboard and its actions need a sign-in — set the password with `--set-password`, ADR-0027) aggregating loaded models, ComfyUI queues, and per-GPU util/VRAM/power/temp. Optionally pushes a live **status banner** into Open WebUI (shown on the blank new-chat screen), keeps the **`small` model warm on slot 0**, and can run an optional **quiet-hours deep-idle window** (unloads models + stops the running ComfyUI instances overnight to drop the V100s out of P0; restores them at window end). |
 | `docker/open-webui/functions/server_status_inlet.py` | Open WebUI **new-chat status card** — a multi-line card of what's running (models, GPUs, host, ComfyUI) above the first reply of each chat, sourced from the status service. Valve `banner_style=line` brings back the old one-line status, which Open WebUI truncates to one line. |
 | `scripts/build-llama.sh` + `scripts/patches/p100-fast-fp16-carveout.patch` | Build llama.cpp for **sm_52/sm_60/sm_61/sm_70** (Maxwell Titan X stopgap, Pascal, Volta) and apply the P100 fp16-precision carveout if missing. The build goes into a staging folder and is checked (it runs, and has code for every arch) before it replaces the live build; the previous build is kept for rollback. |
-| `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from `llama-swap.yaml` so it never drifts. |
+| `scripts/bench-models.sh` | **Re-run llama.cpp benchmarks** for any subset of the served models; reads the model→GPU pinning registry straight from the live, rendered `llama-swap.yaml` so it never drifts. |
 | `scripts/hf-dl` | Hugging Face downloads with the token **injected from the system keyring** (no plaintext token on disk). |
 | `scripts/install-*.sh` | One-shot installers: CUDA 12.9, Docker + NVIDIA toolkit, llama-swap / ComfyUI / fan systemd services. |
 | `scripts/bench-*.sh`, `power-cap-sweep.py`, `verify-gpu-*.sh` | Benchmarking, power/thermal sweeps (caps set via the fan daemon's config), and GPU-state / fan-mapping verification helpers. |
@@ -330,7 +337,7 @@ separately by their respective creators and are not redistributed here.)
 
 | Project | Link | How it's used |
 |---------|------|---------------|
-| llama.cpp | https://github.com/ggml-org/llama.cpp | GGUF LLM inference engine; built from source for sm_52/60/61/70: the Titan X stopgap (sm_52), a P100 (sm_60) and the V100s (sm_70). |
+| llama.cpp | https://github.com/ggml-org/llama.cpp | GGUF LLM inference engine; built from source for sm_52/60/61/70: the Titan X stopgap (sm_52) and the V100s (sm_70), with sm_60/61 kept for a returning Pascal card such as a replacement P100. |
 | llama-swap | https://github.com/mostlygeek/llama-swap | Model router / on-demand loader in front of llama.cpp; the matrix router picks co-resident model sets per GPU. |
 | ComfyUI | https://github.com/comfyanonymous/ComfyUI | Node-based image/video generation server (run as two native instances: open + password-locked). |
 | comfyui-mcp-server | https://github.com/joenorton/comfyui-mcp-server | Exposes ComfyUI style workflows as MCP tools (vendored at upstream `e0101b2`; local fixes in `scripts/patches/comfyui-mcp-server-local.patch`). |
@@ -387,6 +394,9 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 | ComfyUI_Text_Translation | https://github.com/TFL-TFL/ComfyUI_Text_Translation | In-graph prompt translation. |
 | ComfyUI-llama-cpp_vlm | https://github.com/mickeylan/ComfyUI-llama-cpp_vlm | Runs local VLM (GGUF + mmproj) inference inside ComfyUI for image captioning/analysis. |
 | ComfyUI-Login | https://github.com/liusida/ComfyUI-Login | Password authentication for the locked ComfyUI instance. |
+| CRT-Nodes | https://github.com/PGCRT/CRT-Nodes | Utility pack: auto-downloading model loaders (`CRTAutoDL*`, incl. MiniMax-H3 model/CLIP/VAE/turbo-LoRA selectors) and a MiniMax-H3 unified sampler. One import is patched locally: the `comfy_kitchen` int8-attention flag the pinned ComfyUI lacks now falls back to `False`. |
+| ComfyUI_QwenVL_PromptCaption | https://github.com/WingeD123/ComfyUI_QwenVL_PromptCaption | Qwen-VL prompt inversion and captioning (HF-format models via transformers), incl. `Qwen3CaptionBatch` for captioning a folder of images to `.txt` files. |
+| viggle_turbo.py (Viggle) | https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo | One-file node from the model repo's `comfyui/` folder, used on `comfyui-qwen`: `ViggleTurboSigmas` (the turbo LoRA's few-step sigma schedule) and `ViggleTurboLora` (applies the LoRA unmerged, as a runtime branch). |
 | llama-cpp-python (JamePeng fork) | https://github.com/JamePeng/llama-cpp-python | Python bindings backing the VLM node; built from source (v0.3.40) for sm_60/sm_70. |
 
 ### Tooling & infrastructure
@@ -403,7 +413,7 @@ Optional, installed alongside — not replacing — ComfyUI. Install + full attr
 | Plotly + Kaleido | https://github.com/plotly/plotly.py | Renders the benchmark result charts (via `llm-scaling-bench`); Kaleido exports static PNGs headlessly. |
 | iTerm2 | https://github.com/gnachman/iTerm2 | macOS terminal emulator used to drive SSH sessions and the Copilot CLI against the server. |
 | iTerm2 `imgcat` | https://iterm2.com/documentation-images.html | Bundled in `scripts/imgcat` to preview generated images inline in the terminal over SSH. |
-| P100 FAST_FP16 carveout (apollo-mg) | https://gist.github.com/apollo-mg/9218d50a209d70a85f033bf182657818 | 3-line llama.cpp patch disabling `FAST_FP16` on the P100 (sm_60) to stop fp16 accuracy drift; sourced from apollo-mg's write-up, merged in [llama-cpp-turboquant PR #212](https://github.com/TheTom/llama-cpp-turboquant/pull/212) ([TurboQuant+ tqp-v0.3.0](https://github.com/TheTom/llama-cpp-turboquant/releases/tag/tqp-v0.3.0)). See [docs/adr/0014](docs/adr/0014-p100-fast-fp16-carveout.md). |
+| P100 FAST_FP16 carveout (apollo-mg) | https://gist.github.com/apollo-mg/9218d50a209d70a85f033bf182657818 | 3-line llama.cpp patch disabling `FAST_FP16` on the P100 (sm_60) to stop fp16 accuracy drift (dormant while slot 0 holds the Titan X stopgap; `build-llama.sh` still applies it); sourced from apollo-mg's write-up, merged in [llama-cpp-turboquant PR #212](https://github.com/TheTom/llama-cpp-turboquant/pull/212) ([TurboQuant+ tqp-v0.3.0](https://github.com/TheTom/llama-cpp-turboquant/releases/tag/tqp-v0.3.0)). See [docs/adr/0014](docs/adr/0014-p100-fast-fp16-carveout.md). |
 
 ## License
 

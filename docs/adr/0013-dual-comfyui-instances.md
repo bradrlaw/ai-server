@@ -4,6 +4,12 @@
 * Date: 2026-07-07
 * Deciders: @bradrlaw
 
+> **Later changes (noted 2026-10-15):** a third, on-demand ComfyUI instance for Qwen-Image 2.1
+> (`comfyui-qwen`, `:8190`, idx1) was added in
+> [ADR-0024](0024-qwen-image-2.1-comfyui-instance.md). The P100 mentioned below died on
+> 2026-07-27; idx0 is a 12 GB Titan X stopgap
+> ([ADR-0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md)).
+
 ## Context
 
 ComfyUI has **no real built-in authentication or multi-tenant isolation**. The

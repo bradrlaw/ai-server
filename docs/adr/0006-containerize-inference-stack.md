@@ -4,6 +4,11 @@
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
+> **Later changes (noted 2026-10-15):** OpenClaw left native systemd and runs as a Docker
+> Compose container next to the Hermes gateway
+> ([ADR-0016](0016-personal-assistant-gateways.md)). vLLM, listed below as a native-venv
+> engine, was dropped on 2026-07-18 ([ADR-0004](0004-llama-cpp-primary-vllm-secondary.md)).
+
 ## Context
 Different engines (llama.cpp, vLLM, TTS/STT) want different, sometimes conflicting,
 CUDA/PyTorch/Python versions. Managing all of that natively on one host leads to

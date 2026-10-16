@@ -4,6 +4,11 @@
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
+> **Later changes (noted 2026-10-15):** the P100 below died on 2026-07-27; idx0 is now a 12 GB
+> GTX Titan X stopgap ([ADR-0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md)). The
+> controller and its idx0 200 W cap carried over unchanged (`scripts/gpu-fan-control.config.json`);
+> both V100s stay at 175 W.
+
 ## Context
 The three datacenter GPUs (2x V100, 1x P100) are **passively cooled** — they have
 no onboard fans and expose **no fan control** (nvidia-smi cannot set fan speed on
