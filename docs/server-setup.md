@@ -879,6 +879,129 @@ stall events since it started; hover the Fan cell to see the count.
    no STALL at idle (`min_duty`). Then A/B under load with `scripts/power-cap-sweep.py`
    and `scripts/gpu-dmon-load-capture.sh`.
 
+### Fan noise test (2026-10-16)
+To compare cooling setups by noise, record each condition with one mic in a fixed spot.
+`scripts/fan-noise-analyze.py` turns the WAVs into levels, a room correction and tones, and
+`scripts/fan-noise-sweep.py` adds a fixed-duty fan sweep. Levels are dBFS (relative to the
+recorder), so recordings compare only with the **same mic, position and gain**. Keep all
+three fixed between the before and after sessions.
+
+**Recording (Audacity on the Mac).** Use 48 kHz, 32-bit float or 24-bit WAV; mono is fine.
+Turn off anything that adapts: AGC, noise suppression, macOS voice isolation. Set the input
+gain once, so the loudest condition (both V100s loaded) peaks below about −6 dBFS, then leave
+it. Mark where the arm and mic are so the after-session matches. Record at least 60 s of
+steady state per condition (the analysis drops 5 s at each end) and keep quiet. Say the
+condition at the start of each take, or put it in the file name.
+
+| Take | Machine | Notes |
+|---|---|---|
+| `room-start`, `room-end` | **off** | The NAS, disk arrays and the cage stay on: they're the room. Recorded at the start and end of the session; a change over 1 dB is flagged |
+| `idle` | as configured, GPUs idle | 15+ min after the last load |
+| `gpu1`, `gpu2`, `both` | one or both V100s loaded | the same load every session; record once the fans have settled (~10 min) |
+| `sweep` | GPUs idle, `fan-noise-sweep.py` | ~11 min |
+
+Two takes of each (`idle1=`, `idle2=` …) show how repeatable the numbers are.
+
+The sweep needs the GPUs idle and the case closed. `sudo scripts/fan-noise-sweep.py --dry-run`
+shows the schedule and checks the GPUs are ready. Then start recording and run
+`sudo scripts/fan-noise-sweep.py --setup before-swap`. Press Enter when asked (that's t=0),
+and stay quiet until it prints DONE. It writes a steps CSV and a samples CSV to
+`docs/data/acoustic/`. While it runs:
+- It stops `gpu-fan-control`. On any exit it puts the fans on BIOS auto and restarts the
+  service, which takes them back (even if it wasn't running before).
+- Before it touches anything, it starts a guard, the transient unit `fan-noise-sweep-guard`.
+  The guard starts `gpu-fan-control` within about a second of the sweep dying, even by
+  `kill -9` or the OOM killer. It also covers a hung sweep: the sweep refreshes a heartbeat
+  file, `/run/fan-noise-sweep-<pid>.beat`, every second, and the guard fires once that's
+  60 s old. If the sweep then resumes, it stops. A normal exit cancels the guard. If the
+  service doesn't come back, the guard stays armed and starts it once more as the sweep exits.
+- Only one sweep runs at a time. If the guard can't be started, or another sweep's guard is
+  still running, the sweep refuses to start and changes nothing. With no sweep running,
+  `sudo systemctl stop fan-noise-sweep-guard.service` clears a stale guard.
+- It won't start unless every driven fan's GPU reports its core and HBM temperatures. For a
+  card without a memory sensor, set `"hbm_temp": false` on its zone in
+  `scripts/gpu-fan-control.config.json` (the fan daemon ignores that key).
+- It aborts at 70 °C core or 80 °C HBM, or when `nvidia-smi` stops reporting a GPU's
+  temperatures.
+- Ctrl-C stops it cleanly, as do SIGTERM, SIGHUP and SIGQUIT; Ctrl-Z is ignored.
+
+**Known gaps in the guard** (review of 2026-10-16; not fixed, because someone is at the
+machine for the whole sweep). Each needs the sweep to die or hang first:
+- The sweep doesn't watch the guard. If the sweep hangs for 60 s between starting the guard
+  and stopping `gpu-fan-control`, the guard fires while the service still runs, so its start
+  does nothing, and it exits. A sweep that then resumes runs unguarded; so does one whose
+  guard is killed. The sweep still handles Ctrl-C, signals and errors itself; only a later
+  `kill -9` or hang goes uncovered.
+- When it fires, the guard runs one `systemctl --no-block start gpu-fan-control` and doesn't
+  check the result: no retry, no BIOS-auto fallback. If the service doesn't start, the fans
+  can stay at the sweep's last fixed duty.
+- Nothing notices if the guard dies (OOM killer, an external stop), and `--collect` removes
+  its unit.
+- The heartbeat's age is wall-clock time, so a clock step can fire the guard early or late.
+
+After a sweep, check that `gpu-fan-control` is running (the status page shows a fan alert
+while it isn't); `sudo systemctl restart gpu-fan-control` fixes it. A possible fix: run the
+guard as a Python mode of the script (`Type=notify`, `OOMScoreAdjust=-1000`) that watches
+the sweep through a pidfd and the heartbeat's mtime on the monotonic clock. On firing it
+removes the heartbeat and hands back as the sweep's own restore does: BIOS auto, restart,
+check the service took the fans, retry. The sweep watches the guard's pidfd and heartbeat in
+turn, including right after it stops the service.
+
+**Files.** Copy the WAVs over SMB into `storage-bulk/acoustic/` on the `srv-ai` share. That
+keeps them out of git and off the full root disk. The results go to `docs/data/acoustic/`;
+they're small, so commit them.
+
+**Analysis** (no sudo; the script re-runs itself in the comfyui venv):
+```bash
+cd /srv/ai/storage-bulk/acoustic
+A=/srv/ai/scripts/fan-noise-analyze.py; OUT=/srv/ai/docs/data/acoustic; mkdir -p $OUT
+$A --room room-start.wav --room room-end.wav idle=idle.wav gpu1=gpu1.wav gpu2=gpu2.wav \
+   both=both.wav --csv $OUT/before.csv --plot $OUT/before.png
+$A --room room-start.wav --steps $OUT/fan-sweep-before-swap-<UTC>.steps.csv sweep.wav \
+   --csv $OUT/before-sweep.csv --plot $OUT/before-sweep.png
+# after the change: the same again, writing after*.csv; then
+$A --compare $OUT/before.csv $OUT/after.csv
+```
+Use the same labels (`LABEL=FILE`) in both sessions, because `--compare` matches rows by label.
+Its `notes` column marks the side (A, B) whose row carries a note, such as a busy or stalled
+step, clipping, an unsteady level, sweep drift or a sweep that stopped early. The notes are
+listed under the table; those numbers may not be clean. A room file's notes (clipping, say)
+go on the combined `room` row, so `--compare` lists them too.
+
+**Reading it.**
+- **LA90** is the A-weighted level exceeded 90 % of the time. It's the steady noise and
+  ignores short sounds like a car or a disk seek, so compare LA90, not LAeq.
+- **machine** is LA90 with the room subtracted. It's blank when under 3 dB above the room,
+  because the two can't be separated: move the mic closer or record at a quieter time. At
+  10+ dB above the room, the room barely matters.
+- **delta** is machine minus the reference's (the first recording, or `--ref`). `~` marks
+  the plain LA90 difference, used when one side is within 3 dB of the room: the real
+  difference is at least that big.
+- About 1 dB is the smallest difference you hear side by side. 3 dB is double the sound
+  power, and 10 dB sounds about twice as loud.
+- **Tones** (whine, hum) are rated by TNR, the dB a tone stands above the noise around it
+  (ECMA-418-1). About −4 dB is just audible, and `PROMINENT` meets the standard's
+  criterion. Prominent tones are listed first, then by how far each clears its criterion.
+  Tags:
+  - `7x GPU1 fan`: at 7× that fan's rotation rate, a blade tone. Sweep only, from the
+    logged rpm.
+  - `mains?`: a multiple of 60 Hz (hum, coil whine).
+  - `room`: also there with the machine off.
+  - `coarse FFT`: the window was too short to resolve a tone that low. ECMA-418-1 wants FFT
+    lines under 1 % of the tone's frequency. The analysis uses 0.25 Hz lines on windows of
+    18 s or more and coarser lines on shorter ones. The TNR is rough, and the tone is never
+    called `PROMINENT`; record longer.
+
+  Confirm tones by ear.
+- **Sweep:** t=0 is found from the audio, and the script prints the match `r`. If it can't
+  find it, pass `--offset SECONDS`: how far into the recording you pressed Enter. The drift
+  check compares the lead-out with the lead-in at the same duty. Over 1 dB means the room or
+  the mic changed, so redo the sweep; the CSV keeps it as a note on every step. A sweep that
+  stopped early says so on its last step; without a lead-out there's no drift check. Steps
+  flagged `busy` (a GPU job started) or `stalled` aren't clean. Recording notes such as
+  clipping are copied to every step.
+- `--cal-offset DB` reports dB SPL (SPL = dBFS + DB) for a calibrated mic such as a UMIK-1.
+
 ### Fan control drives off HBM MEMORY temp (2026-07-01)
 The daemon controls each V100 zone on **max(core, memory)** temp, not core alone.
 Reason: the V100's HBM2 `temperature.memory` runs ~15-20 °C HOTTER than the core and
