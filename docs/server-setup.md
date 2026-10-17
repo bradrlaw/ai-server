@@ -2170,3 +2170,38 @@ sudo smbstatus              # sessions, shares, and locked files
 ```
 
 
+
+## Backups (audit E7)
+
+No automated backup exists for anything on this box; everything below is manual.
+
+**Decision (owner, 2026-10-17).** Full-disk/partition images, taken from Windows
+(dual-boot or an external imaging tool) and written to the owner's NAS. This
+covers the whole-disk contents at the block level — root filesystem, Docker
+volumes (`open-webui-data`, `filebrowser-data`, etc.), `openclaw/` and `hermes/`
+state, and the encrypted storage partition — without needing per-service backup
+scripts.
+
+- **Encrypted storage partition:** imaged **locked** (raw LUKS2 ciphertext), so
+  the NAS copy needs no extra protection on its own — it's useless without the
+  passphrase. Image it with the volume closed (`sudo
+  /srv/ai/scripts/storage-crypt.sh lock` first) so the capture isn't mid-write.
+  Keep the passphrase itself somewhere durable and separate from the NAS (a
+  password manager, not a file next to the backup) — see the 2026-10-17 LUKS
+  reformat: a forgotten passphrase with no recovery material meant the volume
+  had to be wiped and recreated from scratch.
+- **Running services:** Docker containers and the two ComfyUI instances write
+  to disk continuously. An image taken while they're running captures a
+  crash-consistent (not necessarily application-consistent) state — fine for
+  disaster recovery, but don't expect a perfectly clean restore of an
+  in-flight database write. Stopping `docker compose` and the ComfyUI services
+  before imaging avoids this if a cleaner snapshot is wanted.
+- **Not covered by this repo:** restore procedure, image rotation/retention,
+  and verifying a restored image boots are entirely on the Windows/NAS side —
+  out of scope for `/srv/ai`'s tracked scripts and docs.
+
+**Future work:** revisit with a native Linux backup (e.g. `restic`/`borg` to
+the NAS over SMB/SSH, or filesystem snapshots) so backups are selective,
+incremental, scriptable, and restorable without booting into Windows. Whole-disk
+imaging from Windows is a reasonable stopgap but is manual, all-or-nothing, and
+decoupled from this repo's tooling.
