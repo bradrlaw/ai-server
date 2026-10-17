@@ -108,3 +108,38 @@ Possible later, if tunnel-free or phone access is wanted:
 - On a desktop Chromium browser only, the per-browser flag
   `unsafely-treat-insecure-origin-as-secure` for the server's URL. This sends the token
   over plain HTTP unless the URL is the Tailscale address.
+
+## Addendum (2026-10-17) — Control UI allowedOrigins + loopback-only publish (audit E9)
+
+**Finding.** OpenClaw's own security audit warned: "Control UI on non-loopback
+(0.0.0.0:18789) with no allowedOrigins set." `gateway.bind` stays `lan` (0.0.0.0 inside
+the container — required for Docker's port publish to reach it at all), and the port was
+published on every host interface (`"18789:18789"`, `"18790:18790"` in compose), so LAN
+and tailnet sources could reach it past `ufw`'s DOCKER-USER rule (ADR-0028 only drops
+non-LAN sources).
+
+**Fix.**
+- Set `gateway.controlUi.allowedOrigins` to the two tunnel origins
+  (`http://localhost:18789`, `http://127.0.0.1:18789`) in the seed
+  `docker/openclaw/openclaw.json`, the live `openclaw/state/openclaw.json`, and its
+  `.last-good` fallback (`assistants-seed.sh` never overwrites the live copy — edited all
+  three by hand, container stopped first).
+- Dropped the no-op `allowInsecureAuth: true` in the same edit (replaced by the
+  `allowedOrigins` block; see the 2026-10-15 addendum above for why it was already a
+  no-op in our setup).
+- Published both ports loopback-only (`"127.0.0.1:18789:18789"`,
+  `"127.0.0.1:18790:18790"`) instead of on all interfaces. Verified first that nothing
+  else needs direct access: no other container talks to `openclaw` over the `ai` Docker
+  network by name, and the only consumers are the host status page
+  (`127.0.0.1:18789/healthz`) and the owner's browser over the existing SSH tunnel.
+  `--bind lan` is kept at the OpenClaw/container level — only the host-side publish
+  changed.
+
+**Verified (live 2026-10-17).** `docker compose up -d openclaw`: healthy in ~1s, no
+startup warnings. `curl 127.0.0.1:18789/healthz` → `{"ok":true}`; `curl <LAN-IP>:18789/healthz`
+now times out (previously reachable). The status dashboard still reports OpenClaw up. `node
+openclaw.mjs security audit --deep` inside the container: **0 critical, 1 warn** — the
+`allowedOrigins`/`controlUi` warning is gone entirely. The one remaining warning
+(`gateway.auth_no_rate_limit`, no `gateway.auth.rateLimit` configured) is a different,
+pre-existing finding, not part of this fix — noted for a future pass if LAN-reachability
+is ever restored for this gateway.

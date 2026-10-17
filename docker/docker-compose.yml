@@ -233,6 +233,13 @@ services:
   # :18789. Runs as the image's `node` user (uid 1000) — the host data dirs under
   # /srv/ai/openclaw (gitignored) are 1000-owned by `scripts/assistants-seed.sh`.
   # Seed configs + dirs once: `scripts/assistants-seed.sh` before first `up`.
+  #
+  # Published loopback-only (audit E9/openclaw-allowed-origins, 2026-10-17): the
+  # only consumers are the host status page (127.0.0.1:18789/healthz) and the
+  # owner's browser over an SSH tunnel (ADR-0016) — nothing needs direct LAN or
+  # tailnet access. `--bind lan` (0.0.0.0 INSIDE the container) is kept: Docker's
+  # port publish does its own interface binding below, and the container needs
+  # to listen on all its own interfaces for the published port to reach it.
   openclaw:
     # Locally-extended image: upstream OpenClaw + a few skill-dependency binaries
     # (ffmpeg, jq, ripgrep, gh). See docker/openclaw/Dockerfile. Bump the base tag
@@ -249,8 +256,8 @@ services:
     depends_on:
       - litellm
     ports:
-      - "18789:18789"   # Control UI + API + WebChat
-      - "18790:18790"   # bridge
+      - "127.0.0.1:18789:18789"   # Control UI + API + WebChat
+      - "127.0.0.1:18790:18790"   # bridge
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
