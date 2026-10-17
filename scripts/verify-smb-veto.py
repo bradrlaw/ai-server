@@ -51,10 +51,6 @@ STORES = [
     "hermes",
     "storage-bulk/backups",
     "comfyui*/user/comfyui_*.log",
-    "storage",
-    "comfyui/input-secure",
-    "comfyui/output-secure",
-    "comfyui/temp-secure",
 ]
 # Dependency/cache trees: their hidden `state` dirs etc. are only counted.
 NOISY = re.compile(r"(^|/)(node_modules|site-packages|dist-packages|venvs?|\.venv|\.cache|\.npm|__pycache__)(/|$)")

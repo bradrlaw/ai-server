@@ -265,3 +265,21 @@ no client was left on the old key. The owner set the new key on the Mac and dele
 - Never create a link or hardlink under another name that points at a hidden item.
 - A container that bind-mounts `/srv/ai`, or any parent of `storage/`, must use a
   non-recursive bind, as mcpo does.
+
+## Addendum 2026-10-17: un-hide `storage`/ComfyUI secure links (owner request)
+
+**Decision (owner, 2026-10-17).** The owner wants to browse the secure ComfyUI
+folders (and subdirectories created inside them) over SMB. Because a veto matches a
+path component at any depth, vetoing `input-secure`/`output-secure`/`temp-secure`
+alone wasn't enough — their real backing path runs through `storage/`, the mount
+point itself, so leaving that vetoed still hid everything beneath the links. The
+owner removed `storage`, `input-secure`, `output-secure` and `temp-secure` from
+`veto files` in both the repo and the live `/etc/samba/smb.conf` to fix this.
+
+**Effect.** The encrypted volume's contents (`/srv/ai/storage`, including the
+ComfyUI secure instance's input/output/temp folders) are now reachable over SMB by
+`brad` whenever the volume is unlocked. This is an intentional narrowing of the
+2026-10-16 decision above, scoped to just those four names; the credential-store
+vetoes (`.env`, `auth.json`, `hermes`, etc.) are unchanged. `scripts/verify-smb-veto.py`
+was updated to drop those four names from `STORES` and re-run clean (31 repo-only /
+34 live checks passed, 0 failed).
