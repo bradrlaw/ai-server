@@ -135,3 +135,42 @@ settings, including an offline start from the cache (`--network none`). After
   ComfyUI output dirs.
 - The host `plan-build-mcp.service` loads the whole `.env` through `EnvironmentFile`. It runs as
   brad, who owns the file, so no boundary is crossed.
+
+## Addendum (2026-10-17) — scoped autoheal socket access, pinned images (audit B7)
+
+**Finding (LOW).** `autoheal` mounted `/var/run/docker.sock:ro`. The `:ro` bind flag only
+makes the *file* read-only to the container; the Docker socket itself has no read-only
+concept, so a compromised `autoheal` process could issue any Docker Engine API call — exec
+into another container, start a new one with the host root bind-mounted, etc. — effectively
+root on the host. Separately, four images were unpinned: `autoheal:latest`, `searxng:latest`,
+`hermes-agent:latest`, `mcpo:main`, so a routine `docker compose pull` could silently change
+what's running.
+
+**Fix.**
+- Added `docker-socket-proxy` (`ghcr.io/tecnativa/docker-socket-proxy`, pinned by digest): the
+  only container that touches the real socket. It forwards just `CONTAINERS` (list/inspect, for
+  health status), `EVENTS` (autoheal's event stream) and `ALLOW_RESTARTS`+`POST` (the one
+  mutating call autoheal needs); everything else — `exec`, `images`, `volumes`, `auth`,
+  `secrets`, `swarm`, container `create`/`run`, etc. — answers `403 Forbidden`. It sits on a new
+  `internal: true` network (`docker-proxy`) with nothing attached but itself and `autoheal`.
+- `autoheal` now talks to `tcp://docker-socket-proxy:2375` via `DOCKER_HOST` + `DOCKER_SOCK`
+  (the image needs both set to use TCP) instead of the raw socket; no socket mount at all.
+- Pinned `autoheal`, `searxng`, `hermes-agent`, `mcpo` (both `mcpo-init` and `mcpo`, which must
+  share a digest since `mcpo-init` chowns for that exact image's uid) to the digest that was
+  running at audit time (`docker image inspect <tag> --format '{{.RepoDigests}}'`), with a
+  comment at each explaining how to intentionally re-pin after a deliberate update. None of the
+  `:latest`/`:main` tags matched a numbered release tag at the time (e.g. `autoheal:latest`'s
+  digest didn't match `1.2.0`, the newest numbered tag), so pinning to a "stable" version tag
+  would have been an unreviewed downgrade; pinning to the currently-deployed digest freezes
+  exactly what's already running and tested.
+
+**Verified (live 2026-10-17).** `docker compose up -d`: all 8 containers healthy/running.
+From inside `autoheal`, `GET docker-socket-proxy:2375/containers/json` returns the container
+list (200); `GET .../images/json` returns `403 Forbidden`. `autoheal` logs show it reached
+"Monitoring containers for unhealthy status" (no socket errors). `mcpo` and `searxng` still
+serve traffic on their usual ports.
+
+**Residual.** `docker-socket-proxy` itself still runs `--privileged` (upstream requirement to
+reach the Unix socket under some LSM policies) and mounts the real socket read-only — it is the
+one component that must hold that access; the fix narrows *who else* can reach the Docker API
+through it, not the proxy's own access to the daemon.

@@ -58,7 +58,11 @@ services:
   # SearXNG — private metasearch backend for Open WebUI web search. No API key;
   # aggregates Google/Bing/Brave/DDG/etc. Internal-only + a localhost debug port.
   searxng:
-    image: searxng/searxng:latest
+    # Pinned to the digest running when this was last verified (audit B7). To
+    # intentionally update: `docker pull searxng/searxng:latest`, re-run
+    # `docker image inspect searxng/searxng:latest --format '{{.RepoDigests}}'`,
+    # paste the new digest here, then `docker compose up -d searxng`.
+    image: searxng/searxng:latest@sha256:b4e34a39f76b1c860bbc53a0f35b10492029b2b18ef1d868df464fe43d7e0b93
     container_name: searxng
     restart: unless-stopped
     ports:
@@ -102,7 +106,12 @@ services:
   #     python one-liner that adds it to sys.argv inside the process.
   #   - mcpo-init (one-shot, root) makes the fresh volume writable for uid 10001.
   mcpo-init:
-    image: ghcr.io/open-webui/mcpo:main
+    # Pinned to the digest running when this was last verified (audit B7). Keep
+    # mcpo-init and mcpo on the SAME digest (mcpo-init chowns for this exact
+    # image's uid 10001). To update: `docker pull ghcr.io/open-webui/mcpo:main`,
+    # re-run `docker image inspect ghcr.io/open-webui/mcpo:main --format
+    # '{{.RepoDigests}}'`, paste the new digest into BOTH lines below.
+    image: ghcr.io/open-webui/mcpo:main@sha256:1e82c9555c19e50b80745705f32b47a2647589f35279527b5118ecd3a71bd467
     container_name: mcpo-init
     restart: "no"
     network_mode: none
@@ -112,7 +121,7 @@ services:
       - mcpo-home:/home/mcpo
 
   mcpo:
-    image: ghcr.io/open-webui/mcpo:main
+    image: ghcr.io/open-webui/mcpo:main@sha256:1e82c9555c19e50b80745705f32b47a2647589f35279527b5118ecd3a71bd467
     container_name: mcpo
     restart: unless-stopped
     depends_on:
@@ -279,7 +288,11 @@ services:
   # Do NOT set `user:` — Hermes remaps its internal user via HERMES_UID/HERMES_GID.
   # All state persists under /srv/ai/hermes (gitignored) == /opt/data.
   hermes:
-    image: nousresearch/hermes-agent:latest
+    # Pinned to the digest running when this was last verified (audit B7). To
+    # intentionally update: `docker pull nousresearch/hermes-agent:latest`,
+    # re-run `docker image inspect nousresearch/hermes-agent:latest --format
+    # '{{.RepoDigests}}'`, paste the new digest here.
+    image: nousresearch/hermes-agent:latest@sha256:9814b2691780eb5a94eaa73111ef8a95ebf1ba088390966928dbe4c957ce7b91
     container_name: hermes
     restart: unless-stopped
     depends_on:
@@ -307,23 +320,56 @@ services:
     networks:
       - ai
 
+  # docker-socket-proxy — scopes autoheal's Docker API access (audit B7). A
+  # `:ro` bind of docker.sock is NOT a read-only API: the Docker socket has no
+  # concept of read-only, so autoheal with it mounted directly could issue ANY
+  # Docker API call (exec into a container, mount the host root into a new
+  # one, etc.) — root-equivalent. This proxy is the only thing that touches
+  # the real socket; it only forwards the specific calls autoheal needs
+  # (list/inspect containers, restart them) and 403s everything else
+  # (exec, images, volumes, auth, secrets, swarm, ...). Reachable only from
+  # the `docker-proxy` network (internal: no egress, nothing else attached).
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    privileged: true  # required to reach the Unix socket under some LSM policies (upstream note); it still can't be used to escape, since it never gets host volumes or host networking
+    environment:
+      CONTAINERS: "1"        # GET /containers/* — list + inspect (health status)
+      ALLOW_RESTARTS: "1"    # POST /containers/{id}/restart
+      POST: "1"              # required for ALLOW_RESTARTS to take effect
+      EVENTS: "1"            # GET /events — autoheal streams container health events
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxy
+
   # autoheal — watches containers labelled `autoheal=true` and restarts any that
   # Docker marks `unhealthy`. Docker's own `restart:` policy only reacts to a
   # container EXITING, not to an unhealthy healthcheck, so this sidecar is what
   # turns mcpo's healthcheck into an actual self-heal (e.g. the boot-race
-  # dead-subprocess CPU spin). Mounts the Docker socket read-only + needs no
-  # network. MONITOR_ALL is off, so only opted-in (labelled) containers heal.
+  # dead-subprocess CPU spin). Talks to docker-socket-proxy instead of the raw
+  # socket (audit B7) — no direct root-equivalent access. MONITOR_ALL is off,
+  # so only opted-in (labelled) containers heal.
   autoheal:
-    image: willfarrell/autoheal:latest
+    # Pinned to the digest running when this was last verified (audit B7). To
+    # intentionally update: `docker pull willfarrell/autoheal:latest`, re-run
+    # `docker image inspect willfarrell/autoheal:latest --format
+    # '{{.RepoDigests}}'`, paste the new digest here.
+    image: willfarrell/autoheal:latest@sha256:dd15dec4b2d33535ff7c78a70dc595b31c13de0d502bf4be440fb910745bab60
     container_name: autoheal
     restart: unless-stopped
+    depends_on:
+      - docker-socket-proxy
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: "15"
       AUTOHEAL_START_PERIOD: "60"
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      DOCKER_SOCK: tcp://docker-socket-proxy:2375
       TZ: America/New_York
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxy
 
 networks:
   ai:
@@ -341,6 +387,11 @@ networks:
       config:
         - subnet: 172.31.250.0/29
           gateway: 172.31.250.1
+  # docker-socket-proxy <-> autoheal only (audit B7). internal: no egress, no
+  # route to any other network — attach NOTHING but these two containers.
+  docker-proxy:
+    name: docker-proxy
+    internal: true
 
 volumes:
   open-webui-data:
