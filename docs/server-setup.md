@@ -658,11 +658,15 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put
 
 # Combined view: GPU temps + actual shroud fan RPM (passive Teslas report no fan to
 # nvidia-smi, so RPM comes from lm-sensors)
-#   shroud map: fan5 = V100 idx1 (bus03), fan4 = V100 idx2 (bus04), fan1 = idx0's old P100
-#   fan (BIOS auto while the self-cooled Titan X stopgap holds idx0)
+#   shroud map (corrected 2026-10-17, later same day): fan5+fan4 = BOTH on V100 idx2
+#   (two-fan shroud; NOT idx1 -- the original bus-id/slot guess was wrong, corrected
+#   by a direct causal test: unplugging the blower under load heated idx1, not idx2),
+#   fan1 = blower on V100 idx1 (no tach, shows 0 rpm in sensors; pwm1 writes have been
+#   proven to have ZERO effect on it -- the blower's speed is NOT software-controlled,
+#   whatever it's doing is BIOS/EC-managed independent of this daemon)
 watch -n2 'CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi \
   --query-gpu=index,name,temperature.gpu,temperature.memory,power.draw --format=csv,noheader; \
-  echo "-- shroud fans (fan5=V100-idx1, fan4=V100-idx2, fan1=old-P100-fan) --"; \
+  echo "-- shroud fans (fan5+fan4=V100-idx2 shroud, fan1=V100-idx1 blower, uncontrolled) --"; \
   sensors | grep -E "fan[145]:"'
 ```
 

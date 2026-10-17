@@ -1,0 +1,3 @@
+utc_start,label,mode,phase,gpu,cap_w,model,pp,ng,reps,pp_ts,tg_ts,iterations,duration_s,peak_hbm_c,peak_core_c,steady_hbm_c,steady_core_c,mean_power_w,min_sm_mhz,median_sm_mhz,fan_rpm_max,fan_rpm_mean,duty_max_pct,pct_sw_power_cap,pct_thermal_slowdown,pct_hw_slowdown,systin_mean_c,cool_s,status
+2026-10-17T09:21:07+00:00,idx1-blower-sysfan1-check,lockstep,bench,1,175,Qwen3.8-27B-Q6_K.gguf,2048,512,3,749.78,22.68,1,85,75.0,57.0,74.2,56.0,167.4,1087.0,1110.0,4873,4427,100,75,0,0,39.9,2.5,ok
+2026-10-17T09:22:36+00:00,idx1-blower-sysfan1-check,lockstep,soak,1,175,Qwen3.8-27B-Q6_K.gguf,2048,512,5,742.31,22.54,2,272,78.0,60.0,75.6,59.7,172.1,1050.0,1102.0,4891,4719,100,73,0,0,40.5,2.8,ok
