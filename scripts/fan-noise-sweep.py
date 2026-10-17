@@ -128,6 +128,11 @@ def write_sysfs(path, value):
         f.write(str(value))
 
 
+def manual_mode(enable, pwm):
+    """nct6775 reads manual mode back as enable 1, but at pwm 255 as 0 ("off", full speed)."""
+    return enable == 1 or (enable == 0 and pwm == 255)
+
+
 class Zone:
     """A driven fan zone of gpu-fan-control.config.json."""
 
@@ -485,7 +490,7 @@ class Sweep:
         deadline = time.monotonic() + RESTORE_WAIT
         while True:
             active = service_active()
-            took = active and all(read_int(z.enable) == 1 for z in self.zones)
+            took = active and all(manual_mode(read_int(z.enable), read_int(z.pwm)) for z in self.zones)
             if took or time.monotonic() > deadline:
                 break
             time.sleep(0.5)
@@ -507,7 +512,7 @@ class Sweep:
             if z.raw is None:
                 continue
             en, raw = read_int(z.enable), read_int(z.pwm)
-            if en != 1 or raw is None or abs(raw - z.raw) > PWM_TOLERANCE:
+            if not manual_mode(en, raw) or raw is None or abs(raw - z.raw) > PWM_TOLERANCE:
                 raise Abort(f"{z.pwm_name} changed underneath the sweep (enable {en}, pwm {raw}, "
                             f"set {z.raw}): is {SERVICE} running again?")
 
