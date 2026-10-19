@@ -123,3 +123,123 @@ and re-seating every power connector changed nothing. The card is not recoverabl
 * **Buy a replacement immediately** — the user may choose another P100 or a third
   V100 later; the stopgap + preserved build + preserved MoE config make that a
   clean swap-back without blocking on a purchase now.
+
+## Addendum (2026-10-15) — `small-12b` removed for the stopgap
+
+After the 2026-08-24 rename (`fast*` → `small*`), `small-12b` and `small` served the
+same Gemma-4-12B GGUF with the same command (32k ctx, no MTP draft). The extra slot
+only cost something:
+
+- It was never in the llama-swap matrix vars, so its eviction behaviour against
+  `small`/`small-uncensored` on idx0 was undefined.
+- It added an id to every client list (LiteLLM, aichat, Copilot BYOK, eval runners)
+  that served nothing different.
+
+Decision: remove `small-12b` from the router, LiteLLM, and the client templates for
+the rest of the stopgap.
+
+Restore it when a 16 GB+ card returns to idx0 and `small` goes back to the 26B MoE,
+since a dense >32k-ctx fallback is useful again then:
+
+1. Take the last full block — 128k ctx, 12B MTP draft at `n_max=1`, `ttl: 600`. It is
+   `fast-12b` in `git show 792ac46^:config/llama-swap.base.yaml`; rename it
+   `small-12b`.
+2. Add `f12: small-12b` to the matrix vars and make the idx0 slot `(f | fu | f12)` in
+   every set.
+3. Re-add its entries in `docker/litellm/config.yaml`,
+   `config/aichat/config.example.yaml`, `scripts/copilot-byok.sh` and
+   `scripts/eval-run-copilot.py`.
+
+## Addendum (2026-10-15) — build script now matches decision 3 (audit C1)
+
+`scripts/build-llama.sh` was never updated for decision 3. It still configured
+`CMAKE_CUDA_ARCHITECTURES="60;70"` after deleting `build/`. The 2026-07-27
+`52;60;61;70` build had been configured by hand. Rerunning the script would have
+produced a binary with no sm_52 code, so every idx0 model on the Titan X would have
+failed to load. llama-swap also had no binary at all while the build ran, and a
+failed build would have left nothing to fall back to.
+
+The owner chose to make the rebuild non-destructive:
+
+- **Archs:** the script defaults to `52;60;61;70`. `ARCHS` overrides it, numbers only.
+- **Staging:** it builds into `build.new/` with `CMAKE_BUILD_RPATH_USE_ORIGIN=ON`, so
+  binaries find their libraries via `$ORIGIN` and the tree still works after a rename.
+  The old build used an absolute RUNPATH into `build/bin`.
+- **Checks before going live:** the new `llama-server --version` runs, `ldd` resolves
+  every llama/ggml library from the new tree, and `cuobjdump --list-elf
+  libggml-cuda.so` shows code for every arch in `ARCHS`. If any check fails, `build/`
+  is left untouched.
+- **Swap:** it renames `build/` to `build.prev-<commit>-<UTC time>/`, moves the new
+  tree in, and re-checks. If the re-check fails it swaps back. Only the newest
+  `build.prev-*` is kept; `build.bak-*` copies such as the `60;70` one above are never
+  touched. Models that are already loaded keep running the old files until
+  llama-swap next starts them.
+- **P100 carveout (ADR-0014):** the script applies the patch if it's missing and stops
+  if it no longer applies. `SKIP_P100_PATCH=1` builds without it, which is acceptable
+  only while no P100 is installed.
+- **Other changes:** the script no longer passes the deprecated no-op `LLAMA_CURL`,
+  and it holds a `flock` so two runs can't share `build.new/`.
+
+**Validation.**
+- A mock harness passed 30 checks and killed all 11 mutants.
+- A real run succeeded in 1 min 33 s (mostly ccache hits): same source (4f31eedb0 plus
+  the carveout), code for sm_52/60/61/70, `$ORIGIN` RUNPATH, and the previous build
+  kept as `build.prev-4f31eedb0-20261015T083322Z`.
+- `llama-bench` with the 0.5B test model ran on the Titan X (compute capability 5.2)
+  from the new tree: pp64 about 1888 t/s, tg16 about 185 t/s.
+
+Note: the `build.bak-sm60_70-…` copy has an absolute RUNPATH into `build/bin`. Only
+use it by renaming it to `build/`; run in place, it would load the live build's
+libraries.
+
+## Addendum (2026-10-15) — plan-build names idx0, not the P100 (audit C10)
+
+The plan-build MCP tools (`docker/mcpo/plan_build_mcp.py`) were never updated for this
+ADR. Their descriptions, refusal messages and output bylines still said `small` runs
+"on the P100", and told callers to pass `caller_gpu="p100"`. Two labels were also stale
+since the 2026-08-15 Qwen3.8 migration: `coding` said "Qwen3.6-27B" and `big` said
+"Qwen3.6-27B BF16".
+
+The owner chose names that don't depend on which card is in idx0, since that card has
+changed once and will change again:
+
+- **Token:** callers pass `caller_gpu="idx0"` (the slot in nvidia-smi / PCI order). The
+  guard still accepts `p100` as an alias, so the existing Open WebUI system prompt and
+  the installed `:9100` unit keep working unchanged. V100 callers of the `fast_*` tools
+  still pass `v100`.
+- **Defaults:** `PLAN_BUILD_SAFE_GPUS` is now `idx0,p100` (was `p100`),
+  `PLAN_BUILD_FAST_SAFE_GPUS` is `idx0,p100,v100`, and `plan-build-mcp.service` sets
+  `PLAN_BUILD_CALLER_GPU=idx0`.
+- **Labels:** `small` is "Gemma-4-12B, idx0", `coding` "Qwen3.8-27B", `big` "Qwen3.8-27B
+  UD-Q8_K_XL". `chat` and `coder-next` were already right.
+- Refusal messages still don't list the accepted tokens, so a refused model isn't told
+  what to retry with.
+
+When `small` goes back to the 26B MoE, update `MODEL_LABELS["small"]` and the
+`Gemma-4-12B` mentions in the tool docstrings.
+
+**Validation.**
+- A harness (stubbed LiteLLM) passed 166 checks: guard tokens for all 7 tools, env
+  overrides, the service fallback with both `idx0` and `p100`, bylines matched against
+  the model files in `config/llama-swap.base.yaml`, and no P100 / Qwen3.6-27B / BF16 in
+  any tool description. The pre-fix file failed 119 checks; all 14 mutants were killed.
+- Live through mcpo after a restart: the OpenAPI spec has no stale text; `idx0` and
+  `p100` pass the guard on `make_plan`; `v100` and an empty value are refused; `v100`
+  passes on `fast_make_plan`.
+- The new script on a throwaway loopback HTTP port answered the same way with the
+  service fallback set to `p100` and to `idx0`.
+
+**Open WebUI runtime fix (same day, owner-approved).** Open WebUI's per-model settings
+were still keyed to the pre-rename ids. The plan-build, ComfyUI and Server Mode tools,
+plus the `caller_gpu="p100"` system prompt, sat on an orphaned `fast` entry. `small` had
+no entry, so plan-build calls from `small` were refused. Fixed in the live database
+through the Open WebUI API:
+- created `small` from `fast`'s settings, with the system prompt now passing
+  `caller_gpu="idx0"`;
+- pointed the "Gemma4-comfyui prompts" preset at `small-uncensored` (it was based on
+  `fast-uncensored`, which no longer exists);
+- relabelled `coding` as "Coding (Qwen3.8-27B)";
+- deleted the leftover `fast`, `fast-uncensored` and `chat-uncensored-q4` entries.
+
+`small-uncensored` was left as the owner set it up. A copy of the full model table taken
+before the change is kept outside the repo.

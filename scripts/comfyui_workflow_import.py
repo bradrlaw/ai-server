@@ -74,6 +74,15 @@ DEFAULT_OUTPUT_DIRS = [
     Path("/srv/ai/comfyui/output-secure"),
     Path("/srv/ai/comfyui/output"),
 ]
+# Deliberately NOT scanned: comfyui-qwen's renders (ADR-0024). That instance runs its
+# own newer ComfyUI tree for Qwen-Image 2.1, but the bridges render on comfyui-open /
+# comfyui-secure (the H3-pinned tree), which lacks those nodes, so an imported Qwen
+# workflow would be advertised as a tool and then fail at render time. Listed here
+# only so a prefix that matches nothing else gets a clear error. An explicit
+# --output-dir / --from-media (or a full path on the status page) still imports it.
+UNSUPPORTED_OUTPUT_DIRS = {
+    Path("/srv/ai/comfyui-qwen/output-qwen"): "comfyui-qwen (Qwen-Image 2.1, ADR-0024)",
+}
 
 # --------------------------------------------------------------------------- #
 # Knob catalog: param name -> (accepted input names, python type, placeholder).
@@ -250,6 +259,16 @@ def newest_media_with_prefix(prefix: str, output_dirs: list[Path]) -> Path:
             for ext in exts:
                 candidates.extend(d.rglob(f"{prefix}*.{ext}"))
     if not candidates:
+        for d, label in UNSUPPORTED_OUTPUT_DIRS.items():
+            if not d.is_dir():
+                continue
+            if any(next(d.rglob(f"{prefix}*.{ext}"), None) for ext in exts):
+                raise SystemExit(
+                    f"'{prefix}*' only matches renders from {label} under {d}. That "
+                    "folder isn't scanned: the MCP bridges render on comfyui-open/secure, "
+                    "whose older ComfyUI tree lacks the Qwen-Image 2.1 nodes. To import a "
+                    "workflow that doesn't need them, give the render's full path instead."
+                )
         raise SystemExit(
             f"No media matching '{prefix}*' under: "
             + ", ".join(str(d) for d in output_dirs if d.is_dir())
@@ -618,7 +637,7 @@ def main(argv=None):
     src.add_argument("--from-api", help="an API-format JSON (ComfyUI Save/Export API)")
     src.add_argument("--from-output", help="SaveImage/SaveVideo filename prefix to find newest render")
     ap.add_argument("--output-dir", action="append", type=Path,
-                    help="extra ComfyUI output dir to scan (repeatable)")
+                    help="ComfyUI output dir to scan instead of the defaults (repeatable)")
     ap.add_argument("--dest-dir", type=Path, default=DEFAULT_WORKFLOW_DIR,
                     help=f"bridge workflow dir (default {DEFAULT_WORKFLOW_DIR})")
     ap.add_argument("--dry-run", action="store_true", help="analyze only, write nothing")

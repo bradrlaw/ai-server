@@ -4,6 +4,16 @@
 - **Date:** 2026-07-02
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
+> **Later changes (noted 2026-10-15):**
+> - vLLM was dropped on 2026-07-18 ([ADR-0004](0004-llama-cpp-primary-vllm-secondary.md)).
+> - The P100 died on 2026-07-27, and idx0 is now a 12 GB GTX Titan X stopgap
+>   ([ADR-0017](0017-p100-hbm-ecc-death-titan-x-stopgap.md)). The P100 aux tier (item 4) was never
+>   built.
+> - OpenClaw runs as a container next to Hermes ([ADR-0016](0016-personal-assistant-gateways.md)).
+> - llama-swap gained serving modes ([ADR-0015](0015-llama-swap-serving-modes.md)).
+> - ComfyUI grew to three instances ([ADR-0013](0013-dual-comfyui-instances.md),
+>   [ADR-0024](0024-qwen-image-2.1-comfyui-instance.md)).
+
 ## Context
 The server must support a broad, growing set of workloads for the user and family:
 coding assistants (VS Code + Copilot, Copilot CLI, opencode/pi), general chat with

@@ -1,6 +1,6 @@
 {
   "//": "MCP server inventory for /srv/ai — single source of truth (tracked in git).",
-  "//_docs": "https://github.com/open-webui/mcpo — Claude-Desktop mcpServers format. Edit + hot-reload picks it up.",
+  "//_docs": "https://github.com/open-webui/mcpo — Claude-Desktop mcpServers format. Edit, then `docker compose restart mcpo` (no --hot-reload).",
   "//_note": "The mcpo image ships uv (uvx). Node-based servers (npx) require a node-enabled image; start with uvx servers.",
   "mcpServers": {
     "time": {
@@ -23,12 +23,11 @@
       }
     },
     "plan-build": {
-      "//": "In-house planner->coder pipeline (docker/mcpo/plan_build_mcp.py, mounted at /config). Tools: make_plan, plan_and_build, implement_spec. Calls the LiteLLM gateway via host.docker.internal:4000; reads LITELLM_MASTER_KEY from inherited env (set via the mcpo service env_file) so no secret lives here.",
-      "//_deps": "uv creates an ephemeral venv with the `mcp` package on first launch; UV_CACHE_DIR points at a writable path since /config is read-only.",
+      "//": "In-house planner->coder pipeline (docker/mcpo/plan_build_mcp.py, mounted at /config). Tools: make_plan, plan_and_build, implement_spec. Calls the LiteLLM gateway via host.docker.internal:4000; reads LITELLM_MASTER_KEY from inherited env (set in the mcpo service `environment:`) so no secret lives here.",
+      "//_deps": "Runs on the mcpo image's own Python env, which already ships `mcp` (`--with mcp` only builds a cached overlay env if a future image drops it). --no-project is REQUIRED: the working dir /app is mcpo's own uv project, and without it uv re-locks /app/uv.lock and re-syncs mcpo's /app/.venv to that stale lock on every start. As root that silently downgraded mcp/fastapi/pydantic under the running server; as uid 10001 it fails (Permission denied). uv cache = $HOME/.cache/uv on the mcpo-home volume.",
       "command": "uv",
-      "args": ["run", "--with", "mcp", "/config/plan_build_mcp.py"],
+      "args": ["run", "--no-project", "--with", "mcp", "/config/plan_build_mcp.py"],
       "env": {
-        "UV_CACHE_DIR": "/tmp/uv-cache",
         "LITELLM_BASE": "http://host.docker.internal:4000/v1"
       }
     },
@@ -38,9 +37,9 @@
       "url": "http://host.docker.internal:9000/mcp"
     },
     "comfyui-secure": {
-      "//": "Same bridge as 'comfyui' but pointed at the login-gated SECURE ComfyUI (:8189, V100 idx2, ComfyUI-Login), served by scripts/comfyui-mcp-secure.service on the host at :9001. The bridge injects the ComfyUI-Login Bearer token (read from comfyui/login/PASSWORD) so its calls authenticate. Choose this tool namespace to send a workflow to the secure/private canvas instead of the open one. Identical tool set + shared style workflows.",
+      "//": "Same bridge as 'comfyui' but pointed at the login-gated SECURE ComfyUI (:8189, V100 idx2, ComfyUI-Login), served by scripts/comfyui-mcp-secure.service on the host at :9001. Reached ONLY over the internal 'mcp-secure' Docker network (host gateway 172.31.250.1, docker-compose.yml): the bridge's systemd IP filter admits just localhost + that /29, so host.docker.internal / LAN / Tailscale / other containers cannot reach it (ADR-0026). The bridge injects the ComfyUI-Login Bearer token (read from comfyui/login/PASSWORD) so its calls authenticate. Choose this tool namespace to send a workflow to the secure/private canvas instead of the open one. Identical tool set + shared style workflows.",
       "type": "streamable-http",
-      "url": "http://host.docker.internal:9001/mcp"
+      "url": "http://172.31.250.1:9001/mcp"
     },
     "llama-swap-mode": {
       "//": "Switch the llama-swap SERVING MODE (daily / heavy-coding / ...) from a client. Runs NATIVELY on the host (scripts/llama-swap-mode-mcp.service, docker/mcpo/llama_swap_mode_mcp.py) at :9120 because it edits config/llama-swap.yaml + calls llama-swap :9090; mcpo proxies it here. Tools: list_modes, current_mode, show_mode, set_mode. Modes are overlays in config/modes/ applied over config/llama-swap.base.yaml by scripts/llama-swap-mode.py.",

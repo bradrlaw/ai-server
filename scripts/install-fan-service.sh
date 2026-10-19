@@ -19,9 +19,10 @@ have=0; for h in /sys/class/hwmon/hwmon*; do
 python3 -c "import json,sys; json.load(open('$SRC/gpu-fan-control.config.json'))" \
   || { echo "config JSON invalid"; exit 1; }
 
-# reject unconfigured pwm placeholders and verify each channel path exists
-python3 - "$SRC/gpu-fan-control.config.json" <<'PY'
-import json, os, sys
+# reject unconfigured pwm placeholders and verify each channel path exists;
+# check each driven zone's stall-alarm tach (gpu-fan-control.py _setup_tach)
+python3 - "$SRC/gpu-fan-control.config.json" <<'PY' || { echo "Fix the config, then re-run."; exit 1; }
+import json, os, re, sys
 cfg = json.load(open(sys.argv[1]))
 def find_hwmon(name):
     base = "/sys/class/hwmon"
@@ -33,8 +34,16 @@ def find_hwmon(name):
             pass
     return None
 bad = False
+owner = {}
 for z in cfg["zones"]:
-    pwm = z.get("pwm", "")
+    pwm = z.get("pwm") or ""
+    if not pwm and z.get("monitor_only"):
+        continue
+    key = (z.get("hwmon_name", "nct6775"), pwm)
+    if pwm and key in owner:
+        print(f"  ERROR: zones '{owner[key]}' and '{z['name']}' both use {pwm}: one header per zone."); bad = True
+        continue
+    owner[key] = z["name"]
     if "REPLACE_ME" in pwm or not pwm:
         print(f"  ERROR: zone '{z['name']}' pwm not set (still '{pwm}'). "
               f"Run identify-fan.sh and edit the config.")
@@ -46,6 +55,37 @@ for z in cfg["zones"]:
     p = os.path.join(hw, pwm)
     if not os.path.exists(p):
         print(f"  ERROR: zone '{z['name']}' channel {p} does not exist."); bad = True
+        continue
+    if z.get("monitor_only"):
+        continue
+    sr = z.get("stall_rpm", 300)
+    if isinstance(sr, bool) or not isinstance(sr, int) or not 0 <= sr <= 20000:
+        print(f"  ERROR: zone '{z['name']}' stall_rpm={sr!r}: want an integer 0-20000."); bad = True
+        continue
+    tach = z["tach"] if "tach" in z else f"fan{pwm[3:]}_input"
+    if tach is None:
+        print(f"  zone '{z['name']}': {pwm}, tach null -> stall alarm off")
+        continue
+    if not isinstance(tach, str) or not re.fullmatch(r"fan\d+_input", tach):
+        print(f"  ERROR: zone '{z['name']}' tach={tach!r}: want \"fanN_input\" or null."); bad = True
+        continue
+    tp = os.path.join(hw, tach)
+    if not os.path.exists(tp):
+        if "tach" in z:
+            print(f"  ERROR: zone '{z['name']}' tach {tp} does not exist."); bad = True
+        else:
+            print(f"  NOTE: zone '{z['name']}': no {tach} for {pwm} -> stall alarm off "
+                  f"(set \"tach\": \"fanM_input\", or null to make that explicit)")
+        continue
+    try:
+        rpm = int(open(tp).read().strip())
+    except (OSError, ValueError):
+        rpm = None
+    print(f"  zone '{z['name']}': {pwm}, stall alarm on {tach} (< {sr} rpm), now {rpm} rpm")
+    if rpm is not None and rpm < sr:
+        print(f"  WARNING: {tach} reads {rpm} rpm now: the daemon will hold this zone at 100% "
+              f"as stalled unless the fan spins up. No tach wire (or the non-tach leg of a "
+              f"Y-splitter)? Set \"tach\": null for this zone.")
 pl = cfg.get("power_limits") or {}
 if not isinstance(pl, dict):
     print("  ERROR: power_limits must be an object {gpu_index: watts}."); bad = True
@@ -63,7 +103,6 @@ if bad:
     sys.exit(1)
 print("  config zones validated OK")
 PY
-[[ $? -eq 0 ]] || { echo "Fix the config, then re-run."; exit 1; }
 
 echo "Installing unit -> $UNIT"
 cp "$SRC/gpu-fan-control.service" "$UNIT"
@@ -73,4 +112,6 @@ systemctl restart gpu-fan-control.service
 sleep 3
 systemctl --no-pager --full status gpu-fan-control.service | head -20
 echo
+ls -l /run/gpu-fan-control/state.json 2>/dev/null \
+  || echo "NOTE: /run/gpu-fan-control/state.json not there yet (written every tick)"
 echo "Live logs:  journalctl -u gpu-fan-control -f"

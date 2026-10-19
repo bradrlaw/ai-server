@@ -36,7 +36,7 @@ Adopt the community **[joenorton/comfyui-mcp-server](https://github.com/joenorto
   without forking upstream.
 - **Style workflow library** in `config/comfyui-mcp/workflows/` — **tracked in this repo**
   (config/ whitelist), NOT in the clone, so styles are version-controlled and survive
-  re-cloning. Each `*.json` with `PARAM_<TYPE>_<NAME>` placeholders auto-registers its own
+  re-cloning. *(Changed 2026-10-15: workflows are no longer committed — see the addendum.)* Each `*.json` with `PARAM_<TYPE>_<NAME>` placeholders auto-registers its own
   MCP tool (e.g. `z_image_turbo`), with defaults from an optional `*.meta.json` sidecar.
 - **Exposed via mcpo** (ADR-0011) as a `streamable-http` proxy entry `comfyui` in
   `docker/mcpo/config.json`, so Open WebUI and agents see the tools alongside the rest.
@@ -82,3 +82,23 @@ First style shipped: **Z-Image Turbo** (`z_image_turbo`), 4-step Lumina2/AuraFlo
   stdout and needs its multi-file code + deps inside the mcpo container; the native
   streamable-http service is independently testable (curl) and matches the GPU-adjacent
   native tier.
+
+## Addendum 2026-10-15: workflows are no longer committed (audit C11)
+
+**Owner decision:** "I do not want any workflows tracked or committed."
+- The 8 files already in git stay tracked as a **frozen snapshot**: `flux1_krea`,
+  `flux2_klein`, `z_image_turbo` (each with `.meta.json`), `generate_image` and
+  `generate_song`. They are not untracked.
+- New workflows stay local. `.gitignore` ignores the directory, and no new `!`
+  lines get added.
+- Local edits to the 8 snapshot files are not committed either. Several of them
+  already differ from git after dashboard Syncs.
+
+**Consequence:** git no longer reproduces the live style library.
+- aichat's default role (ADR-0025) calls `krea2_turbo` / `krea2_turbo_bf16`,
+  which exist only on disk.
+- A re-clone restores the old snapshot, not the current files.
+- Keep a copy of `config/comfyui-mcp/workflows/` outside git if it matters. The
+  backup question is open (audit E7).
+
+aichat runs these workflows fine today, so nothing changes at runtime.

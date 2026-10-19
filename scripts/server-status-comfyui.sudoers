@@ -3,11 +3,12 @@
 #
 # The server-status service runs as `brad` and needs passwordless sudo for EXACTLY
 # these systemctl start/stop commands and nothing else:
-#   * ComfyUI (comfyui-open/comfyui-secure) — stopped during quiet hours to release
-#     the V100 CUDA contexts, restarted at window end; also the dashboard per-row
-#     Start/Stop buttons (POST /actions/comfyui). Quiet hours controls both units
-#     together (the pair line); the dashboard can also control each instance
-#     independently (the single-unit lines).
+#   * ComfyUI (comfyui-open/comfyui-secure/comfyui-qwen) — the running ones are
+#     stopped during quiet hours to release the V100 CUDA contexts, and only those
+#     are restarted at window end; also the dashboard per-row Start/Stop buttons
+#     (POST /actions/comfyui). Quiet hours and the buttons both use the single-unit
+#     lines. The all-units line serves only POST /actions/comfyui without `unit`
+#     (API back-compat).
 #   * The optional creative-tool services (Fooocus/SwarmUI/InvokeAI) — NOT enabled
 #     at boot; started/stopped from the per-service dashboard buttons
 #     (POST /actions/service) and stopped by quiet hours if left running (they hold

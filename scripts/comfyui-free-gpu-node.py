@@ -10,29 +10,46 @@ occupying the card ComfyUI needs, so the GPU is free. It only acts on the
 *generate* action — not on page loads — so simply opening the ComfyUI tab does
 NOT evict anything; the card is freed only when someone clicks "Queue".
 
-ComfyUI is pinned to a single V100 (idx1 = the `coding` card). `chat` (idx2) and
-`small` (idx0) live on OTHER cards and never conflict, so we keep them loaded and
-unload only the idx1 occupant via llama-swap's per-model unload endpoint
+Each ComfyUI instance is pinned to one V100: comfyui-open and the on-demand
+comfyui-qwen to idx1 (the `coding` card), comfyui-secure to idx2 (the `chat`
+card). Models on the other cards never conflict, so we keep them loaded and
+unload only this card's occupants via llama-swap's per-model unload endpoint
 (POST /api/models/unload/<model>). Anything not in FREE_GPU_KEEP is unloaded; the
 kept models stay responsive throughout image generation. Unloaded models reload
 on demand the next time they're used.
 
 Reverse direction (idle watchdog): ComfyUI keeps its models cached in VRAM after
-a run, which would keep the idx1 card occupied and block the daily `coding` model
-from reloading. So a background task watches for inactivity: after FREE_GPU_IDLE_SECS
+a run, which would keep the card occupied and block the daily model from
+reloading. So a background task watches for inactivity: after FREE_GPU_IDLE_SECS
 with no generation, it unloads ComfyUI's models + empties the CUDA cache to release
-idx1, then warms FREE_GPU_RESTORE (default `coding`) back onto the card so the box
+the card, then warms FREE_GPU_RESTORE (e.g. `coding`) back onto it so the box
 returns to its daily state (coding + chat + small) with no manual step.
 
-Config via env (set in comfyui.service):
+Shared card (audit C8): comfyui-open and comfyui-qwen both render on idx1. If one
+instance's idle timer warmed `coding` (~31 GB) while the other was rendering
+(~29 GB), one of them would run out of VRAM. So comfyui-qwen never warms anything
+(FREE_GPU_RESTORE is empty), and comfyui-open yields to it (FREE_GPU_YIELD_TO):
+while comfyui-qwen.service is running, comfyui-open still releases its own cached
+models after the idle window but does not warm `coding`. Once the unit stops,
+comfyui-open warms `coding` back (after its own idle window, never mid-render).
+
+Config via env (set in each comfyui-*.service unit):
   LLAMASWAP_URL       default http://127.0.0.1:9090
-  FREE_GPU_PATHS      comma list of request paths that trigger a free (default /prompt)
-  FREE_GPU_KEEP       comma list of models to KEEP loaded (default "chat,small" — the
-                      idx2 + P100 models that don't share ComfyUI's card)
+  FREE_GPU_PATHS      comma list of request paths that trigger a free
+                      (default /prompt,/api/prompt)
+  FREE_GPU_KEEP       comma list of models to KEEP loaded (default "chat,small"; each
+                      unit lists the models on the cards it does NOT use)
   FREE_GPU_IDLE_SECS  seconds of no generation before ComfyUI's VRAM is released
                       and the daily model restored (default 300; 0 disables)
   FREE_GPU_RESTORE    comma list of models to warm back after freeing ComfyUI
                       (default "coding" — the idx1 daily model; empty = none)
+  FREE_GPU_YIELD_TO   comma list of systemd units that share this card (default
+                      none). While any of them is running, never warm
+                      FREE_GPU_RESTORE; warm it once they have all stopped. Any
+                      `systemctl is-active` state other than inactive/failed counts
+                      as running, and so does a failed query (don't risk the OOM).
+                      A unit systemd doesn't know reads as inactive, so the
+                      watchdog warns about it once at startup (typo check).
   FREE_GPU_WAIT_SECS  after issuing an unload, how long to wait for the card to
                       actually free before proceeding (default 45; 0 disables the
                       wait). llama-swap's unload endpoint returns as soon as it
@@ -55,9 +72,8 @@ LLAMASWAP_URL = os.environ.get("LLAMASWAP_URL", "http://127.0.0.1:9090").rstrip(
 TRIGGER_PATHS = tuple(
     p.strip() for p in os.environ.get("FREE_GPU_PATHS", "/prompt,/api/prompt").split(",") if p.strip()
 )
-# Models to KEEP loaded through image generation — those on cards ComfyUI does
-# NOT use (idx2 `chat` + idx0 `small`). Everything else running is unloaded so the
-# idx1 V100 (the `coding` card) is freed.
+# Models to KEEP loaded through image generation — those on cards this instance
+# does NOT use. Everything else running is unloaded so this instance's card is freed.
 KEEP_MODELS = frozenset(
     m.strip() for m in os.environ.get("FREE_GPU_KEEP", "chat,small").split(",") if m.strip()
 )
@@ -68,6 +84,15 @@ CHECK_INTERVAL = 30  # how often the watchdog polls (seconds)
 RESTORE_MODELS = [
     m.strip() for m in os.environ.get("FREE_GPU_RESTORE", "coding").split(",") if m.strip()
 ]
+# Card-mate units (audit C8): while any of these systemd units is running, the idle
+# watchdog never warms RESTORE_MODELS (the card-mate may be rendering); it warms
+# them back once they have all stopped.
+YIELD_UNITS = [
+    u.strip() for u in os.environ.get("FREE_GPU_YIELD_TO", "").split(",") if u.strip()
+]
+# The only `systemctl is-active` states that mean the unit is NOT on the card.
+_STOPPED_UNIT_STATES = frozenset({"inactive", "failed"})
+_SYSTEMCTL_TIMEOUT = 5  # seconds
 # After issuing an unload, wait up to this long for the card to actually free
 # before letting the generation proceed (llama-swap's unload returns before the
 # llama.cpp subprocess exits and releases VRAM). 0 disables the wait.
@@ -80,9 +105,12 @@ WAIT_RELEASE_MB = int(os.environ.get("FREE_GPU_WAIT_RELEASE_MB", "6000"))
 _cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
 PINNED_GPU = _cvd if _cvd and _cvd.lstrip("-").isdigit() else None
 
-# Watchdog state. Start "already freed" so a box that never generates stays idle.
+# Watchdog state. Start "released, nothing owed" so a box that never generates
+# stays idle.
 _last_activity = time.monotonic()
-_freed_since_activity = True
+_released = True        # this instance's cached models released since the last activity
+_restore_owed = False   # RESTORE_MODELS still need warming back
+_yield_state = None     # last logged FREE_GPU_YIELD_TO state (log each change once)
 
 # ComfyUI expects custom nodes to export these; we have no nodes, just a hook.
 NODE_CLASS_MAPPINGS = {}
@@ -211,7 +239,7 @@ async def _free_gpu():
 
 def _free_comfyui_vram():
     """Unload ComfyUI's cached models and release the CUDA allocator cache so the
-    idx1 V100 is actually free for the daily `coding` model to reload into."""
+    card is actually free for the daily model (or a card-mate) to use."""
     try:
         import comfy.model_management as mm
         mm.unload_all_models()
@@ -243,6 +271,7 @@ async def _restore_models():
                     timeout=aiohttp.ClientTimeout(total=180),
                 ) as r:
                     await r.read()
+                    r.raise_for_status()  # a 5xx (e.g. load failed) isn't "warmed"
                 log.info("free_gpu: warmed %s back onto its card", name)
             except Exception as e:
                 log.warning("free_gpu: failed to warm %s (continuing): %s", name, e)
@@ -263,36 +292,134 @@ def _generation_in_progress():
         return False
 
 
-async def _idle_watchdog():
-    """Background loop: once ComfyUI has been idle past IDLE_TIMEOUT, free its VRAM
-    and restore the daily model. Runs at most once per idle period.
+def _mark_activity():
+    """A generation was queued or is running: restart the idle countdown and owe
+    a release (and a restore, if configured) once it has passed."""
+    global _last_activity, _released, _restore_owed
+    _last_activity = time.monotonic()
+    _released = False
+    _restore_owed = bool(RESTORE_MODELS)
+
+
+async def _systemctl_words(*args):
+    """stdout of `systemctl <args>`, split on whitespace. Raises on failure or
+    after _SYSTEMCTL_TIMEOUT (killing the process); the exit code is ignored
+    because `is-active` exits non-zero for stopped units."""
+    proc = await asyncio.create_subprocess_exec(
+        "systemctl", *args,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=_SYSTEMCTL_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise
+    return out.decode().split()
+
+
+async def _yield_blocker():
+    """Why we must not warm RESTORE_MODELS now: e.g. "comfyui-qwen.service is
+    active", or None if no FREE_GPU_YIELD_TO unit is running.
+
+    Fails closed: if systemctl can't be read, the card-mate counts as running."""
+    if not YIELD_UNITS:
+        return None
+    units = ",".join(YIELD_UNITS)
+    try:
+        states = await _systemctl_words("is-active", *YIELD_UNITS)
+    except Exception as e:
+        return f"state of {units} unreadable ({type(e).__name__})"
+    if len(states) != len(YIELD_UNITS):
+        return f"state of {units} unreadable (systemctl printed {states!r})"
+    for unit, state in zip(YIELD_UNITS, states):
+        if state not in _STOPPED_UNIT_STATES:
+            return f"{unit} is {state}"
+    return None
+
+
+async def _check_yield_units():
+    """Warn once at startup about FREE_GPU_YIELD_TO units systemd doesn't know: a
+    misspelt unit reads as "inactive", so it would never hold the warm-up back."""
+    if not YIELD_UNITS:
+        return
+    try:
+        loads = await _systemctl_words("show", "-p", "LoadState", "--value", *YIELD_UNITS)
+    except Exception as e:
+        log.warning("free_gpu: couldn't check FREE_GPU_YIELD_TO units (%s)", type(e).__name__)
+        return
+    if len(loads) != len(YIELD_UNITS):
+        log.warning("free_gpu: couldn't check FREE_GPU_YIELD_TO units (systemctl printed %r)", loads)
+        return
+    for unit, load in zip(YIELD_UNITS, loads):
+        if load == "not-found":
+            log.warning(
+                "free_gpu: FREE_GPU_YIELD_TO unit %s is not installed (typo?); "
+                "it will never hold back the warm-up", unit,
+            )
+
+
+async def _watchdog_tick():
+    """One idle-watchdog pass: once ComfyUI has been idle past IDLE_TIMEOUT, free
+    its VRAM and restore the daily model, at most once per idle period.
 
     A long single generation (e.g. a multi-minute WAN video) issues only ONE POST
     /prompt, so we must NOT treat "no new request" as idle while that job is still
     running — otherwise we'd unload the model mid-sampling. We therefore also skip
     (and reset the idle timer) whenever ComfyUI's prompt queue is non-empty.
+
+    While a FREE_GPU_YIELD_TO card-mate is running we still release our own cached
+    models (that only helps it), but the restore waits until it has stopped.
     """
-    global _freed_since_activity, _last_activity
+    global _released, _restore_owed, _yield_state
+    if _generation_in_progress():
+        # A job is still running/queued — defer the idle countdown so we never
+        # free VRAM out from under an in-flight generation.
+        _mark_activity()
+        return
+    blocker = await _yield_blocker()
+    if blocker != _yield_state:
+        if blocker:
+            log.info("free_gpu: %s; won't warm %s back meanwhile", blocker, RESTORE_MODELS or "anything")
+        else:
+            log.info("free_gpu: %s no longer running; idle restore resumes", ",".join(YIELD_UNITS))
+        _yield_state = blocker
+    if blocker and RESTORE_MODELS:
+        # The card-mate evicts RESTORE_MODELS when it renders, so owe a warm-up for
+        # when it stops, even if this instance never generates meanwhile.
+        _restore_owed = True
+    if time.monotonic() - _last_activity < IDLE_TIMEOUT:
+        return
+    if _restore_owed and not blocker:
+        # Commit the state before awaiting the warm-up: a render queued while it
+        # runs calls _mark_activity(), and that must survive (not be overwritten
+        # when the warm-up returns).
+        _released = True
+        _restore_owed = False  # don't repeat until the next generation
+        # The card-mate's state was read above; if it starts in the second before
+        # the warm-up is sent, its first render's free_gpu evicts the loading model
+        # again, and booting takes far longer than that. Not worth a cross-process lock.
+        # Release our own cached models first; only warm if that worked.
+        if _free_comfyui_vram():
+            await _restore_models()
+    elif not _released:
+        _free_comfyui_vram()
+        _released = True
+        if _restore_owed:
+            log.info("free_gpu: idle — not warming %s yet (%s)", RESTORE_MODELS, blocker)
+
+
+async def _idle_watchdog():
+    """Background loop: run _watchdog_tick every CHECK_INTERVAL seconds."""
     log.info(
-        "free_gpu: idle watchdog running (timeout=%ds, restore=%s)",
-        IDLE_TIMEOUT, RESTORE_MODELS or "none",
+        "free_gpu: idle watchdog running (timeout=%ds, restore=%s, yield_to=%s)",
+        IDLE_TIMEOUT, RESTORE_MODELS or "none", YIELD_UNITS or "none",
     )
+    await _check_yield_units()
     while True:
         await asyncio.sleep(CHECK_INTERVAL)
         try:
-            if _generation_in_progress():
-                # A job is still running/queued — defer the idle countdown so we
-                # never free VRAM out from under an in-flight generation.
-                _last_activity = time.monotonic()
-                _freed_since_activity = False
-                continue
-            if _freed_since_activity:
-                continue
-            if time.monotonic() - _last_activity < IDLE_TIMEOUT:
-                continue
-            if _free_comfyui_vram():
-                await _restore_models()
-            _freed_since_activity = True  # don't repeat until the next generation
+            await _watchdog_tick()
         except Exception as e:
             log.warning("free_gpu: idle watchdog error (continuing): %s", e)
 
@@ -314,9 +441,7 @@ def _install_middleware():
     async def free_gpu_mw(request, handler):
         try:
             if request.method == "POST" and request.path in TRIGGER_PATHS:
-                global _last_activity, _freed_since_activity
-                _last_activity = time.monotonic()
-                _freed_since_activity = False  # arm the idle watchdog
+                _mark_activity()  # arm the idle watchdog
                 await _free_gpu()
         except Exception as e:
             log.warning("free_gpu: middleware error (continuing): %s", e)

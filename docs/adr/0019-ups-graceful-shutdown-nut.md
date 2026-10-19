@@ -60,7 +60,15 @@ blips on battery, and power off only when the battery is nearly empty
   charge-threshold trigger (via `upssched`).
 - Follow-ups / things to watch:
   - Run `sudo /srv/ai/scripts/ups-setup.sh`, then verify with `upsc cyberpower`.
-  - Drill once with `upsmon -c fsd` (forces a shutdown — schedule it).
+  - ~~Drill once with `upsmon -c fsd` (forces a shutdown — schedule it).~~ **Done
+    2026-10-17:** owner ran `sudo upsmon -c fsd` with AC connected (UPS `OL`,
+    100% charge beforehand) and power-cycled the box. `journalctl -b -1`
+    showed a clean `fsck`/unmount/`poweroff.target` sequence with no hung
+    units; post-boot NUT (`nut-server`/`nut-monitor`/`nut-driver@*`) reconnected
+    to `OL`/100%, the LUKS volume remounted, all 8 Docker containers and both
+    ComfyUI services came back healthy within ~5 min. `SHUTDOWNCMD`/`FINALDELAY`
+    and the systemd stop order are confirmed working end to end; this doesn't
+    exercise the UPS's own low-battery detection or a real AC-loss event.
   - Consider surfacing `ups.status` / `battery.charge` / `battery.runtime` on
     the server-status dashboard.
   - Unrelated but noted the same boot: a flaky `usb 3-11` device on the Intel

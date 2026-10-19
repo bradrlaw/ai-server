@@ -2,7 +2,7 @@
 """plan-build MCP server for /srv/ai.
 
 Exposes a planner -> coder pipeline as MCP tools, surfaced to Open WebUI through
-mcpo (OpenAPI). The general chat model (`small`, on the P100) calls these tools
+mcpo (OpenAPI). The general chat model (`small`, on idx0) calls these tools
 and relays their output; the tools do the heavy lifting on the V100s:
 
   * `make_plan`       - a reasoning model designs a detailed plan (planning only)
@@ -15,11 +15,12 @@ and relays their output; the tools do the heavy lifting on the V100s:
 
 GPU model: the default planner is `big` (highest-precision, dual-V100) and the
 default coder is `coder-next` (dual-V100). Both live on the two V100s and swap
-each other in as needed; the `small` chat model on the P100 is never evicted, so
+each other in as needed; the `small` chat model on idx0 is never evicted, so
 the conversation that invokes these tools keeps responding. Callers can override
 the planner (`small`/`chat`/`big`) or coder per call.
 
-Runtime: launched by mcpo via `uv run --with mcp` inside the mcpo container.
+Runtime: launched by mcpo via `uv run --no-project --with mcp` inside the mcpo
+container (see config.json `//_deps` for why --no-project is required).
 It talks to the LiteLLM gateway (host :4000, reached at host.docker.internal).
 Secrets (LiteLLM master key) come from the container environment, never args.
 """
@@ -36,14 +37,17 @@ LITELLM_BASE = os.environ.get("LITELLM_BASE", "http://host.docker.internal:4000/
 LITELLM_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
 # Reasoning planners (esp. `big`) can spend minutes thinking; allow long calls.
 HTTP_TIMEOUT = float(os.environ.get("PLAN_BUILD_TIMEOUT", "1800"))
-# Only models that live *exclusively* on the P100 (never evicted) may call these
+# Only models that live *exclusively* on idx0 (never evicted) may call these
 # tools, because the tools swap `big`/`coder-next` onto the V100s and would
 # otherwise evict the calling conversation model. The caller reports its GPU via
 # the `caller_gpu` arg (injected by the model's system prompt); anything matching
 # an entry here is allowed. Override with PLAN_BUILD_SAFE_GPUS (comma-separated).
+# `idx0` (nvidia-smi / PCI bus order) names the slot, not the card: the card there
+# changes (a P100 until it died 2026-07-27, now a Titan X stopgap; ADR-0017). `p100`
+# stays accepted as a legacy alias so older system prompts and service envs still work.
 SAFE_GPUS = {
     g.strip().lower()
-    for g in os.environ.get("PLAN_BUILD_SAFE_GPUS", "p100").split(",")
+    for g in os.environ.get("PLAN_BUILD_SAFE_GPUS", "idx0,p100").split(",")
     if g.strip()
 }
 # Default V100 models to restore on `reset_models` (the daily base state). Warming
@@ -54,31 +58,31 @@ DEFAULT_MODELS = [
     for m in os.environ.get("PLAN_BUILD_DEFAULT_MODELS", "coding,chat").split(",")
     if m.strip()
 ]
-# `fast_plan_and_build` only uses the resident daily V100 models (`chat`+`coding`),
-# so it never evicts them and may also be called from those V100 models -- not just
-# the P100 `small` model. Override with PLAN_BUILD_FAST_SAFE_GPUS (comma-separated).
+# The `fast_*` tools only use the resident daily V100 models (`chat`+`coding`),
+# so they never evict them and may also be called from those V100 models -- not just
+# the idx0 `small` model. Override with PLAN_BUILD_FAST_SAFE_GPUS (comma-separated).
 FAST_SAFE_GPUS = {
     g.strip().lower()
-    for g in os.environ.get("PLAN_BUILD_FAST_SAFE_GPUS", "p100,v100").split(",")
+    for g in os.environ.get("PLAN_BUILD_FAST_SAFE_GPUS", "idx0,p100,v100").split(",")
     if g.strip()
 }
 # Service-wide fallback for `caller_gpu` when a client can't inject it per call.
 # The shared streamable-http service (Copilot BYOK over HTTP) is used by many
 # sessions and the server can't know each one's model, so it declares a single
-# assumed driver GPU here (set PLAN_BUILD_CALLER_GPU=p100 on that service: "drive
-# the P100 `small` chat model, so big/coder-next swap onto the V100s without
+# assumed driver GPU here (set PLAN_BUILD_CALLER_GPU=idx0 on that service: "drive
+# the idx0 `small` chat model, so big/coder-next swap onto the V100s without
 # evicting the caller"). Empty by default => the stdio/mcpo path is unchanged and
 # the guard still requires an explicit `caller_gpu`.
 DEFAULT_CALLER_GPU = os.environ.get("PLAN_BUILD_CALLER_GPU", "").strip()
 
 # Human-readable "who may call this" clauses, embedded in guard refusal messages.
 _STRICT_WHO = (
-    "a model that lives exclusively on the P100 (the `small` chat model) -- this tool "
+    "a model that lives exclusively on idx0 (the `small` chat model) -- this tool "
     "swaps `big`/`coder-next` onto the V100s and would otherwise evict the caller and "
     "break the conversation"
 )
 _FAST_WHO = (
-    "the P100 `small` model or a V100 daily model (`chat`/`coding`) -- this tool uses the "
+    "the idx0 `small` model or a V100 daily model (`chat`/`coding`) -- this tool uses the "
     "resident `chat`+`coding` models in place and won't evict them"
 )
 
@@ -93,7 +97,7 @@ def _gpu_guard(
     """Return a refusal message if the caller's GPU isn't allowed, else None.
 
     Callers must report their GPU/tier via `caller_gpu` (injected by the model's
-    system prompt). `allowed` defaults to `SAFE_GPUS` (P100-only); tools that don't
+    system prompt). `allowed` defaults to `SAFE_GPUS` (idx0-only); tools that don't
     evict the daily V100 models can pass a wider set (e.g. `FAST_SAFE_GPUS`).
     """
     allowed = SAFE_GPUS if allowed is None else allowed
@@ -113,13 +117,14 @@ def _gpu_guard(
     )
 
 
-# Human-readable model labels shown in output bylines and docstrings so profile
-# names ("chat", "coding", ...) are never confused with each other.
+# Human-readable model labels shown in output bylines so profile names ("chat",
+# "coding", ...) are never confused with each other. Keep these, and the model names
+# in the tool docstrings below, in sync with config/llama-swap.base.yaml.
 MODEL_LABELS = {
-    "small": "Gemma-4-12B, P100",
-    "coding": "Qwen3.6-27B",
+    "small": "Gemma-4-12B, idx0",
+    "coding": "Qwen3.8-27B",
     "chat": "Qwen3.6-35B-A3B MoE",
-    "big": "Qwen3.6-27B BF16",
+    "big": "Qwen3.8-27B UD-Q8_K_XL",
     "coder-next": "Qwen3-Coder-Next 80B-A3B",
 }
 
@@ -205,13 +210,13 @@ def make_plan(task: str, caller_gpu: str = "", planner_model: str = "big") -> st
     Args:
         task: Natural-language description of what to build.
         caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
-            "p100"). Injected by your system prompt. This tool only runs when the
-            caller lives exclusively on the P100 (the `small` model), because it
+            "idx0"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on idx0 (the `small` model), because it
             swaps `big`/`coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
-        planner_model: Model that writes the plan. 'big' (default, Qwen3.6-27B
-            BF16, highest precision, slower) or 'chat' (Qwen3.6-35B-A3B MoE,
-            reasoning, faster) on the V100s, or 'small' (Gemma-4-12B on the P100,
+        planner_model: Model that writes the plan. 'big' (default, Qwen3.8-27B
+            UD-Q8_K_XL, highest precision, slower) or 'chat' (Qwen3.6-35B-A3B MoE,
+            reasoning, faster) on the V100s, or 'small' (Gemma-4-12B on idx0,
             quickest, weaker plans, no GPU swap).
 
     Returns:
@@ -249,13 +254,13 @@ def plan_and_build(
     Args:
         task: Natural-language description of what to build.
         caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
-            "p100"). Injected by your system prompt. This tool only runs when the
-            caller lives exclusively on the P100 (the `small` model), because it
+            "idx0"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on idx0 (the `small` model), because it
             swaps `big`/`coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
-        planner_model: Model that writes the plan. Default 'big' (Qwen3.6-27B
-            BF16, highest precision). Alternatives: 'chat' (Qwen3.6-35B-A3B MoE,
-            faster reasoning) or 'small' (Gemma-4-12B, P100,
+        planner_model: Model that writes the plan. Default 'big' (Qwen3.8-27B
+            UD-Q8_K_XL, highest precision). Alternatives: 'chat' (Qwen3.6-35B-A3B MoE,
+            faster reasoning) or 'small' (Gemma-4-12B, idx0,
             quickest, no GPU swap).
         coder_model: Coding model that implements the plan. Default 'coder-next' (Qwen3-Coder-Next 80B-A3B).
 
@@ -264,7 +269,7 @@ def plan_and_build(
 
     Note: With the default 'big' planner, this can take several minutes (deep
     reasoning) plus a GPU swap from the planner to the coder. The 'small' chat
-    model stays resident on the P100, so your conversation keeps responding.
+    model stays resident on idx0, so your conversation keeps responding.
     """
     refusal = _gpu_guard(caller_gpu)
     if refusal:
@@ -292,7 +297,7 @@ def fast_plan_and_build(
     """Quick plan + implement using the resident daily V100 models (no GPU swap).
 
     The interactive counterpart to `plan_and_build`: it plans with `chat`
-    (Qwen3.6 MoE reasoner) and implements with `coding` (Qwen3.6-27B) -- the two
+    (Qwen3.6 MoE reasoner) and implements with `coding` (Qwen3.8-27B) -- the two
     models normally already resident together on the V100s (idx2 + idx1). Because
     it uses them in place, there is NO model swap, so it is fast and well-suited to
     interactive programming sessions.
@@ -303,13 +308,13 @@ def fast_plan_and_build(
 
     Args:
         task: Natural-language description of what to build.
-        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("idx0" for the
             `small` model, or "v100" for the `chat`/`coding` models). Injected by
             your system prompt. Because this tool only uses the resident
-            `chat`/`coding` models, it may be called from the P100 `small` model OR
+            `chat`/`coding` models, it may be called from the idx0 `small` model OR
             those V100 daily models.
         planner_model: Planner. Default 'chat' (Qwen3.6-35B-A3B MoE).
-        coder_model: Coder. Default 'coding' (Qwen3.6-27B).
+        coder_model: Coder. Default 'coding' (Qwen3.8-27B).
 
     Returns:
         Markdown containing both the plan and the implementation.
@@ -342,10 +347,10 @@ def fast_make_plan(task: str, caller_gpu: str = "", planner_model: str = "chat")
 
     Args:
         task: Natural-language description of what to build.
-        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("idx0" for the
             `small` model, or "v100" for the `chat`/`coding` models). Injected by
             your system prompt. Because this tool only uses the resident `chat`
-            model, it may be called from the P100 `small` model OR those V100 daily
+            model, it may be called from the idx0 `small` model OR those V100 daily
             models.
         planner_model: Planner. Default 'chat' (Qwen3.6-35B-A3B MoE).
 
@@ -377,8 +382,8 @@ def implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "coder-ne
     Args:
         spec: The specification or implementation plan to build from.
         caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
-            "p100"). Injected by your system prompt. This tool only runs when the
-            caller lives exclusively on the P100 (the `small` model), because it
+            "idx0"). Injected by your system prompt. This tool only runs when the
+            caller lives exclusively on idx0 (the `small` model), because it
             swaps `coder-next` onto the V100s and would otherwise evict the
             caller. Always pass this.
         coder_model: Coding model that implements it. Default 'coder-next' (Qwen3-Coder-Next 80B-A3B).
@@ -400,7 +405,7 @@ def fast_implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "cod
     """Implement code from a spec/plan using the resident `coding` model (no swap).
 
     The interactive counterpart to `implement_spec`: it implements with `coding`
-    (Qwen3.6-27B), a daily V100 model that stays resident, so there is no model
+    (Qwen3.8-27B), a daily V100 model that stays resident, so there is no model
     swap. Use when you already have a clear spec/plan -- e.g. one from
     `fast_make_plan` (optionally edited), or a detailed spec you wrote yourself.
     Use `implement_spec` (`coder-next`, 80B) instead for the largest/most complex
@@ -408,12 +413,12 @@ def fast_implement_spec(spec: str, caller_gpu: str = "", coder_model: str = "cod
 
     Args:
         spec: The specification or implementation plan to build from.
-        caller_gpu: REQUIRED. The GPU the calling model runs on ("p100" for the
+        caller_gpu: REQUIRED. The GPU the calling model runs on ("idx0" for the
             `small` model, or "v100" for the `chat`/`coding` models). Injected by
             your system prompt. Because this tool only uses the resident `coding`
-            model, it may be called from the P100 `small` model OR those V100 daily
+            model, it may be called from the idx0 `small` model OR those V100 daily
             models.
-        coder_model: Coder. Default 'coding' (Qwen3.6-27B).
+        coder_model: Coder. Default 'coding' (Qwen3.8-27B).
 
     Returns:
         Markdown with the implementation produced by the coding model.
@@ -435,12 +440,12 @@ def reset_models(caller_gpu: str = "") -> str:
     the base state -- e.g. they say "stop", "reset", "done", "free the GPUs", or
     "go back to normal". It warms the default coding models back onto the V100s,
     which evicts any planner/coder (`big`/`coder-next`) left resident from earlier
-    plan-build calls. The `small` chat model on the P100 is unaffected, so this
+    plan-build calls. The `small` chat model on idx0 is unaffected, so this
     conversation keeps responding.
 
     Args:
         caller_gpu: REQUIRED. The GPU/card the calling model runs on (e.g.
-            "p100"). Injected by your system prompt. Same P100-exclusive rule as
+            "idx0"). Injected by your system prompt. Same idx0-exclusive rule as
             the other tools.
 
     Returns:
@@ -463,7 +468,7 @@ def reset_models(caller_gpu: str = "") -> str:
         parts.append("✅ Reset the V100s to the default models: " + ", ".join(f"`{m}`" for m in restored) + ".")
     if failed:
         parts.append("⚠️ Failed to restore: " + "; ".join(failed) + ".")
-    parts.append("The `small` model (P100) was unaffected.")
+    parts.append("The `small` model (idx0) was unaffected.")
     return " ".join(parts)
 
 

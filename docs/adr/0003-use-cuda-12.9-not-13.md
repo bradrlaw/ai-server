@@ -22,7 +22,9 @@ Standardize on **CUDA Toolkit 12.9** (12.9.2-1) + **cuDNN 9** (`cudnn9-cuda-12`)
 Verification performed before deciding:
 - CUDA 12.9 `nvcc` targets sm_60 and sm_70 (12.x keeps Pascal/Volta).
 - PyTorch ships **stable `cu129` wheels** (torch 2.8, 2.9.1, 2.10, 2.11, 2.12) -
-  not nightly-only.
+  not nightly-only. *(Note 2026-10-15, audit D5: only torch 2.8–2.10's cu129 wheels
+  include sm_70, and none include sm_60; the toolkit version doesn't decide that. See
+  the [wheel table](../optional-tools.md#which-torch-wheels-run-on-the-v100s-sm_70).)*
 - llama.cpp (source build) and vLLM both support CUDA 12.9.
 
 Install via toolkit-only metapackage per ADR-0002.
@@ -32,7 +34,9 @@ Install via toolkit-only metapackage per ADR-0002.
   for current PyTorch releases.
 - Negative: Pascal/Volta are deprecated in 12.x - a *future* CUDA (13+) will not
   support these GPUs at all, capping the long-term ceiling (hardware-bound anyway).
-- Follow-up: build engines with `CUDA_ARCHITECTURES="60;70"`.
+- Follow-up: build engines with `CUDA_ARCHITECTURES="60;70"`. *(Updated 2026-07-27:
+  `52;60;61;70` for the Maxwell Titan X stopgap, ADR-0017; `scripts/build-llama.sh`
+  builds it.)*
 
 ## Alternatives considered
 - **Stay on CUDA 13.3** - rejected; does not support sm_60/sm_70 at all.

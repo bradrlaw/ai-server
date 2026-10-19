@@ -12,7 +12,9 @@ evals/
   <test-name>/                  # short, descriptive kebab-case name
     README.md                   # what the test measures, the rubric, how to run
     prompt.txt                  # the exact prompt sent to every model (verbatim)
-    check.py                    # optional: objective/automatable scoring for this test
+    check.py                    # optional: objective/automatable scoring (run by hand)
+    rubric.json                 # optional: manual design axes (default: 5 landing-page axes)
+    playtest.json               # optional: headless playtest scenario (see Scoring)
     outputs/
       <model-label>/            # one directory per model run
         index.html | output.*   # the model's extracted output
@@ -20,9 +22,12 @@ evals/
         meta.json               # model, load command, sampler, usage, MTP, perf timings
         run.html                # human-readable view: metrics + rendered output + raw
         check.json              # optional: objective-check results (from check.py)
-        scores.json             # manual design scores (five 0–5 axes + notes)
+        scores.json             # manual design scores (0–5 per rubric axis + notes)
+        playtest.json           # optional: playtest results
     summary.html                # auto-built comparison table across all runs
     RESULTS.md                  # auto-built scoreboard (objective+perf + manual scores)
+    RESULTS.html                # auto-built HTML view of RESULTS.md
+    PLAYTEST.md / PLAYTEST.html # optional: playtest milestone report
 ```
 
 Conventions:
@@ -115,20 +120,34 @@ refreshes the test's `summary.html`.
 - **`outputs/<label>/run.html`** — a per-run page: metric cards, the llama.cpp load
   command, the sampler, the full `meta.json`, and (for HTML tests) the rendered page inline.
 
-Both are plain files. **To view rendered pages, use the evals web viewer at
-`http://<server>:8085/`** (a read-only static server that serves this tree with
-directory listing) — open `localmind-landing-page/summary.html`, then click into any
-run. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it shows HTML
+Both are plain files. **To view rendered pages, open them straight from the SMB share**
+(`smb://<server-ip>/srv-ai` on macOS, `\\<server-ip>\srv-ai` on Windows — see
+[Mounting /srv/ai over SMB](../docs/server-setup.md#mounting-srvai-over-smb-macos--windows--2026-09-13)):
+browse to `evals/localmind-landing-page/`, open `summary.html` in a browser, then click
+into any run. Links and the `run.html` inline preview are relative, so they work from the
+share. Filebrowser (`:8083` → `/data/evals`) is fine for downloading, but it shows HTML
 *source* rather than rendering it.
 
 ## Scoring
 
-Each test defines its own rubric in its `README.md`. Two parts:
+Each test describes its rubric in its `README.md`. Three parts:
 
 - **Objective (automated)** — `check.py` scores objectively-checkable constraints
   (self-containment, required sections/interactions) and writes `check.json` per run.
-- **Subjective (manual)** — design/quality axes scored 0–5 by hand. Enter them in each run's
-  `outputs/<label>/scores.json` (a blank stub is auto-created), then rebuild:
+  **Neither runner calls it**, so after new runs, score them and rebuild:
+
+  ```bash
+  python3 evals/<name>/check.py      # scores every outputs/<label>/ (or pass output files)
+  scripts/eval-summary.py --test <name>
+  ```
+
+  Use `python3`: not every `check.py` is executable. For `dungeon-adventure-engine`,
+  `check.py` runs each model-written `output.py` as you, unsandboxed (20 s timeout).
+- **Subjective (manual)** — design/quality axes scored 0–5 by hand. The axes come from
+  the test's `rubric.json` (`{"axes": [["key", "Label"], …]}`); without one,
+  `eval-summary.py` uses the five landing-page axes. Enter scores in each run's
+  `outputs/<label>/scores.json` (a blank stub with the test's axes is auto-created), then
+  rebuild:
 
   ```bash
   scripts/eval-summary.py --test <name>

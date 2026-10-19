@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 #
-# ups-setup.sh — configure NUT (Network UPS Tools) for the CyberPower CP1500AVRLCD
+# ups-setup.sh — configure NUT (Network UPS Tools) for the CyberPower CP1500PFCLCD
 #                so the AI server shuts down gracefully on an extended outage.
 #
-# Hardware:  CyberPower CP1500AVRLCD (USB HID Power Device, VID:PID 0764:0601),
-#            enumerated by the kernel as hidraw "CPS CP1500AVRLCD3".
+# Hardware:  CyberPower CP1500PFCLCD PFC Sinewave (USB HID Power Device,
+#            VID:PID 0764:0601; NUT reports device.model "CP1500PFCLCDa").
+#            It replaced the CP1500AVRLCD on 2026-08-08: that unit's stepped sine
+#            wave was rejected by the active-PFC PSU (ADR-0019). Same VID:PID, so
+#            the driver config below didn't change.
 # Driver:    NUT usbhid-ups (native, no vendor daemon needed).
 # Mode:      standalone (single machine monitors its own UPS over local USB).
 # Trigger:   graceful `shutdown -h` on the UPS LOW-BATTERY signal (OB LB) —
@@ -20,7 +23,7 @@
 set -euo pipefail
 
 UPS_NAME="cyberpower"
-UPS_DESC="CyberPower CP1500AVRLCD"
+UPS_DESC="CyberPower CP1500PFCLCD"
 VENDORID="0764"
 PRODUCTID="0601"
 NUTDIR="/etc/nut"
@@ -127,7 +130,8 @@ DEADTIME 15
 POWERDOWNFLAG /etc/killpower
 FINALDELAY 5
 
-# Log/notify on state changes (syslog only; no wall spam on a headless box).
+# Log every state change to syslog; also WALL the critical ones (on battery, low
+# battery, forced shutdown) so anyone logged in over SSH sees them.
 NOTIFYFLAG ONLINE   SYSLOG
 NOTIFYFLAG ONBATT   SYSLOG+WALL
 NOTIFYFLAG LOWBATT  SYSLOG+WALL

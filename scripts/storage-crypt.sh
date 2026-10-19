@@ -12,7 +12,7 @@
 # Usage (run as root):
 #   sudo scripts/storage-crypt.sh setup    # ONE-TIME, DESTRUCTIVE: format + mkfs
 #   sudo scripts/storage-crypt.sh unlock   # open LUKS + mount (prompts passphrase)
-#   sudo scripts/storage-crypt.sh lock      # umount + close LUKS
+#   sudo scripts/storage-crypt.sh lock      # stop comfyui-secure + filebrowser, umount, close LUKS
 #   sudo scripts/storage-crypt.sh status    # show current state
 #
 set -euo pipefail
@@ -35,6 +35,27 @@ require_disk() {
     echo "       is the ADATA SU760 connected? check: ls -l /dev/disk/by-id/ | grep SU760" >&2
     exit 1
   fi
+}
+
+# Processes in OTHER mount namespaces that still have the volume mounted, one
+# line each. A container whose bind mount covers ${MOUNT} recursively (the docker
+# default) holds its own copy of the mount: umount on the host leaves it, and
+# cryptsetup close then fails with "device busy". Best-effort; complete as root.
+mount_holders() {
+  local self p ns id name seen=" "
+  self=$(readlink /proc/self/ns/mnt)
+  for p in /proc/[0-9]*; do
+    grep -qs " ${MAPPER_DEV} " "${p}/mountinfo" || continue
+    ns=$(readlink "${p}/ns/mnt" 2>/dev/null) || continue
+    [[ "${ns}" == "${self}" || "${seen}" == *" ${ns} "* ]] && continue
+    seen+="${ns} "
+    id=$(grep -o -m1 'docker-[0-9a-f]\{64\}' "${p}/cgroup" 2>/dev/null | cut -c8-) || true
+    name=""
+    if [[ -n "${id}" ]]; then
+      name=$(docker inspect --format '{{.Name}}' "${id}" 2>/dev/null | tr -d /) || true
+    fi
+    echo "pid ${p#/proc/} ($(cat "${p}/comm" 2>/dev/null))${name:+, container ${name}}"
+  done
 }
 
 cmd_setup() {
@@ -106,11 +127,11 @@ cmd_unlock() {
   fi
 
   # Start the secure ComfyUI instance now that the encrypted volume is present.
-  # comfyui-secure.service has RequiresMountsFor=/srv/ai/storage, so at boot (when
-  # the volume is still locked) its start job fails on the missing mount and systemd
-  # does NOT auto-retry — it stays dead even after a later unlock. Starting it here
-  # closes that gap. Best-effort: never fail the unlock over this (comfyui-open has
-  # no encrypted dependency and comes up at boot on its own).
+  # comfyui-secure.service has ConditionPathIsMountPoint=/srv/ai/storage, so at boot
+  # (when the volume is still locked) its start is skipped and systemd does NOT
+  # re-check after a later unlock — it stays dead. Starting it here closes that gap.
+  # Best-effort: never fail the unlock over this (comfyui-open has no encrypted
+  # dependency and comes up at boot on its own).
   if command -v systemctl >/dev/null 2>&1 \
      && systemctl list-unit-files comfyui-secure.service >/dev/null 2>&1; then
     if systemctl is-active --quiet comfyui-secure.service; then
@@ -128,13 +149,39 @@ cmd_unlock() {
 
 cmd_lock() {
   require_root
+  # Stop what unlock started on top of the volume, or the lock fails/leaks:
+  # comfyui-secure writes into it via its *-secure symlinks, and filebrowser's
+  # bind mounts of those dirs keep the filesystem busy (cryptsetup close would
+  # fail). `docker compose stop` also keeps unless-stopped from retrying it at the
+  # next boot; unlock recreates it. Best-effort: umount below still refuses if busy.
   if mountpoint -q "${MOUNT}"; then
+    if command -v systemctl >/dev/null 2>&1 \
+       && systemctl is-active --quiet comfyui-secure.service; then
+      echo ">> stopping comfyui-secure (uses the encrypted volume)"
+      systemctl stop comfyui-secure.service \
+        || echo "   warning: comfyui-secure stop failed" >&2
+    fi
+    if command -v docker >/dev/null 2>&1 && [[ -f /srv/ai/docker/docker-compose.yml ]] \
+       && docker compose version >/dev/null 2>&1; then
+      echo ">> stopping filebrowser (bind-mounts the secure dirs; unlock recreates it)"
+      ( cd /srv/ai/docker && docker compose stop filebrowser ) \
+        || echo "   warning: filebrowser stop failed" >&2
+    fi
     echo ">> unmounting ${MOUNT}"
     umount "${MOUNT}"
   fi
   if [[ -b "${MAPPER_DEV}" ]]; then
     echo ">> closing LUKS container"
-    cryptsetup close "${MAPPER}"
+    if ! cryptsetup close "${MAPPER}"; then
+      echo "error: ${MAPPER} is still in use, so the volume stays OPEN (decrypted)." >&2
+      local holders
+      holders=$(mount_holders)
+      if [[ -n "${holders}" ]]; then
+        echo "       Still mounted in (stop these, then re-run lock):" >&2
+        sed 's/^/         /' <<<"${holders}" >&2
+      fi
+      exit 1
+    fi
   fi
   echo "locked."
 }
@@ -151,6 +198,14 @@ cmd_status() {
     df -h "${MOUNT}" | tail -1 | awk '{print "         used "$3" / "$2" ("$5")"}'
   else
     echo "mount:   not mounted"
+  fi
+  if [[ -b "${MAPPER_DEV}" ]]; then
+    local holders
+    holders=$(mount_holders)
+    if [[ -n "${holders}" ]]; then
+      echo "also mounted in:"
+      sed 's/^/         /' <<<"${holders}"
+    fi
   fi
 }
 

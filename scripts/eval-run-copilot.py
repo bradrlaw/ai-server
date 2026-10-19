@@ -45,12 +45,11 @@ FENCE = re.compile(r"```(\w+)?\s*\n(.*?)```", re.DOTALL)
 # BYOK client stays within each model's shared llama.cpp KV ctx-size. Keep in sync
 # with that script (and config/llama-swap.base.yaml) if ctx-sizes change.
 TOKEN_BUDGETS = {
-    "coding":     (131072, 32768),
+    "coding":     (114688, 32768),
     "chat":       (57344, 24576),
     "big":        (163840, 32768),
     "coder-next": (98304, 32768),
     "small":      (20480, 8192),
-    "small-12b":  (20480, 8192),
 }
 DEFAULT_BUDGET = (32768, 8192)
 

@@ -5,7 +5,8 @@
 #
 # CUDA 12.9 is the newest CUDA that still builds for Pascal (sm_60) and Volta
 # (sm_70) — those were removed in CUDA 13. PyTorch ships stable cu129 wheels
-# (torch 2.8–2.12), and llama.cpp/vLLM support 12.9.
+# (torch 2.8–2.13; only 2.8–2.10's include sm_70, none sm_60 — see the wheel
+# table in docs/optional-tools.md), and llama.cpp/vLLM support 12.9.
 #
 # Safe by design:
 #   * Installs the TOOLKIT-only metapackage (cuda-toolkit-12-9) — NOT the `cuda`
@@ -93,13 +94,15 @@ echo
 echo "==> VERIFY CUDA toolkit"
 NVCC=/usr/local/cuda/bin/nvcc
 "$NVCC" --version | sed -n '4,5p'
-echo "--- nvcc supported GPU codes (must include sm_60 and sm_70) ---"
+echo "--- nvcc supported GPU codes (must include sm_52, sm_60, sm_61 and sm_70) ---"
 CODES=$("$NVCC" --list-gpu-code | tr '\n' ' ')
 echo "    $CODES"
+echo "$CODES" | grep -qw sm_52 && echo "    sm_52 (Titan X) supported ✅" || echo "    sm_52 MISSING ❌"
 echo "$CODES" | grep -qw sm_60 && echo "    sm_60 (P100) supported ✅" || echo "    sm_60 MISSING ❌"
+echo "$CODES" | grep -qw sm_61 && echo "    sm_61 (Pascal) supported ✅" || echo "    sm_61 MISSING ❌"
 echo "$CODES" | grep -qw sm_70 && echo "    sm_70 (V100) supported ✅" || echo "    sm_70 MISSING ❌"
 
 echo
 echo "==> DONE. CUDA $CUDA_VER + cuDNN installed; 580 driver preserved."
 echo "    Open a NEW shell (or: source /etc/profile.d/cuda.sh) so nvcc is on PATH."
-echo "    Next: build llama.cpp with -DCMAKE_CUDA_ARCHITECTURES=\"60;70\"."
+echo "    Next: build llama.cpp with scripts/build-llama.sh (archs 52;60;61;70, ADR-0017)."

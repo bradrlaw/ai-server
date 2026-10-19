@@ -3,14 +3,15 @@
 # tensor split. No sudo required.
 #
 # Hardware notes (see /srv/ai/docs/server-setup.md):
-#   nvidia-smi index order (PCI_BUS_ID): 0=P100, 1=V100, 2=V100
+#   nvidia-smi index order (PCI_BUS_ID): 0=Titan X (stopgap; P100 died 2026-07-27), 1=V100, 2=V100
 #   V100s have NO NVLink -> tensor split crosses PCIe gen3 (PHB).
 #   Each V100 = 32 GB. Q6_K (~21 GB) fits ONE card; BF16 (~54 GB) needs BOTH.
 #
 # Usage: ./bench-qwen3.6-27b.sh [output_dir]
 set -euo pipefail
 
-MODEL_DIR=/srv/ai/models/qwen3.6-27b
+# Cold tier (bulk HDD): no longer served, kept as a benchmark baseline.
+MODEL_DIR=/srv/ai/models/cold/qwen3.6-27b
 BIN=/srv/ai/src/llama.cpp/build/bin/llama-bench
 Q6K="$MODEL_DIR/Qwen3.6-27B-Q6_K.gguf"
 BF16="$MODEL_DIR/Qwen3.6-27B-BF16-00001-of-00002.gguf"   # sharded; loader finds shard 2

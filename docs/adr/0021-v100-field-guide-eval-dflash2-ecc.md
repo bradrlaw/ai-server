@@ -14,7 +14,7 @@ with speculative decoding at ~60 tok/s. Same card family, engine, and model fami
 and the decision not to act on it for now.
 
 Our relevant state at time of writing:
-- GPUs: 2× Tesla V100-PCIE-32GB (idx1/idx2, sm_70) **capped 175 W / 200 W** for HBM thermals
+- GPUs: 2× Tesla V100-PCIE-32GB (idx1/idx2, sm_70) **capped 175 W each** for HBM thermals
   (HBM2 throttles ~85 °C), + GTX Titan X (idx0, sm_52, stopgap — see ADR-0017). No NVLink (PHB).
 - Both V100s run **ECC Enabled**.
 - `coding`/`big` use **MTP self-speculative decode**; `reasoning_effort` pinned `medium`.
@@ -26,7 +26,7 @@ Our relevant state at time of writing:
 1. **Do not switch `coding`/`big` from MTP to DFlash2.** DFlash2 (llama.cpp mainline
    PR #27342, 27 Aug 2026, `--spec-type draft-dflash`) is already available in our binary,
    but the guide's own numbers show it only *wins* at full power + ECC-off, while at a
-   **150–180 W cap MTP leads**. We cap V100s at 175/200 W for HBM thermals, so the guide's
+   **150–180 W cap MTP leads**. We cap both V100s at 175 W for HBM thermals, so the guide's
    curve places us squarely in MTP's favourable region. Our existing MTP choice is correct
    for our power/thermal envelope.
 2. **Keep ECC Enabled on the V100s** (do not run `nvidia-smi -e 0`). The guide reports
@@ -60,7 +60,7 @@ The guide independently confirms several of our existing conventions:
   `-fit` planner → OOM on device 0. Kept in mind for the hand-tuned `big` dual-V100 `-sm layer`.
 
 ## Alternatives considered
-- **Switch to DFlash2 now** — rejected: at our 175/200 W caps MTP is the faster method per the
+- **Switch to DFlash2 now** — rejected: at our 175 W caps MTP is the faster method per the
   guide's data; switching would likely regress or be neutral while adding a second draft model.
 - **Disable ECC for bandwidth** — rejected: family/multi-user reliability plus a prior HBM ECC
   death (ADR-0017) make silent bit-flips an unacceptable trade for single-digit-% throughput.

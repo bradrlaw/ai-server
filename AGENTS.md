@@ -12,8 +12,12 @@ Read this first, then the detailed docs:
 
 ## Repo scope & conventions
 - **This repo tracks docs + scripts + config only.** `.gitignore` is a **whitelist**:
-  only `docs/`, `scripts/`, `docker/`, `config/`, `README`, `LICENSE` are tracked.
+  only `docs/`, `scripts/`, `docker/`, `config/`, `evals/`, `README.md`, `AGENTS.md`, `LICENSE`
+  (and `.gitignore`) are tracked.
   Everything else under `/srv/ai` (`models/`, `venvs/`, `src/`, `comfyui/`, `datasets/`) is **local & gitignored** — do not try to commit it.
+  - **ComfyUI MCP workflows stay local** (owner policy, ADR-0012 addendum): never stage files in
+    `config/comfyui-mcp/workflows/` (the 8 tracked ones are a frozen snapshot; local edits stay
+    uncommitted) and add no new `!` lines for them in `.gitignore`.
 - **Keep all work under `/srv/ai`.** Record design decisions as ADRs in `docs/adr/`.
 - **Commits:** append the trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 - Remote: `github.com/bradrlaw/ai-server` (private).
@@ -34,36 +38,65 @@ Read this first, then the detailed docs:
 - **CUDA 12.x only** — 13.x dropped Maxwell/Pascal/Volta (sm_52/sm_60/sm_70). sm_70 also means **no fp8 /
   FlashAttention-2 / SageAttention**; use `sdpa` attention and avoid `*_fast` fp8 paths in ComfyUI.
 - **Keep GPUs under thermal limits** via power caps applied at boot by the `gpu-fan-control`
-  service (Titan X idx0 200W, V100 idx1 175W / idx2 200W); V100 HBM throttles ~85 °C. Maxwell GPU
+  service (Titan X idx0 200W, V100 idx1/idx2 175W each — `power_limits` in
+  `scripts/gpu-fan-control.config.json`, re-read live every 30 s, so a raw `nvidia-smi -pl`
+  gets reverted: change caps via that file or the status dashboard); V100 HBM throttles ~85 °C. Maxwell GPU
   Boost 2.0 self-trims the Titan X to ~200W/~1126MHz at its 83 °C target regardless of a higher cap.
 - **Clock is UTC, owner is US Eastern.** The machine runs `Etc/UTC` but the owner thinks in
   EST/EDT (~4–5 h offset). Any wall-clock scheduling (cron, timers, the quiet-hours window) must
   be timezone-aware — e.g. quiet-hours reads `QUIET_TZ=America/New_York`, not the system clock.
+- **Host firewall (ufw, ADR-0028).** Containers can reach only host TCP
+  `4000,8188,9000,9001,9095,9120`; every other host port is **rejected** for them. A new
+  container→host dependency must be added to `DOCKER_HOST_PORTS` in `scripts/setup-firewall.sh`
+  **and** `scripts/verify-firewall.sh`, then the owner re-runs `sudo scripts/setup-firewall.sh`.
+  Containers reach each other by Docker DNS name (`http://mcpo:8000/...`), never via the host
+  IP/hostname. Check with `scripts/verify-firewall.sh`.
 - **HF downloads:** use `/srv/ai/scripts/hf-dl download <repo> <path> --local-dir <dir>`
   (injects token from keyring, ~150 MB/s Xet). Don't use raw curl (throttled) or `HF_XET_HIGH_PERFORMANCE=1`.
+- **Secure-canvas MCP bridges are localhost/mcpo-only (ADR-0026).**
+  - `comfyui-mcp-secure` (`:9001`, injects the `:8189` login token) is kernel-filtered
+    (unit `IPAddressAllow`) to localhost + the internal `mcp-secure` Docker net.
+  - Only **mcpo** may join `mcp-secure`; it reaches the bridge at `172.31.250.1:9001`.
+  - The aichat bridge (`:8808`) is loopback-only.
+  - Don't attach containers to `mcp-secure` or add `:9001` clients without updating the
+    filter. If the host LAN IP or that subnet changes, update the unit too.
+  - Check with `scripts/verify-mcp-lockdown.sh`.
+- **The status dashboard (`:9095`) needs the owner's sign-in (ADR-0027).**
+  - Read-only `GET /status.json` / `/history.json` work without it from the host and
+    containers (`curl -s 127.0.0.1:9095/status.json`).
+  - `POST /actions/*` (service start/stop, power caps, fp16, quiet hours, workflow sync)
+    needs a browser session + same-origin + CSRF token, so agents can't call it — hand
+    those changes to the user, or use the underlying config/CLI path.
+  - Only the owner sets the password (`server-status-service.py --set-password`); don't
+    touch `/srv/ai/var/status-service/auth.json`.
 
 ## Serving stack (hybrid deploy — ADR-0006)
 - **GPU/low-level tiers run NATIVE** (systemd/venv): llama.cpp + **llama-swap** router,
-  ComfyUI, (future) vLLM/whisper.
-- **CPU app tier runs in Docker Compose** (`docker/`): **LiteLLM** (client-facing gateway
-  `:4000`), Open WebUI, Qdrant, Postgres, MCPO, SearXNG, the **OpenClaw** (`:18789`) +
-  **Hermes** (`:9119`/`:8642`) assistant gateways (ADR-0016), etc.
+  the ComfyUI instances, (future) whisper STT. (vLLM was abandoned 2026-07-18, ADR-0004.)
+- **CPU app tier runs in Docker Compose** (`docker/docker-compose.yml`): **LiteLLM**
+  (client-facing gateway `:4000`), Open WebUI (`:3000`), mcpo (MCP tools as OpenAPI, for Open
+  WebUI/agents), SearXNG, filebrowser (`:8083`, file manager for ComfyUI media/models, ADR-0023), autoheal,
+  and the **OpenClaw** (`:18789`) + **Hermes** (`:9119`/`:8642`) assistant gateways (ADR-0016).
+  Qdrant/Postgres (RAG) are planned in `docs/architecture.md`, not deployed.
 - **Model router:** `config/llama-swap.base.yaml` is the **canonical** source (matrix router,
   mgmt `127.0.0.1:9090`); the active `config/llama-swap.yaml` the service reads is **generated**
   from the base + a mode overlay (`config/modes/*.yaml`) by `scripts/llama-swap-mode.py` and is
   **gitignored**. Edit the **base**, then re-render with `llama-swap-mode.py set <mode>`.
   **LiteLLM (`docker/litellm/config.yaml`) must have a matching `model_list` entry for every model
   you want clients to see;** restart the `litellm` container after edits.
-- **Serving modes (ADR-0015):** `daily` (balanced, all single-slot), `heavy-coding` (interactive
-  `coding` at full ctx + `chat`/`fast` sub-agent pools at `--parallel 4`), and `agentic`
-  (autonomous throughput: `coding` P=2, `gemma-26b` P=8 in place of `chat` on idx2, `fast` P=2).
+- **Serving modes (ADR-0015):** `daily` (balanced, single-slot except `coder-next` P=2),
+  `heavy-coding` (interactive `coding` at full ctx + sub-agent pools: `chat` P=4 and `small` P=2,
+  32k ctx/slot each), and `agentic` (autonomous throughput: `coding` P=2, `gemma-26b` P=8 in
+  place of `chat` on idx2, `small` P=2). Exact values: `config/modes/*.yaml`.
   Switch with `scripts/llama-swap-mode.py set <mode>` (no restart — `-watch-config` reloads) or the
   `llama-swap-mode` MCP (`set_mode`). `list` / `current` / `show <mode>` to inspect.
 - **Model roster** (see `config/llama-swap.base.yaml` for exact args): `coding` (Qwen3.8-27B Q6_K
   **+ MTP** self-spec decode, 160k ctx, idx1), `chat` (Qwen3.6-35B-A3B MoE UD-Q6_K **+ MTP**, 96k
-  ctx, idx2), `big` (Qwen3.8-27B UD-Q8_K_XL **+ MTP**, dual-V100, 256k), `small`/`fast`
+  ctx, idx2), `big` (Qwen3.8-27B UD-Q8_K_XL **+ MTP**, dual-V100, 256k), `small` + `small-uncensored`
   (dense Gemma-4-12B QAT on the idx0 Titan X stopgap, non-reasoning, MTP disabled — was the
-  Gemma-4-26B-A4B MoE on the P100), `gemma-31b`/`gemma-26b` (comparison), `chat-uncensored-q4/q6`.
+  Gemma-4-26B-A4B MoE on the P100; `small` was named `fast` until 2026-08-24), `coder-next`
+  (Qwen3-Coder-Next, dual-V100, loaded on demand from the cold tier), `gemma-31b`/`gemma-26b`
+  (comparison), `chat-uncensored-q6`.
   Most Qwen3 models are **reasoning** models (thinking phase) — give generous `max_tokens`.
   The Qwen3.8 `coding`/`big` slots are pinned to `reasoning_effort=medium` in the base config
   (the template default `xhigh` balloons to 40k+ reasoning tokens on codegen and truncates).
@@ -73,5 +106,5 @@ Read this first, then the detailed docs:
   validate with `python3 -c "import yaml; yaml.safe_load(open('config/llama-swap.base.yaml'))"`,
   re-render with `python3 scripts/llama-swap-mode.py set <current-mode>`, then load a model via
   `curl 127.0.0.1:9090/v1/chat/completions` and check fit with `nvidia-smi`.
-- After testing, **restore the daily models** (`coding` + `chat` + `fast`) with
+- After testing, **restore the daily models** (`coding` + `chat` + `small`) with
   `scripts/llama-swap-mode.py set daily` (warms the trio).

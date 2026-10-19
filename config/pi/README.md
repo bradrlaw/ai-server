@@ -86,3 +86,12 @@ prompt is sent as a `system` message instead.
 
 Reasoning models run a thinking phase, so give them generous `maxTokens`
 (already set to 32768 here). `coder-next` is non-thinking (direct code).
+
+`contextWindow` must not exceed what the server actually holds per request — the
+model's `--ctx-size` in `config/llama-swap.base.yaml` (daily mode): `coding`
+163840, `chat` 98304, `small` 32768, `coder-next` 131072 (one of its two slots).
+A larger value makes pi send prompts that llama.cpp rejects ("exceeds the
+available context size") instead of compacting first. The `heavy-coding` /
+`agentic` serving modes split some models into smaller parallel slots (e.g.
+`chat` 32k per slot in heavy-coding). If these numbers change, re-copy
+`models.json` to the Mac (and re-apply your `baseUrl`).

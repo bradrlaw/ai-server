@@ -22,7 +22,9 @@ Use **llama.cpp as the primary inference engine** for initial bring-up and likel
 for production on these GPUs. Evaluate **vLLM as a secondary** option on the V100s
 (only) later, and benchmark it against llama.cpp before committing to it.
 
-Build llama.cpp with `-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60;70"`.
+Build llama.cpp with `-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60;70"`. *(Updated
+2026-07-27: `52;60;61;70` for the Maxwell Titan X stopgap, ADR-0017; use
+`scripts/build-llama.sh`.)*
 
 ## Consequences
 - Positive: fastest path to working inference on this exact hardware; GGUF quants

@@ -19,7 +19,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 echo "==> Sanity checks"
-for f in comfyui-open.service comfyui-secure.service comfyui-secure-extra-paths.yaml; do
+for f in comfyui-open.service comfyui-secure.service comfyui-secure-extra-paths.yaml comfyui-free-gpu-node.py; do
   [[ -f "$SRC/$f" ]] || { echo "missing $SRC/$f" >&2; exit 1; }
 done
 [[ -d "$COMFY/custom_nodes_secure/ComfyUI-Login" ]] || {
@@ -28,6 +28,24 @@ for d in output-open input-open temp-open output-secure input-secure temp-secure
   [[ -d "$COMFY/$d" ]] || { echo "missing dir $COMFY/$d" >&2; exit 1; }
 done
 
+echo "==> Keeping ComfyUI-Login secrets private (login/, user/, plugin dir -> 0700, brad only)"
+# The first line of login/PASSWORD (the bcrypt hash) doubles as the API bearer
+# token, and ComfyUI-Login logs it on every start (journal + user/comfyui_<port>.log).
+# The plugin would create login/ with the default umask (0755) and recreates
+# PASSWORD as 0644 after a reset, so the 0700 dirs are the lasting protection.
+install -d -m 0700 -o brad -g brad "$COMFY/login"
+chmod 0700 "$COMFY/user" "$COMFY/custom_nodes_secure/ComfyUI-Login"   # plugin dir holds .secret-key.txt
+
+echo "==> Installing the free_gpu hook (custom node that frees the card before a render)"
+# Shared by both instances (one custom_nodes tree). comfyui-qwen loads its own copy
+# from custom_nodes_qwen; refresh it too so the two never drift (it picks it up on
+# its next start).
+install -m 0644 -o brad -g brad "$SRC/comfyui-free-gpu-node.py" "$COMFY/custom_nodes/free_gpu.py"
+QWEN_NODES=/srv/ai/comfyui-qwen/custom_nodes_qwen
+if [[ -d "$QWEN_NODES" ]]; then
+  install -m 0644 -o brad -g brad "$SRC/comfyui-free-gpu-node.py" "$QWEN_NODES/free_gpu.py"
+fi
+
 echo "==> Stopping & disabling the old single-instance comfyui.service (if present)"
 systemctl stop    comfyui.service 2>/dev/null || true
 systemctl disable comfyui.service 2>/dev/null || true
@@ -35,6 +53,15 @@ systemctl disable comfyui.service 2>/dev/null || true
 echo "==> Installing new unit files"
 install -m 0644 "$SRC/comfyui-open.service"   "$DEST/comfyui-open.service"
 install -m 0644 "$SRC/comfyui-secure.service" "$DEST/comfyui-secure.service"
+# The encrypted-volume guard now lives in comfyui-secure.service itself
+# (ConditionPathIsMountPoint=/srv/ai/storage). Drop the old hand-installed
+# RequiresMountsFor drop-in: it made boot wait 90 s for the locked disk.
+LEGACY_DROPIN="$DEST/comfyui-secure.service.d/require-storage.conf"
+if [[ -f "$LEGACY_DROPIN" ]]; then
+  echo "==> Removing legacy drop-in $LEGACY_DROPIN (guard is in the unit now)"
+  rm -f "$LEGACY_DROPIN"
+  rmdir --ignore-fail-on-non-empty "$DEST/comfyui-secure.service.d"
+fi
 
 echo "==> Reloading systemd, enabling and (re)starting both instances"
 systemctl daemon-reload
@@ -58,7 +85,8 @@ Done. Two ComfyUI instances are now running:
 
 NEXT STEP — set the shared password:
   Open  http://<host>:8189/login  in a browser and choose a password on first visit.
-  (It is stored bcrypt-hashed at $COMFY/login/PASSWORD; delete that file to reset.)
+  (It is stored bcrypt-hashed at $COMFY/login/PASSWORD, in a brad-only 0700 dir.
+   To reset it: sudo /srv/ai/scripts/reset-comfyui-password.sh)
 
 Logs:
   journalctl -u comfyui-open.service   -f

@@ -3,6 +3,12 @@
 How to measure how the server behaves under concurrent load — the "tokens/sec vs
 concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 
+> **GPU 0 changed on 2026-07-27.** Sections dated before then ran GPU 0 (idx0) on a Tesla
+> P100-16GB, including the `fast` rows of the July sweeps and the P100 sections below. That card
+> died ([ADR-0017](adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)), so those idx0 numbers are
+> historical. idx0 is now a 12 GB GTX Titan X stopgap serving `small` (dense Gemma-4-12B, no MTP
+> draft); `fast` was renamed `small` on 2026-08-24.
+
 ## Contents
 
 - [Tooling](#tooling)
@@ -27,6 +33,14 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
 - [Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)](#candidate-eval--ternary-bonsai-27b-ternary-q2_0-on-the-p100-2026-07-26)
 - [Candidate eval — ThinkingCap-Qwen3.6-27B (token-efficient fine-tune) vs the `coding` base (2026-07-26)](#candidate-eval--thinkingcap-qwen36-27b-token-efficient-fine-tune-vs-the-coding-base-2026-07-26)
 - [ComfyUI V100 power-cap sweep — does generation benefit from more watts? (2026-08-04)](#comfyui-v100-power-cap-sweep--does-generation-benefit-from-more-watts-2026-08-04)
+- [MiniMax-H3 video — native fp16 on V100 (`--fp16-unet` + overflow fix, 2026-08-27)](#minimax-h3-video--native-fp16-on-v100---fp16-unet--overflow-fix-2026-08-27)
+- [Qwen3.8-27B migration — `coding` + `big` benchmark suite (2026-08-15)](#qwen38-27b-migration--coding--big-benchmark-suite-2026-08-15)
+  - [Single-stream throughput (llama-bench, raw — no MTP), pp512 / tg128 t/s](#single-stream-throughput-llama-bench-raw--no-mtp-pp512--tg128-ts)
+  - [MTP self-speculative decode (echo-heavy `code` prompt)](#mtp-self-speculative-decode-echo-heavy-code-prompt)
+  - [GSM8K quality (5-shot, greedy, n=100)](#gsm8k-quality-5-shot-greedy-n100)
+  - [`reasoning_effort` — the `xhigh` default is pathological for codegen](#reasoning_effort--the-xhigh-default-is-pathological-for-codegen)
+  - [Code-generation evals (`scripts/eval-run.py`, objective `check.py` score)](#code-generation-evals-scriptseval-runpy-objective-checkpy-score)
+  - [`big` slot: UD-Q6_K_XL vs UD-Q8_K_XL A/B (2026-08-15)](#big-slot-ud-q6_k_xl-vs-ud-q8_k_xl-ab-2026-08-15)
 - [Single-stream engine benchmarks (`llama-bench`, 2026-07-01/02)](#single-stream-engine-benchmarks-llama-bench-2026-07-0102)
   - [Coding-model benchmark — Qwen3.6-27B on the V100s (2026-07-01)](#coding-model-benchmark--qwen36-27b-on-the-v100s-2026-07-01)
   - [MoE benchmark — Qwen3.6-35B-A3B on the V100s (2026-07-01)](#moe-benchmark--qwen36-35b-a3b-on-the-v100s-2026-07-01)
@@ -75,7 +89,9 @@ Env vars: `BENCH_MODEL`, `BENCH_USERS` (comma list), `BENCH_MAX_TOKENS`,
 
 ## The critical caveat: `--parallel N` caps concurrency
 
-Each model's concurrency is bounded by `--parallel N` in `config/llama-swap.yaml`.
+Each model's concurrency is bounded by `--parallel N` in its `config/llama-swap.base.yaml` block
+(or the active mode overlay in `config/modes/`; the router reads the generated, gitignored
+`config/llama-swap.yaml`).
 Most daily models run `--parallel 1`, so **concurrent requests serialise**:
 aggregate tokens/sec stays flat and the stack returns `429 Too many requests` once
 the single slot's queue overflows. `coder-next` is `--parallel 2` (two 131k slots).
@@ -104,7 +120,8 @@ llama.cpp/LM Studio. Throughput does **not** improve with concurrency on a
 `--parallel 1` model; past the queue depth the gateway/engine sheds load with 429s.
 
 > The `429` is **llama-swap's** per-model `concurrencyLimit` (default **10**),
-> *not* the engine — raise it per model in `config/llama-swap.yaml` if you want the
+> *not* the engine — raise it per model in `config/llama-swap.base.yaml` (then re-render with
+> `scripts/llama-swap-mode.py set <mode>`) if you want the
 > router to admit more simultaneous requests.
 
 ## `--parallel` throughput sweep (2026-08-24)
@@ -130,23 +147,25 @@ Peak aggregate tokens/sec per `--parallel`, and VRAM at the best setting:
 | coding      | V100 idx1, Qwen3.8-27B Q6_K **+MTP** | 163840 | **33** | 35 | 36 | OOM | P=4 | 31.7/32 GB |
 | chat        | V100 idx2, Qwen3.6-35B-A3B MoE **+MTP** | 98304 | 118 | 120 | 125 | **127** | P=8 | 32.2/32 GB |
 | small       | Titan X idx0, Gemma-4-12B (dense) | 32768 | 19 | 32 | **37** | OOM | P=4 | 11.6/12 GB |
-| big         | dual-V100, Qwen3.8-27B Q8_K_XL (dense) | 262144 | 38 | 48 | 54 | **61** | P=8 | 24.8/32 GB/card |
+| big         | dual-V100, Qwen3.8-27B Q8_K_XL **+MTP** | 262144 | 38 | 48 | 54 | **61** | P=8 | 24.8/32 GB/card |
 | coder-next  | dual-V100, Qwen3-Coder-Next MoE | 262144 | 74 | 111 | 145 | **191** | P=8 | 28.5/32 GB/card |
-| gemma-31b   | V100 idx1, Gemma-4-31B (dense) | 131072 | 34 | 46 | **70** | OOM | P=4 | 31.2/32 GB |
+| gemma-31b   | V100 idx1, Gemma-4-31B (dense) **+MTP** | 131072 | 34 | 46 | **70** | OOM | P=4 | 31.2/32 GB |
 | gemma-26b   | V100 idx2, Gemma-4-26B-A4B MoE | 131072 | 102 | 177 | 228 | **293** | P=8 | 22.1/32 GB |
 
 Patterns (and what changed vs the 2026-07-21 baseline):
-- **MTP self-speculative decode reshapes the curve.** The two Qwen slots now run MTP
-  (`coding`, `chat`). MTP **boosts single-user speed** — `coding` P=1 22→**33** tok/s,
-  `chat` P=1 84→**118** — but **flattens `--parallel` scaling**: MTP already spends the
-  batch dimension on draft+verify, so extra sequences find little compute headroom.
+- **MTP self-speculative decode reshapes the curve.** Four slots now run MTP (`coding`, `chat`,
+  `big`, `gemma-31b`; the sweep doesn't strip it). MTP **boosts single-user speed** — `coding` P=1
+  22→**33** tok/s, `chat` P=1 84→**118**, `big` P=1 23→**38** — but **flattens `--parallel`
+  scaling on the single-card Qwen slots**: MTP already spends the batch dimension on draft+verify,
+  so extra sequences find little compute headroom.
   `coding` is nearly flat (33→36) and its compute buffers are already ~31.7 GB at P=4,
-  so **P=8 OOMs**; `chat`'s ceiling actually *dropped* (P=8 194→127). Net: MTP is a win
+  so **P=8 OOMs**; `chat`'s ceiling actually *dropped* (P=8 194→127). `big` and `gemma-31b` still
+  climb (61 at P=8 and 70 at P=4, vs July's 59 and 67). Net: MTP is a win
   for interactive single-user coding, a wash-to-loss for many-slot throughput. Daily
-  keeps both at `--parallel 1`, which is the right call.
+  keeps these slots at `--parallel 1`, which is the right call.
 - **Non-MTP models scale as before.** `gemma-26b` is still the throughput champ
-  (**293 tok/s** at P=8), `coder-next` reaches **191**, `big` **61** — all within a few
-  percent of July, confirming the harness and the dual-V100 path are stable.
+  (**293 tok/s** at P=8) and `coder-next` reaches **191** — both within a few percent of July,
+  confirming the harness and the dual-V100 path are stable.
 - **VRAM-tight dense models cap early.** `small` (12 GB Titan X) and `gemma-31b`
   (31 GB at P=4) OOM before P=8 — the batch *compute* buffers, not KV, are what grow.
 - **`small` is the slowest tier by design** (Titan X Maxwell stopgap): 19 tok/s single
@@ -215,6 +234,9 @@ throughput vs per-request context** for that model's real workload — e.g. sing
 agentic coding wants few slots/large context; multi-user family chat wants many slots.
 
 ## MoE on the P100 (16 GB) — Gemma-4-26B-A4B (2026-07-22)
+
+> **Historical:** the P100 died 2026-07-27 (ADR-0017). The 26B MoE (~15.9 GB) doesn't fit the
+> 12 GB Titan X stopgap; it returns to `small` when a 16 GB+ card does.
 
 Which MoE model fits on the **Tesla P100-16GB** (idx0, sm_60)? An MoE's *total*
 params (all experts) must be resident, so weight size — not active params — sets
@@ -298,6 +320,9 @@ a few concurrent chat users → `--parallel 4 --ctx 65536`.
 
 ## ComfyUI image generation — P100 vs V100 (txt2img, 2026-07-22)
 
+> **Historical:** the P100 died 2026-07-27 (ADR-0017). All three ComfyUI instances run on the
+> V100s.
+
 How much does the aux **P100 (sm_60)** lose to a **V100 (sm_70)** on diffusion
 image generation? Unlike LLM decode (memory-bandwidth bound, where the P100's HBM2
 keeps it within ~1.5× of a V100), image sampling is **fp16-compute bound** — and the
@@ -332,6 +357,9 @@ one discarded priming run then 3 timed runs. Driver:
 
 
 ## P100 `fast` slot: 12B dense vs 26B-A4B MoE — TTFT & prefill (2026-07-22)
+
+> **Historical:** the P100 died 2026-07-27 (ADR-0017). `fast` is now `small`, and on the 12 GB
+> Titan X stopgap it is the dense 12B, the only one of the two that fits.
 
 Should the always-on P100 `fast` slot serve the dense **Gemma-4-12B** or the
 **Gemma-4-26B-A4B MoE** (25B total / ~3.8B active)? Focus: time-to-first-token
@@ -665,7 +693,7 @@ Takeaways:
   runs alone on idx1 (comfyui-open evicts it before image gen via the free_gpu hook), so the
   full-card peak is the real ceiling.
 
-**How to enable** (this is the shipped `coding` block — ctx capped at 180k to fit MTP):
+**How to enable** (the `coding` block as shipped 2026-07-23 — ctx capped at 180k to fit MTP):
 
 ```bash
 llama-server \
@@ -675,9 +703,16 @@ llama-server \
   --spec-type draft-mtp --spec-draft-n-max 2
 ```
 
+> **Since then:** `n_max` 2→3 on 2026-07-25 ([sweep below](#mtp-draft-depth-sweep-on-coding--shipping-n_max-23-2026-07-25)),
+> and on 2026-08-15 the slot moved to **Qwen3.8-27B Q6_K at 163840 ctx** with
+> `reasoning_effort=medium` ([ADR-0029](adr/0029-qwen3.8-27b-migration.md)). The live block is in
+> `config/llama-swap.base.yaml`.
+
 > MTP is a **single-stream latency** win, so the `agentic` mode (which runs `coding` as a P=2
 > throughput pool) overrides back to the non-MTP Q6_K file at 200k with spec off; `heavy-coding`
 > keeps MTP on the single-slot interactive `coding` primary.
+> *(Update 2026-10-15: the pools no longer swap files — they load the base NVMe file with MTP
+> off; fit, switch-time and MTP-vs-`--parallel` data in ADR-0015's 2026-10-15 addendum.)*
 
 ### Chaining `ngram-mod` before `draft-mtp` on the `coding` slot (2026-07-25)
 
@@ -814,7 +849,7 @@ Takeaways:
 - **No context trade-off.** MTP adds only ~1.8 GB total across the two cards (~31 GB / 64 GB at
   32k). `big` keeps its full **262144 (256k)** native ctx — VRAM headroom is ample on the pair.
 
-**How to enable** (this is the shipped `big` block):
+**How to enable** (the `big` block as shipped 2026-07-23):
 
 ```bash
 CUDA_VISIBLE_DEVICES=1,2 llama-server \
@@ -824,10 +859,17 @@ CUDA_VISIBLE_DEVICES=1,2 llama-server \
   --spec-type draft-mtp --spec-draft-n-max 2
 ```
 
+> **Since 2026-08-15** the slot runs **Qwen3.8-27B UD-Q8_K_XL** with the same split/KV/MTP flags
+> plus `reasoning_effort=medium` ([ADR-0029](adr/0029-qwen3.8-27b-migration.md)); the live block is
+> in `config/llama-swap.base.yaml`.
+
 > `big` is `--parallel 1` in every serving mode (it preempts `coding`+`chat`), so MTP applies
 > unconditionally — no mode overlay overrides it.
 
 ### MTP on the `fast` model — Gemma-4-26B-A4B MoE, **separate draft head** (2026-07-23)
+
+> **Historical (P100):** the P100 died 2026-07-27 (ADR-0017). The `draft-mtp` path crashes on the
+> Maxwell Titan X stopgap, so every idx0 model runs without its draft until a 16 GB+ card returns.
 
 Unlike Qwen3.6 (embedded `nextn` head), **Gemma-4 has no embedded MTP head** — self-spec
 uses a **separate ~460 MB `gemma4-assistant` draft model** (`--model-draft` +
@@ -864,7 +906,7 @@ Takeaways:
   (68 vs 52 t/s) — smaller than the dense slots since the MoE fires only ~3.8 B params/token, but
   never negative across the full 500→32k range.
 
-**How to enable** (this is the shipped `fast` block):
+**How to enable** (the P100 `fast` block as shipped 2026-07-23):
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 llama-server \
@@ -879,7 +921,15 @@ CUDA_VISIBLE_DEVICES=0 llama-server \
 > P=2 worker pool) strip the draft via `spec: none` — the mode renderer now also removes the
 > separate `--model-draft` / `--n-gpu-layers-draft` flags, not just `--spec-type`.
 
+> **Retired 2026-07-27:** the P100 died ([ADR-0017](adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)).
+> idx0 is now a 12 GB GTX Titan X (sm_52), which can't hold this MoE and crashes on the `draft-mtp`
+> path, so the slot — renamed `small` on 2026-08-24 — runs dense Gemma-4-12B with no draft. The
+> recipe is kept for when a 16 GB+ card returns to idx0.
+
 ### MTP on the `fast-12b` model — Gemma-4-12B dense, separate draft head (2026-07-23)
+
+> **Historical (P100):** the P100 died 2026-07-27 (ADR-0017). The same 12B now serves as `small`
+> on the Titan X stopgap, without its draft (`draft-mtp` crashes on Maxwell).
 
 The dense 12B fallback. Same separate-`gemma4-assistant`-draft mechanism as `fast`, but
 because it is a **dense** model it is bandwidth-bound (~28 t/s baseline) with very high draft
@@ -910,7 +960,7 @@ Takeaways:
 - **VRAM is a non-issue.** The 465 MB Q8 draft costs ~0.8 GB (~9.8 GB / 16 GB); the full
   128k context and P100 co-hosting headroom are unaffected.
 
-**How to enable** (this is the shipped `fast-12b` block):
+**How to enable** (the `fast-12b` block as shipped 2026-07-23):
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 llama-server \
@@ -923,6 +973,11 @@ CUDA_VISIBLE_DEVICES=0 llama-server \
 
 > `fast-12b` is a `--parallel 1` fallback with no mode overlay override, so MTP applies in every
 > serving mode.
+
+> **Since the P100 died (2026-07-27):** this 12B became the idx0 stopgap model itself — today's
+> `small` slot on the 12 GB Titan X runs it at **32768 ctx with no draft** (the Titan X crashes on
+> `draft-mtp`), and the separate `fast-12b`/`small-12b` alias was dropped on 2026-10-15 as a
+> duplicate. Live block: `config/llama-swap.base.yaml`.
 
 ### MTP on the uncensored `chat-uncensored-q6` model — Qwen3.6-35B-A3B heretic (2026-07-23)
 
@@ -1074,7 +1129,7 @@ Findings:
   low-acceptance content it drafts long chains that get rejected, so the wasted work
   *exceeds* the savings and decode drops **below baseline**. This is exactly why the
   reporter's n=5 / n=20 configs hurt their non-code cases hardest.
-- **Our shipped `n_max=2` never regresses.** Across every cell its worst case is creative
+- **The then-shipped `n_max=2` never regresses.** Across every cell its worst case is creative
   temp=1 at **+31%** (29.4 t/s); it's +90% on code. The conservative `n=2` captures most
   of the code win while staying safe on prose/creative — vindicating the daily setting.
 
@@ -1082,6 +1137,12 @@ Findings:
 it's the prompt type (token predictability) and sampling temperature governing draft
 acceptance, not the Metal backend. Keep `--spec-draft-n-max 2` for a mixed workload; only
 push `n_max` higher on a code-dominated, low-temperature slot where acceptance stays ≳80%.
+
+> *Update 2026-07-25:* the `coding` slot now ships `n_max=3` — the
+> [draft-depth sweep](#mtp-draft-depth-sweep-on-coding--shipping-n_max-23-2026-07-25) found n3
+> beats n2 in all 13 cells (code and generative prompts, plus a temp-0.7 spot check). `chat` and
+> `big` stay at n2. n3 was not run through this creative/temp-1 matrix; the n=5 rows above show
+> where deeper drafting starts to hurt.
 
 **Reproduce:**
 
@@ -1157,6 +1218,9 @@ so it scores identically and is omitted from the chart.
 > result is large enough to be a real signal regardless.
 
 ## Candidate eval — Ternary-Bonsai-27B (ternary Q2_0) on the P100 (2026-07-26)
+
+> **Historical (P100):** measured the day before the P100 died (2026-07-27, ADR-0017). The Prism
+> fork was built for sm_60/sm_70 only.
 
 Evaluated [`prism-ml/Ternary-Bonsai-27B-gguf`](https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf)
 — a **ternary** (`{-1,0,+1}`, `Q2_0_g128`, ~1.71 bits/weight) build of Qwen3.6-27B — as a possible
@@ -1238,9 +1302,9 @@ reasoning phase into `reasoning_content`, which we tokenize per generation). Two
 **Findings:**
 
 - **~60–63 % fewer thinking tokens** — meets and beats the "~50 % avg" claim on both samplers.
-- **Accuracy preserved** — 81.5 % vs 83.0 % per-sample (temp 1.0), 85.0 % vs 82.5 % majority@5; the base
-  edges greedy 87.5 % → 91.2 % is offset the other way at temp 1.0. Differences sit inside the n=40–80 CI
-  (±~4 pts): the honest read is **statistical parity**, not a quality win either way.
+- **Accuracy preserved** — ThinkingCap scored 91.2 % vs the base's 87.5 % greedy and 83.0 % vs 81.5 %
+  per-sample at temp 1.0, while the base edged majority@5 (85.0 % vs 82.5 %). Every gap sits inside the
+  n=40–80 CI (±~4 pts): the honest read is **statistical parity**, not a quality win either way.
 - **Variance collapse (the sleeper win).** The stock base's per-problem reasoning length is *wildly*
   unpredictable — σ **≈ 1299 tokens ≈ its own mean** at temp 1.0, occasionally running away into the 8 k
   cap (2/200 truncations, i.e. wrong answers from over-thinking). ThinkingCap's σ is **151** and it never
@@ -1250,14 +1314,24 @@ reasoning phase into `reasoning_content`, which we tokenize per generation). Two
   emitting fewer tokens: **~2.3–2.5× faster wall-clock per answer** at the same quality
   (base ≈105 s vs ThinkingCap ≈46 s per GSM8K item in the greedy pass).
 
-**Verdict — strong `coding`-slot candidate, kept hot for a live trial.**
+**Verdict at the time (2026-07-26) — strong `coding`-slot candidate, kept hot for a live trial.**
 
 It is a genuine drop-in (same base, quant, VRAM, MTP self-spec, stock engine) that returns equivalent
 answers ~2.5× faster with far more predictable latency. GSM8K is a narrow, easy axis — the base
 over-thinks it, which likely *flatters* the token-savings gap — so a live trial on real coding/agentic
-traffic (where the vendor's own GPQA/MMLU-Pro/LiveCodeBench tables still show 25–68 % reductions) is the
-right next step before swapping the daily `coding` model. Kept hot at
-`/srv/ai/models/thinkingcap-27b/` (official Q6_K + `protoLabsAI` Q6_K-MTP).
+traffic (where the vendor's own GPQA/MMLU-Pro/LiveCodeBench tables still show 25–68 % reductions) was
+the right next step before swapping the daily `coding` model. The GGUFs (official Q6_K + `protoLabsAI`
+Q6_K-MTP) were kept at `/srv/ai/models/thinkingcap-27b/` for it.
+
+> **Trial closed (2026-10-15) — never run.** On 2026-08-15 the `coding`/`big` slots moved to
+> **Qwen3.8-27B** ([ADR-0029](adr/0029-qwen3.8-27b-migration.md)), so a Qwen3.6-27B fine-tune no
+> longer matches the base it would replace. The 42 GB of GGUFs went to the bulk-HDD cold tier during
+> that migration and were **deleted on 2026-09-22** to free space. Kept as history: this section,
+> the data + harness (`docs/data/thinkingcap-27b-20260726/`), the chart, and the `thinkingcap-27b`
+> runs under `evals/*/outputs/`. To revisit (e.g. if a ThinkingCap fine-tune of Qwen3.8-27B
+> appears), fetch the GGUFs with `scripts/hf-dl`, point `BASE_MODEL`/`TC_MODEL` in `run-matched.sh` /
+> `run-temp1.sh` at the current files (they hard-code the 2026-07 paths), and unload the daily models
+> first — the scripts take both V100s.
 
 Data + reproducible harness: `docs/data/thinkingcap-27b-20260726/` (`harness.py`, `run-matched.sh`,
 `run-temp1.sh`, per-generation `*.jsonl`, item sets). Chart: `scripts/thinkingcap-plot.py`.
@@ -1441,17 +1515,24 @@ sustained heavy video the payoff is small and it pushes HBM into the ~87 °C thr
 jobs is cooling, not power). The cap is global per-card, applied at boot by `gpu-fan-control`, and
 resets to 175 W on reboot; raise it (`nvidia-smi -pl`) only for a supervised light-clip session.
 
+## Qwen3.8-27B migration — `coding` + `big` benchmark suite (2026-08-15)
 
+We migrated the `coding` and `big` slots from Qwen3.6-27B to **Qwen3.8-27B**
 (unsloth GGUFs, `general.architecture=qwen35` — drop-in on llama.cpp build 9850,
 MTP `nextn` head embedded in the main GGUF). `chat` stays Qwen3.6-35B-A3B MoE.
 This section records the full validation pass (throughput, MTP, GSM8K quality,
-code evals) against the retained 3.6 numbers.
+code evals) against the retained 3.6 numbers. Decision record:
+[ADR-0029](adr/0029-qwen3.8-27b-migration.md).
 
 - **coding** = Qwen3.8-27B **Q6_K** (21.3 GiB), single V100 idx1, q8_0 KV,
-  ctx **163840** (trimmed from 3.6's 180k — the larger 3.8 weights left only ~1 GB
-  free at 180k; 160k = 30.7/32 GB, ~2 GB headroom), MTP `--spec-draft-n-max 3`.
-- **big** = Qwen3.8-27B **UD-Q6_K_XL** (24.1 GiB), dual-V100 `-sm layer`, f16 KV,
-  ctx 262144, MTP `n_max 2`. (Never BF16 — corrected stale doc claim during migration.)
+  ctx **163840** (trimmed from 3.6's 180k, which always ran with under 1 GB free — the 3.8 Q6_K is
+  the same size as 3.6's, so the migration bought headroom instead: 160k = 30.7/32 GB, ~2 GB free),
+  MTP `--spec-draft-n-max 3`.
+- **big** = Qwen3.8-27B, dual-V100 `-sm layer`, f16 KV, ctx 262144, MTP `n_max 2`. Benchmarked
+  below on **UD-Q6_K_XL** (24.1 GiB); after the
+  [Q6-vs-Q8 A/B](#big-slot-ud-q6_k_xl-vs-ud-q8_k_xl-ab-2026-08-15) it ships **UD-Q8_K_XL**
+  (31.5 GB). (BF16 ran in this slot only 2026-07-02 → 07-04, as Qwen3.6-27B BF16 before the
+  switch to UD-Q6_K_XL; at 256k it is razor-thin even with q8_0 KV and overflows 2× 32 GB with f16.)
 
 Harnesses: `scripts/bench-qwen3.8-27b.sh` (llama-bench), `scripts/mtp-bench.py`
 (`--model` the 3.8 GGUF), `scripts/roster-gsm8k-eval.sh coding big` (SPEC updated to
@@ -1603,8 +1684,9 @@ thinking-mode sampling.
 | decode (avg across 5 evals) | ~43 t/s | ~41 t/s (**−5%**) |
 | MTP acceptance | 0.76–0.93 | 0.79–0.93 (unchanged) |
 
-**Eval scores (single sample, temp 1.0):** identical — dungeon 27→29/29, local-dungeon-web
-41/41, localmind 27/27, localmind-pro 41/41, logic-puzzle 12/12. **No measurable quality gain.**
+**Eval scores (single sample, temp 1.0), Q6 → Q8:** dungeon 27 → 29/29; local-dungeon-web 41/41,
+localmind 27/27, localmind-pro 41/41 and logic-puzzle 12/12 on both. The one difference (dungeon +2)
+sits inside the sampling noise shown next. **No measurable quality gain.**
 
 **Same temperature tail-risk:** re-running `dungeon` 3× on Q8 at temp 1.0 reproduced the exact
 Q6 failure — 29/29, **2/29** (`IndentationError`, non-parsing), 29/29. So the code-break is

@@ -1,6 +1,8 @@
 # ADR-0008: Primary coding model = Qwen3.6-27B (dense), with Qwen3.6-35B-A3B (MoE) as fast alternative
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0029](0029-qwen3.8-27b-migration.md) for the coding model
+  (`coding` + `big` moved to Qwen3.8-27B on 2026-08-15). The Qwen3.6-35B-A3B MoE choice still
+  stands; it serves the `chat` slot.
 - **Date:** 2026-07-01
 - **Deciders:** @bradrlaw (+ Copilot CLI)
 
@@ -73,4 +75,6 @@ head, +0.35 GB) with `--spec-type draft-mtp --spec-draft-n-max 2`.
   capped at **180k (184320)** — near-full prefill peaks 32.02/32 GB (~0.75 GB free).
 - MTP is a single-stream latency win, so the `agentic` mode (coding at `--parallel 2`)
   overrides back to the non-MTP file at 200k with spec off; `heavy-coding` keeps MTP
-  on the single-slot interactive primary.
+  on the single-slot interactive primary. *(Update 2026-10-15: `agentic` now keeps the
+  base `coding` file — Qwen3.8-27B since 2026-08-15 — and only turns MTP off; the pinned
+  non-MTP Qwen3.6 file had gone stale on the HDD cold tier. ADR-0015 2026-10-15 addendum.)*

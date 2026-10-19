@@ -10,7 +10,7 @@ User=brad
 Group=brad
 WorkingDirectory=/srv/ai/comfyui
 # Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
-# cards as nvidia-smi (idx0=P100, idx1/2=V100).
+# cards as nvidia-smi (idx0=Titan X, idx1/2=V100).
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 # OPEN instance: pin to V100 #1 (idx1 = the `coding` card). This instance serves
 # the MCP / Open WebUI image-gen and the open (no-login) canvas.
@@ -21,13 +21,18 @@ Environment=CUDA_VISIBLE_DEVICES=1
 # but unallocated on the 32 GB V100).
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
+# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q6) on generate;
 # keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
 # and idx0 (small, small-uncensored). Dual-card big/coder-next are intentionally
-# omitted so they get freed (they occupy idx1). Keep in sync with llama-swap.yaml.
+# omitted so they get freed (they occupy idx1). Keep in sync with
+# config/llama-swap.base.yaml.
 Environment=FREE_GPU_KEEP=chat,gemma-26b,small,small-uncensored
 Environment=FREE_GPU_IDLE_SECS=300
 Environment=FREE_GPU_RESTORE=coding
+# comfyui-qwen (on-demand, ~29 GB per render) shares idx1. While it runs, never warm
+# `coding` back onto the card: the idle watchdog still releases this instance's own
+# cached models, and warms `coding` back once comfyui-qwen stops (audit C8).
+Environment=FREE_GPU_YIELD_TO=comfyui-qwen.service
 # Optional per-instance extra args (currently only --fp16-unet), toggled from the
 # status page. Lives on tmpfs (/run) so it AUTO-RESETS to empty on every boot —
 # native fp16 never silently persists across a reboot. The leading '-' makes a

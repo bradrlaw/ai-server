@@ -23,7 +23,7 @@ Last updated: 2026-06-30
 - [8. Intended workload split (user's plan — sound)](#8-intended-workload-split-users-plan--sound)
 - [9. Additional considerations / things to verify](#9-additional-considerations--things-to-verify)
 - [10. Proposed task order](#10-proposed-task-order)
-- [Quick reference — current state (2026-06-30)](#quick-reference--current-state-2026-06-30)
+- [Quick reference — current state (2026-10-15)](#quick-reference--current-state-2026-10-15)
 - [Operator cheat-sheet — common commands](#operator-cheat-sheet--common-commands)
 - [llama.cpp usage notes (learned during bring-up)](#llamacpp-usage-notes-learned-during-bring-up)
 - [Benchmarks → see benchmarking.md](#benchmarks--see-benchmarkingmd)
@@ -41,19 +41,19 @@ Last updated: 2026-06-30
 
 | Component    | Detail |
 |--------------|--------|
-| Motherboard  | MSI X99A Gaming Titanium Pro (LGA2011-3, X99 chipset) |
+| Motherboard  | MSI X99A XPOWER GAMING TITANIUM (MS-7A21; LGA2011-3, X99 chipset) |
 | CPU          | Intel Core i7-6950X (10C/20T, Broadwell-E, 40 PCIe lanes, ~140W TDP) |
 | RAM          | 128 GB |
 | Storage      | **Boot/root:** Intel 2 TB SSD (NVMe, `/dev/nvme0n1`, PCIe slot 4) — `/`, ~1.1T. **Encrypted:** ADATA SU760 512 GB SATA (LUKS2 `aidata` → `/srv/ai/storage`, manual unlock) on SATA7. **Bulk (unsecured):** Seagate ST1000DM003 1 TB SATA (ext4 `aibulk` → `/srv/ai/storage-bulk`) on SATA8 — models & other large non-secret data |
 | GPU 1        | NVIDIA Tesla V100-PCIE-32GB — slot 1 — compute cap **7.0** (Volta) |
 | GPU 2        | NVIDIA Tesla V100-PCIE-32GB — slot 3 — compute cap **7.0** (Volta) |
-| GPU 3        | NVIDIA Tesla P100-PCIE-16GB — slot 6 — compute cap **6.0** (Pascal) |
+| GPU 3        | NVIDIA GeForce GTX Titan X 12 GB — slot 6 — compute cap **5.2** (Maxwell). **Stopgap** since 2026-07-27: the Tesla P100-PCIE-16GB (cc 6.0) that held this slot died ([ADR-0017](adr/0017-p100-hbm-ecc-death-titan-x-stopgap.md)) |
 
 ### GPU enumeration (Linux, driver 580)
-- `GPU 0` = **P100** 16GB  (PCI 01:00.0)
+- `GPU 0` = **GTX Titan X** 12GB  (PCI 01:00.0) — stopgap; was the **P100** 16GB
 - `GPU 1` = **V100** 32GB  (PCI 03:00.0)
 - `GPU 2` = **V100** 32GB  (PCI 04:00.0)
-- Total VRAM: 32 + 32 + 16 = **80 GB**
+- Total VRAM: 32 + 32 + 12 = **76 GB** (80 GB with the P100)
 
 ### Interconnect topology
 - `nvidia-smi topo -m`: all pairs = **PHB** (PCIe via host bridge). **No NVLink**
@@ -130,15 +130,16 @@ A previous (ChatGPT-guided) install put **CUDA Toolkit 13.3** on the system:
 **CUDA 13 dropped support for Pascal and Volta.** Verified empirically:
 `nvcc --list-gpu-code` on 13.3 lists only `sm_75, sm_80, sm_86, sm_87, sm_88,
 sm_89, sm_90, sm_100, sm_103, sm_110, sm_120, sm_121`.
-Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** with CUDA 13.
+Our GPUs were **`sm_60` (P100)** and **`sm_70` (V100)**; the Titan X stopgap that replaced the
+P100 is **`sm_52`** → **not buildable** with CUDA 13.
 
-### Required fix
+### Required fix (done 2026-07-01: CUDA **12.9**, [ADR-0003](adr/0003-use-cuda-12.9-not-13.md))
 1. **Cleanly remove all CUDA 13 toolkit packages** (leave the 580 driver intact).
-2. **Install CUDA 12.x toolkit** (12.x still supports sm_60 + sm_70). Recommended:
-   **CUDA 12.6** (broad framework compatibility) or **12.8** (newer; good vLLM/torch
-   wheel coverage). Avoid the `cuda` / `cuda-toolkit` *meta* package that drags in a
-   driver — install the **versioned toolkit metapackage** `cuda-toolkit-12-6`
-   (or `-12-8`) **only**, so the 580 driver is untouched.
+2. **Install CUDA 12.x toolkit** (12.x still supports sm_52 + sm_60 + sm_70). The plan named
+   **CUDA 12.6** (broad framework compatibility) or **12.8**; ADR-0003 chose **12.9**, installed
+   by `scripts/install-cuda129.sh`. Avoid the `cuda` / `cuda-toolkit` *meta* package that drags
+   in a driver — install the **versioned toolkit metapackage** (`cuda-toolkit-12-9`) **only**,
+   so the 580 driver is untouched.
 3. Fix `/usr/local/cuda` symlink → `cuda-12.x`; set `PATH`/`LD_LIBRARY_PATH`.
 4. Install **cuDNN for CUDA 12.x** (needed by some frameworks).
 
@@ -178,8 +179,9 @@ Our GPUs are **`sm_60` (P100)** and **`sm_70` (V100)** → **not buildable** wit
 
 ### llama.cpp  (already cloned at `/srv/ai/src/llama.cpp`)
 - **Best Volta/Pascal support of any engine.** GGUF quants, multi-GPU split, and an
-  OpenAI-compatible `llama-server`. Build with `-DGGML_CUDA=ON` and arch
-  `CMAKE_CUDA_ARCHITECTURES="60;70"`.
+  OpenAI-compatible `llama-server`. Build with `scripts/build-llama.sh`: `-DGGML_CUDA=ON`
+  and `CMAKE_CUDA_ARCHITECTURES="52;60;61;70"` (was `60;70` until the Titan X stopgap,
+  ADR-0017).
 - Good first validation target. Likely the **primary** engine for V100 coding models
   too (Q4/Q5/Q6 GGUF lets a ~70B model fit across 2×V100=64GB).
 
@@ -245,20 +247,34 @@ less fragile and engines independently upgradable.
    passphrase unlock via `scripts/storage-crypt.sh`, `noauto`) for secrets/private
    media; (c) **unsecured bulk** Seagate 1TB (ext4 `LABEL=aibulk` →
    `/srv/ai/storage-bulk`, fstab `defaults,nofail`) for model weights and other large
-   non-secret data. Prefer `/srv/ai/storage-bulk` for big model downloads to keep `/`
+   non-secret data. **Gotcha (encrypted tier):** a container that bind-mounts `/srv/ai`
+   (or any parent of `storage/`) with docker's default recursive bind gets its own copy
+   of the unlocked volume, and `storage-crypt.sh lock` then can't close it. Use
+   `bind: recursive: disabled`, as mcpo does; `sudo scripts/storage-crypt.sh status`
+   lists any holder (ADR-0022 2026-10-16 addendum). Prefer `/srv/ai/storage-bulk` for
+   big model downloads to keep `/`
    free. **Model cold-tier:** `/srv/ai/models/cold` is a symlink →
    `/srv/ai/storage-bulk/models` — hot/served model dirs stay directly under
    `/srv/ai/models/`; rarely-used, base-weight, or superseded-quant dirs (e.g. the plain
    `qwen3.6-27b/` BF16 + `Q4_K_M`/`UD-Q6_K_XL`/`UD-Q8_K_XL` quants, `pxq-fusion4/`,
-   `qwen3.5-9b/`) live under `/srv/ai/models/cold/` on the 1TB. The non-MTP swap files used
-   only by the parallel-pool modes are also cold (loaded on demand): `agentic` pins `coding`
-   to `cold/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf` and `heavy-coding` pins `chat` to
-   `cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf` — first switch into those modes pays a
-   one-time ~21–28 GB HDD load (~150 MB/s). **Gotcha:** check the mode overlays
-   (`config/modes/*.yaml`), not just `llama-swap.base.yaml`, before moving a file — a slot's
-   file may differ per mode. Only the daily/base served slots (`coding`+`chat`+`small` MTP
-   files, uncensored-heretic, etc.) stay on the hot NVMe tier; `llama-swap.base.yaml` itself
-   references no `cold/` paths.
+   `qwen3.5-9b/`) live under `/srv/ai/models/cold/` on the 1TB. The non-MTP Qwen3.6 files
+   (`cold/qwen3.6-27b/Qwen3.6-27B-Q6_K.gguf`, `cold/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q6_K.gguf`)
+   are kept only for benchmark scripts (`power-cap-sweep.py`, `bench-qwen3.6-*.sh`, `pxq-bench.py`,
+   `pxq-ppl-run.sh`), as are `cold/qwen3.6-27b-mtp/` (the pre-3.8 coding model,
+   `mtp-scenario-bench.py`) and the pre-A/B `big` file `cold/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf`
+   (`bench-qwen3.8-27b.sh`). Until 2026-10-15 the
+   `agentic`/`heavy-coding` overlays pinned their parallel pools to them, so switching into
+   those modes paid a multi-minute HDD load (heavy-coding: 2.5 min for `chat`, 3 min total)
+   and `agentic` served the pre-3.8 coding model; the
+   overlays now inherit the base NVMe files and only turn MTP off (ADR-0015 2026-10-15
+   addendum). **Gotcha:** before moving a model file, check the mode overlays
+   (`config/modes/*.yaml`) as well as `llama-swap.base.yaml` — an overlay *may* override a
+   slot's `model:` (none do today). The benchmark/eval scripts hard-code paths too
+   (`bench-*.sh`, `roster-gsm8k-eval.sh`, `*-bench.py`, `pxq-*`), so run
+   `grep -rn '<dir-or-file>' config/ scripts/` first and update every hit in the same change.
+   Only the occasional `coder-next` slot is served from
+   `cold/` (base config, load-on-demand); the daily/base served slots (`coding`+`chat`+`small`,
+   uncensored-heretic, etc.) stay on the hot NVMe tier.
 
 ---
 
@@ -275,27 +291,32 @@ less fragile and engines independently upgradable.
    Binaries in `/srv/ai/src/llama.cpp/build/bin/` (llama-server/cli/bench/embedding).
    Verified: detects all 3 GPUs; inference OK on V100 (~402 tg t/s) and P100
    (~233 tg t/s) with a 0.5B Q4_K_M test model.
-5. ⏭️ Stand up **NVIDIA Container Toolkit** + Docker; reproduce llama.cpp in a container.
-6. ⏭️ Evaluate **vLLM** on the V100s (containerized); benchmark vs llama.cpp.
-7. ⏭️ Wire up **OpenAI-style API** + router (LiteLLM); systemd services.
-8. ⏭️ Cooling/fan-control + thermal/power validation under sustained load.
+   *(Rebuilt 2026-07-27 for archs `52;60;61;70` after the P100 died (ADR-0017). Since
+   2026-10-15 the script builds into a staging folder before swapping; see "llama.cpp
+   usage notes" below.)*
+5. ✅ **Docker + NVIDIA Container Toolkit** (`scripts/install-docker-nvidia.sh`). llama.cpp
+   stayed native; the CPU app tier runs in Docker Compose (ADR-0006).
+6. ✅ Evaluated **vLLM** on the V100s: it runs, but the track was dropped 2026-07-18 (ADR-0004).
+7. ✅ **LiteLLM** gateway on `:4000` (ADR-0007) in front of llama-swap; systemd services.
+8. ✅ Cooling/fan control + power caps (`gpu-fan-control`, ADR-0009) and the power-cap
+   sweeps below.
 
 ---
 
-## Quick reference — current state (2026-06-30)
+## Quick reference — current state (2026-10-15)
 ```
-OS:      Ubuntu 24.04.4 LTS, kernel 6.8.0-124-generic
-Driver:  nvidia-driver-580-server 580.159.03  (KEEP)
+OS:      Ubuntu 24.04.4 LTS, kernel 6.8.0-136-generic
+Driver:  nvidia-driver-580-server 580.173.02  (KEEP)
 CUDA:    12.9.86 installed ✅ (cuDNN 9.23.2); /usr/local/cuda -> cuda-12.9
-nvcc:    /usr/local/cuda/bin/nvcc → 12.9 (targets sm_50..sm_121 incl sm_60/sm_70)
-GPUs:    nvidia-smi order: 0=P100  1=V100  2=V100  (all OK on 580)
-         CUDA runtime order (fastest-first): 0=V100 1=V100 2=P100
+nvcc:    /usr/local/cuda/bin/nvcc → 12.9 (targets sm_50..sm_121 incl sm_52/sm_60/sm_70)
+GPUs:    nvidia-smi order: 0=Titan X (stopgap, was P100)  1=V100  2=V100
+         CUDA runtime order (fastest-first): 0=V100 1=V100 2=Titan X
          → set CUDA_DEVICE_ORDER=PCI_BUS_ID to align with nvidia-smi
 NVLink:  none (all PHB / PCIe gen3)
 gcc:     13.3.0
 llama.cpp clone: /srv/ai/src/llama.cpp
-llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (server/cli/bench/embedding)
-docker:  not installed yet (for NVIDIA Container Toolkit step)
+llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (built by scripts/build-llama.sh)
+docker:  29.6.1 + Compose v5.3.0, NVIDIA Container Toolkit 1.19.1 (CPU app tier)
 ```
 
 ## Operator cheat-sheet — common commands
@@ -317,6 +338,19 @@ journalctl -u llama-swap -e --no-pager               # recent logs
 journalctl -u gpu-fan-control -f                     # follow live
 ```
 
+### GPUs fail with "unknown error" after a crash (poisoned UVM)
+If every *new* CUDA process fails with `ggml_cuda_init: failed to initialize CUDA: unknown
+error` (llama-swap loads models on the CPU, torch sees 0 GPUs) after a GPU process segfaulted
+or was SIGKILLed, reload `nvidia_uvm` instead of rebooting:
+```bash
+scripts/gpu-uvm-reset.sh --dry-run    # what it would stop and kill (no sudo needed)
+sudo scripts/gpu-uvm-reset.sh         # stop GPU services, reload nvidia_uvm, check, restart
+```
+Everything on the GPUs is interrupted. It restarts only the always-on services that were
+running (llama-swap, comfyui-open, comfyui-secure, ai-toolkit-ui) and lists the on-demand ones
+it left stopped (comfyui-qwen, Fooocus, SwarmUI, InvokeAI): start those again from the status
+page. If it ends with "Finished with problems", reboot.
+
 ### Restart the app tier (Docker Compose)
 ```bash
 cd /srv/ai/docker
@@ -335,11 +369,13 @@ docker compose logs -f litellm                       # follow logs
 | Always-on / preloaded model | `hooks.on_startup.preload` in `config/llama-swap.base.yaml` (or a mode's `preload:`) | re-render (`llama-swap-mode.py set <mode>`) then `sudo systemctl restart llama-swap` (boot preload only runs at process start) |
 | Switch serving mode (daily / heavy-coding / agentic) | — | `scripts/llama-swap-mode.py set agentic` (no restart — renders `config/llama-swap.yaml`, `-watch-config` reloads, warms the mode's models). Or from a client via the [`llama-swap-mode` MCP](#llama-swap-mode-mcp-switch-serving-modes-from-a-client) (`set_mode`). `llama-swap-mode.py list` / `current` / `show <mode>` to inspect. |
 | Add a serving mode | new `config/modes/<name>.yaml` overlay (`overrides` per-model `parallel`/`concurrencyLimit`/`ctx_size`, `preload`, `warm`) | `scripts/llama-swap-mode.py set <name>` |
-| GPU power caps / fan curves | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` |
-| New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (new workflow files are **gitignored** by default — add to git only to publish) |
-| Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/`); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
+| GPU power caps | `power_limits` in `scripts/gpu-fan-control.config.json` (or the status dashboard's per-GPU power dropdown) | none — the daemon re-reads it every `power_recheck_sec` (30 s) and applies it live; a raw `nvidia-smi -pl` is reverted on the next pass |
+| GPU fan curves / `min_duty` / zones / `tach` / `stall_rpm` | `scripts/gpu-fan-control.config.json` | `sudo systemctl restart gpu-fan-control` (loaded only at startup; `sudo scripts/install-fan-service.sh` validates first, then restarts) |
+| New ComfyUI image/video MCP tool | drop a workflow JSON in `config/comfyui-mcp/workflows/` | `sudo systemctl restart comfyui-mcp` (workflows stay **local**: new files are gitignored and no workflow changes are committed — owner policy, ADR-0012 2026-10-15 addendum) |
+| Snapshot ComfyUI before a node-pack install | — | `scripts/comfyui-snapshot.sh` (captures venv pip freeze + custom_nodes git HEADs + a ComfyUI-Manager snapshot into `comfyui/backups/` (hidden on the SMB share, like every `backups` folder)); `scripts/comfyui-snapshot.sh --list` to list; restore via the Manager UI or `cm-cli.py restore-snapshot <STAMP>` |
 | Model dropdown display names | Open WebUI → Admin → Settings → Models | stored in the OWUI DB, not the repo |
-| Enable the OWUI status banner | `cp scripts/server-status.env.example scripts/server-status.env`, set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
+| Enable the OWUI status banner | `install -m 600 scripts/server-status.env.example scripts/server-status.env` (keeps the key private), set `OWUI_API_KEY` | `sudo systemctl restart server-status` |
+| Status dashboard password | — | `python3 scripts/server-status-service.py --set-password` as `brad` (no sudo/restart; signs every browser out) — see [sign-in](#status-dashboard-sign-in-adr-0027) |
 
 ### Check state / warm the daily models
 ```bash
@@ -372,7 +408,34 @@ sudo systemctl start comfyui-open comfyui-secure server-status
 Leaving ComfyUI running is normal (image gen stays instant); just know the V100s won't
 deep-idle until their CUDA context is gone.
 
-### Dual-V100 for oversized ComfyUI models (component placement)
+### Status dashboard sign-in (ADR-0027)
+The `server-status` dashboard (`http://<host>:9095/`) can stop/start services and change GPU
+power caps, so it asks every browser to **sign in** with one shared password. It also blocks
+cross-site requests: every `POST /actions/...` needs the session, a same-origin request and
+the page's CSRF token. Set or change the password as `brad` (no sudo, no restart):
+```bash
+python3 /srv/ai/scripts/server-status-service.py --set-password
+```
+- **No password ⇒ nobody can sign in** (fails closed). `install-status-service.sh` prompts
+  for one if it's missing.
+- **Changing the password applies immediately and signs every browser out.** Restarting the
+  service does too (sessions are in memory). Sessions also end after 12 h idle or 7 d total.
+- **Lockout:** 5 wrong passwords from one IP ⇒ 429 for 15 min. Sign-ins are logged:
+  `journalctl -u server-status | grep '\[auth\]'`.
+- **No sign-in needed for read-only JSON from the host and containers.** That covers
+  `/status.json`, `/history.json` and the chart PNGs (the `curl` lines above, and the Open
+  WebUI status banner) — `STATUS_TRUSTED_READ_NETS`. From the LAN or Tailscale they need a
+  session, like the page.
+- **The `POST /actions/...` endpoints below are what the dashboard buttons call.** They can't
+  be driven by a plain `curl` any more.
+- **Plain HTTP:** the password crosses the LAN unencrypted (Tailscale traffic is encrypted),
+  so don't reuse one from elsewhere.
+
+### Dual-V100 for oversized ComfyUI models (component placement — future, not active)
+> **Not active.** By the owner's decision of 2026-10-15, `comfyui-secure` runs on **one GPU**:
+> `CUDA_VISIBLE_DEVICES=2`, no `--reserve-vram`. See the ADR-0013 2026-10-15 addendum. This
+> section is the recipe for enabling dual-GPU placement later. ComfyUI-MultiGPU stays installed.
+
 Some models don't fit one 32 GB V100 even quantized. The MiniMax-H3 reference-to-video
 graph loads a **21.6 GB** int8 diffusion model **+** a **15 GB** Qwen3-VL text encoder **+**
 ~5 GB of VAEs — ~42 GB total. On one card ComfyUI evicts weights to CPU and streams them
@@ -380,10 +443,11 @@ back **every sampling step** (measured ~4 GB/s `rxpci` on the slow PCIe gen3 x8 
 dominates wall-clock. The fix is to **place whole components on separate cards** (no model is
 split — see the no-NVLink rule of thumb: split by component, never one model across cards).
 
-`comfyui-secure` is pinned to `CUDA_VISIBLE_DEVICES=2,1` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` →
-`cuda:0` = idx2, `cuda:1` = idx1) and runs `--reserve-vram 2` (low, so the diffusion model
-stays fully resident on idx2). The [ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU)
-node pack adds a `device` dropdown to the loaders. In the workflow:
+To enable it, change `scripts/comfyui-secure.service` to `CUDA_VISIBLE_DEVICES=2,1`
+(`CUDA_DEVICE_ORDER=PCI_BUS_ID` → `cuda:0` = idx2, `cuda:1` = idx1) and add `--reserve-vram 2`
+(low, so the diffusion model stays fully resident on idx2), then reinstall the unit. The
+[ComfyUI-MultiGPU](https://github.com/pollockjj/ComfyUI-MultiGPU) node pack adds a `device`
+dropdown to the loaders. In the workflow:
 
 | Loader | Swap to | device |
 |--------|---------|--------|
@@ -403,16 +467,26 @@ win is HBM capacity, not concurrent compute.
 
 ### Quiet-hours deep-idle window
 The `server-status` service can run an optional overnight window that drops the box to the
-true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). On
-entering the window it **unloads the daily models and stops both ComfyUI units** so the
-V100s fall out of P0. LLM requests still auto-wake llama-swap on demand; when a client is
-active during the window the service **restarts ComfyUI** so the box is fully ready. It
-re-idles once **GPU SM utilization stays below `QUIET_ACTIVE_SM_PCT`% (default 5) for
-`QUIET_ACTIVITY_GRACE` seconds** (default 600) — utilization is used rather than "a model
-is loaded" because `coding`/`chat` have no ttl and would otherwise pin the box awake all
-window. On re-idle the models are unloaded and ComfyUI stopped again; the next client
-request reloads on demand. At window end the daily set (`coding`, `chat`) is re-warmed and
-the `small` keeper resumes.
+true cold-idle floor (~73 W GPU vs ~103 W warm; see the README Power-usage tables). It acts
+only at the window's two boundaries:
+- **Window start:** it unloads the daily models and pauses the `small` keeper. It stops every
+  running ComfyUI unit in `QUIET_COMFYUI_UNITS` (one `systemctl stop` per unit) and records
+  which ones it stopped in `/srv/ai/var/status-service/quiet-comfyui-stopped`. Running
+  managed creative tools (Fooocus/SwarmUI/InvokeAI) are stopped too. The V100s then fall out
+  of P0.
+- **During the window:** nothing is polled. An LLM request still loads its model on demand,
+  and that model stays loaded until the window ends. ComfyUI stays stopped; use the
+  dashboard's per-row **▶ Start** if you need it.
+- **Window end:** it clears every instance's native-fp16 flag, then restarts **only the
+  ComfyUI units it stopped**. On-demand `comfyui-qwen` and anything you had stopped yourself
+  stay off (audit C7). It re-warms the daily set (`coding`, `chat`) and resumes the `small`
+  keeper. Managed creative tools are not restarted.
+
+The recorded list survives a `server-status` restart in the middle of the window. If the
+service was down when the window ended, it does the restore when it next starts. A list
+written before the last reboot is ignored, because the reboot already reset the units.
+**Pausing** quiet hours from the dashboard while the box is idle runs the same window-end
+restore immediately.
 
 Disabled by default. To enable:
 ```bash
@@ -428,7 +502,7 @@ sudo systemctl restart server-status
 ```
 > **Note:** the window is evaluated in `QUIET_TZ` (or system local time if unset). This box's
 > clock is `Etc/UTC`, so set `QUIET_TZ` to your wall-clock zone or the window will be hours off.
-The current mode is reported as `power_mode` (`active` / `deep-idle` / `woken`) in
+The current mode is reported as `power_mode` (`active` / `deep-idle`) in
 `curl -s 127.0.0.1:9095/status.json`. All `QUIET_*` knobs are documented in
 `scripts/server-status.env.example`.
 
@@ -436,11 +510,13 @@ The dashboard's **Services** section gives every controllable row its own **▶ 
 **⏹ Stop** button in the **Action** column. For ComfyUI, `comfyui-open` and `comfyui-secure`
 are listed as separate rows and can be started/stopped **independently**
 (`POST /actions/comfyui?action=start|stop&unit=comfyui-open`) — handy for waking one
-instance during the deep-idle window without SSHing in. Omitting `unit` still controls both
-together (what quiet hours uses). These reuse the scoped sudoers rule and are gated by
-`STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep the page read-only). The
-sudoers file grants both the pair command (quiet hours) and the single-unit commands
-(independent buttons).
+instance during the deep-idle window without SSHing in. Omitting `unit` controls all
+configured units in one command (API back-compat; no button uses it). These reuse the scoped
+sudoers rule and are gated by `STATUS_ACTIONS_ENABLED` (default `true`; set `false` to keep
+the page read-only) and by the dashboard sign-in. The sudoers file allows the all-units
+command and the single-unit commands. The buttons and quiet hours both use single-unit
+commands; sudo matches the exact command line, so an arbitrary subset of units would be
+refused.
 
 #### ComfyUI native-fp16 toggle (`--fp16-unet`, per instance)
 
@@ -486,9 +562,15 @@ Qwen-Image 2.1 unified generate+edit model. It is isolated from the H3-pinned 0.
 (which can't be upgraded without breaking the H3 fp16 nodes) but **shares the model store**.
 Full design + rationale in **ADR-0024**. Key facts:
 - App tree `/srv/ai/comfyui-qwen`, venv `/srv/ai/venvs/comfyui-qwen` (**torch 2.8.0+cu128** —
-  `comfy-kitchen` needs torch ≥ 2.7; cu128 still ships Volta sm_70 kernels).
+  `comfy-kitchen` needs torch ≥ 2.7; torch 2.8's cu128 wheel still ships Volta sm_70 kernels,
+  but 2.11+'s and PyPI's cu130 default don't, so don't let torch drift up here — see the
+  [wheel table](optional-tools.md#which-torch-wheels-run-on-the-v100s-sm_70)).
 - Pinned to **idx1 (V100 #1), shared with `comfyui-open`**; the `free_gpu` node evicts the
-  idx1 LLM (`coding`) on generate.
+  idx1 LLM (`coding`) on generate but never warms it back (`FREE_GPU_RESTORE=` is empty).
+  While this unit runs, `comfyui-open` still releases its own cached models when idle but
+  doesn't warm `coding` back. Once this unit stops, `comfyui-open` warms `coding` back
+  (`FREE_GPU_YIELD_TO`, audit C8). Don't render on both instances at once: each can need
+  ~29 GB of the 32 GB card.
 - **Login-gated** (ComfyUI-Login in `custom_nodes_qwen`); set the password on first visit to
   `:8190/login`. Shares `/srv/ai/comfyui/models` via `scripts/comfyui-qwen-extra-paths.yaml`;
   separate `output-qwen`/`input-qwen`/`temp-qwen`/user dir.
@@ -501,6 +583,15 @@ Full design + rationale in **ADR-0024**. Key facts:
 
 One-time setup (owner sudo — agents cannot):
 ```bash
+# 0) as brad, no sudo: make the login dirs private BEFORE the first start.
+#    ComfyUI-Login would create them world-readable; its PASSWORD hash doubles
+#    as the API bearer token and its plugin dir holds the session-signing key
+#    (ADR-0013, 2026-10-15 addendum):
+install -d -m 0700 /srv/ai/comfyui-qwen/login
+chmod 700 /srv/ai/comfyui-qwen/custom_nodes_qwen/ComfyUI-Login
+#    and copy in the free_gpu hook (install-comfyui-instances.sh refreshes it later):
+install -m 0644 scripts/comfyui-free-gpu-node.py /srv/ai/comfyui-qwen/custom_nodes_qwen/free_gpu.py
+
 # 1) install the on-demand unit (NOT enabled at boot — start it from the dashboard):
 sudo cp scripts/comfyui-qwen.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -518,7 +609,7 @@ sudo systemctl daemon-reload && sudo systemctl restart server-status
 # 4) start it (or use the dashboard ▶ Start button on the comfyui-qwen row):
 sudo systemctl start comfyui-qwen
 ```
-First run: open `https://<host>:8190/login`, set a password, then load a
+First run: open `http://<host>:8190/login` (plain HTTP, no TLS on this port), set a password, then load a
 **Qwen-Image 2.1** template (Templates → search "Qwen Image 2.1") and run a t2i / edit.
 
 #### On-demand creative-tool services (Fooocus / SwarmUI / InvokeAI)
@@ -551,10 +642,15 @@ or clearing `MANAGED_SERVICES` hides the buttons.
 
 ### Monitor GPU temps & fan speeds
 The fan daemon drives the shroud fans off **HBM memory** temp (`mtemp`), which on the
-V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C.
+V100s runs ~15-20 °C hotter than the core and throttles at ~85 °C. The status page's GPU
+table has a **Fan** column (duty % and tach rpm per GPU, red **STALL** when the stall alarm
+holds a fan at 100 %, "own fan" for the self-cooled Titan X), read from the daemon's
+`/run/gpu-fan-control/state.json`; a stalled fan or a stopped daemon also shows on the
+summary line and turns the Open WebUI status banner amber.
 ```bash
-# Easiest: follow the fan daemon's own log — it prints per-GPU temps and the fan
-# duty %% it applies each tick:
+# Easiest: follow the fan daemon's own log — it prints per-GPU temps, the fan duty %
+# it applies and the tach rpm each tick (e.g. `c41/m40C->41%@7336rpm`; ` STALL` while
+# the stall alarm holds that fan at 100%):
 journalctl -u gpu-fan-control -f
 
 # GPU power + core (gtemp) + HBM (mtemp) + clocks, refreshing:
@@ -562,17 +658,22 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi dmon -s put
 
 # Combined view: GPU temps + actual shroud fan RPM (passive Teslas report no fan to
 # nvidia-smi, so RPM comes from lm-sensors)
-#   shroud map: fan5 = V100 idx1 (bus03), fan4 = V100 idx2 (bus04), fan1 = P100 idx0
+#   shroud map (corrected 2026-10-17, later same day): fan5+fan4 = BOTH on V100 idx2
+#   (two-fan shroud; NOT idx1 -- the original bus-id/slot guess was wrong, corrected
+#   by a direct causal test: unplugging the blower under load heated idx1, not idx2),
+#   fan1 = blower on V100 idx1 (no tach, shows 0 rpm in sensors; pwm1 writes have been
+#   proven to have ZERO effect on it -- the blower's speed is NOT software-controlled,
+#   whatever it's doing is BIOS/EC-managed independent of this daemon)
 watch -n2 'CUDA_DEVICE_ORDER=PCI_BUS_ID nvidia-smi \
   --query-gpu=index,name,temperature.gpu,temperature.memory,power.draw --format=csv,noheader; \
-  echo "-- shroud fans (fan5=V100-idx1, fan4=V100-idx2, fan1=P100-idx0) --"; \
+  echo "-- shroud fans (fan5+fan4=V100-idx2 shroud, fan1=V100-idx1 blower, uncontrolled) --"; \
   sensors | grep -E "fan[145]:"'
 ```
 
 ### Re-run benchmarks
 `scripts/bench-models.sh` re-runs llama.cpp benchmarks for any subset of the served
-models. The model registry (gguf path, GPU pinning, split mode) is read straight from
-`config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
+models. The model registry (gguf path, GPU pinning, split mode) is read straight from the
+live, rendered `config/llama-swap.yaml`, so it always matches what the router serves. No sudo needed.
 ```bash
 scripts/bench-models.sh --list                 # show model names + GPU pinning
 scripts/bench-models.sh                         # bench the daily set (coding chat small)
@@ -609,9 +710,21 @@ sudo systemctl poweroff
 ```
 
 ## llama.cpp usage notes (learned during bring-up)
-- **Build:** `scripts/build-llama.sh` — clean rebuild, arch `60;70`, curl+ccache on.
+- **Build:** `scripts/build-llama.sh` — clean build of archs `52;60;61;70` (ccache on).
+  It is non-destructive:
+  - It re-applies the P100 carveout patch (ADR-0014) if it's missing. If the patch no
+    longer applies, the script stops; `SKIP_P100_PATCH=1` builds without it.
+  - It builds into `build.new/` while the live `build/` keeps serving.
+  - It checks that the new `llama-server` runs, loads its libraries from its own folder,
+    and that `libggml-cuda.so` has code for every arch.
+  - Only then does it rename `build/` to `build.prev-<commit>-<time>/` and put the new
+    build in place. Only the newest `build.prev-*` is kept.
+
+  Models that are already loaded keep the old binary until llama-swap next starts them.
+  To roll back: `mv build build.bad && mv build.prev-<…> build`. To update llama.cpp:
+  `git checkout -- ggml/src/ggml-cuda/common.cuh && git pull`, then rerun the script.
 - **GPU selection:** set `CUDA_DEVICE_ORDER=PCI_BUS_ID` so `CUDA_VISIBLE_DEVICES`
-  indices match nvidia-smi (0=P100, 1/2=V100). Otherwise CUDA reorders V100s first.
+  indices match nvidia-smi (0=Titan X stopgap, 1/2=V100). Otherwise CUDA reorders V100s first.
 - **`-hf` auto-download hits HTTP 401** (HF API now requires auth for the commit
   lookup). Workaround: download GGUFs directly via `curl` into `/srv/ai/models`
   and pass with `-m`, or configure an HF token later.
@@ -629,33 +742,50 @@ context-window and `--ubatch-size` tuning, the Gemma-4 numbers) and the concurre
 
 ## GPU fan control (shroud fans) — runbook (2026-07-01)
 Passive Tesla cards throttle under load (seen via `nvidia-smi dmon`). Shroud fans
-are on the board's **4-pin PWM headers** (Nuvoton nct6775). Control = GPU temp
-(nvidia-smi) → PWM. See ADR-0009. Scripts in `/srv/ai/scripts/`:
+are on the board's fan headers (Nuvoton NCT6792D, `nct6775` driver), which are
+**voltage-mode** except CPUFAN1 (see [Fan headers](#fan-headers-voltage-mode-splitters-current-2026-10-16)).
+Control = GPU temp (nvidia-smi) → header duty. See ADR-0009. Scripts in `/srv/ai/scripts/`:
 
 1. **`sudo ./setup-fan-sensors.sh`** — installs lm-sensors, loads `nct6775`
    (adds `acpi_enforce_resources=lax` to GRUB if the chip won't bind → **reboot**,
    then re-run). Prints the exposed `pwmN` channels + fan RPMs.
-2. **`sudo ./identify-fan.sh`** — pulses each `pwmN` low→high so you can see which
-   channel spins each card's shroud fan. Restores auto on exit.
+2. **`sudo ./identify-fan.sh`** (GPUs idle) — pulses each `pwmN` low→high and shows which
+   tach (`fanN_input`) responds and how fast it peaks (15k-class shroud fan / blower /
+   case fan). Stops `gpu-fan-control` for the test and restarts it on exit; restores the
+   previous modes. If a pwm's responding tach isn't the same-numbered `fanN`, it says
+   which `"tach"` the zone needs.
 3. Edit **`gpu-fan-control.config.json`** — set each zone's `pwm` to the channel
-   found in step 2 (GPU idx: 0=P100, 1=V100, 2=V100). Curve = [tempC, duty%],
-   min 35%, 100% by 80 °C.
-4. **`sudo ./install-fan-service.sh`** — installs+starts `gpu-fan-control.service`.
-   Logs: `journalctl -u gpu-fan-control -f`.
+   found in step 2 (GPU idx: 0=Titan X stopgap (was P100), 1=V100, 2=V100). Curve = [tempC, duty%],
+   min 35 %, 100 % at 70 °C. Optional per zone: `tach` / `stall_rpm` (see
+   [Stall alarm](#fan-stall-alarm-2026-10-16)).
+4. **`sudo ./install-fan-service.sh`** — validates the config (pwm channels, tach inputs
+   and their current rpm, `stall_rpm`, power caps), installs + (re)starts
+   `gpu-fan-control.service`. Logs: `journalctl -u gpu-fan-control -f`.
 
 Daemon = `gpu-fan-control.py` (stdlib only). Fail-safe: forces fans to **100%** on
-any error/`nvidia-smi` failure; hands back to BIOS auto on clean stop.
+any error/`nvidia-smi` failure (including an `nvidia-smi` call that hangs > 15 s); hands
+back to BIOS auto on clean stop.
+
+**Config changes need a restart**, except `power_limits` (re-read every 30 s and applied
+live — that's how the status page's power dropdown works). Curve, `min_duty`, zones,
+`tach`, `stall_rpm`, `interval_sec`: `sudo systemctl restart gpu-fan-control`, or re-run
+`sudo ./install-fan-service.sh`, which validates first.
 
 ### Fan wiring + curves (confirmed from Windows FanControl, 2026-07-01)
 Fans: 40x28mm high-static-pressure. V100 fans 15k rpm max; P100 fan 6k rpm max
-(quieter). Ambient 72-76 °F. CPU on Cooler Master block via CPU_FAN; case has
+(quieter; idle on BIOS auto while the self-cooled Titan X stopgap holds idx0). Ambient 72-76 °F. CPU on Cooler Master block via CPU_FAN; case has
 adequate airflow.
 
 | GPU (nvidia-smi) | PCI bus | Card   | pwm channel | Idle→Load | Duty     |
 |------------------|---------|--------|-------------|-----------|----------|
 | GPU1             | 03      | V100   | **pwm5**    | 39→70 °C  | 35→100 % |
 | GPU2             | 04      | V100   | **pwm4**    | 39→70 °C  | 35→100 % |
-| GPU0             | 01      | P100   | pwm1        | 38→70 °C  | 70→100 % |
+| GPU0             | 01      | Titan X (stopgap) | pwm1 → BIOS auto | — | monitor only |
+
+Since 2026-07-27 the idx0 zone is `monitor_only`: the GTX Titan X cools itself with its own
+blower (logged as `gpufan%`), so the daemon hands `pwm1`, the dead P100's fan, back to BIOS
+auto. The P100 curve was 38→70 °C, 70→100 %; it is kept as `_restore_p100_curve` in the config
+for when a passive card returns to idx0.
 
 Curves are linear between idle and load temp (hold min below idle, 100% at/above
 70 °C) — encoded in `gpu-fan-control.config.json`.
@@ -667,14 +797,221 @@ cools GPU2** — the *opposite* of the initial `identify-fan.sh` guess. Lesson: 
 a fan's RPM track a GPU's temp under the running daemon is **circular** — it only
 proves the daemon drives that pwm from that GPU, not which card the fan physically
 sits on. Always confirm with the forced-fan cross-test. (`identify-fan.sh` is still
-useful for pwm↔tach discovery and the P100/case/side-fan classification.)
+useful for pwm↔tach discovery and the shroud-fan/blower/case-fan classification.)
+
+**Re-run it after any fan/shroud re-wiring:** `sudo scripts/verify-gpu-fan-mapping.sh`
+(GPUs idle; ~2-3 min). It reads the zones from `gpu-fan-control.config.json` (hwmon found
+by name), maxes each zone's fan in turn, and reports per zone whether the fan **responds**
+(tach at floor vs max, using the zone's `tach` — flags a dead fan, a missing tach, or a fan
+with no speed control, e.g. one on a SATA-powered PWM hub) and whether it physically cools
+the GPU the config says (OK / MISMATCH). Exit 0 only if everything matches. It stops the
+daemon for the test (and exits untouched if it won't stop) and aborts if a tested GPU's core
+passes 70 °C or its HBM 80 °C (`ABORT_C` / `ABORT_HBM_C`), i.e. the GPUs weren't idle.
+
+### Fan headers: voltage mode, splitters, current (2026-10-16)
+From the board manual (MSI X99A XPOWER GAMING TITANIUM, MS-7A21, p48):
+
+| Header | Pins | Control mode |
+|---|---|---|
+| CPUFAN1 | 4 | **PWM** (constant 12 V + PWM signal on pin 4) — the only PWM-mode header |
+| SYSFAN1, PUMPFAN1, OPTFAN1, OPTFAN2 | 4 | **Voltage** (pin 2 = variable voltage, pin 4 not connected) |
+| SYSFAN2, SYSFAN3 | 3 | **Voltage** |
+
+The chip exposes only `pwm1`–`pwm5` for these 7 headers and the manual doesn't say which
+header is which `pwmN` — map them with `identify-fan.sh` (and `verify-gpu-fan-mapping.sh`
+for which GPU a fan cools). What follows for the shroud fans (all on voltage-mode headers):
+- **The duty is a voltage.** A 3-pin fan or a blower *is* speed-controlled there. A 4-pin
+  PWM fan works too: its PWM input floats (full duty) and the header voltage sets the speed.
+  The manual's "a 3-pin fan runs at 100 %" warning applies to CPUFAN1 only.
+- **Low duty may not START a fan.** 35 % ≈ 4.2 V keeps a spinning fan turning but may not
+  start a stopped one (blowers especially). The [stall alarm](#fan-stall-alarm-2026-10-16)
+  catches that and holds 100 % until it spins; if it keeps happening, raise that zone's
+  `min_duty`.
+- **No SATA/molex-powered PWM hub** on these headers: it feeds the fans 12 V and passes on
+  only the PWM signal, which isn't there — the fans run 100 % permanently (safe, but loud
+  and uncontrolled). Use a plain (passive) Y-splitter, a hub that follows the header
+  *voltage*, or one header per fan.
+- **Current.** MSI publishes no per-header rating for this board. Assume the common
+  **1 A (12 W)** and keep the summed fan-label current of each header under it. A 15k-rpm
+  40 mm fan is often 0.5–1.2 A and blowers can draw more, so check the labels: a pair that
+  doesn't fit goes on two headers.
+- **Two fans on one GPU:** with a Y-splitter only one tach (the splitter's tach leg) is
+  read, so that fan is the one the stall alarm watches. With two headers, add a second zone
+  for the same GPU (same curve, its own `pwm`/`tach`). Both fans then get the stall alarm.
+  `verify-gpu-fan-mapping.sh` checks each of the two zones in turn; with only half the pair
+  maxed per phase the margin is smaller, so use `SETTLE=90` if it reports INCONCLUSIVE.
+- `pwmN_mode` is left alone. The BIOS sets it to match the board's wiring, and on the
+  nct6792 the kernel can only change it for `pwm1` (`pwm2`–`pwm5` always read 1 = "PWM",
+  whatever the header really does), so that value tells you nothing about the header.
+
+### Fan stall alarm (2026-10-16)
+Each driven zone watches its fan's tach: by default `fanN_input` for `pwmN`. Per-zone
+config can override that with `"tach": "fanM_input"`, or set `"tach": null` for a fan with no
+tach (or the non-tach leg of a Y-splitter). The threshold is `"stall_rpm"` (default 300;
+0 = show the rpm with no alarm). A fan reading below `stall_rpm` for **3 ticks (~12 s)**
+while its duty is **≥ 25 %** is **stalled**. The daemon then:
+- logs `WARNING <zone>: fan STALLED ...`, holds that zone at **100 %** (which also kick-starts
+  a fan that can't start at a low voltage), and marks the tick line ` STALL`;
+- shows it on the status page (red **STALL** in the GPU table's Fan column, plus the summary
+  line), and turns the Open WebUI status banner amber with "FAN STALL: <zone>";
+- once the tach reads ≥ `stall_rpm` for 3 ticks, logs `fan stall cleared` and returns the zone
+  to its curve (not latched). If it stalls again after every recovery, the fan can't start
+  or keep running at `min_duty` on its voltage header: raise `min_duty`.
+
+Below 25 % duty a fan may legitimately stop on a voltage header, so it isn't checked
+there. A tach that can't be read is logged once, and the zone just has no rpm reading.
+A bad `tach` only disables the alarm, and a bad `stall_rpm` (not an integer 0–20000) falls
+back to 300; neither stops fan control. `install-fan-service.sh` rejects both, and two zones
+on one `pwm`, and shows each tach's current rpm. If a tach reads below `stall_rpm` at
+install time, it warns that the daemon will hold that zone at 100 %. Run
+`journalctl -u gpu-fan-control | grep -i stall` to see the history. The daemon also counts
+stall events since it started; hover the Fan cell to see the count.
+
+### After re-wiring fans (checklist)
+1. Case open: the summed fan-label current per header is ≤ 1 A (see above); no SATA PWM hub
+   on a voltage header; note which header each GPU's fan(s) went on. Check by eye that the
+   210 mm side fan (`pwm3`; Cooler Master A23030-07CB-3MN-F1) spins: `fan3` reads 0 rpm even
+   while it runs, so nothing alarms if it stops. It's on BIOS auto, not a daemon zone. Note
+   its header and check in the BIOS whether that header shows an rpm; if it does, the fan has
+   a speed sensor and the `pwm3`/`fan3` mapping needs rechecking.
+2. After boot, with the GPUs idle: `sudo scripts/identify-fan.sh` → set each zone's `pwm` (and
+   `tach` if it says so, or `null` for a fan without a tach).
+3. `sudo scripts/install-fan-service.sh` (validates, shows each tach's rpm, restarts the
+   daemon), then `sudo scripts/verify-gpu-fan-mapping.sh` (GPUs idle; every zone OK) and
+   `sudo scripts/verify-gpu-state.sh`.
+4. Watch the status page Fan column (or `journalctl -u gpu-fan-control -f`) for a few minutes:
+   no STALL at idle (`min_duty`). Then A/B under load with `scripts/power-cap-sweep.py`
+   and `scripts/gpu-dmon-load-capture.sh`.
+
+### Fan noise test (2026-10-16)
+To compare cooling setups by noise, record each condition with one mic in a fixed spot.
+`scripts/fan-noise-analyze.py` turns the WAVs into levels, a room correction and tones, and
+`scripts/fan-noise-sweep.py` adds a fixed-duty fan sweep. Levels are dBFS (relative to the
+recorder), so recordings compare only with the **same mic, position and gain**. Keep all
+three fixed between the before and after sessions.
+
+**Recording (Audacity on the Mac).** Use 48 kHz, 32-bit float or 24-bit WAV; mono is fine.
+Turn off anything that adapts: AGC, noise suppression, macOS voice isolation. Set the input
+gain once, so the loudest condition (both V100s loaded) peaks below about −6 dBFS, then leave
+it. Mark where the arm and mic are so the after-session matches. Record at least 60 s of
+steady state per condition (the analysis drops 5 s at each end) and keep quiet. Say the
+condition at the start of each take, or put it in the file name.
+
+| Take | Machine | Notes |
+|---|---|---|
+| `room-start`, `room-end` | **off** | The NAS, disk arrays and the cage stay on: they're the room. Recorded at the start and end of the session; a change over 1 dB is flagged |
+| `idle` | as configured, GPUs idle | 15+ min after the last load |
+| `gpu1`, `gpu2`, `both` | one or both V100s loaded | the same load every session; record once the fans have settled (~10 min) |
+| `sweep` | GPUs idle, `fan-noise-sweep.py` | ~11 min |
+
+Two takes of each (`idle1=`, `idle2=` …) show how repeatable the numbers are.
+
+The sweep needs the GPUs idle and the case closed. `sudo scripts/fan-noise-sweep.py --dry-run`
+shows the schedule and checks the GPUs are ready. Then start recording and run
+`sudo scripts/fan-noise-sweep.py --setup before-swap`. Press Enter when asked (that's t=0),
+and stay quiet until it prints DONE. It writes a steps CSV and a samples CSV to
+`docs/data/acoustic/`. While it runs:
+- It stops `gpu-fan-control`. On any exit it puts the fans on BIOS auto and restarts the
+  service, which takes them back (even if it wasn't running before).
+- Before it touches anything, it starts a guard, the transient unit `fan-noise-sweep-guard`.
+  The guard starts `gpu-fan-control` within about a second of the sweep dying, even by
+  `kill -9` or the OOM killer. It also covers a hung sweep: the sweep refreshes a heartbeat
+  file, `/run/fan-noise-sweep-<pid>.beat`, every second, and the guard fires once that's
+  60 s old. If the sweep then resumes, it stops. A normal exit cancels the guard. If the
+  service doesn't come back, the guard stays armed and starts it once more as the sweep exits.
+- Only one sweep runs at a time. If the guard can't be started, or another sweep's guard is
+  still running, the sweep refuses to start and changes nothing. With no sweep running,
+  `sudo systemctl stop fan-noise-sweep-guard.service` clears a stale guard.
+- It won't start unless every driven fan's GPU reports its core and HBM temperatures. For a
+  card without a memory sensor, set `"hbm_temp": false` on its zone in
+  `scripts/gpu-fan-control.config.json` (the fan daemon ignores that key).
+- It aborts at 70 °C core or 80 °C HBM, or when `nvidia-smi` stops reporting a GPU's
+  temperatures.
+- Ctrl-C stops it cleanly, as do SIGTERM, SIGHUP and SIGQUIT; Ctrl-Z is ignored.
+
+**Known gaps in the guard** (review of 2026-10-16; not fixed, because someone is at the
+machine for the whole sweep). Each needs the sweep to die or hang first:
+- The sweep doesn't watch the guard. If the sweep hangs for 60 s between starting the guard
+  and stopping `gpu-fan-control`, the guard fires while the service still runs, so its start
+  does nothing, and it exits. A sweep that then resumes runs unguarded; so does one whose
+  guard is killed. The sweep still handles Ctrl-C, signals and errors itself; only a later
+  `kill -9` or hang goes uncovered.
+- When it fires, the guard runs one `systemctl --no-block start gpu-fan-control` and doesn't
+  check the result: no retry, no BIOS-auto fallback. If the service doesn't start, the fans
+  can stay at the sweep's last fixed duty.
+- Nothing notices if the guard dies (OOM killer, an external stop), and `--collect` removes
+  its unit.
+- The heartbeat's age is wall-clock time, so a clock step can fire the guard early or late.
+
+After a sweep, check that `gpu-fan-control` is running (the status page shows a fan alert
+while it isn't); `sudo systemctl restart gpu-fan-control` fixes it. A possible fix: run the
+guard as a Python mode of the script (`Type=notify`, `OOMScoreAdjust=-1000`) that watches
+the sweep through a pidfd and the heartbeat's mtime on the monotonic clock. On firing it
+removes the heartbeat and hands back as the sweep's own restore does: BIOS auto, restart,
+check the service took the fans, retry. The sweep watches the guard's pidfd and heartbeat in
+turn, including right after it stops the service.
+
+**Files.** Copy the WAVs over SMB into `storage-bulk/acoustic/` on the `srv-ai` share. That
+keeps them out of git and off the full root disk. The results go to `docs/data/acoustic/`;
+they're small, so commit them.
+
+**Analysis** (no sudo; the script re-runs itself in the comfyui venv):
+```bash
+cd /srv/ai/storage-bulk/acoustic
+A=/srv/ai/scripts/fan-noise-analyze.py; OUT=/srv/ai/docs/data/acoustic; mkdir -p $OUT
+$A --room room-start.wav --room room-end.wav idle=idle.wav gpu1=gpu1.wav gpu2=gpu2.wav \
+   both=both.wav --csv $OUT/before.csv --plot $OUT/before.png
+$A --room room-start.wav --steps $OUT/fan-sweep-before-swap-<UTC>.steps.csv sweep.wav \
+   --csv $OUT/before-sweep.csv --plot $OUT/before-sweep.png
+# after the change: the same again, writing after*.csv; then
+$A --compare $OUT/before.csv $OUT/after.csv
+```
+Use the same labels (`LABEL=FILE`) in both sessions, because `--compare` matches rows by label.
+Its `notes` column marks the side (A, B) whose row carries a note, such as a busy or stalled
+step, clipping, an unsteady level, sweep drift or a sweep that stopped early. The notes are
+listed under the table; those numbers may not be clean. A room file's notes (clipping, say)
+go on the combined `room` row, so `--compare` lists them too.
+
+**Reading it.**
+- **LA90** is the A-weighted level exceeded 90 % of the time. It's the steady noise and
+  ignores short sounds like a car or a disk seek, so compare LA90, not LAeq.
+- **machine** is LA90 with the room subtracted. It's blank when under 3 dB above the room,
+  because the two can't be separated: move the mic closer or record at a quieter time. At
+  10+ dB above the room, the room barely matters.
+- **delta** is machine minus the reference's (the first recording, or `--ref`). `~` marks
+  the plain LA90 difference, used when one side is within 3 dB of the room: the real
+  difference is at least that big.
+- About 1 dB is the smallest difference you hear side by side. 3 dB is double the sound
+  power, and 10 dB sounds about twice as loud.
+- **Tones** (whine, hum) are rated by TNR, the dB a tone stands above the noise around it
+  (ECMA-418-1). About −4 dB is just audible, and `PROMINENT` meets the standard's
+  criterion. Prominent tones are listed first, then by how far each clears its criterion.
+  Tags:
+  - `7x GPU1 fan`: at 7× that fan's rotation rate, a blade tone. Sweep only, from the
+    logged rpm.
+  - `mains?`: a multiple of 60 Hz (hum, coil whine).
+  - `room`: also there with the machine off.
+  - `coarse FFT`: the window was too short to resolve a tone that low. ECMA-418-1 wants FFT
+    lines under 1 % of the tone's frequency. The analysis uses 0.25 Hz lines on windows of
+    18 s or more and coarser lines on shorter ones. The TNR is rough, and the tone is never
+    called `PROMINENT`; record longer.
+
+  Confirm tones by ear.
+- **Sweep:** t=0 is found from the audio, and the script prints the match `r`. If it can't
+  find it, pass `--offset SECONDS`: how far into the recording you pressed Enter. The drift
+  check compares the lead-out with the lead-in at the same duty. Over 1 dB means the room or
+  the mic changed, so redo the sweep; the CSV keeps it as a note on every step. A sweep that
+  stopped early says so on its last step; without a lead-out there's no drift check. Steps
+  flagged `busy` (a GPU job started) or `stalled` aren't clean. Recording notes such as
+  clipping are copied to every step.
+- `--cal-offset DB` reports dB SPL (SPL = dBFS + DB) for a calibrated mic such as a UMIK-1.
 
 ### Fan control drives off HBM MEMORY temp (2026-07-01)
 The daemon controls each V100 zone on **max(core, memory)** temp, not core alone.
 Reason: the V100's HBM2 `temperature.memory` runs ~15-20 °C HOTTER than the core and
 is the throttle limiter (~85 °C). Controlling on core (64 °C ≈ 87% fan) let the HBM
-cook. Now the fan pins 100% as memory climbs. (P100 reports `temperature.memory`=N/A
-→ uses core.) Log format: `c<core>/m<mem>C->duty%`.
+cook. Now the fan pins 100% as memory climbs. (Cards without an HBM sensor, such as the P100
+and the Titan X stopgap, report `temperature.memory`=N/A → core is used.) Log format: `c<core>/m<mem>C->duty%`.
 
 **Physical cooling ceiling (important):** even at 100% fan (15k rpm) the 40 mm shroud
 cannot dissipate a full 245 W memory-bound load — under `llama-bench -p 2048` (a
@@ -682,14 +1019,24 @@ worst-case, memory-bandwidth-saturating prefill) the HBM plateaus at 85 °C and 
 card SOFT-throttles itself to ~180 W / ~1130 MHz to hold that temp. This is safe
 (within HBM2 spec) and expected for a passive Tesla + 40 mm fan. Normal inference/
 serving (token-gen dominated, far lower sustained mem BW) should not reach this.
-To ELIMINATE throttle under max load, cap power/clocks:
+To ELIMINATE throttle under max load, cap power/clocks (historical, pre-daemon — power caps
+are now owned by `gpu-fan-control`, which reverts a raw `-pl` within 30 s; see below):
   `sudo nvidia-smi -i 1 -pl 200`   (range 100-250 W; card self-limits ~180 W at 85 °C)
   or lock the graphics clock: `sudo nvidia-smi -i 1 -lgc <MHz>` (mem clock is fixed 877).
 Enable `nvidia-smi -pm 1` (persistence) so caps survive. Tune per-card if desired.
 
 ### Power-cap sweep results + automatic caps at boot (2026-07-01)
 `power-cap-sweep.sh` sweeps caps and benches prefill+decode, recording peak temps and
-throughput. Results (Qwen3.6-27B on V100s, Qwen3.5-9B Q8_0 on P100):
+throughput. Results (2026-07-01; Qwen3.6-27B on V100s, Qwen3.5-9B Q8_0 on the P100, since dead):
+
+> **Tool update (2026-10):** the sweep is now `scripts/power-cap-sweep.py` (the `.sh` is a
+> back-compat shim). It sets each cap **through the daemon's config** (no sudo; the old raw
+> `nvidia-smi -pl` was silently reverted by the 30 s reconcile), runs several GPUs in
+> lockstep, records fan RPM/duty, throttle reasons and cool-down time, has a `--soak`
+> steady-state phase, restores the original caps on exit, and writes CSVs to
+> `docs/data/thermal/`. Cooling A/B example:
+> `scripts/power-cap-sweep.py --gpus 1 2 --caps 175 225 250 --free --label <shroud-layout>`
+> then `--caps 175 --soak 600`; swap the shrouds between cards and repeat.
 
 | GPU | 250W | 200W | 175W | 150W | chosen |
 |-----|------|------|------|------|--------|
@@ -703,6 +1050,10 @@ soft-throttle at ≥200W; **175W holds ~83-84 °C at ~91% decode throughput**. D
 HBM-bandwidth-bound (mem clock locked 877 MHz), so capping power costs mostly prefill,
 little token-gen. P100 200W is a longevity/noise trim at ~0% throughput cost.
 
+The idx0 200 W cap carried over to the Titan X stopgap. A 250 W sustained-load test on
+2026-07-27 showed why that is fine: Maxwell GPU Boost holds an 83 °C target and self-trims to
+~200 W / ~1126 MHz, so 200 W and 250 W converge (see `_power_limits_note` in the config).
+
 **These caps are now applied automatically at boot** by the `gpu-fan-control` service via
 a top-level `power_limits` object in `gpu-fan-control.config.json`:
 ```json
@@ -710,9 +1061,13 @@ a top-level `power_limits` object in `gpu-fan-control.config.json`:
 ```
 `gpu-fan-control.py:reconcile_power_limits()` runs `nvidia-smi -i N -pm 1 -pl W` for each
 entry (logged as `power cap GPUN 250W -> 175W`). A capping failure is **non-fatal** — the
-fan daemon keeps running (airflow is the safety-critical function). To change caps, edit the
-config and re-run `sudo install-fan-service.sh` (validates 50-400 W range). Board limits:
-V100 100-250 W, P100 125-250 W.
+fan daemon keeps running (airflow is the safety-critical function). To change caps, edit
+`power_limits` in the config (or use the status dashboard's per-GPU power dropdown): the
+daemon re-reads it every `power_recheck_sec` (30 s) and applies it live — no restart, no GPU
+reset. A raw `nvidia-smi -pl` is reverted on the next pass, so benchmarks that sweep caps
+must go through the config (`power-cap-sweep.py` / `comfyui-power-sweep.py` do).
+`sudo install-fan-service.sh` validates the 50-400 W range at (re)install. Board limits:
+V100 100-250 W, P100 125-250 W, Titan X 150-275 W.
 
 **Boot/recovery self-heal (2026-07-14).** After a wall-power loss, a V100 (bus04/idx2)
 "fell off the bus" (`NVRM: ... has fallen off the bus`; visible in `lspci` but not
@@ -746,15 +1101,14 @@ Native on-demand model router in front of `llama-server`, OpenAI-compatible. Bin
 `llama-swap.service` (binds `127.0.0.1:9090`, runs as `brad`, `-watch-config`).
 Install/update: `sudo /srv/ai/scripts/install-llama-swap-service.sh`.
 
-**Models / GPU map** (`CUDA_DEVICE_ORDER=PCI_BUS_ID`; idx0=P100, idx1/2=V100):
+**Models / GPU map** (`CUDA_DEVICE_ORDER=PCI_BUS_ID`; idx0=Titan X stopgap (was P100), idx1/2=V100):
 
 | model    | file                               | GPU(s)      | ctx   | VRAM   |
 |----------|------------------------------------|-------------|-------|--------|
 | `coding` | Qwen3.8-27B **Q6_K + MTP**         | idx1        | 163840 | ~30.7 GB (q8_0 KV, MTP self-spec) |
 | `chat`   | Qwen3.6-35B-A3B **UD-Q6_K + MTP**  | idx2        | 98304 | ~31.5 GB (q8_0 KV, MTP self-spec) |
 | `big`    | Qwen3.8-27B **UD-Q8_K_XL + MTP** (split) | idx1+idx2   | 262144 | ~51 GB (23+28), f16 KV, ttl 300s |
-| `small`   | **Gemma-4-26B-A4B** MoE QAT UD-Q4_K_XL | idx0 (P100) | 32768 | ~15.3 GB, always-on, `--reasoning-budget 0`, ub1024 (SWAPPED 2026-07-22 from Gemma-4-12B) |
-| `small-12b` | **Gemma-4-12B** QAT UD-Q4_K_XL   | idx0 (P100) | 131072 | ~10.8 GB dense fallback for max ctx/headroom, ttl 600s, shares idx0 w/ `small` |
+| `small`   | **Gemma-4-12B** dense QAT UD-Q4_K_XL | idx0 (Titan X) | 32768 | ~6.3 GB weights, always-on, `--reasoning-budget 0`, MTP draft stripped (crashes on Maxwell). Titan X stopgap: the Gemma-4-26B-A4B MoE returns with a 16 GB+ card (ADR-0017); the old `small-12b` fallback was removed as a duplicate meanwhile |
 | `gemma-31b` | **Gemma-4-31B** QAT UD-Q4_K_XL  | idx1        | 131072 | ~26 GB (q8_0 KV), ttl 600s (evicts coding), ub2048 |
 | `gemma-26b` | **Gemma-4-26B-A4B** MoE QAT     | idx2        | 131072 | ~18 GB, ttl 600s (evicts chat), ub2048 |
 
@@ -771,16 +1125,19 @@ the short name (`chat`, `coding`, …) so the plan-build MCP tool, llama-swap ro
 | `big`              | `big (Qwen3.8-27B UD-Q8_K_XL)` |
 | `coder-next`       | `coder-next (Qwen3-Coder-Next 80B-A3B)` |
 | `small`             | `small (Gemma-4-26B-A4B MoE)` |
-| `small-12b`         | `small-12b (Gemma-4-12B dense)` |
 
 (The `plan-build` MCP tool carries the same labels in its output bylines/param hints via its
 `MODEL_LABELS` map — keep the two in sync if a model is swapped.)
 
-**Routing = matrix (3 cards).** `f`(small, P100) is in every set so it's never evicted and runs
-CONCURRENTLY with the V100 models. V100 sets: `qq: c & h & f` (daily), `qg: c & y & f`,
-`gq: x & h & f`, `gg: x & y & f` (any Qwen/Gemma pairing across idx1/idx2), `max: b & f`
-(big splits both V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+small(P100) all
-co-resident; after the 2026-07-22 swap `small` (MoE) uses ~15.3 GB on the P100 (was ~7.7 GB as the 12B). `small` answers immediately (Gemma reasoning disabled).
+**Routing = matrix (3 cards).** The idx0 slot `(f | fu)` (`small` or `small-uncensored`) is in
+every set, so it's never evicted by V100 traffic and runs CONCURRENTLY with the V100 models.
+V100 sets: `qq: c & h` (daily), `qg: c & y`, `gq: x & h`, `gg: x & y` (any Qwen/Gemma pairing
+across idx1/idx2), `qw: w & h`, `max: b` (big splits both V100s), `cn: n` (coder-next, both
+V100s). Verified 2026-07-02: coding(idx1)+chat(idx2)+small(P100) all co-resident; after the
+2026-07-22 swap `small` (MoE) used ~15.3 GB on the P100 (was ~7.7 GB as the 12B). Since the
+P100 died (2026-07-27) idx0 is the 12 GB Titan X stopgap and `small` is the dense 12B again
+(~6.3 GB weights; peak ~10.3 GB with heavy-coding's 2 × 32k slots). `small` answers
+immediately (Gemma reasoning disabled).
 
 **Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
 `small` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
@@ -810,6 +1167,26 @@ hence host mode.) Config `docker/litellm/config.yaml` maps model names `coding`/
 Requests without a key get 401. Verified 2026-07-02: `/v1/models` lists all three; full path
 client→LiteLLM(:4000)→llama-swap(:9090)→llama-server returns correct output.
 
+**Rotating the master key.** Put the new key (`sk-` plus random) in `docker/.env`, then
+update the copies that hold it literally:
+- `/srv/ai/hermes/config.yaml` (`model.api_key`) and `~/.config/aichat/config.yaml`.
+- Open WebUI's connection key. Open WebUI stores it in its database (`openai.api_keys`),
+  which wins over the `OPENAI_API_KEY` env var after the first start. Change it in
+  Admin Panel → Settings → Connections. Or GET `/openai/config` and POST the whole body
+  back to `/openai/config/update` with only the key changed.
+
+Then restart what reads it:
+- `docker compose up -d litellm open-webui mcpo openclaw` (they get it through compose
+  `environment:`).
+- `docker compose restart hermes`.
+- `sudo systemctl restart plan-build-mcp` (it loads `docker/.env` only at start).
+
+`copilot-byok.sh` and the other scripts read `docker/.env` on every run. Clients that
+set `LITELLM_MASTER_KEY` themselves (pi on the Mac) need the new value. LiteLLM has no
+database here, so the old key stops working when the container restarts; it then gets
+the same 400 (`no_db_connection`) as any unknown key. Last rotated 2026-10-16
+(ADR-0022, E8 addendum).
+
 **Client setup** (Copilot CLI / VS Code / any OpenAI client):
 - Base URL: `http://<server-or-tailscale-ip>:4000/v1`
 - API key: the `LITELLM_MASTER_KEY`
@@ -826,6 +1203,22 @@ model errors mid-session — every later request then replays it and 400s the wh
 `callbacks: custom_hooks.proxy_handler_instance` hook gives such messages an empty-string
 `content` (accepted by llama-server), so one bad turn no longer bricks a session and no context
 is lost. Mounted read-only into the container; restart `litellm` after editing.
+
+**Tool-schema sanitizer (same hook, 2026-10-15):** llama.cpp compiles tool-parameter and
+`response_format` JSON schemas into a sampling grammar, and one incompatible keyword anywhere
+400s the whole request. It rejects an unanchored `pattern` (`JSON schema conversion failed:
+Pattern must start with '^' and end with '$'`) and a length/item bound big enough to become a
+~2000-rule repetition (`Failed to initialize samplers: failed to parse grammar`; the llama-server
+log says `number of repetitions exceeds sane defaults`). OpenClaw's owner-only `cron` tool, sent
+for admin-scoped clients such as the Control UI, has both (`pattern "\S"`, `maxLength 65536`), so
+every Control UI chat failed on the Qwen slots. The hook drops unanchored `pattern`s and any
+`minLength`/`maxLength` (string types) or `minItems`/`maxItems` of 1000 or more. Measured
+cutoffs: string `maxLength` 2000 and array `maxItems` 1999 (with `minItems` 0) already fail, so
+1000 leaves margin.
+Each distinct drop is logged once: `docker logs litellm 2>&1 | grep "dropped JSON-schema"`. The
+grammar only gets looser; OpenClaw still validates every tool call against its own schema and
+returns violations to the model as tool errors. Direct `:9090` callers are not covered. See the
+ADR-0007 2026-10-15 addendum.
 
 ## GitHub Copilot CLI via BYOK (2026-07-02)
 
@@ -858,12 +1251,11 @@ output tokens; **non-thinking** models don't, so their output cap can be smaller
 
 | `COPILOT_MODEL` | ctx-size | reasoning | `MAX_PROMPT_TOKENS` | `MAX_OUTPUT_TOKENS` | prompt+output |
 |-----------------|---------:|-----------|--------------------:|--------------------:|--------------:|
-| `coding`     | 184320 | yes | 131072 | 32768 | 163840 (~20k spare) |
+| `coding`     | 163840 | yes | 114688 | 32768 | 147456 (~16k spare) |
 | `chat`       | 98304 | yes |  57344 | 24576 | 81920 (~16k spare) |
 | `big`        | 262144 | yes | 163840 | 32768 | 196608 (~65k spare) |
 | `coder-next` | 262144 (131072/slot, `--parallel 2`) | **no** (agentic) | 98304 | 32768 | 131072 (fits 1 slot) |
 | `small`       | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
-| `small-12b`   | 32768 | **no** |  20480 |  8192 | 28672 (~4k spare) |
 | *(other)*    | — | — | 32768 | 8192 | conservative fallback |
 
 Notes:
@@ -888,7 +1280,7 @@ different GPU — so the driver keeps reasoning while subagents work **in parall
 | --- | --- | --- |
 | V100 idx1 | `coding` (default `COPILOT_MODEL`) | primary driver |
 | V100 idx2 | `chat` | task/general subagent |
-| P100 idx0 | `small` (Gemma-4-26B-A4B MoE) | explore/search subagent (always warm) |
+| idx0 (Titan X stopgap) | `small` (Gemma-4-12B dense; the 26B MoE while the P100 lived) | explore/search subagent (always warm) |
 
 Because `small`/`chat` live on separate cards from the driver, subagents run with no
 contention, no eviction, and (for `small`) zero cold-start (the status service's keeper
@@ -946,7 +1338,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
    - **Do NOT expose the `plan-build` MCP to a review/parallel session.** Its tools are
      **serial** (blocking `_chat` calls) and the heavy ones swap `big`/`coder-next` onto
      **both V100s**, evicting the `coding`/`chat` models the review subagents are running on
-     (the P100-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=p100`
+     (the idx0-only guard is bypassed by the HTTP service's `PLAN_BUILD_CALLER_GPU=idx0`
      fallback). Symptom seen live: one reviewer stalled at ~2k generated tokens while its
      model was evicted mid-flight. Disable the plan-build MCP for review sessions
      (`COPILOT_PLAN_BUILD_MCP=0` for the CLI launcher, or turn it off in the app's MCP/tools
@@ -981,8 +1373,8 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   Manual: `copilot mcp add --transport http plan-build http://<host-or-tailscale>:9100/mcp`.
 - **`caller_gpu` over a shared endpoint:** the guard (see mcpo section) normally requires each
   call to report `caller_gpu` so a driver model can't evict itself. A shared HTTP service can't
-  know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=p100`
-  — i.e. it assumes clients drive the P100 `small` chat model, letting `big`/`coder-next` swap
+  know each session's model, so the unit sets a service-wide default `PLAN_BUILD_CALLER_GPU=idx0`
+  — i.e. it assumes clients drive the idx0 `small` chat model, letting `big`/`coder-next` swap
   onto the V100s without evicting the caller. **If a BYOK session instead drives a V100 model**
   (`coding`/`chat`/`big`/`coder-next`), use only the `fast_*` tools (they never evict the daily
   V100 set). Override the default with `PLAN_BUILD_CALLER_GPU` on the service.
@@ -1014,10 +1406,13 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
 - **Open WebUI** talks to it through **mcpo (OpenAPI), not the raw MCP port.** It is
   registered in `docker/mcpo/config.json` as a `streamable-http` server pointing at
   `http://host.docker.internal:9120/mcp`; mcpo re-exposes it as an OpenAPI tool.
-  Add it in **Settings → Integrations → External Tool Servers → Add**:
-  - **URL:** `http://<host-or-tailscale>:8000/llama-swap-mode` — the **mcpo proxy on
-    `:8000`**, *not* `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak).
-    Use the same address your browser reaches Open WebUI by (LAN IP vs Tailscale).
+  Add it as an **admin (global) tool server** in **Admin Panel → Settings → Integrations**:
+  - **URL:** `http://mcpo:8000/llama-swap-mode` — the **mcpo proxy on `:8000`**, *not*
+    `:9120/mcp` (that's the raw MCP endpoint, which OWUI can't speak). The Open WebUI
+    **container** calls admin tool servers, so use the Docker DNS name. A host address
+    (LAN IP, `aipcub.local`, Tailscale) is rejected by the firewall (ADR-0028). Only a
+    *personal* tool server (user **Settings → Integrations**), which your **browser**
+    calls, uses the host address your browser reaches Open WebUI by.
   - **Auth:** API key = `MCPO_API_KEY` from `docker/.env`.
 
   **Two gotchas:** (1) the host `:9120` service must be **running before mcpo (re)mounts
@@ -1025,8 +1420,10 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
   down (logs `Failed to create server 'llama-swap-mode'`), so after installing the
   service run `cd /srv/ai/docker && docker compose restart mcpo`. Verify with
   `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/llama-swap-mode/docs`
-  (expect `200`). (2) `--hot-reload` picks up config.json *edits*, but reviving a
-  previously-failed HTTP backend needs the restart.
+  (expect `200`). (2) mcpo runs **without** `--hot-reload` (dropped 2026-07-25, `baf8ac4`:
+  its file watcher spun a CPU core on the read-only `/config` bind mount), so a
+  config.json edit also needs `docker compose restart mcpo`. A plain `up -d` leaves an
+  unchanged container running on the old inventory.
 - **Copilot CLI / BYOK:** register the **raw MCP** endpoint (`:9120/mcp`) directly — it
   is **not** auto-added by `copilot-byok.sh`:
   `copilot mcp add --transport http llama-swap-mode http://<host-or-tailscale>:9120/mcp`
@@ -1049,7 +1446,7 @@ is reached from containers via `host.docker.internal:4000`.
 
 | Service     | Image                              | Access                     | Purpose |
 |-------------|------------------------------------|----------------------------|---------|
-| open-webui  | ghcr.io/open-webui/open-webui:v0.10.2 | `http://<host>:3000`    | Family chat UI + accounts |
+| open-webui  | ghcr.io/open-webui/open-webui:v0.11.0 | `http://<host>:3000`    | Family chat UI + accounts |
 | searxng     | searxng/searxng:latest             | `127.0.0.1:8888` (debug)   | Private web search (JSON) |
 | mcpo        | ghcr.io/open-webui/mcpo:main       | `0.0.0.0:8000` / `mcpo:8000` | MCP→OpenAPI proxy (ADR-0011) |
 
@@ -1075,8 +1472,28 @@ dir in the volume (embedding + whisper models, ~1 GB) is **not** user images —
 `SEARXNG_SECRET` (settings.yml keeps the literal `ultrasecretkey` placeholder). Verified:
 `/search?q=...&format=json` returns results.
 
+- **Query URL:** in Open WebUI, Admin → Settings → Web Search → SearXNG Query URL
+  must be `http://searxng:8080/search?q=<query>` (the internal address).
+  - Open WebUI saves admin-UI settings in its DB, and the saved value overrides the
+    compose `SEARXNG_QUERY_URL`.
+  - `localhost:8888` is the host-only debug port; inside the `open-webui` container it is
+    refused. That was the 2026-10-15 "web search doesn't work" report.
+- **Engine rot:** scraper engines break, or get CAPTCHA'd or rate-limited, as sites change.
+  When that happens, web search returns **nothing**, and Open WebUI shows no error.
+  - On 2026-10-15 the 2026-07-02 image had zero working engines: Google returned 0
+    results, DuckDuckGo and Startpage hit CAPTCHAs, and Brave returned 429.
+  - Refreshing the image brought a working `google cse`. `settings.yml` also enables
+    Bing and Yahoo as fallbacks.
+  - Health check:
+    `curl -s 'http://127.0.0.1:8888/search?q=test&format=json' | jq -c '[(.results|length), .unresponsive_engines]'`.
+  - Fix when results dry up: `docker compose pull searxng && docker compose up -d searxng`.
+- **Editing `settings.yml`:** the file is owned by the image's uid 977, so edit it through the
+  container: `docker exec -i searxng sh -c 'cat > /etc/searxng/settings.yml' < new.yml`,
+  then `docker compose restart searxng`.
+
 **mcpo (MCP hosting):** inventory = `docker/mcpo/config.json` (`mcpServers`, Claude-Desktop
-format), tracked in git, `--hot-reload`. Each server → authed OpenAPI route
+format), tracked in git; edits apply on `docker compose restart mcpo` (no `--hot-reload`, see
+the gotchas above). Each server → authed OpenAPI route
 `http://mcpo:8000/<name>` (docs at `/<name>/docs`), bearer `MCPO_API_KEY`. Ships `uvx`
 (Python servers work; Node/`npx` needs a node-enabled image). Registered servers:
 `time`, `fetch` (URL→markdown), `git` (inspect the ai-server repo) — all `uvx` — plus
@@ -1088,20 +1505,31 @@ Published on `0.0.0.0:8000` (API-key protected) because Open WebUI fetches/valid
 specs and the browser may too — the URL must be reachable from the client, not just the
 open-webui backend.
 
+_Least privilege (audit B5, ADR-0007 2026-10-15 addendum):_ mcpo runs as uid/gid **10001**
+(no host account) with `no-new-privileges`. Container root ignores file modes, so a root
+mcpo could read every brad-only secret under the `/srv/ai` mount; uid 10001 can't. It gets
+only `MCPO_API_KEY` and `LITELLM_MASTER_KEY` through compose `environment:` (never
+`env_file: ./.env`). The API key goes in through a python entrypoint rather than the command
+line, where any host account could read it with `ps`. `HOME=/home/mcpo` is the `mcpo-home`
+volume (uv cache), which the one-shot `mcpo-init` service chowns to 10001;
+`docker compose up -d mcpo` runs it first. Check: `docker exec mcpo id` → `uid=10001`.
+
 _git server notes:_ `/srv/ai` is bind-mounted **read-only** at `/repos/ai-server` (compose
 mcpo `volumes`). Read ops (log/diff/status/show) work; `git_commit`/`git_add` fail by design
 (`Read-only file system`) — no LLM-driven mutation of the real repo. The container user ≠
 host owner (uid 1000), so the git server sets `safe.directory` via `GIT_CONFIG_*` env in
 config.json (avoids git's "dubious ownership" error without writing host files). **Adding a
-repo/volume mount requires `docker compose up -d --force-recreate mcpo`** — hot-reload only
-picks up config.json edits, not new env/volumes.
+repo/volume mount requires `docker compose up -d --force-recreate mcpo`**. A restart only
+re-reads config.json; new env/volumes need the container recreated.
 
 _plan-build server (in-house planner→coder pipeline):_ source
 `docker/mcpo/plan_build_mcp.py` (mounted at `/config`), launched with
-`uv run --with mcp` (uv builds an ephemeral venv with the `mcp` package on first start;
-`UV_CACHE_DIR=/tmp/uv-cache` since `/config` is read-only). It exposes three tools that call
+`uv run --no-project --with mcp`, which runs it on the mcpo image's own Python env (it already
+ships `mcp`). `--no-project` is required: mcpo's working dir `/app` is its own uv project, and
+without the flag uv re-syncs mcpo's venv to a stale lockfile on every start (see config.json
+`//_deps`). It exposes seven tools that call
 the **LiteLLM gateway** and do the heavy lifting on the V100s while the `small` chat model
-(P100, never evicted) invokes them and relays output:
+(idx0, never evicted) invokes them and relays output:
 `make_plan` (a reasoning model — default `big` — writes a detailed plan),
 `plan_and_build` (plan with `big`, then implement with `coder-next`), and
 `fast_plan_and_build` (the interactive path: plan with `chat` + implement with `coding` — the
@@ -1115,16 +1543,19 @@ resident). Planner
 (`big`/`chat`/`small`) and coder are overridable per call. Because `big` and `coder-next`
 both need the two V100s, a `plan_and_build` call swaps `big` in (evicting coding+chat), then
 `coder-next` in (evicting `big`); `small` stays resident so the chat keeps responding. **So it
-must only be called from a P100-exclusive model** — a V100 caller (coding/chat/big) would
+must only be called from an idx0-exclusive model** — a V100 caller (coding/chat/big) would
 evict *itself* mid-call and break the conversation. The tool can't see its caller through the
 MCP protocol, so it takes a **`caller_gpu`** arg the model reports (via its system prompt) and
-refuses anything not P100-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `p100`). Enforce
+refuses anything not idx0-exclusive (allowlist `PLAN_BUILD_SAFE_GPUS`, default `idx0,p100`;
+`p100` is the pre-2026-10-15 value, kept as an alias for idx0 so older prompts still work —
+the P100 itself died, ADR-0017). Enforce
 it two ways: (1) in Open WebUI, enable this tool **only on the `small` model**; (2) add to the
 `small` model's system prompt: _"When calling any plan-build tool, always pass
-`caller_gpu="p100"`."_ **This
+`caller_gpu="idx0"`."_ **This
 needs container networking + the gateway key:** the mcpo service adds
 `extra_hosts: host.docker.internal:host-gateway` (LiteLLM runs `network_mode: host` on
-`:4000`) and `env_file: ./.env`; mcpo passes `{**os.environ, **cfg.env}` to the stdio child,
+`:4000`) and passes `LITELLM_MASTER_KEY` in its `environment:`; mcpo passes
+`{**os.environ, **cfg.env}` to the stdio child,
 so `LITELLM_MASTER_KEY` reaches the tool via inherited env — **no secret in the git-tracked
 config.json**. `big` planning can take several minutes (deep reasoning) plus GPU swaps;
 `PLAN_BUILD_TIMEOUT` (default 1800s) bounds the HTTP call. Verified live 2026-07-04:
@@ -1132,9 +1563,12 @@ config.json**. `big` planning can take several minutes (deep reasoning) plus GPU
 The same script also serves these tools over **streamable-http on `:9100`** for the Copilot
 CLI (`PLAN_BUILD_TRANSPORT=streamable-http`) — see [plan-build MCP over HTTP](#plan-build-mcp-over-http-for-copilot-byok).
 
-To register in Open WebUI v0.10.2: **Settings → Integrations → External Tool Servers →
-Add** → URL `http://<host-ip>:8000/<name>` (e.g. `http://<host-ip>:8000/time`; the IP
-**must match the address your browser uses to reach Open WebUI** — LAN vs Tailscale),
+To register in Open WebUI: **Admin Panel → Settings → Integrations** (global; the Open WebUI
+container calls these) → URL **`http://mcpo:8000/<name>`** (e.g. `http://mcpo:8000/time`).
+Use the Docker DNS name, never the host IP or hostname: container→host `:8000` is rejected by
+the firewall (ADR-0028). A *personal* tool server (user **Settings → Integrations**) is called by
+your **browser** instead, so there use `http://<host-ip>:8000/<name>` with the address your
+browser uses for Open WebUI (LAN vs Tailscale).
 Auth = Bearer `MCPO_API_KEY`. Gotchas: the Integrations row may not show a tool **count**
 even when working (cosmetic); external tool servers do **not** appear in the `+` menu —
 enable them per-chat via the **tools/🔧 icon next to `+`**; set the model's **Function
@@ -1180,25 +1614,49 @@ exposes the UI on LAN/Tailscale — **ComfyUI has no auth**, so keep it on the p
 network only. Start/stop: `sudo systemctl start|stop comfyui`.
 
 **Auto-free the GPU (no manual step, keeps chat loaded).** A tiny ComfyUI server hook —
-`scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` — adds an
+`scripts/comfyui-free-gpu-node.py`, installed to `comfyui/custom_nodes/free_gpu.py` (shared by
+`comfyui-open`/`comfyui-secure`) and `comfyui-qwen/custom_nodes_qwen/free_gpu.py`; both copies are
+refreshed by `install-comfyui-instances.sh` and take effect on each instance's next start — adds an
 aiohttp middleware that, on **POST `/prompt`** (i.e. when someone clicks **Queue**), frees the
-V100 ComfyUI needs, then runs the generation. ComfyUI is pinned to **idx1 (the `coding` card)**,
-so the hook unloads **only** the model(s) squatting there via llama-swap's per-model endpoint
-(`POST /api/models/unload/<model>`), while **keeping `chat` (idx2) + `small` (P100) resident** so
-family chat stays responsive during image gen. Models to keep are set by the `FREE_GPU_KEEP` env
-(default `chat,small`); everything else running (`coding`, or a split `big`/`coder-next`) is
-evicted and reloads on-demand. It triggers **only on generate**, not on page loads. Configurable
-via `LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
+GPU that instance needs, then runs the generation. `comfyui-open` and `comfyui-qwen` are pinned to
+**idx1 (the `coding` card)** and `comfyui-secure` to **idx2 (the `chat` card)**, so each instance's
+hook unloads **only** the model(s) squatting on its card via llama-swap's per-model endpoint
+(`POST /api/models/unload/<model>`). The idx1 instances keep `chat` (idx2) and `small` (idx0)
+resident, so family chat stays responsive during image gen. Models to keep are set per unit by the
+`FREE_GPU_KEEP` env (code default `chat,small`; the idx1 units also keep `gemma-26b` and
+`small-uncensored`). Everything else running (`coding`, or a split `big`/`coder-next`) is evicted
+and reloads on demand. It triggers **only on generate**, not on page loads. Configurable via
+`LLAMASWAP_URL` + `FREE_GPU_KEEP` env in the unit. Verified: with `coding` resident
 (idx1 = 32.1 GB), a queued run auto-unloaded **only** `coding` (chat/small untouched) — log shows
 `free_gpu: unloading ['coding'] before generation (keeping ['chat', 'small'])`.
 
 **Idle watchdog (reverse direction).** ComfyUI caches its models in VRAM after a run, which
-would keep idx1 occupied and block `coding` from reloading. The same hook runs a background task
-that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
-(`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release idx1,
-then warms `FREE_GPU_RESTORE` (default `coding`) back onto the card via llama-swap — so the box
-returns to its daily resident state (coding + chat + small) with no manual step. Runs at most once
-per idle period; set `FREE_GPU_IDLE_SECS=0` to disable.
+would keep the card occupied and block the LLM from reloading. The same hook runs a background
+task that, after `FREE_GPU_IDLE_SECS` (default 300s) with no generation, unloads ComfyUI's models
+(`comfy.model_management.unload_all_models()` + `soft_empty_cache(force=True)`) to release the
+card, then warms `FREE_GPU_RESTORE` back via llama-swap: `coding` for `comfyui-open`, `chat` for
+`comfyui-secure`, nothing for `comfyui-qwen` (empty). That returns the box to its daily resident
+state (coding + chat + small) with no manual step. Runs at most once per idle period; set
+`FREE_GPU_IDLE_SECS=0` to disable.
+
+**Shared idx1 (`FREE_GPU_YIELD_TO`, audit C8).** `comfyui-qwen` (on-demand, ~29 GB per render)
+shares idx1 with the always-on `comfyui-open`. Before this fix, `comfyui-open`'s watchdog could warm
+`coding` (~30 GB) back mid-render and OOM the Qwen job. `comfyui-open` therefore sets
+`FREE_GPU_YIELD_TO=comfyui-qwen.service`. Every 30 s check runs `systemctl is-active` on that unit.
+While the unit is in any state other than `inactive`/`failed`, `comfyui-open` still releases its own
+cached models when idle, but doesn't warm `coding`. If the state can't be read, the hook treats
+the unit as running and doesn't warm. A unit systemd doesn't know reads as `inactive`, so at
+startup the hook warns about any misspelt `FREE_GPU_YIELD_TO` unit. Once the unit stops,
+`comfyui-open` warms `coding` back within one check, as soon as it has itself been idle for
+`FREE_GPU_IDLE_SECS`. It does this even if `comfyui-open` rendered nothing meanwhile, because Qwen
+renders evicted `coding`. Journal lines:
+`idle watchdog running (... yield_to=['comfyui-qwen.service'])` at start, then
+`comfyui-qwen.service is active; won't warm ['coding'] back meanwhile` and later
+`comfyui-qwen.service no longer running; idle restore resumes` + `warmed coding back onto its card`.
+This only coordinates the warm-up. Rendering on both idx1 instances at once can still OOM. The
+status service's warm-ups don't check for `comfyui-qwen` either: at the end of the quiet-hours
+window, and on every `server-status` start outside the window. Don't restart `server-status`
+during a Qwen render.
 
 **Installing missing models/nodes (ComfyUI-Manager).** ComfyUI-Manager is installed into
 `comfyui/custom_nodes/comfyui-manager` (the install script clones it + installs its deps into the
@@ -1225,10 +1683,17 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 **agent / long-running** use, we expose ComfyUI as MCP tools via the vendored
 [joenorton/comfyui-mcp-server](https://github.com/joenorton/comfyui-mcp-server).
 
-- **Clone (updatable):** `/srv/ai/src/comfyui-mcp-server` (gitignored). Kept pristine except one
-  local commit — a real bug fix (`_load_workflows` didn't skip `.meta.json` sidecars → startup
-  crash; parity with `get_workflow_catalog`), pinned on upstream `e0101b2`, candidate to upstream.
-  Update with `git -C /srv/ai/src/comfyui-mcp-server pull --rebase`.
+- **Clone (updatable):** `/srv/ai/src/comfyui-mcp-server` (gitignored). Four local commits
+  (2026-07-05) on upstream `e0101b2`:
+  - `4a70818` bug fix: `_load_workflows` didn't skip `.meta.json` sidecars → startup crash
+    (parity with `get_workflow_catalog`). Candidate to upstream.
+  - `148e3d9` generation results carry a ready-to-render `markdown` image link, and
+    `view_image` returns markdown when `COMFY_MCP_RETURN_MARKDOWN` is set. mcpo turns MCP
+    image content into an inert data URI that Open WebUI never renders.
+  - `82bb418` + `2a15fde` tool-description wording: require the leading `!` for inline
+    images; drop the placeholder-host example.
+
+  Update with `git -C /srv/ai/src/comfyui-mcp-server pull --rebase`, which replays these four.
 - **Venv:** `/srv/ai/venvs/comfyui-mcp` (`--without-pip` + get-pip; deps `requests`, `mcp[cli]`,
   `Pillow`).
 - **Service:** `scripts/comfyui-mcp.service` (install via
@@ -1237,9 +1702,12 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
   A tracked launcher `scripts/comfyui-mcp-launch.py` imports upstream's `mcp` object and (a)
   forces the bind host to `0.0.0.0` (upstream hard-codes 127.0.0.1) and (b) allows the mcpo
   `Host: host.docker.internal:9000` header (FastMCP's DNS-rebinding guard else returns **421
-  Misdirected Request**) — **no fork of upstream**. Auth-less like ComfyUI → LAN/Tailscale only.
-- **Style library (tracked in this repo):** `config/comfyui-mcp/workflows/` (set via
-  `COMFY_MCP_WORKFLOW_DIR`), so styles are versioned and survive re-cloning. Each **API-format**
+  Misdirected Request**) — no upstream patch needed for these two. Auth-less like ComfyUI → LAN/Tailscale only.
+- **Style library (local):** `config/comfyui-mcp/workflows/` (set via
+  `COMFY_MCP_WORKFLOW_DIR`). Git holds only a frozen 8-file early snapshot; newer styles (e.g.
+  `krea2_turbo`/`krea2_turbo_bf16`, which aichat's default role uses) and later edits are
+  local-only, so a re-clone does **not** restore the live library (owner policy, ADR-0012
+  2026-10-15 addendum). Each **API-format**
   `*.json` using `PARAM_<TYPE>_<NAME>` placeholders (e.g. `PARAM_PROMPT`, `PARAM_INT_SEED`,
   `PARAM_INT_WIDTH`) auto-registers its **own MCP tool** named after the file; an optional
   `*.meta.json` sidecar gives it a friendly name/description + parameter defaults. First style:
@@ -1248,14 +1716,30 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 - **Exposed via mcpo** (ADR-0011): `docker/mcpo/config.json` → `comfyui` entry, type
   `streamable-http`, url `http://host.docker.internal:9000/mcp`. **mcpo does not retry a backend
   that was down at its startup**, so the install script bounces mcpo after the service is up.
+- **Secure twin (`comfyui-mcp-secure`, `:9001` → login-gated `:8189`; ADR-0026):** the same
+  bridge and launcher, installed by the same script. It injects the ComfyUI-Login token from
+  `comfyui/login/PASSWORD` and re-reads the file whenever it changes, so a password reset needs
+  no bridge restart. Because it holds that credential and has **no auth of its own**, it
+  is **not** LAN/Tailscale-reachable:
+  - A systemd IP filter (`IPAddressAllow`/`IPAddressDeny` in the unit) admits only localhost
+    (e.g. the aichat bridge) and the internal `mcp-secure` Docker network (`172.31.250.0/29`).
+  - **Only mcpo** is attached to `mcp-secure`. Its `comfyui-secure` entry uses
+    `http://172.31.250.1:9001/mcp`.
+  - Don't attach other containers to `mcp-secure` or point new clients at `:9001` without
+    deliberately updating the filter.
+  - The filter also allowlists the host's own LAN IP (`/32`) so the bridge can fetch its own
+    `COMFY_MCP_PUBLIC_URL` links, e.g. a previous render passed back as `input_image`.
+    **If the LAN IP changes, update both.**
+
+  Check everything with `scripts/verify-mcp-lockdown.sh` (read-only; the installer runs it).
 - **Tools:** per-style (`z_image_turbo`, …), plus `generate_image`, `run_workflow`,
   `list_workflows`, `list_models`, async jobs (`get_job`, `get_queue_status`, `cancel_job`),
   `regenerate`, `view_image` (inline base64), `list_assets`, `get_asset_metadata`,
   `get/set_defaults`, publish tools. Long renders return `{"status":"running","prompt_id":…}` —
   poll `get_job(prompt_id=…)`. Ideal for agents/long-running processes.
 - **GPU coordination:** the tool hits ComfyUI's `/prompt`, so the existing `free_gpu` hook still
-  fires (unloads idx1's LLM keeping chat+small, idle watchdog restores `coding`) regardless of
-  caller.
+  fires regardless of caller: it unloads the LLM on that instance's card and the idle watchdog warms
+  it back (see "Auto-free the GPU" above).
 - **Displaying images inline:** mcpo serializes an MCP `ImageContent` (what `view_image`'s
   `FastMCPImage` produces) into an inert data-URI **string**; Open WebUI feeds that to the model
   as text and never renders it. So every generation tool response includes a **`markdown`** field
@@ -1279,7 +1763,7 @@ different graph topologies (Z-Image Turbo vs Flux vs a LoRA style). For **multip
 Verified live 2026-07-05: `POST /comfyui/z_image_turbo {"prompt":…}` through mcpo (bearer
 `MCPO_API_KEY`) → async job → `z-image-turbo_*.png` in `comfyui/output/`; all 18 tools listed at
 `http://<host>:8000/comfyui/docs`. Register in Open WebUI the same way as other mcpo tools
-(Settings → Integrations → External Tool Servers → `http://<host-ip>:8000/comfyui`).
+(Admin Panel → Settings → Integrations → `http://mcpo:8000/comfyui`).
 
 ## aichat — terminal LLM client + comfyui image gen (ADR-0025)
 
@@ -1305,12 +1789,17 @@ client is **local & gitignored**. Upstream pieces are all **sigoden / MIT**:
   `functions_dir` is a symlink to it). `mcp.json` (from
   `config/aichat/llm-functions-mcp.json`) lists the comfyui-secure MCP
   (`http://127.0.0.1:9001/mcp`). The **bridge** (`mcp/bridge/index.js`) is patched
-  (`config/aichat/llm-functions-bridge.patch`, +72/−6, MIT) to (a) speak
-  streamable-http/SSE and (b) repair the comfyui schema's typeless numeric params
-  so aichat doesn't loop on `{"width":{"width":1024}}`. Run `argc mcp start` once in
-  the clone to generate `functions.json` + `bin/` shims.
+  (`config/aichat/llm-functions-bridge.patch`, +77/−8, MIT) to:
+  (a) speak streamable-http/SSE;
+  (b) repair the comfyui schema's typeless numeric params so aichat doesn't loop on
+  `{"width":{"width":1024}}`;
+  (c) listen on loopback only (`MCP_BRIDGE_HOST`, default `127.0.0.1`; ADR-0026).
+
+  Run `argc mcp start` once in the clone to generate `functions.json` + `bin/` shims.
 - **Bridge service:** `scripts/aichat-mcp-bridge.service` keeps the bridge alive on
-  `:8808`. Install: `sudo scripts/install-aichat-mcp-bridge.sh`. The bridge has **no
+  `127.0.0.1:8808`, kernel-filtered to localhost (`IPAddressAllow=localhost`,
+  `IPAddressDeny=any`). It has no auth and holds a live session to the login-gated `:9001`.
+  Install: `sudo scripts/install-aichat-mcp-bridge.sh`. The bridge has **no
   reconnect logic**, so the unit declares `After=` + `PartOf=comfyui-mcp-secure.service`:
   a restart of the upstream MCP (`:9001`, e.g. `systemctl restart comfyui-mcp-secure`
   after a workflow-param change) now auto-restarts the bridge. It is tied to
@@ -1349,7 +1838,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` (Control UI needs a secure context — reach it via SSH tunnel: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) | Multi-channel assistant gateway + Control UI |
+| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -1372,9 +1861,16 @@ and injects the LiteLLM key into Hermes' live config.
 **OpenClaw** (`ghcr.io/openclaw/openclaw`, Node daemon, runs as `node`/uid 1000):
 - Config = JSON5 at `/srv/ai/openclaw/state/openclaw.json` (writable; OpenClaw runs
   schema migrations). A dedicated `litellm` provider (`api: openai-completions`,
-  `baseUrl: http://host.docker.internal:4000`, `apiKey: "${LITELLM_API_KEY}"`,
-  `request.allowPrivateNetwork: true`) lists `chat`/`coding`/`small`;
+  `baseUrl: http://host.docker.internal:4000/v1`, `apiKey: "${LITELLM_API_KEY}"`)
+  lists `chat`/`coding`/`small`;
   `agents.defaults.model.primary = litellm/chat`, `fallbacks = [litellm/coding]`.
+- Each model's `contextWindow` is the server's per-request `--ctx-size` in daily mode
+  (`chat` 98304, `coding` 163840, `small` 32768), never more — a larger claim makes
+  OpenClaw send prompts llama.cpp rejects instead of compacting first. Seeding never
+  overwrites the live config, so after a ctx change also edit
+  `openclaw/state/openclaw.json` (+ `.last-good`) and
+  `openclaw/state/agents/main/agent/plugins/litellm/catalog.json` with the container
+  stopped.
 - **Must** set `gateway.mode: "local"`, `gateway.bind: "lan"` and an
   `OPENCLAW_GATEWAY_TOKEN` (env SecretRef) — a loopback bind makes the published
   port unreachable; a LAN bind without a token is refused.
@@ -1387,12 +1883,31 @@ and injects the LiteLLM key into Hermes' live config.
   openclaw.mjs doctor`. Three persistent dirs: `state`, `workspace`, `auth-secrets`.
 - Verified live 2026-07-21: `openclaw agent --agent main -m "…"` →
   `winnerProvider: litellm, winnerModel: chat, result: success`.
-- **Control UI needs a secure browser context** (WebCrypto device identity):
-  reach it over an SSH tunnel to `http://localhost:18789`, not the LAN hostname.
-  `gateway.controlUi.allowInsecureAuth` only helps an on-host (loopback) browser;
-  a remote LAN browser additionally fails the `isLocalClient` check.
-- **Update the pinned image tag deliberately** (`docker compose pull` + `up -d`),
-  never the in-app self-updater (ephemeral container layer). The auto-updater is
+- **Control UI needs a secure browser context** (WebCrypto device identity): plain
+  `http://<host>:18789` loads, but its login is refused (`1008 control ui requires
+  device identity`). `gateway.controlUi.allowInsecureAuth` (set in our config, and
+  flagged by OpenClaw's security warning at startup) doesn't help: it only applies to a
+  loopback peer, and behind Docker's port mapping every browser arrives from the bridge
+  IP. **Use an SSH tunnel** (chosen 2026-07-21, kept 2026-10-15 — ADR-0016 addendum):
+  - On your computer: `ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`, then open
+    `http://localhost:18789` (the status page links there, marked "SSH tunnel"). Paste
+    `OPENCLAW_GATEWAY_TOKEN` (`docker/.env`) on first login. `localhost` is a secure
+    context, and OpenClaw treats a token-authenticated `localhost` browser arriving via
+    the docker bridge as container-local, so it pairs the browser automatically.
+  - Always-on (Mac): a LaunchAgent (`~/Library/LaunchAgents/com.openclaw.tunnel.plist`,
+    `RunAtLoad` + `KeepAlive`, recipe from 2026-07-21) can run `ssh -N` against a
+    key-auth `~/.ssh/config` host carrying `LocalForward 18789 127.0.0.1:18789`; check
+    it with `launchctl list | grep openclaw`. Simpler: add that `LocalForward` line to
+    the host you normally SSH in with, so the tunnel is open whenever a session is
+    (extra sessions just warn that the port is already in use).
+  - Not used: Tailscale Serve HTTPS (works, but enabling tailnet HTTPS certificates
+    permanently publishes the machine's tailnet name in public Certificate Transparency
+    logs) and `dangerouslyDisableDeviceAuth` (drops the device check for every client).
+- **Update deliberately by rebuilding the local image**, never with the in-app
+  self-updater (ephemeral container layer). The image is built locally
+  (`ai-server/openclaw:<tag>`, see the image-extension bullet below), so
+  `docker compose pull` doesn't update it. Bump the tag, then
+  `docker compose build openclaw && docker compose up -d openclaw`. The auto-updater is
   off by default. The "Update available" startup banner checks the **npm** registry
   (`2026.7.1-2`), whose `-N` patch suffix is **not** published as a GHCR image tag,
   so it's a cross-channel false positive for the container — silenced with
@@ -1415,8 +1930,10 @@ and injects the LiteLLM key into Hermes' live config.
   (github/gh-issues); compose builds it as `ai-server/openclaw:<tag>`. **User-installed
   skill *content*** (ClawHub/git) already persists under the mounted `state` dir
   (`~/.openclaw/plugin-skills`, `skill-workshop`) — no extra volume needed; only
-  dependency *binaries* need the image extension. Bump `BASE_IMAGE` in the Dockerfile
-  in lockstep with the compose tag when updating, then `docker compose build openclaw`.
+  dependency *binaries* need the image extension. When updating, bump the tag in all three
+  places together: compose `build.args.BASE_IMAGE` (this is the value used, since a build arg
+  overrides the Dockerfile's default), compose `image:`, and the Dockerfile's
+  `ARG BASE_IMAGE`. Then `docker compose build openclaw`.
 
 **Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
 - **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web
@@ -1458,28 +1975,95 @@ only** — they must never be port-forwarded to the public internet. Auth postur
 | Hermes API server | 8642 | `HERMES_API_SERVER_KEY` |
 | SearXNG | 8888 | none |
 | llama-swap mgmt | 127.0.0.1:9090 | localhost-only (safe) |
+| ComfyUI MCP bridge **open** (`comfyui-mcp`) | 9000 | none — same exposure as `:8188` |
+| ComfyUI MCP bridge **secure** (`comfyui-mcp-secure`) | 9001 | none on the bridge (it injects the `:8189` login) → **kernel-filtered to localhost + mcpo** via the internal `mcp-secure` network (ADR-0026) |
+| aichat MCP bridge | 127.0.0.1:8808 | none → loopback bind + kernel filter (ADR-0026) |
+| Status dashboard (`server-status`) | 9095 | sign-in (one shared password) + same-origin/CSRF checks on every action; read-only JSON open to the host + containers only (ADR-0027) |
+
+Services that hold credentials for *another* service (the two secure-canvas MCP bridges) are
+fenced with per-unit systemd IP filters (`IPAddressAllow`/`IPAddressDeny`). These hold
+regardless of ufw's state. Verify: `scripts/verify-mcp-lockdown.sh`.
 
 The box sits behind home-router NAT (`eno1 = <host-ip>/22`), so nothing is
-WAN-reachable unless the router forwards a port. `ufw` (installed) adds
-defense-in-depth: allow only LAN + Tailscale, deny everything else. Run with sudo
-(agents cannot):
+WAN-reachable unless the router forwards a port. **ufw is the second layer
+([ADR-0028](adr/0028-host-firewall-ufw.md)).** It is installed and maintained by a script
+with a dead-man switch. Agents can't sudo, so the owner runs it:
 
 ```bash
-# Order matters — add the allow rules BEFORE enabling, or you can lock out SSH.
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow in on tailscale0            # trust the Tailscale mesh
-sudo ufw allow from <lan-subnet>            # trust the local LAN (all ports)
-# (LAN rule already covers SSH; if you tighten it, keep: sudo ufw allow 22/tcp)
-sudo ufw enable
-sudo ufw status verbose
+scripts/setup-firewall.sh --dry-run        # show the plan (no root needed)
+sudo /srv/ai/scripts/setup-firewall.sh     # pre-flight → plan → apply → verify → type "keep"
+scripts/verify-firewall.sh                 # check any time (sudo adds the rule-level checks)
 ```
 
-This keeps the no-auth `:8188` (and everything else) reachable from your LAN and
-Tailscale devices while blocking any other source. If you ever must reach a
-service from outside, prefer Tailscale over a router port-forward — never expose
-`:8188`. To reset the locked instance's password:
-`sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013).
+What it enforces:
+
+| Source | Allowed |
+| --- | --- |
+| Docker containers (`172.16.0.0/12`) → host | **only** TCP `4000` LiteLLM, `8188` ComfyUI open, `9000`/`9001` MCP bridges, `9095` status JSON, `9120` mode MCP. Everything else is **rejected** ("connection refused" right away), including SSH, Samba, `:9100`, `:8675`, `:8189`, `:8190`. |
+| LAN (`192.168.4.0/22`, the ULA `/64`, link-local) | everything |
+| Tailnet (`tailscale0`, plus `41641/udp` for direct connections) | everything |
+| Anywhere else | SSH `22/tcp` only (anti-lockout) |
+| Docker-**published** ports (`:3000`, `:8000`, `:8083`, …) | LAN + tailnet only. These bypass ufw's INPUT rules, so a managed `DOCKER-USER` block in `/etc/ufw/after.rules` drops non-LAN sources arriving on `eno1`. It also **rejects containers** that dial a published port via the host's address from another Docker network (that path is forwarded, so the container rule above never sees it). |
+
+**How the installer stays safe:**
+- It refuses to start unless its pre-flight checks pass, including
+  `verify-firewall.sh --preflight`, and while an earlier run is still unconfirmed or
+  a rollback is running.
+- It snapshots `/etc/ufw`, `/etc/default/ufw`, the chain policies and the
+  `DOCKER-USER` rules, and arms a **300 s auto-rollback** (a transient systemd
+  timer, retried every 30 s if a rollback attempt fails) before changing anything.
+  If any of that changed while the `y`/`N` prompt was waiting, it stops instead,
+  with nothing changed.
+- After applying, it runs the full verifier as root. **Any FAIL, or an
+  inconclusive result (exit 3), rolls back automatically** without asking.
+- Then, from your Mac, **open a NEW SSH session** and load Open WebUI and the
+  dashboard. Type `keep` only if both work.
+- Any other answer, no answer, Ctrl-C, a dropped session or an error rolls back.
+- **Reboot or power loss before `keep`:** a `ufw.service` drop-in
+  (`/etc/systemd/system/ufw.service.d/ai-fw-rollback.conf`, installed by the
+  installer) restores the snapshot's files at boot, before ufw loads them. It does
+  nothing unless a run is unconfirmed (`/etc/ufw/ai-fw-snapshot/PENDING`). If that
+  restore fails, ufw doesn't load at all, so the box boots open and stays
+  reachable over SSH. `systemctl status ufw` shows the failure.
+- Every rollback checks the live result: the files, whether ufw is loaded (or fully
+  unloaded) as before, the chain policies and `DOCKER-USER`. A firewall table it
+  can't read counts as a failure. If anything fails it says `ROLLBACK FAILED`, keeps
+  the snapshot and the `PENDING` marker (so the timer and the next boot retry), and
+  prints the retry command.
+- Re-running is safe (idempotent). Rules you added by hand without an `ai-fw:`
+  comment are never touched.
+
+**Adding a container→host dependency:**
+1. Add the port to `DOCKER_HOST_PORTS` in **both** `scripts/setup-firewall.sh` and
+   `scripts/verify-firewall.sh` (at most 15 ports).
+2. Re-run the installer.
+
+Containers must reach **other containers by Docker DNS name**, e.g. Open WebUI
+tool servers at `http://mcpo:8000/<name>`. Never use the host's IP, `aipcub.local` or
+the Tailscale IP plus a published port: that path goes back through the host and is
+rejected, from the same Docker network and from any other. The verifier flags any
+Open WebUI admin tool server set up that way.
+
+**Undoing it:**
+- During setup, rollback is automatic.
+- Later, `sudo /bin/sh /etc/ufw/ai-fw-snapshot/rollback.sh` restores the state from
+  before the **last** run.
+- In an emergency, run `sudo ufw disable && sudo iptables -F DOCKER-USER`.
+- The boot safety net is inert once a run is kept. To remove it anyway:
+  `sudo rm /etc/systemd/system/ufw.service.d/ai-fw-rollback.conf && sudo systemctl daemon-reload`.
+  The next installer run puts it back.
+
+**Verifier exit codes:** `0` pass, `1` FAIL, `3` inconclusive (run without sudo, so
+the rule-level checks were skipped).
+
+ufw logs blocked packets to the kernel log: `[UFW BLOCK]`, `[AI-FW DOCKER BLOCK]`
+for the non-LAN published-port drop, and `[AI-FW DOCKER XNET]` for containers
+reaching a published port through the host.
+
+Never port-forward `:8188` (or anything else). If you must reach a service from
+outside, use Tailscale. To reset the locked instance's password:
+`sudo /srv/ai/scripts/reset-comfyui-password.sh` (see ADR-0013), then set the new
+one at `:8189/login`. The secure MCP bridge picks it up by itself.
 
 ## Mounting /srv/ai over SMB (macOS / Windows) — 2026-09-13
 
@@ -1488,9 +2072,10 @@ Windows Explorer via **Samba (SMB3)**. Config is repo-tracked and installed by a
 sudo script; rationale is in [ADR-0022](adr/0022-samba-share-srv-ai.md).
 
 - Canonical config: [`config/smb.conf`](../config/smb.conf) (SMB3-only,
-  `smb encrypt = required`, bound to `lo tailscale0 eno1` — **never** the docker
-  bridges or the public internet; single share `srv-ai` → `/srv/ai`, macOS
-  `vfs_fruit` interop).
+  `smb encrypt = required`, port 445 only; listens on all addresses but
+  `hosts allow` admits only loopback, the LAN, the tailnet and IPv6
+  ULA/link-local, **never** the docker networks or the public internet; single
+  share `srv-ai` → `/srv/ai`, macOS `vfs_fruit` interop).
 - Installer: [`scripts/setup-samba.sh`](../scripts/setup-samba.sh) — idempotent;
   agents cannot sudo, so run it yourself:
 
@@ -1500,9 +2085,12 @@ sudo /srv/ai/scripts/setup-samba.sh
 
 It installs Samba, deploys the config (backs up any existing `/etc/samba/smb.conf`,
 validates with `testparm`), prompts once for an SMB password for `brad`
-(separate from the login password), adds `ufw` rules for port 445 on `tailscale0`
-+ the LAN subnet (and `allow 22/tcp`; it does **not** auto-enable ufw, so no SSH
-lockout), then enables `smbd` and disables the unused `nmbd`/NetBIOS daemon.
+(separate from the login password), then enables `smbd`, disables the unused
+`nmbd`/NetBIOS daemon and checks that smbd listens on `0.0.0.0:445 [::]:445`.
+It makes no firewall changes: `scripts/setup-firewall.sh` (ADR-0028) already
+allows the LAN and the tailnet on every port. (Older versions of this script added
+ufw rules for 445 on `tailscale0` and the LAN subnet; they are redundant and
+harmless.)
 
 Mount from any device on the tailnet or LAN (use the server's Tailscale IP or its
 LAN IP; find them with `tailscale ip -4` and `ip -4 addr show eno1`):
@@ -1515,15 +2103,35 @@ Windows  Explorer address bar →             \\<server-ip>\srv-ai
 Log in as **`brad`** with the SMB password set above.
 
 **Caveats.**
-- **Not internet-facing** — SMB listens only on loopback + Tailscale + LAN.
+- **Not internet-facing**: SMB admits only loopback, LAN, tailnet and IPv6
+  ULA/link-local sources (`hosts allow`), behind ufw.
   Encryption is required; if a legacy client can't mount, relax `smb encrypt` to
   `desired` in `config/smb.conf` and re-run the installer.
 - **Root-owned files** under `/srv/ai` (some model/LoRA files created via sudo)
   can't be modified/deleted over SMB as `brad`. Fix per-directory as needed, e.g.
   `sudo chown -R brad:brad /srv/ai/comfyui/models/loras` (the installer prints the
   count of non-`brad`-owned paths).
-- **Tightening to tailnet-only:** drop `eno1` from `interfaces` in `config/smb.conf`
-  and remove the LAN `ufw` rule.
+- **Tightening to tailnet-only:** in `config/smb.conf`, reduce `hosts allow` to
+  `127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48`. The firewall trusts the whole
+  LAN (ADR-0028), so `hosts allow` is what restricts SMB.
+- **Don't go back to `bind interfaces only = yes`**: Samba silently skips
+  `tailscale0` (point-to-point, no broadcast flag) and binds the LAN's rotating
+  IPv6 privacy addresses only at startup (ADR-0022, 2026-10-15 addendum).
+- **Changed LAN subnet?** Update the `192.168.4.0/22` entry in `hosts allow`.
+- **Credential stores are hidden** (`veto files`, ADR-0022 2026-10-16 addendum):
+  `docker/.env`, `scripts/server-status.env`, the dashboard's `auth.json`,
+  ComfyUI-Login's `PASSWORD`/`.secret-key.txt`, ai-toolkit's `aitk_db.db*`,
+  OpenClaw's `auth-secrets/`/`state/`/`openclaw.bak-*`, `hermes/`, every `backups`
+  folder, ComfyUI-Manager's `comfyui_*.log` and the encrypted `storage/` volume
+  (with ComfyUI's `*-secure` links) are invisible and can't be opened or created
+  over SMB. The match is by name at any depth, so same-named items are hidden too
+  (e.g. `docker/hermes/`, `comfyui/backups/`). Use SSH for all of these.
+- **Keep it that way:** put backups in a folder named `backups` (mode 0700, e.g.
+  `storage-bulk/backups/`), and never link or hardlink a hidden item under another
+  name (Samba checks names, not targets). For a new secret file, add its name to
+  `veto files` and to `STORES` in `scripts/verify-smb-veto.py`, then re-run the
+  installer. Check with `scripts/verify-smb-veto.py` (read-only, no sudo; add
+  `--repo-only` before deploying a change).
 
 ### Managing SMB accounts & passwords
 
@@ -1566,3 +2174,38 @@ sudo smbstatus              # sessions, shares, and locked files
 ```
 
 
+
+## Backups (audit E7)
+
+No automated backup exists for anything on this box; everything below is manual.
+
+**Decision (owner, 2026-10-17).** Full-disk/partition images, taken from Windows
+(dual-boot or an external imaging tool) and written to the owner's NAS. This
+covers the whole-disk contents at the block level — root filesystem, Docker
+volumes (`open-webui-data`, `filebrowser-data`, etc.), `openclaw/` and `hermes/`
+state, and the encrypted storage partition — without needing per-service backup
+scripts.
+
+- **Encrypted storage partition:** imaged **locked** (raw LUKS2 ciphertext), so
+  the NAS copy needs no extra protection on its own — it's useless without the
+  passphrase. Image it with the volume closed (`sudo
+  /srv/ai/scripts/storage-crypt.sh lock` first) so the capture isn't mid-write.
+  Keep the passphrase itself somewhere durable and separate from the NAS (a
+  password manager, not a file next to the backup) — see the 2026-10-17 LUKS
+  reformat: a forgotten passphrase with no recovery material meant the volume
+  had to be wiped and recreated from scratch.
+- **Running services:** Docker containers and the two ComfyUI instances write
+  to disk continuously. An image taken while they're running captures a
+  crash-consistent (not necessarily application-consistent) state — fine for
+  disaster recovery, but don't expect a perfectly clean restore of an
+  in-flight database write. Stopping `docker compose` and the ComfyUI services
+  before imaging avoids this if a cleaner snapshot is wanted.
+- **Not covered by this repo:** restore procedure, image rotation/retention,
+  and verifying a restored image boots are entirely on the Windows/NAS side —
+  out of scope for `/srv/ai`'s tracked scripts and docs.
+
+**Future work:** revisit with a native Linux backup (e.g. `restic`/`borg` to
+the NAS over SMB/SSH, or filesystem snapshots) so backups are selective,
+incremental, scriptable, and restorable without booting into Windows. Whole-disk
+imaging from Windows is a reasonable stopgap but is manual, all-or-nothing, and
+decoupled from this repo's tooling.

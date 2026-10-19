@@ -1,0 +1,5 @@
+utc_start,label,mode,phase,gpu,cap_w,model,pp,ng,reps,pp_ts,tg_ts,iterations,duration_s,peak_hbm_c,peak_core_c,steady_hbm_c,steady_core_c,mean_power_w,min_sm_mhz,median_sm_mhz,fan_rpm_max,fan_rpm_mean,duty_max_pct,pct_sw_power_cap,pct_thermal_slowdown,pct_hw_slowdown,systin_mean_c,cool_s,status
+2026-10-17T07:58:57+00:00,dual-fan-idx1_blower-idx2,lockstep,bench,1,175,Qwen3.8-27B-Q6_K.gguf,2048,512,3,750.7,22.64,1,85,79.0,61.0,76.6,58.8,168.3,1095.0,1110.0,15340,13484,100,68,0,0,37.7,2.7,ok
+2026-10-17T07:58:57+00:00,dual-fan-idx1_blower-idx2,lockstep,bench,2,175,Qwen3.8-27B-Q6_K.gguf,2048,512,3,755.86,22.91,1,84,68.0,55.0,67.0,54.7,168.2,1117.0,1132.0,0,0,92,80,0,0,37.7,0.7,ok
+2026-10-17T08:00:27+00:00,dual-fan-idx1_blower-idx2,lockstep,soak,1,175,Qwen3.8-27B-Q6_K.gguf,2048,512,5,735.05,21.39,3,423,85.0,68.0,83.4,67.0,164.9,945.0,1057.0,15340,14997,100,33,33,0,40.6,25.3,ok
+2026-10-17T08:00:27+00:00,dual-fan-idx1_blower-idx2,lockstep,soak,2,175,Qwen3.8-27B-Q6_K.gguf,2048,512,5,752.07,22.83,3,404,70.0,57.0,68.3,56.6,170.4,1065.0,1125.0,0,0,100,69,0,0,40.5,0.7,ok

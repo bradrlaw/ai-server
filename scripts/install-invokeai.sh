@@ -7,12 +7,14 @@
 # layers, workflow graph, first-class model manager). Two things make a stock
 # `pip install invokeai` fail on THIS server, both fixed here:
 #
-#   1. torch pin. InvokeAI's CURRENT main requires torch>=2.7 and its `cuda`
-#      extra pins torch==2.7.1+cu128 — cu128 / torch>=2.7 DROP the sm_70 (Volta)
-#      kernels our Tesla V100s need ("no kernel image is available"). So we pin
-#      InvokeAI to **v5.11.0**, the newest release that still targets
-#      `torch~=2.6.0`, and install the proven-good torch 2.6.0+cu124 (sm_70) that
-#      ComfyUI/Fooocus/SwarmUI also use.
+#   1. torch pin. InvokeAI main requires torch>=2.7, and its `cuda` extra pins a
+#      wheel with NO sm_70 (Volta) kernels for our Tesla V100s ("no kernel image
+#      is available"): torch==2.7.1+cu128 when this was written (2026-08), and
+#      torch==2.13.0+cu130 as of v6.14.2. (Whether a wheel has sm_70 depends on
+#      its CUDA variant AND torch release, not on "torch>=2.7" -- see the wheel
+#      table in docs/optional-tools.md.) So we pin InvokeAI to **v5.11.0**, the
+#      newest release that still targets `torch~=2.6.0`, and install the
+#      proven-good torch 2.6.0+cu124 (sm_70) that ComfyUI/Fooocus/SwarmUI also use.
 #
 #   2. unpinned deps. v5.11.0's pyproject leaves transformers/pydantic/fastapi/
 #      etc. loosely pinned; a 2026 index resolves them to future majors
@@ -43,7 +45,7 @@ if [[ ! -x "${VENV}/bin/python" ]]; then
 fi
 "${VENV}/bin/pip" install --upgrade pip wheel setuptools
 
-echo "==> 2/5 install the sm_70-capable torch (cu124 / 2.6.0), NOT InvokeAI's 2.7"
+echo "==> 2/5 install the sm_70-capable torch (cu124 / 2.6.0), NOT the wheel InvokeAI's cuda extra pins"
 "${VENV}/bin/pip" install --no-cache-dir \
   torch==2.6.0 torchvision==0.21.0 --index-url "${TORCH_INDEX}"
 # hard-verify Volta kernels are present before continuing
@@ -118,16 +120,18 @@ Done. To run the UI (port 9091, all interfaces):
   INVOKEAI_ROOT=/srv/ai/invokeai CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 \
     /srv/ai/venvs/invokeai/bin/invokeai-web --root /srv/ai/invokeai
 
-  as a service (needs sudo):
+  as a service (needs sudo). It runs on demand, so do NOT enable it at boot:
       sudo cp /srv/ai/scripts/invokeai.service /etc/systemd/system/
       sudo systemctl daemon-reload
-      sudo systemctl enable --now invokeai
       sudo systemctl restart server-status   # pick up the status-page entry
+      # start/stop it from the status page (Services: Start / Stop), or:
+      sudo systemctl start invokeai
 
 NOTES
   - Pinned to InvokeAI v5.11.0 on purpose: it is the last release targeting
-    torch~=2.6.0, which still has sm_70 (Volta) kernels. Newer InvokeAI requires
-    torch>=2.7 (cu128), which will NOT run on the V100s. Do NOT `pip install -U`.
+    torch~=2.6.0 (our cu124 wheel has sm_70 Volta kernels). Newer InvokeAI needs
+    torch>=2.7 and pulls a cu130 wheel with NO sm_70, which will NOT run on the
+    V100s. Do NOT `pip install -U`.
   - Host/port live in /srv/ai/invokeai/invokeai.yaml (0.0.0.0:9091).
   - GPU is pinned to a V100 (idx1) by the service via CUDA_VISIBLE_DEVICES=1.
   - Models: InvokeAI uses its own model manager / DB under the runtime root.

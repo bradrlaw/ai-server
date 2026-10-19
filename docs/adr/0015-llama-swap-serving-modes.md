@@ -55,6 +55,13 @@ Introduce **serving modes** as a *base + overlay* system:
 
 Modes shipped initially:
 
+> **Reading note (2026-10-15):** this list is the July 2026 snapshot. `fast` below is
+> today's `small` (renamed 2026-08-24, commit `60d64e5`), and idx0 is now the 12 GB
+> Titan X stopgap, not the P100 (ADR-0017). `small` now runs `--parallel 2` at 32k per
+> slot in both heavy-coding and agentic (C9 addendum below), and `coding`'s full context
+> is 160k (163840) since the Qwen3.8 migration. Current values live in
+> `config/modes/*.yaml` and `config/llama-swap.base.yaml`.
+
 - **daily** — base verbatim (all single-slot; coder-next `2`). Boot-preloads
   `fast`; a switch back warms the daily trio (coding + chat + fast).
 - **heavy-coding** — `coding` stays `--parallel 1` (full 180k MTP ctx, interactive
@@ -111,9 +118,12 @@ ADR-0008). This changes the single-slot contexts referenced above:
 
 - **daily / heavy-coding `coding`** — Qwen3.6-27B-MTP Q6_K, ctx **184320 (180k)**,
   not 200k (MTP's extra ~1 GB compute buffer OOMs at 200k). +79% decode.
+  *(Superseded 2026-08-15: `coding` is Qwen3.8-27B Q6_K at **163840 (160k)** with
+  `n_max 3` — [ADR-0029](0029-qwen3.8-27b-migration.md).)*
 - **daily `chat`** — Qwen3.6-35B-A3B-MTP UD-Q6_K, ctx **98304 (96k)**, not 128k. +31% decode.
 
-Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`:
+Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`
+*(the two `model:` overrides below were removed 2026-10-15 — see that addendum)*:
 
 - **heavy-coding `chat`** overrides back to the **non-MTP** file at `--parallel 4`
   / ctx 131072 / spec off — MTP is a single-stream latency win, wasted (and VRAM-costly)
@@ -122,3 +132,98 @@ Mode overlays gained `spec` and `model` override keys in `llama-swap-mode.py`:
   ctx 204800 / spec off for the same reason.
 
 So MTP is active only where a slot serves one stream at a time.
+
+## Addendum (2026-10-15) — pools inherit the base model file (no `model:` overrides)
+
+The two `model:` overrides above pinned the pools to non-MTP copies that later moved to the
+HDD cold tier (`models/cold` → `/srv/ai/storage-bulk`), and the 2026-08-15 Qwen3.8 migration
+of the base `coding` slot didn't touch them:
+
+- **agentic `coding`** still served the pre-3.8 **Qwen3.6-27B** — a stale model.
+- **heavy-coding `chat`** loaded its 29.3 GB file from the HDD, so a switch into the mode
+  took **3 min 1 s** (chat alone 2 min 31 s).
+
+Decision: the overlays drop `model:` and keep `spec: none`, so each pool loads the same
+NVMe file as its base slot, with the embedded MTP head loaded but unused. The base stays the
+single source of *which model* a slot serves, so a future migration can't miss a mode. The
+`model` override key remains in `llama-swap-mode.py`; no shipped overlay uses it.
+
+MTP stays **off** for both pools because, on this build, it doesn't scale with `--parallel`
+(aggregate tok/s by number of busy slots):
+
+| | MTP on (2026-08-24 sweep) | MTP off (2026-07-21 sweep) |
+|---|---|---|
+| `chat` P=4 — 1 / 2 / 4 busy | 125 / 115 / 124 | 85 / 123 / 153 |
+| `coding` P=2 — 1 / 2 busy | 34 / 32 | 22 / 37 |
+
+(MTP-off `coding` was Qwen3.6-27B, the same architecture as 3.8.) MTP only wins while a
+single slot is busy, so it stays on for the single-slot primaries (daily `coding`/`chat`,
+heavy-coding `coding`).
+
+Measured 2026-10-15 — every slot filled to its full context at once, peak VRAM sampled
+every 200 ms; "free" = 32768 − 274 MiB driver reserve − peak (idx1 also holds
+comfyui-open's ~0.8 GB idle context):
+
+- heavy-coding `chat` P=4 / 131072: 31180 MiB idle → **31350 MiB peak, 1144 MiB free**
+  (the old non-MTP file peaked at 30680 MiB — the unused head costs ~0.7 GB).
+- agentic `coding` (Qwen3.8 Q6_K) P=2 / 204800: 30578 MiB idle → **30814 MiB peak,
+  1680 MiB free**. Single-stream decode 22.4 tok/s (MTP off), as expected.
+- Switch time with the chat file uncached on NVMe: heavy-coding **62 s** (chat 33 s);
+  agentic **34 s**.
+
+## Addendum (2026-10-15) — `small` pools get 32k per slot (audit C9)
+
+heavy-coding and agentic ran `small` at ctx 24576 @ P=2, i.e. **12,288 tokens per
+request**. That cap was sized for the 26B MoE (~15.3 GB) on the 16 GB P100. Since the P100
+died, `small` serves the dense Gemma-4-12B on the 12 GB Titan X stopgap (ADR-0017), and
+every client assumes daily's 32k window:
+
+- OpenClaw/pi `contextWindow` is 32768.
+- Copilot BYOK budgets a 20480-token prompt plus 8192 output.
+
+The mismatch surfaced once Open WebUI's Small regained its tools (moved from the orphaned
+`fast` entry during C10). Those tools come to ~14k tokens:
+
+- ComfyUI-MCP: 22 tools, ~7.7k tokens.
+- plan-build: ~3.1k tokens.
+- Server Mode: ~0.5k tokens.
+- Open WebUI's built-in tools on top.
+
+So `fast_make_plan` in heavy-coding failed with *"request (14086 tokens) exceeds the
+available context size (12288 tokens)"*.
+
+Decision (owner): both overlays now run `small` at **ctx 65536 @ P=2 = 32k per slot**,
+the same per-request window as daily. The dense 12B can afford it because only its 8
+global-attention layers (1 KV head, 512-dim K/V) grow with context. The measured cost is
++487 MiB for 40,960 more tokens, ~12 KiB/token. Its 40 sliding-window layers stay at the
+1024-token window.
+
+Measured 2026-10-15 in heavy-coding. agentic renders an identical `small` block, and idx0
+holds only `small` in both modes, so the result covers both:
+
+- Idle VRAM: 9588 MiB → **10075 MiB**.
+- Both slots filled with 32,704-token prompts at once: **10308 MiB peak of 12288, ~1.9 GB
+  free** (after the 90 MiB driver reserve).
+- The mode switch reloaded all three models in 30 s.
+- The owner's case now succeeds: a 13,858-token request via LiteLLM returns 200.
+- Prefill on the Maxwell card is slow. A cold ~14k-token prompt takes **~113 s**
+  (~120 tok/s). With both slots busy, each gets 86–102 tok/s. Follow-ups that reuse the
+  cached prefix answer in ~1 s.
+
+If `small` returns to the 26B MoE on a 16 GB card, drop both overlays back to 24576. The MoE
+OOMed at 48k+ even at P=1. Both overlays and the base's TEMPORARY block say so.
+
+## Addendum (2026-10-15) — rendering leaves comments alone (audit C14)
+
+A model "block" in the renderer runs from its key to the next model key, so it
+also holds the comment header of the *next* model. The override regexes edited
+those comments: the live heavy-coding file said `RESTORE --ctx-size 65536`
+under `small-uncensored` (base: 131072, `small`'s override leaked in), and
+`spec: none` cut `(--spec-type draft-mtp)` out of a sentence.
+`scripts/llama-swap-mode.py` now skips comment lines in `_apply_overrides` and
+`effective_config`, and a block also ends at the next top-level key, so the last
+model can't reach `routing:`/`hooks:`. Every mode renders the same YAML as
+before, and its comments now match the base. Covered by a harness: real modes vs
+the old renderer, a synthetic base with flag text in comments, and 7/7 mutants
+killed. The live file picks this up on the next mode switch; writing it reloads
+llama-swap, so it wasn't re-rendered just for comments.

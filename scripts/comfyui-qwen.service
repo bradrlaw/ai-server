@@ -16,22 +16,26 @@ WorkingDirectory=/srv/ai/comfyui-qwen
 # Deterministic GPU numbering so CUDA_VISIBLE_DEVICES maps to the same physical
 # cards as nvidia-smi (idx0=Titan X, idx1/2=V100).
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
-# Pin to V100 #1 (idx1 = the `coding` card), SHARED with the OPEN instance
-# (comfyui-open, idx1). Both are on-demand image servers that rarely run at once;
-# the free_gpu env below evicts the idx1 LLM occupants while generating.
+# Pin to V100 #1 (idx1 = the `coding` card), SHARED with the always-on OPEN instance
+# (comfyui-open, idx1). Don't render on both at once (each can need ~29 GB of the
+# 32 GB card); the free_gpu env below evicts the idx1 LLM occupants while generating.
 Environment=CUDA_VISIBLE_DEVICES=1
 # Reduce allocator fragmentation so large activation spikes (Qwen-Image DiT
 # attention at higher resolutions) can reuse reserved-but-unallocated VRAM
 # instead of OOMing on the 32 GB V100.
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 Environment=LLAMASWAP_URL=http://127.0.0.1:9090
-# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q4/q6) on generate;
+# Free the idx1 occupants (coding / gemma-31b / chat-uncensored-q6) on generate;
 # keep everything on the cards this instance does NOT use — idx2 (chat, gemma-26b)
 # and idx0 (small, small-uncensored). Mirrors comfyui-open (same card). Keep in
-# sync with llama-swap.yaml.
+# sync with config/llama-swap.base.yaml.
 Environment=FREE_GPU_KEEP=chat,gemma-26b,small,small-uncensored
 Environment=FREE_GPU_IDLE_SECS=300
-Environment=FREE_GPU_RESTORE=coding
+# Never warm `coding` back from this instance (empty = none): comfyui-open may be
+# rendering on the shared card. comfyui-open yields while this unit runs and warms
+# `coding` back once it stops (its FREE_GPU_YIELD_TO; audit C8). The idle watchdog
+# still releases this instance's own cached models after FREE_GPU_IDLE_SECS.
+Environment=FREE_GPU_RESTORE=
 # Optional per-instance extra args (currently only --fp16-unet), toggled from the
 # status page. Lives on tmpfs (/run) so it AUTO-RESETS to empty on every boot.
 # The leading '-' makes a missing file non-fatal.

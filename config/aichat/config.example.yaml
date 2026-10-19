@@ -31,11 +31,8 @@ clients:
       - name: coder-next
         supports_function_calling: true
       - name: small
-      - name: small-12b
       - name: gemma-31b
       - name: gemma-26b
-      - name: chat-uncensored-q4
-        supports_function_calling: true
       - name: chat-uncensored-q6
         supports_function_calling: true
       - name: small-uncensored

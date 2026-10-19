@@ -25,8 +25,9 @@ Environment=PLAN_BUILD_PORT=9100
 # Service-wide caller_gpu assumption: clients drive the idx0 `small` chat model, so
 # the tools swap `big`/`coder-next` onto the V100s WITHOUT evicting the caller. If a
 # BYOK session instead drives a V100 model (coding/chat/big/coder-next), it must use
-# only the fast_* tools (which never evict the daily V100 models).
-Environment=PLAN_BUILD_CALLER_GPU=p100
+# only the fast_* tools (which never evict the daily V100 models). (`p100`, the old
+# value, is still accepted as an alias for idx0.)
+Environment=PLAN_BUILD_CALLER_GPU=idx0
 Environment=HOME=/home/brad
 ExecStart=/srv/ai/venvs/comfyui-mcp/bin/python /srv/ai/docker/mcpo/plan_build_mcp.py
 Restart=on-failure

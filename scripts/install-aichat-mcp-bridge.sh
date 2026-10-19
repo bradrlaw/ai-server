@@ -4,9 +4,12 @@
 # The bridge (node mcp/bridge/index.js) reads tools/llm-functions/mcp.json, connects
 # to each MCP server listed there (currently comfyui-secure on :9001) and re-exposes
 # their tools over http://127.0.0.1:8808 for the llm-functions bin shims that aichat
-# calls. The tool DECLARATIONS already live in tools/llm-functions/functions.json
-# (generated once by `argc mcp start`); this service only needs to keep the bridge
-# process alive, so it does NOT regenerate functions.json.
+# calls. It has no auth, so it is loopback-only twice over (ADR-0026): our bridge
+# patch binds MCP_BRIDGE_HOST (default 127.0.0.1) and the unit's IPAddressAllow/Deny
+# kernel filter admits only localhost. The tool DECLARATIONS already live in
+# tools/llm-functions/functions.json (generated once by `argc mcp start`); this
+# service only needs to keep the bridge process alive, so it does NOT regenerate
+# functions.json.
 #
 # Prereqs (set up by the initial `argc mcp start` run):
 #   - /srv/ai/tools/llm-functions cloned, mcp/bridge deps installed (npm install)
@@ -53,3 +56,10 @@ echo
 echo "Done. aichat now has the comfyui-secure tools (default model: aiserver:chat-uncensored-q6)."
 echo "If you edit $LF/mcp.json, re-run 'argc mcp start' in $LF to rebuild functions.json, then"
 echo "'sudo systemctl restart aichat-mcp-bridge'."
+
+echo
+echo "Verifying the bridge lockdown (scripts/verify-mcp-lockdown.sh --section aichat)..."
+if ! sudo -u brad /srv/ai/scripts/verify-mcp-lockdown.sh --section aichat; then
+  echo "WARNING: lockdown verification FAILED — see the FAIL lines above."
+  exit 1
+fi

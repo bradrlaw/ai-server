@@ -1,5 +1,5 @@
 {
-  "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (passive cards without a memory-temp sensor use core). Wiring/pwm verified: pwm5=V100 GPU1(bus03), pwm4=V100 GPU2(bus04), pwm1=idx0(bus01). Fans 40x28mm high-static-pressure; V100 15k rpm max, pump 6k rpm max. Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=idx0(bus01, was P100 -> now GTX Titan X stopgap since 2026-07-27 P100 HBM ECC death; self-cooled, fan.speed logged as gpufan%), 1=V100(bus03), 2=V100(bus04). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
+  "_comment": "GPU shroud fan control. Curves mirror the user's proven Windows FanControl setup. CONTROL INPUT = max(core, HBM memory) temp: on the V100 the HBM2 memory runs ~15-20C hotter than the core and throttles at ~85C, so the fan is driven off memory temp (passive cards without a memory-temp sensor use core). Wiring/pwm RE-MAPPED 2026-10-17 (dual-fan shroud rework, owner physically moved fans): pwm5+pwm4 (the two 40x28mm 15k-rpm fans) BOTH drive a shared two-fan shroud on the V100 that nvidia-smi enumerates as idx2 (gpu<->fan pairing corrected the same day by a direct causal test after an initial bus-id/slot guess was proven wrong -- see _pwm_mapping_note); a single blower cools idx1. The blower was originally wired to OPTFAN1 (pwm1), which proved NOT controllable from Linux at all (confirmed by an isolated 0%/100% test AND a blind full-channel sweep -- zero response either way, WITH the blower actually connected). The owner then physically moved the blower's connector to SYSFAN1 (a later reboot), which IS controllable: pwm3 now drives it, reconfirmed by a second blind full-channel sweep. CORRECTION: pwm3 was earlier assumed to be OPTFAN2 (the 210mm fan's header) and logged as \"zero response\" -- but that test ran BEFORE the blower moved, when SYSFAN1 had nothing plugged into it; an empty header reads \"nothing\" in a sweep regardless of whether it's controllable. So pwm3 was actually SYSFAN1 all along, not OPTFAN2 -- the 210mm/OPTFAN2 identification was never real evidence and OPTFAN2's actual pwm channel (and whether it's controllable) remains UNTESTED/UNKNOWN; re-run identify-fan.sh/sweep-fan-channels.sh with the 210mm fan connected and SYSFAN1 occupied to find it properly. Separately, at the blower's ~39% test-floor duty on pwm3, its tach read 0 and idx1 idled hot (57-58C, 0% util) with no felt vibration -- looked like another dead header, but 100% duty immediately dropped idx1 to 42C and the tach jumped to ~4800 rpm, proving this fan simply needs a higher duty to start (BIOS Hardware Monitor documents <40% as unsupported on this header) -- not a software-control dead end. min_duty raised to 45% accordingly. pwm1 (OPTFAN1, now unused) is handed back to BIOS auto at startup. Fans 40x28mm high-static-pressure; V100 15k rpm max, blower ~4800rpm+ at >=45% duty (untested ceiling). Ambient 72-76F. GPU idx (nvidia-smi PCI order): 0=idx0(bus01, was P100 -> now GTX Titan X stopgap since 2026-07-27 P100 HBM ECC death; self-cooled, fan.speed logged as gpufan%), 1=V100(blower, pwm3/SYSFAN1), 2=V100(dual-fan shroud, pwm4+pwm5). Curve=[tempC,duty%] linear; below first pt holds min, above last holds max.",
   "interval_sec": 4,
   "expected_gpu_count": 3,
   "gpu_wait_timeout_sec": 90,
@@ -13,9 +13,10 @@
   "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W) AND re-reconciled every power_recheck_sec. Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)/GPU2(idx2)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C). idx0=200W: GTX Titan X stopgap (board default 250W, range 150-275W). A 250W sustained-load test 2026-07-27 showed the card's own blower keeps up fine (held 83C, fan only ~50%, NO hard throttle), BUT Maxwell GPU Boost 2.0 has an 83C temp target and self-trims boost clocks to hold it, so steady state converges to ~200W / ~1126MHz whether the cap is 200W or 250W -- 250W only buys a ~4s opening burst. So we keep the 200W longevity/noise trim (thermally & perf identical at steady state, slightly cooler bursts). Board limits: V100 100-250W, P100 125-250W, Titan X 150-275W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
   "zones": [
     {
-      "name": "V100 GPU1 (bus03)",
+      "name": "V100 idx2 dual-fan shroud, fan A",
+      "_zone_note": "2026-10-17: renamed from \"GPU1 (bus03)\" -- the bus-id/slot-based gpu assignment was wrong. Direct causal test (owner unplugged the blower's power under load; idx1, not idx2, heated up while these fans spun up uselessly) proved this shroud is physically on idx2, not idx1. gpus corrected to [2].",
       "gpus": [
-        1
+        2
       ],
       "hwmon_name": "nct6792",
       "pwm": "pwm5",
@@ -33,7 +34,8 @@
       ]
     },
     {
-      "name": "V100 GPU2 (bus04)",
+      "name": "V100 idx2 dual-fan shroud, fan B",
+      "_zone_note": "2026-10-17: moved here from V100 GPU2 (original bus-id guess); the two-fan shroud sits on idx2 (corrected -- see fan A's note), both 15k fans driven from the same curve/temp so they always move together.",
       "gpus": [
         2
       ],
@@ -53,14 +55,33 @@
       ]
     },
     {
+      "name": "V100 idx1 blower",
+      "_zone_note": "FIXED 2026-10-17 (reboot to move the blower from OPTFAN1 to SYSFAN1): confirmed by a second blind randomized full-channel sweep -- pwm3 (SYSFAN1) now drives the blower (\"pwm3 is the blower fan for sure\"), pwm1 (now-empty OPTFAN1) shows nothing. SYSFAN1/pwm3 IS controllable from Linux (OPTFAN1 was not). Note: pwm3's earlier \"zero response\" result (pre-move, logged as testing OPTFAN2/the 210mm fan) was a mislabeling -- SYSFAN1 was simply unoccupied at the time, so it read \"nothing\" regardless of controllability; it was never actually OPTFAN2. IMPORTANT MIN-DUTY FINDING: at the sweep test's ~39% floor duty, fan3_input read 0 and idx1 idled hot (57-58C core/idle, no vibration felt) -- looked like a repeat of the OPTFAN1 dead-end, but forcing 100% immediately dropped idx1 to 42C and fan3_input jumped to 4838 rpm, proving the tach/fan are fine and this is a MIN-DUTY-TO-START issue, not a non-controllable header. BIOS Hardware Monitor explicitly warns <40% duty on this header may cause issues (owner recalled this from BIOS), matching the behavior exactly: this is a real 4-wire PWM fan (tach works) that stalls/won't start below its documented floor. min_duty raised to 45 (board warns below 40%, +5 margin) -- retune after watching the Fan column for a few days; if fan3_input ever reads near 0 while duty >=45%, the stall alarm (default stall_rpm 300) will catch it and hold 100% until it recovers.",
+      "gpus": [
+        1
+      ],
+      "hwmon_name": "nct6792",
+      "pwm": "pwm3",
+      "min_duty": 45,
+      "hysteresis_c": 3,
+      "curve": [
+        [
+          39,
+          45
+        ],
+        [
+          70,
+          100
+        ]
+      ]
+    },
+    {
       "name": "Titan X (idx0, self-cooled)",
-      "_zone_note": "STOPGAP 2026-07-27: the P100 (idx0/bus01) died from an uncorrectable HBM2 double-bit ECC error (Xid 48/64/62/171/154, page-retirement fatal, microcontroller halt -> whole NVML wedged). Replaced by a 12GB GTX Titan X (Maxwell sm_52). Unlike the passive P100, the Titan X cools itself with its OWN built-in fan (readable via nvidia-smi fan.speed, logged as gpufan%) and does NOT use the chassis PUMP_FAN. So this zone is monitor_only: it logs the card's temp + its own fan but drives no chassis PWM. The listed pwm (pwm1, the old P100 pump fan) is handed back to BIOS auto at startup so we stop forcing an unused fan. When a passive P100/V100 returns to idx0, drop monitor_only and restore the curve/min_duty below.",
+      "_zone_note": "STOPGAP 2026-07-27: the P100 (idx0/bus01) died from an uncorrectable HBM2 double-bit ECC error (Xid 48/64/62/171/154, page-retirement fatal, microcontroller halt -> whole NVML wedged). Replaced by a 12GB GTX Titan X (Maxwell sm_52). Unlike the passive P100, the Titan X cools itself with its OWN built-in fan (readable via nvidia-smi fan.speed, logged as gpufan%) and does NOT use a chassis PWM header -- monitor_only, drives no chassis PWM. No \"pwm\" field: pwm1 (OPTFAN1, the old P100 pump-fan header) is unused since 2026-10-17 -- the blower moved off it onto SYSFAN1 (pwm3, see the idx1 blower zone above), and OPTFAN1 was confirmed NOT individually controllable from Linux on this board (sweep test showed zero response) either way. pwm1 is handed back to BIOS auto at daemon startup since no zone claims it anymore. When a passive P100/V100 returns to idx0, drop monitor_only, restore the curve/min_duty below, and pick a free, ACTUALLY-controllable header/pwm with identify-fan.sh + a hand/airflow test (not just a tach check -- a 0-rpm tach reading at a too-low duty can also mean a real PWM fan that just hasn't reached its minimum start duty yet, as the idx1 blower turned out to be, not necessarily a non-controllable header).",
       "gpus": [
         0
       ],
       "monitor_only": true,
-      "hwmon_name": "nct6792",
-      "pwm": "pwm1",
       "_restore_p100_curve": {
         "min_duty": 70,
         "hysteresis_c": 3,
@@ -68,5 +89,7 @@
       }
     }
   ],
-  "_pwm_mapping_note": "PHYSICAL mapping verified via verify-gpu-fan-mapping.sh 2026-07-01 (idle cross-test, one V100 fan MAX / other FLOOR): pwm5 cools GPU1(bus03), pwm4 cools GPU2(bus04). This is SWAPPED vs the naive identify-fan.sh guess. pwm1=P100(6.5k). pwm2=case/CPU, pwm3=3-pin side fan over V100s (non-PWM, BIOS). NOTE: fan RPM correlating with a GPU's temp under the daemon only proves the daemon drives that pwm from that GPU -- NOT which card it physically cools; only the forced-fan cross-test does."
+  "_pwm_mapping_note": "PHYSICAL mapping (corrected 2026-10-17, after moving the blower from OPTFAN1 to SYSFAN1 at a reboot): pwm4+pwm5 (both 15k 40mm fans) cool idx2 in a shared shroud, proven by a direct causal test (unplugging the blower's power under load heated idx1, not idx2, while pwm4/pwm5 spun up uselessly since they're not physically on idx1's card). idx1 has a single blower, now on SYSFAN1 (pwm3) after the owner moved it there -- OPTFAN1 (pwm1), where it originally sat, proved NOT controllable from Linux (isolated 0%/100% test + blind full-channel sweep, zero response both times, fan actually connected). pwm3/SYSFAN1 IS controllable: confirmed by a second blind full-channel sweep (\"pwm3 is the blower fan for sure\"), and empirically by forcing 100% duty which dropped idx1 from 58C to 42C with fan3_input jumping to ~4800rpm. CORRECTION: pwm3 was earlier (pre-move) assumed to be OPTFAN2/the 210mm fan and logged as zero-response -- that was a mislabeling, since SYSFAN1 was simply unoccupied at the time; an empty header reads nothing in a sweep regardless of its own controllability. So OPTFAN2's real pwm channel (and whether it responds) is UNTESTED/UNKNOWN -- re-run identify-fan.sh + sweep-fan-channels.sh with the 210mm fan connected and SYSFAN1 occupied (so they can't be confused) to find it properly. pwm2=case/CPU fan (weak/unrelated response, ~1.9k rpm), confirmed again in the second sweep. pwm1/OPTFAN1 is now unused/empty and confirmed to show zero response post-move, consistent with it being genuinely uncontrollable (not just unoccupied, since the blower WAS connected there during its own negative test). LESSON: (1) never trust a bus-id/slot-based gpu<->fan assignment without a direct causal test (unplug/disable one fan under load, see which GPU's temp actually responds) -- NVIDIA PCI bus-id order does not reliably predict which physical card ends up in which slot after reseating; (2) a 0-rpm tach / no-response result from a sweep only means something if a real fan was actually connected to that header during the test -- an empty header will always read \"nothing\" regardless of its true controllability, so don't retroactively apply a negative result to a different fan that gets connected to the same header later; (3) a fan that needs a higher minimum duty to start can look identical to a non-controllable header at a too-low test floor -- verify by trying 100% before concluding a header is dead.",
+  "_header_note": "Board headers (MSI X99A XPOWER GAMING TITANIUM manual p48): only CPUFAN1 is PWM-mode. SYSFAN1, PUMPFAN1, OPTFAN1, OPTFAN2 are 4-pin VOLTAGE-mode (pin 4 not connected) and SYSFAN2/SYSFAN3 3-pin voltage-mode, so our duty sets the header voltage: 3-pin fans and blowers are speed-controlled, 4-pin PWM fans follow the voltage, and a SATA/molex-powered PWM hub gets no PWM signal (fans stuck at 100%). MSI publishes no per-header current rating: we'd conservatively assumed ~1 A (12 W) per header, but SYSFAN1 has been running the idx1 blower (Delta BFB1012EH, 2.94 A / ~35 W rated) at 100% duty with no issue across multiple test sessions -- so this board's headers evidently tolerate well above the earlier 1 A guess, at least for SYSFAN1. Treat the 1 A figure as a stale lower-bound guess, not a hard ceiling; still keep an eye on header/Super I/O temps if stacking multiple high-draw fans on one header. Which header is which pwmN is undocumented: map with identify-fan.sh (pwm1-5 only; 7 headers) -- but identify-fan.sh/a sweep can only identify an OCCUPIED header; an empty one always reads/sounds like \"nothing\" regardless of whether it's actually controllable, so re-test any header once a fan is actually connected to it before trusting a prior \"no response\" finding. 2026-10-17: SYSFAN1 = pwm3 (confirmed, blower now attached); OPTFAN1 = pwm1 (confirmed empty-but-uncontrollable, tested both with and without a fan attached); OPTFAN2 = UNKNOWN pwm (never isolated from SYSFAN1 while occupied). The daemon never writes pwmN_mode (the kernel can only change pwm1 on the nct6792; pwm2-5 always read 1).",
+  "_stall_note": "Stall alarm (ADR-0009 2026-10-16 addendum): each driven zone watches a tach -- default fanN_input for pwmN; per-zone \"tach\": \"fanM_input\" to override, or null when the fan has no tach / is the Y-splitter leg whose tach is not passed through. Per-zone \"stall_rpm\" (default 300; 0 = show rpm, no alarm). Below stall_rpm for 3 ticks (~12 s) while the duty is >= 25% -> WARNING in the journal, fan held at 100% (also kick-starts a fan that cannot start at a low voltage) until it reads >= stall_rpm for 3 ticks, then back on the curve. Shown on the status page (Fan column) from /run/gpu-fan-control/state.json. Only power_limits is re-read live: any other edit here needs sudo systemctl restart gpu-fan-control (validate first with sudo scripts/install-fan-service.sh, which also restarts it)."
 }

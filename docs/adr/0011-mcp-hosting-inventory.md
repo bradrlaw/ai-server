@@ -26,7 +26,9 @@ Host MCP servers **on this machine** (CPU app tier), and manage them centrally w
   `mcpServers` format) is the **source of truth** for what MCP servers exist. It is
   tracked in git. Adding/removing a server = edit this file.
 - **Hot reload:** mcpo runs with `--hot-reload`, so inventory edits apply without
-  downtime.
+  downtime. *(Updated 2026-10-15, audit D8: `--hot-reload` was dropped on 2026-07-25
+  (`baf8ac4`) because mcpo's file watcher spun a CPU core on the read-only config bind
+  mount. Inventory edits now apply on `docker compose restart mcpo`.)*
 - **Exposure:** each MCP server becomes an authenticated OpenAPI route
   (`http://mcpo:8000/<name>` on the `ai` network; `127.0.0.1:8000` for debug) with
   auto-generated docs at `/<name>/docs`. Auth via `MCPO_API_KEY` (in `.env`).
@@ -66,6 +68,10 @@ details. Two wiring notes that generalize to future in-house servers:
   targets `http://host.docker.internal:4000/v1`. (llama-swap `127.0.0.1:9090` is
   loopback-only and not reachable from containers — go through LiteLLM.)
 - **Secrets without committing them:** mcpo launches stdio children with
-  `{**os.environ, **cfg.env}`, so a key placed in the mcpo container env (via
-  `env_file: ./.env`) is inherited by the child. The tool reads `LITELLM_MASTER_KEY`
+  `{**os.environ, **cfg.env}`, so a key placed in the mcpo container env is inherited
+  by the child. The tool reads `LITELLM_MASTER_KEY`
   from `os.environ`; the git-tracked `config.json` holds only non-secret overrides.
+  *(Updated 2026-10-15, audit B5: the key now comes from the mcpo service's
+  `environment:`, which holds only `MCPO_API_KEY` + `LITELLM_MASTER_KEY`. It used to
+  come from `env_file: ./.env`, which gave mcpo every secret. The launch is now
+  `uv run --no-project --with mcp`. See the ADR-0007 2026-10-15 addendum.)*

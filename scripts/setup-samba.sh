@@ -5,7 +5,7 @@
 # Agents cannot sudo -- run this yourself:
 #     sudo /srv/ai/scripts/setup-samba.sh
 #
-# Idempotent: safe to re-run (re-copies config, re-applies ufw rules). It will
+# Idempotent: safe to re-run (re-copies config, restarts smbd). It will
 # prompt once for the SMB password for user `brad` if one isn't set yet.
 #
 # What it does:
@@ -13,8 +13,11 @@
 #   2. Deploy config/smb.conf -> /etc/samba/smb.conf (backs up any existing file)
 #   3. Validate with testparm
 #   4. Set an SMB password for `brad` (prompts, first run only)
-#   5. Add ufw rules for port 445 on tailscale0 + LAN (does NOT enable ufw)
-#   6. Enable + restart smbd (disables the unneeded nmbd/NetBIOS daemon)
+#   5. Enable + restart smbd (disables the unneeded nmbd/NetBIOS daemon) and
+#      check it listens on all addresses (smb.conf filters sources itself)
+#
+# No firewall changes: scripts/setup-firewall.sh (ADR-0028) already admits the
+# LAN (IPv4 + IPv6 ULA/link-local) and the tailnet on every port.
 #
 set -euo pipefail
 
@@ -22,7 +25,6 @@ REPO=/srv/ai
 SRC_CONF="$REPO/config/smb.conf"
 DST_CONF=/etc/samba/smb.conf
 SHARE_USER=brad
-LAN_CIDR=192.168.4.0/22   # matches eno1 192.168.4.57/22
 
 if [[ $EUID -ne 0 ]]; then
   echo "ERROR: run as root (sudo $0)" >&2
@@ -63,19 +65,24 @@ else
   smbpasswd -a "$SHARE_USER"
 fi
 
-if command -v ufw &>/dev/null; then
-  echo "==> Adding ufw rules for SMB (port 445) on tailnet + LAN"
-  # Keep SSH open so enabling ufw later can't lock you out.
-  ufw allow 22/tcp                                     >/dev/null || true
-  ufw allow in on tailscale0 to any port 445 proto tcp >/dev/null || true
-  ufw allow from "$LAN_CIDR" to any port 445 proto tcp >/dev/null || true
-  echo "    rules added (ufw NOT auto-enabled; enable manually with: sudo ufw enable)"
-fi
-
 echo "==> Enabling smbd, disabling unused nmbd (NetBIOS)"
 systemctl enable --now smbd
 systemctl disable --now nmbd 2>/dev/null || true
 systemctl restart smbd
+
+# smb.conf listens on the wildcard addresses (port 445 only). The old per-
+# interface binding silently skipped tailscale0, so check what is really bound.
+listeners=""
+for _ in $(seq 1 10); do
+  listeners=$(ss -Hltn '( sport = :445 or sport = :139 )' | awk '{print $4}' | sort | paste -sd' ' -)
+  [[ "$listeners" == "0.0.0.0:445 [::]:445" ]] && break
+  sleep 1
+done
+if [[ "$listeners" == "0.0.0.0:445 [::]:445" ]]; then
+  echo "    smbd listening on $listeners (sources filtered by 'hosts allow')"
+else
+  echo "WARNING: expected smbd on '0.0.0.0:445 [::]:445', got '${listeners:-nothing}'" >&2
+fi
 
 echo
 echo "Done. Mount from a device on the tailnet or LAN:"
@@ -83,6 +90,9 @@ echo "  macOS  Finder -> Go -> Connect to Server ->  smb://100.97.143.29/srv-ai"
 echo "                                          (or  smb://192.168.4.57/srv-ai )"
 echo "  Windows Explorer address bar ->  \\\\100.97.143.29\\srv-ai"
 echo "  Log in as '$SHARE_USER' with the SMB password set above."
+echo
+echo "Check that the credential stores are hidden (read-only, no sudo needed):"
+echo "  /srv/ai/scripts/verify-smb-veto.py"
 echo
 # Heads-up about root-owned files that brad won't be able to delete over SMB.
 ROOT_OWNED=$(find /srv/ai -xdev ! -user "$SHARE_USER" 2>/dev/null | wc -l || echo 0)

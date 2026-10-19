@@ -76,11 +76,17 @@ ENGINES = {
 }
 
 # gpus are PCI_BUS_ID indices (0=P100, 1/2=V100). ctx/batch/ubatch shared by both engines.
+# The p100-* targets ran on the P100, which died 2026-07-27; idx0 is now a 12 GB Titan X
+# (ADR-0017), so they are kept for the record and won't reproduce as-is.
 # Strategy: STANDARD-quant model on stock llama.cpp  vs  the fork's PXQ quant of the
 # SAME base model (Qwen3.6-35B-A3B, a 256-expert hybrid SSM+MoE) on the fork.
-Q35 = f"{MODELS_DIR}/qwen3.6-35b-a3b"
+# Model files since moved or deleted: the 35B UD-Q6_K and the Fusion4 PXQU12/PXQU16 are
+# on the cold tier (bulk HDD). Deleted after the benchmark: the self-made PXQ quants in
+# models/pxq (Qwen: scripts/pxq-make-quants.sh; Gemma: recipe in
+# docs/benchmark_pxq_llama.md), the uncensored Q4_K_M and the Fusion4 PXQ2.
+Q35 = f"{MODELS_DIR}/cold/qwen3.6-35b-a3b"
 PXQ = f"{MODELS_DIR}/pxq"
-F4 = f"{MODELS_DIR}/pxa-fusion4-35b"
+F4 = f"{MODELS_DIR}/cold/pxq-fusion4"
 TARGETS = {
     # --- current P100 MoE (Gemma-4-26B-A4B Q4_K_XL, our `fast` slot) for reference ---
     "p100-gemma26b": {  # matches the pxq P100 settings for a like-for-like compare

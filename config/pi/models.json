@@ -11,10 +11,10 @@
       "models": [
         {
           "id": "coding",
-          "name": "Qwen3.6-27B dense (coding)",
+          "name": "Qwen3.8-27B dense (coding)",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 204800,
+          "contextWindow": 163840,
           "maxTokens": 32768,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
@@ -23,7 +23,7 @@
           "name": "Qwen3.6-35B-A3B MoE (chat)",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 131072,
+          "contextWindow": 98304,
           "maxTokens": 32768,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
@@ -41,7 +41,7 @@
           "name": "Gemma-4-12B (small, non-reasoning)",
           "reasoning": false,
           "input": ["text"],
-          "contextWindow": 131072,
+          "contextWindow": 32768,
           "maxTokens": 8192,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }

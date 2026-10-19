@@ -3,7 +3,7 @@ Description=aichat MCP bridge — exposes external MCP servers (comfyui-secure, 
 Documentation=https://github.com/bradrlaw/ai-server
 # The bridge reads /srv/ai/tools/llm-functions/mcp.json and connects to each MCP
 # server listed there (currently the login-gated comfyui-secure MCP on :9001),
-# re-exposing their tools over a small HTTP API on :8808 that the llm-functions
+# re-exposing their tools over a small HTTP API on 127.0.0.1:8808 that the llm-functions
 # bin shims (bin/comfyui_secure_*) POST to. aichat picks them up via functions.json.
 #
 # The bridge opens ONE session to :9001 at startup and has NO reconnect logic, so a
@@ -30,6 +30,19 @@ Group=brad
 WorkingDirectory=/srv/ai/tools/llm-functions
 Environment=HOME=/home/brad
 Environment=MCP_BRIDGE_PORT=8808
+# --- Network lockdown (ADR-0026) ---------------------------------------------------
+# The bridge has no auth and holds a live session to the login-gated comfyui-secure
+# MCP, so it must only ever be reachable from this host. Two layers:
+#   1. bind loopback only (our llm-functions patch reads MCP_BRIDGE_HOST, default
+#      127.0.0.1 — so an interactive `argc mcp start` bridge is loopback too);
+#   2. in-kernel cgroup filter on every socket of this unit (and its children):
+#      only localhost in or out — its sole upstream is 127.0.0.1:9001.
+# If you add an MCP server to mcp.json that needs other network access (e.g. a stdio
+# server that downloads via npx/uvx), extend IPAddressAllow deliberately.
+# Verify: scripts/verify-mcp-lockdown.sh
+Environment=MCP_BRIDGE_HOST=127.0.0.1
+IPAddressAllow=localhost
+IPAddressDeny=any
 ExecStart=/usr/bin/node /srv/ai/tools/llm-functions/mcp/bridge/index.js /srv/ai/tools/llm-functions
 Restart=on-failure
 RestartSec=3

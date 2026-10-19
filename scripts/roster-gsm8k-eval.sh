@@ -2,7 +2,7 @@
 # GSM8K (5-shot, greedy) quality eval across the served-model roster using dedicated
 # stock llama-server instances. Accuracy is parallelism-independent, so we run two
 # workers (one per V100) in parallel to bound wall-time, then the dual-V100 models
-# sequentially. `fast` (P100) auto-rewarms and is left alone; the two V100s are ours.
+# sequentially. `small` (idx0) auto-rewarms and is left alone; the two V100s are ours.
 #
 # Reasoning models (Qwen thinking / gemma reasoning-on): n=100, max_gen_toks=6144,
 # until=<|im_end|>. Non-reasoning: n=200, max_gen_toks=512.
@@ -19,10 +19,10 @@ declare -A SPEC=(
  [coding]="qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf|1|q8_0|6|49152"
  [chat]="qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf|1|q8_0|6|49152"
  [chat-uncensored-q6]="qwen3.6-35b-a3b/Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf|1|q8_0|6|49152"
- [fast-uncensored]="gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf|1|f16|6|49152"
+ [small-uncensored]="gemma-4-12b-uncensored/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf|1|f16|6|49152"
  [gemma-31b]="gemma-4-31b/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf|0|q8_0|8|16384"
  [big]="qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf|1|f16|6|49152"
- [coder-next]="qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf|0|f16|8|16384"
+ [coder-next]="cold/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf|0|f16|8|16384"
 )
 
 run_one() {  # $1=name  $2=gpus  $3=port
@@ -75,7 +75,7 @@ if [ "$#" -gt 0 ]; then
     if [[ "$DUAL_SET" == *" $m "* ]]; then DUAL+=("$m"); else SINGLE+=("$m"); fi
   done
 else
-  SINGLE=(coding chat-uncensored-q6 gemma-31b chat fast-uncensored)
+  SINGLE=(coding chat-uncensored-q6 gemma-31b chat small-uncensored)
   DUAL=(big coder-next)
 fi
 

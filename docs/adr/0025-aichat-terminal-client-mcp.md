@@ -17,7 +17,7 @@ on GPU idx2, and must **not** modify the shared MCP/mcpo path that Open WebUI us
 
 ## Decision
 Install **`aichat`** (sigoden, MIT) as the terminal client, configured against the
-LiteLLM gateway with all 11 served models. Wire in the comfyui-secure MCP tools via
+LiteLLM gateway, listing every model it serves. Wire in the comfyui-secure MCP tools via
 **`llm-functions`** + **`argc`** (both sigoden, MIT), running the `llm-functions`
 **MCP bridge** as a boot-persistent systemd service that re-exposes the tools for
 aichat's function-calling.
@@ -49,8 +49,11 @@ attribution README) plus the systemd unit + installer under `scripts/`.
 
 ## Consequences
 - Positive: image generation and multi-model chat from a bare SSH shell; local-only
-  (nothing leaves the box); OWUI/mcpo path untouched; reproducible from the tracked
-  snapshot + upstream `616d8d8`.
+  (nothing leaves the box); OWUI/mcpo path untouched; the client is reproducible from
+  the tracked snapshot + upstream `616d8d8`. *Correction (2026-10-15): the image
+  workflows its default role calls (`krea2_turbo`, `krea2_turbo_bf16`) are local-only
+  and are not in git, by owner policy (ADR-0012 2026-10-15 addendum). A rebuild needs
+  a copy of those files.*
 - Negative / trade-offs: the client lives outside the repo (local dirs), so the
   snapshot must be kept in sync by hand after config changes. The bridge opens a
   single session to its upstream MCP and has **no reconnect logic**, so it must be
@@ -63,6 +66,11 @@ attribution README) plus the systemd unit + installer under `scripts/`.
   `comfyui-mcp-secure` (the bridge's actual upstream), **not** `comfyui-secure`
   (`:8189`): quiet hours stops/starts the latter, and `PartOf` doesn't propagate
   *start*, so tying to it would strand the bridge down for the rest of the day.
+- **Update (2026-10-13):** upstream's `app.listen(PORT)` left the bridge reachable
+  from the LAN (`:8808/tools` answered), bypassing the secure canvas's login. It is
+  now loopback-only. A fourth patch item binds `MCP_BRIDGE_HOST`, default
+  `127.0.0.1`, and the unit kernel-filters to localhost. See
+  [ADR-0026](0026-secure-mcp-bridge-network-lockdown.md).
 
 ### Restart hook
 The bridge unit declares `After=comfyui-mcp-secure.service` + `PartOf=comfyui-mcp-secure.service`.

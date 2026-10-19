@@ -2,22 +2,92 @@
 title: Server Status (new-chat banner)
 author: bradrlaw (ai-server)
 description: On the first message of a new chat, fetch live server state and surface it
-    so the user sees "what's currently running" up front. Pulls loaded models from
-    llama-swap (/running, /v1/models) and active image/video jobs from the ComfyUI
-    instances (/queue). Optionally enriches with GPU/host data from a status JSON API
-    (the detailed web status page) if one is configured. By default it injects a compact
-    system-context block so the assistant opens its first reply with the status, and also
-    emits a transient status banner via the event emitter. All network calls are best
-    effort with short timeouts — a down service never blocks the chat.
-version: 1.0.0
-required_open_webui_version: 0.5.0
+    so the user sees "what's currently running" up front. The source is the host-side
+    status service's JSON API (loaded models, GPU/host data, ComfyUI queues). If that is
+    unreachable it falls back to polling the ComfyUI instances (/queue) directly, plus
+    llama-swap (/running, /v1/models) when a reachable llama-swap URL is configured. By
+    default it shows a multi-line status card at the top of the first reply; it can also
+    inject a system-context block so the assistant opens its first reply with the status.
+    All network calls are best effort with short timeouts — a down service never blocks
+    the chat.
+version: 1.2.0
+required_open_webui_version: 0.9.3
 """
 
 import asyncio
-from typing import Awaitable, Callable, Optional
+import html
+import time
+from typing import Awaitable, Callable, List, NamedTuple, Optional, Tuple
 
 import requests
 from pydantic import BaseModel, Field
+
+_SEP = "  ·  "
+
+
+class _Row(NamedTuple):
+    """One status section, e.g. ("GPUs", ["GPU0 0% ...", "GPU1 ..."])."""
+
+    label: str
+    items: List[str]
+    stack: bool = False  # card only: one item per line instead of wrapping inline
+
+
+# Why a card: OWUI draws a "status" event's text clamped to one line (StatusItem.svelte,
+# `line-clamp-1`), so the full status ended in "…" with no way to expand it. An "embeds"
+# event is drawn above the reply by OWUI's FullHeightIframe as a sandboxed srcdoc iframe
+# (scripts allowed, no same-origin); it wraps, is saved with the chat, and is never sent
+# to the model. Being sandboxed, the card posts its own height ("iframe:height") and
+# can't see OWUI's theme class, so it uses translucent fills and greys that read on both
+# themes; prefers-color-scheme tracks OWUI when its theme is "System".
+_CARD_HTML = """<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body{margin:0;padding:0;background:transparent}
+body{font:13.5px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+color:#6e6e6e;-webkit-text-size-adjust:100%}
+@media (prefers-color-scheme:dark){body{color:#9a9a9a}}
+#card{box-sizing:border-box;border:1px solid rgba(128,128,128,.3);border-radius:12px;
+padding:8px 12px;background:rgba(128,128,128,.07)}
+.hd{font-weight:600;margin-bottom:4px}
+.hd time{font-weight:400;opacity:.85}
+.grid{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:14px;row-gap:3px}
+.k{font-weight:600;white-space:nowrap}
+.v span{display:inline-block}
+.v span:not(:last-child)::after{content:"·";padding:0 .5em;opacity:.7}
+.v.stack span{display:block}
+.v.stack span::after{content:none}
+@media (max-width:460px){.grid{grid-template-columns:minmax(0,1fr);row-gap:0}
+.k:not(:first-child){margin-top:4px}}
+</style></head><body>
+<div id="card"><div class="hd">Server status <time data-ts="@@TS@@">· @@WHEN@@</time></div>
+<div class="grid">@@ROWS@@</div></div>
+<script>
+(function () {
+  var card = document.getElementById("card");
+  var t = document.querySelector("time[data-ts]");
+  var ts = t && Number(t.getAttribute("data-ts"));
+  if (ts) {
+    try {
+      t.textContent = "· " + new Date(ts * 1000).toLocaleString([], {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+      });
+    } catch (e) {}
+  }
+  document.documentElement.style.overflow = "hidden";
+  function post() {
+    try {
+      var h = Math.ceil(card.getBoundingClientRect().height) + 2;
+      parent.postMessage({ type: "iframe:height", height: h }, "*");
+    } catch (e) {}
+  }
+  if (window.ResizeObserver) new ResizeObserver(post).observe(card);
+  addEventListener("load", post);
+  setTimeout(post, 300);
+  post();
+})();
+</script></body></html>"""
 
 
 class Filter:
@@ -27,8 +97,12 @@ class Filter:
             description="Show live server status at the start of each new chat.",
         )
         llama_swap_url: str = Field(
-            default="http://host.docker.internal:9090",
-            description="llama-swap management base URL (reachable from the OWUI container).",
+            default="",
+            description=(
+                "Fallback only: llama-swap management base URL, polled when the status API "
+                "is unreachable. Empty by default because llama-swap binds 127.0.0.1:9090, "
+                "which the OWUI container can't reach; the status API reports models instead."
+            ),
         )
         comfyui_urls: str = Field(
             default="open=http://host.docker.internal:8188",
@@ -44,7 +118,7 @@ class Filter:
                 "Primary source: JSON status endpoint served by the host-side status "
                 "service (scripts/server-status-service.py). When reachable it provides "
                 "models, ComfyUI, and GPU data. If empty/unreachable, the filter falls "
-                "back to the direct llama-swap/ComfyUI URLs below."
+                "back to the direct ComfyUI (and llama-swap, if set) URLs."
             ),
         )
         inject_mode: str = Field(
@@ -53,6 +127,14 @@ class Filter:
                 "How to surface status: 'banner' (event chip, no model message — "
                 "default), 'system' (inject a context block so the model opens with it), "
                 "or 'both'."
+            ),
+        )
+        banner_style: str = Field(
+            default="card",
+            description=(
+                "Look of the banner: 'card' (multi-line status card at the top of the "
+                "first reply — default) or 'line' (OWUI's one-line status text, which "
+                "OWUI cuts off with '…' when it doesn't fit)."
             ),
         )
         request_timeout: float = Field(
@@ -73,13 +155,13 @@ class Filter:
             pass
         return None
 
-    def _models_status(self) -> Optional[str]:
+    def _models_row(self) -> Optional[_Row]:
         base = (self.valves.llama_swap_url or "").rstrip("/")
         if not base:
             return None
         running = self._get_json(f"{base}/running")
         if running is None:
-            return "**Loaded models:** llama-swap unreachable"
+            return _Row("Loaded models", ["llama-swap unreachable"])
         rows = running.get("running") or []
         loaded = [
             f"{m.get('model', '?')} ({m.get('state', '?')})"
@@ -88,15 +170,12 @@ class Filter:
         ]
         catalog = self._get_json(f"{base}/v1/models") or {}
         total = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
-        if loaded:
-            line = "**Loaded models:** " + ", ".join(loaded)
-        else:
-            line = "**Loaded models:** none (idle — first request will load one)"
+        items = [", ".join(loaded) if loaded else "none (idle — first request will load one)"]
         if total:
-            line += f"  ·  {total} available"
-        return line
+            items.append(f"{total} available")
+        return _Row("Loaded models", items)
 
-    def _comfy_status(self) -> Optional[str]:
+    def _comfy_row(self) -> Optional[_Row]:
         spec = (self.valves.comfyui_urls or "").strip()
         if not spec:
             return None
@@ -133,16 +212,16 @@ class Filter:
                 parts.append(f"{label}: idle")
         if not parts:
             return None
-        return "**ComfyUI:** " + "  ·  ".join(parts)
+        return _Row("ComfyUI", parts)
 
-    def _render_from_api(self, data: dict) -> Optional[str]:
-        """Render the full status block from the host-side status service JSON."""
-        lines = []
+    def _rows_from_api(self, data: dict) -> List[_Row]:
+        """Status rows from the host-side status service JSON."""
+        rows: List[_Row] = []
 
         models = data.get("models") or {}
         if isinstance(models, dict):
             if models.get("reachable") is False:
-                lines.append("**Loaded models:** llama-swap unreachable")
+                rows.append(_Row("Loaded models", ["llama-swap unreachable"]))
             else:
                 loaded = models.get("loaded") or []
                 names = [
@@ -150,14 +229,13 @@ class Filter:
                     for m in loaded
                     if isinstance(m, dict)
                 ]
-                if names:
-                    line = "**Loaded models:** " + ", ".join(names)
-                else:
-                    line = "**Loaded models:** none (idle — first request will load one)"
+                items = [
+                    ", ".join(names) if names else "none (idle — first request will load one)"
+                ]
                 total = models.get("available")
                 if total:
-                    line += f"  ·  {total} available"
-                lines.append(line)
+                    items.append(f"{total} available")
+                rows.append(_Row("Loaded models", items))
 
         gpus = data.get("gpus")
         if isinstance(gpus, list) and gpus:
@@ -176,7 +254,7 @@ class Filter:
                     bits.append(f"{gpu['temp']}°C")
                 g.append(" ".join(bits))
             if g:
-                lines.append("**GPUs:** " + "  ·  ".join(g))
+                rows.append(_Row("GPUs", g, stack=True))
 
         host = data.get("host")
         if isinstance(host, dict):
@@ -200,7 +278,7 @@ class Filter:
                         f"{dk['total_gb']:.0f}GB ({dk.get('used_pct', '?')}%)"
                     )
             if hp:
-                lines.append("**Host:** " + "  ·  ".join(hp))
+                rows.append(_Row("Host", hp))
 
         comfyui = data.get("comfyui")
         if isinstance(comfyui, list) and comfyui:
@@ -217,26 +295,59 @@ class Filter:
                 else:
                     parts.append(f"{c.get('label', '?')}: {state}")
             if parts:
-                lines.append("**ComfyUI:** " + "  ·  ".join(parts))
+                rows.append(_Row("ComfyUI", parts))
 
-        return "\n".join(lines) if lines else None
+        return rows
 
-    def _build_status(self) -> Optional[str]:
+    def _build_rows(self) -> Tuple[List[_Row], int]:
+        """Status rows plus the epoch time they describe ([] when there's nothing)."""
         # Prefer the host-side status service (reachable from the container and the
         # only source that can report GPU stats).
         api = (self.valves.status_api_url or "").strip()
+        api_down = False
         if api:
             data = self._get_json(api)
             if isinstance(data, dict):
-                rendered = self._render_from_api(data)
-                if rendered:
-                    return rendered
+                rows = self._rows_from_api(data)
+                if rows:
+                    ts = data.get("timestamp")
+                    if not isinstance(ts, (int, float)) or isinstance(ts, bool):
+                        ts = time.time()
+                    return rows, int(ts)
+            else:
+                api_down = True
         # Fallback: query llama-swap / ComfyUI directly (no GPU data).
-        sections = [self._models_status(), self._comfy_status()]
-        sections = [s for s in sections if s]
-        if not sections:
-            return None
-        return "\n".join(sections)
+        rows = [r for r in (self._models_row(), self._comfy_row()) if r]
+        if api_down and not (self.valves.llama_swap_url or "").strip():
+            # Without llama-swap there's no model line, so say why it's missing.
+            rows.insert(0, _Row("Status service", ["unreachable (no model/GPU data)"]))
+        return rows, int(time.time())
+
+    # ---- rendering -------------------------------------------------------
+
+    @staticmethod
+    def _markdown(rows: List[_Row]) -> str:
+        return "\n".join(f"**{r.label}:** {_SEP.join(r.items)}" for r in rows)
+
+    @staticmethod
+    def _one_line(rows: List[_Row]) -> str:
+        return _SEP.join(f"{r.label}: {_SEP.join(r.items)}" for r in rows)
+
+    @staticmethod
+    def _card(rows: List[_Row], ts: int) -> str:
+        cells = []
+        for r in rows:
+            spans = "".join(f"<span>{html.escape(i)}</span>" for i in r.items)
+            cls = "v stack" if r.stack else "v"
+            cells.append(f'<div class="k">{html.escape(r.label)}</div><div class="{cls}">{spans}</div>')
+        # Shown only if the card's script can't run; the script swaps in browser-local time.
+        when = time.strftime("%b %d %H:%M UTC", time.gmtime(ts))
+        # Rows last, so status text can never be taken for a placeholder.
+        return (
+            _CARD_HTML.replace("@@TS@@", str(ts))
+            .replace("@@WHEN@@", when)
+            .replace("@@ROWS@@", "".join(cells))
+        )
 
     # ---- helpers ---------------------------------------------------------
 
@@ -259,24 +370,33 @@ class Filter:
         if not self._is_new_chat(body):
             return body
 
-        status = await asyncio.to_thread(self._build_status)
-        if not status:
+        try:
+            rows, ts = await asyncio.to_thread(self._build_rows)
+        except Exception:
+            return body  # e.g. a malformed status payload: skip the banner, keep the chat
+        if not rows:
             return body
 
         mode = (self.valves.inject_mode or "banner").lower()
 
         if mode in ("banner", "both") and __event_emitter__:
-            # Compact the multi-line markdown into one banner line (no model message).
-            banner = "  ·  ".join(
-                ln.replace("**", "").strip() for ln in status.splitlines() if ln.strip()
-            )
+            if (self.valves.banner_style or "").strip().lower() == "line":
+                event = {
+                    "type": "status",
+                    "data": {
+                        "description": f"Server status — {self._one_line(rows)}",
+                        "done": True,
+                    },
+                }
+            else:
+                # replace=True stores the list as given instead of first reading the
+                # message to append to its (still empty) embeds.
+                event = {
+                    "type": "embeds",
+                    "data": {"embeds": [self._card(rows, ts)], "replace": True},
+                }
             try:
-                await __event_emitter__(
-                    {
-                        "type": "status",
-                        "data": {"description": f"Server status — {banner}", "done": True},
-                    }
-                )
+                await __event_emitter__(event)
             except Exception:
                 pass
 
@@ -285,7 +405,7 @@ class Filter:
                 "Live server status at the start of this chat (from the AI server "
                 "monitoring hooks). Open your first reply with a one-line greeting, then "
                 "present this status as a compact markdown block, then help the user:\n\n"
-                + status
+                + self._markdown(rows)
             )
             messages = body.setdefault("messages", [])
             messages.insert(0, {"role": "system", "content": block})

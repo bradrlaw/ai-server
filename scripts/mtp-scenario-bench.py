@@ -28,7 +28,7 @@ models while it runs, re-warms daily at the end unless --no-restore.
 import argparse, csv, json, os, signal, socket, subprocess, sys, threading, time
 import urllib.request
 
-MODEL = "/srv/ai/models/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf"
+MODEL = "/srv/ai/models/cold/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf"   # cold tier (bulk HDD)
 STOCK_BIN = "/srv/ai/src/llama.cpp/build/bin/llama-server"
 SWAP = "http://127.0.0.1:9090"
 DATA_DIR = "/srv/ai/docs/data/mtp"

@@ -8,10 +8,13 @@
 # fail on THIS server, both fixed here:
 #
 #   1. torch pin. Fooocus defaults to `torch==2.1.0` (see launch.py). That wheel
-#      has NO cp312 build, and this box runs Python 3.12; even where it installs,
-#      newer cu128/cu130 torch drops the sm_70(Volta)/sm_60(Pascal) kernels the
-#      Tesla V100/P100 need. We install the SAME proven-good build ComfyUI runs
-#      here — torch 2.6.0 + cu124 — whose kernel list includes sm_70/sm_60.
+#      has NO cp312 build, and this box runs Python 3.12. A newer torch isn't
+#      automatically safe either: cu130 wheels (PyPI's default since torch 2.11)
+#      have no sm_70 (Volta) kernels, and cu128 ones never have sm_60 and only
+#      have sm_70 for torch 2.8-2.10 -- see the wheel table in
+#      docs/optional-tools.md. We install the SAME proven-good build ComfyUI runs
+#      here — torch 2.6.0 + cu124 — whose kernel list includes sm_70 (V100s),
+#      sm_60 (a returning P100) and sm_50 (the idx0 Titan X stopgap).
 #
 #   2. web stack. Fooocus ships `gradio==3.41.2` (2023) but leaves fastapi /
 #      starlette / pydantic UNPINNED. On a 2026 package index pip resolves those
@@ -60,10 +63,10 @@ PY
 echo "==> 4/5 write the Volta constraints + install Fooocus requirements"
 cd "${REPO}"
 cat > constraints_v100.txt <<'EOF'
-# Volta (V100/P100 sm_70/sm_60) pin set for Fooocus 2.5.5 on Python 3.12.
+# Volta (V100 sm_70) pin set for Fooocus 2.5.5 on Python 3.12.
 # torch 2.6.0+cu124 is the proven-good build that still ships sm_70/sm_60 kernels
-# (newer cu128/cu130 wheels drop Pascal/Volta). Fooocus default pins torch==2.1.0,
-# which has no cp312 wheels, so we override it.
+# (cu130 wheels have no sm_70; cu128 ones no sm_60, and sm_70 only for torch 2.8-2.10).
+# Fooocus default pins torch==2.1.0, which has no cp312 wheels, so we override it.
 torch==2.6.0
 torchvision==0.21.0
 # Fooocus ships gradio==3.41.2 (2023) but leaves fastapi/starlette/pydantic UNPINNED.
@@ -96,10 +99,11 @@ Done. To run the UI (port 7865, loopback only):
   cd /srv/ai/Fooocus && CUDA_DEVICE_ORDER=PCI_BUS_ID \
     /srv/ai/venvs/fooocus/bin/python launch.py --port 7865 --listen 0.0.0.0
 
-  as a service (needs sudo):
+  as a service (needs sudo). It runs on demand, so do NOT enable it at boot:
       sudo cp /srv/ai/scripts/fooocus.service /etc/systemd/system/
       sudo systemctl daemon-reload
-      sudo systemctl enable --now fooocus
+      # start/stop it from the status page (Services: Start / Stop), or:
+      sudo systemctl start fooocus
 
 NOTES
   - Fooocus's ldm_patched default port is 8188 (== ComfyUI!). ALWAYS pass
