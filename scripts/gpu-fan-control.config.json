@@ -8,9 +8,9 @@
   "power_limits": {
     "0": 200,
     "1": 175,
-    "2": 175
+    "2": 225
   },
-  "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W) AND re-reconciled every power_recheck_sec. Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)/GPU2(idx2)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C). idx0=200W: GTX Titan X stopgap (board default 250W, range 150-275W). A 250W sustained-load test 2026-07-27 showed the card's own blower keeps up fine (held 83C, fan only ~50%, NO hard throttle), BUT Maxwell GPU Boost 2.0 has an 83C temp target and self-trims boost clocks to hold it, so steady state converges to ~200W / ~1126MHz whether the cap is 200W or 250W -- 250W only buys a ~4s opening burst. So we keep the 200W longevity/noise trim (thermally & perf identical at steady state, slightly cooler bursts). Board limits: V100 100-250W, P100 125-250W, Titan X 150-275W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
+  "_power_limits_note": "Per-GPU sustained power cap in watts, applied at daemon startup with persistence mode (nvidia-smi -pm 1 -pl W) AND re-reconciled every power_recheck_sec. Chosen from power-cap-sweep.sh 2026-07-01. V100 GPU1(idx1)=175W: at stock 250W the HBM2 pegs 85C and soft-throttles; 175W holds ~83-84C at ~91% decode throughput (200W still hit 85C) with the single-blower cooler. idx0=200W: GTX Titan X stopgap (board default 250W, range 150-275W). A 250W sustained-load test 2026-07-27 showed the card's own blower keeps up fine (held 83C, fan only ~50%, NO hard throttle), BUT Maxwell GPU Boost 2.0 has an 83C temp target and self-trims boost clocks to hold it, so steady state converges to ~200W / ~1126MHz whether the cap is 200W or 250W -- 250W only buys a ~4s opening burst. So we keep the 200W longevity/noise trim (thermally & perf identical at steady state, slightly cooler bursts). RAISED idx2 (V100 GPU2) to 225W 2026-10-19: after the 2026-10-17 dual-40mm-fan shroud rework, 175/225/250W soak + llama-bench + ComfyUI (Krea2 Turbo, MiniMax H3) tests all confirmed idx2 holds 225W sustained with peak HBM <=78-80C (well under the 85C soft-throttle line) for a consistent ~10-18% real-workload speedup -- see ADR-0009 addenda. idx1 STAYS AT 175W: it only has the single blower cooler (no dual-fan shroud), so the 225W headroom finding does NOT apply there -- raise idx1 only after its cooler is upgraded to match idx2's shroud, then re-run the same soak/perf tests before changing this value. Board limits: V100 100-250W, P100 125-250W, Titan X 150-275W. Failure to apply a cap is non-fatal -- the fan daemon keeps running.",
   "zones": [
     {
       "name": "V100 idx2 dual-fan shroud, fan A",
@@ -85,7 +85,16 @@
       "_restore_p100_curve": {
         "min_duty": 70,
         "hysteresis_c": 3,
-        "curve": [[38, 70], [70, 100]]
+        "curve": [
+          [
+            38,
+            70
+          ],
+          [
+            70,
+            100
+          ]
+        ]
       }
     }
   ],
