@@ -424,3 +424,21 @@ to its original header/connector, which is already known to be uncontrollable fr
 software (same conclusion reached before this session's blower work, just via a different,
 now-corrected test). No further investigation planned; this is an accepted, pre-existing
 limitation (same posture as before the whole dual-fan-shroud rework).
+
+## Addendum (2026-10-19) — straight-through shroud does not fit; replacement abandoned
+
+Owner sourced and received a candidate straight-through-duct shroud (intended to improve
+on the curved shroud's apparent static-pressure loss, see the 2026-10-17 addendum). On a
+physical test-fit, **it did not clear the GPU's power connector or the power cable
+routing** -- installing it fully would have required either forcing the shroud against
+the connector/cable or bending the cable in a way that risked damaging the card (cracked
+connector, strained/shorted cable, or PCB stress). Owner correctly stopped before forcing
+it and did not install or test it.
+
+**Outcome: this specific shroud is abandoned; no thermal test was run.** The idx1 blower
+configuration (SYSFAN1/`pwm3`, `min_duty` 45%, curved shroud, 78 °C peak HBM under 175 W
+soak, 0% throttle) from the 2026-10-17 addendum remains the final, deployed, working
+state -- no regression, nothing to revert. If the owner looks for another straight-through
+candidate in the future, add power-connector/cable clearance (not just fan-to-GPU-end
+clearance) to the fit checklist before ordering -- this is the dimension that was missed
+here. No config or code changes needed for this addendum.
