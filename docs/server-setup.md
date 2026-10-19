@@ -870,10 +870,12 @@ stall events since it started; hover the Fan cell to see the count.
 ### After re-wiring fans (checklist)
 1. Case open: the summed fan-label current per header is ≤ 1 A (see above); no SATA PWM hub
    on a voltage header; note which header each GPU's fan(s) went on. Check by eye that the
-   210 mm side fan (`pwm3`; Cooler Master A23030-07CB-3MN-F1) spins: `fan3` reads 0 rpm even
-   while it runs, so nothing alarms if it stops. It's on BIOS auto, not a daemon zone. Note
-   its header and check in the BIOS whether that header shows an rpm; if it does, the fan has
-   a speed sensor and the `pwm3`/`fan3` mapping needs rechecking.
+   230 mm side fan (`OPTFAN2`; A23030-07CB-3MN-F1 / DF2303012SELN, corrected from an
+   earlier "210mm"/`pwm3` logging -- `pwm3` is SYSFAN1/the idx1 blower, not this fan) spins:
+   speed is set in BIOS Hardware Monitor, not the Linux daemon, so nothing alarms if it
+   stops. At BIOS 100% it runs ~730 rpm, quiet relative to the other fans. Note its header
+   and check in the BIOS whether that header shows an rpm; if it does, the fan has a speed
+   sensor and whether it's reliably addressable from Linux needs rechecking.
 2. After boot, with the GPUs idle: `sudo scripts/identify-fan.sh` → set each zone's `pwm` (and
    `tach` if it says so, or `null` for a fan without a tach).
 3. `sudo scripts/install-fan-service.sh` (validates, shows each tach's rpm, restarts the

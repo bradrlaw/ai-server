@@ -442,3 +442,24 @@ state -- no regression, nothing to revert. If the owner looks for another straig
 candidate in the future, add power-connector/cable clearance (not just fan-to-GPU-end
 clearance) to the fit checklist before ordering -- this is the dimension that was missed
 here. No config or code changes needed for this addendum.
+
+## Addendum (2026-10-19) — 210mm side fan reinstalled; size corrected to 230mm, BIOS-driven at max
+
+Owner reinstalled the side fan (model **A23030-07CB-3MN-F1 / DF2303012SELN**) on the
+`OPTFAN2` header. **Size correction: this fan is 230x200mm, not 210mm** as logged
+throughout this ADR and `server-setup.md`'s rewiring checklist -- the model number itself
+was always right, only the diameter figure was wrong. Left the earlier "210mm" text
+in place elsewhere in this ADR as a historical record of what was believed at the time;
+this entry is the correction of record.
+
+Speed is set directly in BIOS Hardware Monitor to max/100% (not via the Linux daemon --
+consistent with the 2026-10-17 finding that `OPTFAN2` is not reliably addressable from
+`nct6775`/Linux on this board). At that BIOS-set 100%, the fan spins at **~730 rpm** and
+is not noticeable above the machine's other fans. 730 rpm at "100%" is plausible for a
+large, low-speed 230mm case fan (slow but high air-volume by design) and is not evidence
+of a stuck/throttled header.
+
+No config or daemon changes: `pwm3`/`OPTFAN2`'s channel remains outside `gpu-fan-control`'s
+scope (BIOS-managed), per the 2026-10-17 "deliberately not pursued further" decision. This
+addendum is a documentation-only correction of the fan's size and a record of its current
+BIOS-set operating point for future reference (e.g. if it ever needs rechecking).
