@@ -559,3 +559,66 @@ drops from ~25.2s to ~23.0s (~9% faster end-to-end).
 data to inform a future decision on whether to raise the production power cap, not a cap
 change itself. Data: `docs/data/thermal/power-cap-sweep-20261019-155137-qwen38-27b-175-vs-225-perf.csv`
 (+ `-samples.csv`).
+
+## Addendum (2026-10-19) — idx2, real ComfyUI workload power-cap tests (Krea2 Turbo, MiniMax H3)
+
+Follow-up to the llama.cpp-only result above: ran `comfyui-power-sweep.py` (modified this
+session to drop its root requirement -- it now applies caps the same live-reload way
+`power-cap-sweep.py` does: write `power_limits` into the brad-owned
+`gpu-fan-control.config.json` and let the already-running daemon pick it up on its next
+`power_recheck_sec` tick, no `systemctl restart` needed) against two real generative
+workloads, each run as a temporary unauthenticated ComfyUI instance pinned to idx2 alone
+(`CUDA_VISIBLE_DEVICES=2`) while the production `comfyui-open`/`comfyui-secure` services
+were stopped, to isolate idx2 as the only variable.
+
+**Krea 2 Turbo (image gen, 1500x1500, 12 steps, 3 runs/cap):**
+
+| | 175W | 225W | delta |
+|---|---|---|---|
+| Avg time/run | 75.43s | 63.75s | -15.4% |
+| Peak HBM | 64 °C | 71 °C | -- |
+| Peak power | 223W | 282W | -- |
+| Min clock | 757MHz | 1027MHz | -- |
+
+**MiniMax H3 (5s/0.4MP/24fps video, 6-step turbo sampler, 1 run/cap):** first attempt at
+1MP triggered the model's `[H3AutoReserve]` VRAM-streaming fallback (~16GB of the ~29GB
+working set streamed from host RAM every step over PCIe, no NVLink -- ~471s/step, making a
+full sweep impractical); corrected to 0.4MP to match the owner's typical usage, but the same
+streaming fallback still triggered regardless of resolution (the model's resident-weight
+footprint vs 32GB V100 free pool decision is resolution-independent) -- `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
+(set in production `comfyui-secure.service` but missing from the temp instance) also made no
+measurable difference to per-step time. Single-GPU H3 is simply slower than the owner's
+typical experience for reasons still unexplained (owner is on single-GPU idx2-only
+placement in production too, per `comfyui-secure.service`'s current config -- the
+dual-V100 `ComfyUI-MultiGPU` split is a documented future TODO, not yet implemented -- so
+this is not a topology mismatch); proceeded anyway per owner's instruction ("just run it,
+will investigate difference later").
+
+| | 175W | 225W | delta |
+|---|---|---|---|
+| Time/run | 710.2s | 616.8s | -13.1% |
+| Peak HBM | 70 °C | 78 °C | -- |
+| Peak power | 215W | 259W | -- |
+| Min clock | 840MHz | 1162MHz | -- |
+
+Both real workloads confirm the llama.cpp-only result: 225W gives a consistent ~13-15%
+real-world speedup on idx2 with zero throttling and peak HBM well under the ~85 °C
+soft-throttle line (71-78 °C vs the 80 °C seen in the pure-inference test). CSVs:
+`benchmarks/comfyui-power-sweep/krea2-turbo-idx2_20261019_163114.csv`,
+`benchmarks/comfyui-power-sweep/minimax-h3-idx2_20261019_175632.csv`.
+
+## Addendum (2026-10-19) — idx2 default power cap raised to 225W; idx1 stays at 175W
+
+Following the soak tests, inference benchmark, and the two real-workload sweeps above (all
+consistently showing idx2 holds 225W sustained with peak HBM <=80 °C, comfortably under the
+85 °C soft-throttle line, for a real ~10-18% speedup across llama.cpp and ComfyUI
+workloads), changed `scripts/gpu-fan-control.config.json`'s `power_limits["2"]` from 175W
+to **225W** as the new production default (live-reloaded by the already-running daemon,
+no restart needed; verified via `nvidia-smi -i 2 --query-gpu=power.limit` reading 225.00 W
+within the 30s `power_recheck_sec` window).
+
+idx1 **intentionally stays at 175W** -- it still only has the single-blower cooler (no
+dual-fan shroud), so none of this session's headroom findings apply to it. Raise idx1 only
+after its cooler is upgraded to match idx2's dual-40mm shroud, then re-run the same
+soak/perf test sequence (175/225/250W soak -> llama.cpp bench -> real-workload sweep)
+before changing its cap, per the same evidence bar used for idx2.

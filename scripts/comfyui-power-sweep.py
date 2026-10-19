@@ -22,9 +22,11 @@ models on exit.
 Runs the V100 clean: unloads all llama-swap models first and keeps them
 unloaded for the duration (a background unloader), then restores `daily`.
 
-REQUIRES ROOT (restarts gpu-fan-control, which applies the caps):
-    sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py --label t2i
-    sudo /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py \
+No root required: caps are applied by editing gpu-fan-control.config.json (brad-owned)
+and waiting for the already-running daemon to pick them up live (re-read every
+power_recheck_sec, default 30s) -- same mechanism as power-cap-sweep.py.
+    /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py --label t2i
+    /srv/ai/venvs/comfyui/bin/python scripts/comfyui-power-sweep.py \
         --label video --workflow /path/to/exported_video_api.json --runs 2
 
 Export a video workflow from the ComfyUI UI via the API format
@@ -240,10 +242,6 @@ def _restore_owner(path, ref_stat):
         pass
 
 
-def restart_fan_daemon():
-    subprocess.run(["systemctl", "restart", FAN_SERVICE], check=False)
-
-
 def enforced_pl(idx):
     try:
         r = subprocess.run(["nvidia-smi", "-i", str(idx),
@@ -254,8 +252,13 @@ def enforced_pl(idx):
         return -1
 
 
-def set_cap_via_daemon(idx, watts, cfg_stat, timeout=25):
-    """Write the cap into the fan config, restart the daemon, wait until enforced."""
+def set_cap_via_daemon(idx, watts, cfg_stat, timeout=45):
+    """Write the cap into the fan config; the running daemon re-reads
+    power_limits live every power_recheck_sec (default 30s, see
+    gpu-fan-control.config.json) and applies it with nvidia-smi -pl itself --
+    no restart needed (only non-power_limits edits need a restart). This
+    means the sweep needs no root: the config is brad-owned and the daemon
+    does the privileged nvidia-smi call on its own schedule."""
     with open(FAN_CONFIG) as f:
         cfg = json.load(f)
     cfg.setdefault("power_limits", {})[str(idx)] = watts
@@ -263,7 +266,6 @@ def set_cap_via_daemon(idx, watts, cfg_stat, timeout=25):
         json.dump(cfg, f, indent=2)
         f.write("\n")
     _restore_owner(FAN_CONFIG, cfg_stat)
-    restart_fan_daemon()
     deadline = time.time() + timeout
     while time.time() < deadline:
         if enforced_pl(idx) == watts:
@@ -298,8 +300,6 @@ def main():
                     help="per-generation hard timeout in seconds (default 1800)")
     a = ap.parse_args()
 
-    if os.geteuid() != 0:
-        sys.exit("Must run as root (restarts gpu-fan-control to apply caps): use sudo.")
     if not os.path.exists(FAN_CONFIG):
         sys.exit(f"fan config not found: {FAN_CONFIG}")
     if not comfy_ready(a.port):
@@ -335,7 +335,7 @@ def main():
         if restored["done"]:
             return
         restored["done"] = True
-        print(f"\n[restore] returning GPU{a.gpu} cap to {orig_cap} W + restarting fan daemon...")
+        print(f"\n[restore] returning GPU{a.gpu} cap to {orig_cap} W (daemon re-applies live)...")
         try:
             with open(FAN_CONFIG) as f:
                 cfg = json.load(f)
@@ -344,7 +344,6 @@ def main():
                 json.dump(cfg, f, indent=2)
                 f.write("\n")
             _restore_owner(FAN_CONFIG, cfg_stat)
-            restart_fan_daemon()
         except Exception as e:
             print(f"    WARN: cap restore failed: {e} — check {FAN_CONFIG} manually!")
         _keepalive["run"] = False
