@@ -530,3 +530,32 @@ of running at the throttle edge. **No config change made** -- idx2 remains at 17
 (auto-restored at the end of the sweep); both tests were headroom probes only. Data:
 `docs/data/thermal/power-cap-sweep-20261019-154223-idx2-250w-full-power.csv`
 (+ `-samples.csv`).
+
+## Addendum (2026-10-19) — idx2, Qwen3.8-27B performance at 175W vs 225W
+
+Follow-up to the headroom probes above: ran `power-cap-sweep.py --gpus 2 --caps 175 225
+--reps 5 --free --force` to quantify the actual inference speedup from the unused
+headroom, using the production `coding`/`big` model (Qwen3.8-27B-Q6_K.gguf, pp2048/tg512,
+5 reps/cap -- bench only, no soak).
+
+| | 175W | 225W | delta |
+|---|---|---|---|
+| Prefill speed | 753.9 tok/s | 834.0 tok/s | +10.6% |
+| Prefill time (2048 tok) | 2.72 s | 2.46 s | -0.26 s |
+| Decode speed | 22.8 tok/s | 25.0 tok/s | +9.6% |
+| Decode time (512 tok) | 22.44 s | 20.51 s | -1.93 s |
+| Peak HBM | 70 °C | 80 °C | -- |
+| Mean power | 170.1W | 218.1W | -- |
+| Thermal/HW slowdown | 0% | 0% | -- |
+
+Raising the cap from 175W to 225W gives a consistent ~10% speedup on **both** prefill
+and decode (not just one phase) with zero throttling, confirming the 225W headroom found
+in the earlier soak test (peak HBM 80 °C there too) translates into a real, proportional
+inference speedup rather than being absorbed elsewhere (e.g. memory-bandwidth-bound decode
+not scaling with power). For a typical 2048-prefill/512-decode exchange, total wall time
+drops from ~25.2s to ~23.0s (~9% faster end-to-end).
+
+**No config change made** -- idx2 remains at 175W (auto-restored); this is performance
+data to inform a future decision on whether to raise the production power cap, not a cap
+change itself. Data: `docs/data/thermal/power-cap-sweep-20261019-155137-qwen38-27b-175-vs-225-perf.csv`
+(+ `-samples.csv`).
