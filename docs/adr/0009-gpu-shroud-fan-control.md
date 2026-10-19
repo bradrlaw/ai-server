@@ -495,3 +495,38 @@ automatically at the end of the sweep); this was a headroom probe, not a decisio
 raise the production cap. Full per-rep data:
 `docs/data/thermal/power-cap-sweep-20261019-153157-idx2-225w-vs-175w-baseline.csv`
 (+ `-samples.csv`).
+
+## Addendum (2026-10-19) — idx2 dual-40mm shroud, 250W (full stock power) soak test
+
+Follow-up to the 225W soak test above: ran the same `power-cap-sweep.py --gpus 2 --caps
+250 --soak 180 --free --force` probe at the V100's board max (250W, its stock/default
+cap) to find the actual ceiling of this shroud's headroom.
+
+**Result: still no throttling, but margin is thin.** Full comparison across all three
+caps tested on idx2:
+
+| | 175W (production) | 225W | 250W (full power) |
+|---|---|---|---|
+| Peak HBM | 70 °C | 80 °C | 84 °C |
+| Peak core | 58 °C | 66 °C | 70 °C |
+| Steady HBM | -- | 76.8 °C | 80.5 °C |
+| Mean power | ~175W | 217.7W | 237.3W |
+| Fan duty / rpm | 92-98% / ~15k | 100% / ~15.5k | 100% / ~15.5k |
+| Thermal/HW slowdown | 0% | 0% | 0% |
+| % time at power cap | -- | 35% | 72% |
+| Cooldown to idle | 2.2 s | 3.4 s | 7.4 s |
+
+At 250W, peak HBM (84 °C) sits only ~1 °C below the ~85 °C soft-throttle point, and the
+card spent 72% of the soak pinned at the power cap (vs 35% at 225W) -- the workload is
+now genuinely power-limited rather than cooling-limited, i.e. the shroud is keeping up
+right at the edge, not with comfortable margin. Cooldown time nearly doubled vs 225W
+(7.4s vs 3.4s), another sign the thermal buffer is thinning out quickly as power rises.
+
+**Conclusion:** the dual-40mm shroud *can* sustain the V100's full stock 250W with zero
+observed throttling in this test, but 225W is the better long-term choice if the
+production cap is ever raised above 175W -- it captures most of the extra performance
+headroom while keeping a real thermal buffer (80 °C peak, only 35% time-at-cap) instead
+of running at the throttle edge. **No config change made** -- idx2 remains at 175W
+(auto-restored at the end of the sweep); both tests were headroom probes only. Data:
+`docs/data/thermal/power-cap-sweep-20261019-154223-idx2-250w-full-power.csv`
+(+ `-samples.csv`).
