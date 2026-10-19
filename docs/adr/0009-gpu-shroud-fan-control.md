@@ -463,3 +463,35 @@ No config or daemon changes: `pwm3`/`OPTFAN2`'s channel remains outside `gpu-fan
 scope (BIOS-managed), per the 2026-10-17 "deliberately not pursued further" decision. This
 addendum is a documentation-only correction of the fan's size and a record of its current
 BIOS-set operating point for future reference (e.g. if it ever needs rechecking).
+
+## Addendum (2026-10-19) — idx2 dual-40mm shroud, 225W soak test (no throttle)
+
+Ran `power-cap-sweep.py --gpus 2 --caps 225 --soak 180 --free --force` on idx2 (the
+dual-40mm-fan shroud V100) to see how much thermal headroom the shroud has above the
+current 175W operating cap. `--force` was needed to bypass a one-off false-positive
+busy check: the script's own `--free` unload of the pinned `chat` model causes a brief
+util spike at the instant it tears down the CUDA context, which the single post-unload
+sample mistook for external GPU activity; manual polling confirmed idx2 was genuinely
+idle (0% util) both before and after.
+
+**Result: no throttling at 225W**, with real power headroom:
+
+| | 175W baseline (2026-10-17 addendum) | 225W (this test) |
+|---|---|---|
+| Peak HBM | 70 °C | 80 °C |
+| Peak core | 58 °C | 66 °C |
+| Mean power | ~175W | 217.7W |
+| Fan duty / rpm | 92-98% / ~14.7-15.3k | 100% / ~15.5k rpm |
+| Thermal/HW slowdown | 0% | 0% |
+| Cooldown to idle | 2.2 s | 3.4 s |
+
+Peak HBM at 225W (80 °C) is still ~5 °C below the ~85 °C soft-throttle point, and mean
+power (217.7W) tracked close to the 225W cap, confirming the card could actually draw
+the extra power rather than being capped elsewhere. The dual-40mm shroud has meaningfully
+more thermal headroom than the current 175W cap uses — relevant context for the planned
+idx1 dual-40mm shroud (todo `gpu-fan-idx1-dual-shroud`): that design should have similar
+headroom once installed. **No config change made** -- idx2's cap stays at 175W (restored
+automatically at the end of the sweep); this was a headroom probe, not a decision to
+raise the production cap. Full per-rep data:
+`docs/data/thermal/power-cap-sweep-20261019-153157-idx2-225w-vs-175w-baseline.csv`
+(+ `-samples.csv`).
