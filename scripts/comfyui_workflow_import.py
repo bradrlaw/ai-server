@@ -553,12 +553,20 @@ def import_workflow(
     dest_dir: Path = DEFAULT_WORKFLOW_DIR,
     dry_run: bool = False,
 ) -> dict:
+    # Collapse to a bare filename-safe stem (no '.', '/', or '..' survive the
+    # substitution) and re-verify the resulting paths resolve inside dest_dir,
+    # so a crafted `name` can never escape the workflow directory.
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", name)
     templ, core = templatize(graph)
     templ_json = json.dumps(templ, indent=2, sort_keys=True)
 
-    wf_path = dest_dir / f"{safe}.json"
-    meta_path = dest_dir / f"{safe}.meta.json"
+    dest_dir_resolved = dest_dir.resolve()
+    wf_path = (dest_dir / f"{safe}.json").resolve()
+    meta_path = (dest_dir / f"{safe}.meta.json").resolve()
+    if not wf_path.is_relative_to(dest_dir_resolved) or not meta_path.is_relative_to(
+        dest_dir_resolved
+    ):
+        raise ValueError(f"refusing to write outside {dest_dir}: {name!r}")
     prior = {}
     if meta_path.exists():
         try:
