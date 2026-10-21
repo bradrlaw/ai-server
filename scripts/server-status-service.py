@@ -1509,12 +1509,17 @@ def _comfyui_fp16_path(unit: str) -> str:
     """Env-file path holding the per-unit --fp16-unet flag (comfyui-open ->
     /run/comfyui-fp16/open.env). Callers already validate `unit` against the
     QUIET_COMFYUI_UNITS allowlist before this is reached; the label is also
-    stripped to a safe filename charset here as defense-in-depth so this
-    function can never be used to escape COMFYUI_FP16_DIR even if called
-    with an unvalidated value in the future."""
+    stripped to a safe filename charset and re-verified with the
+    normpath+startswith idiom here as defense-in-depth, so this function can
+    never be used to escape COMFYUI_FP16_DIR even if called with an
+    unvalidated value in the future."""
     label = unit[len("comfyui-"):] if unit.startswith("comfyui-") else unit
     label = re.sub(r"[^A-Za-z0-9_-]", "_", label)
-    return os.path.join(COMFYUI_FP16_DIR, f"{label}.env")
+    base_path = os.path.normpath(COMFYUI_FP16_DIR) + os.sep
+    path = os.path.normpath(os.path.join(COMFYUI_FP16_DIR, f"{label}.env"))
+    if not path.startswith(base_path):
+        raise ValueError(f"refusing to use fp16 path outside {COMFYUI_FP16_DIR}: {unit!r}")
+    return path
 
 
 def _comfyui_fp16_state(unit: str) -> bool:
