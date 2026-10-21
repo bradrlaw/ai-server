@@ -315,7 +315,10 @@ services:
       HERMES_GID: "1000"
       HERMES_DASHBOARD: "1"
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME: "${HERMES_DASHBOARD_USER:-admin}"
-      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: "${HERMES_DASHBOARD_PASSWORD}"
+      # Scrypt hash, not the plaintext password — the plaintext only ever lives
+      # in the gnome-keyring (service=hermes key=dashboard-password). Reset with
+      # scripts/hermes-dashboard-password.sh.
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH: "${HERMES_DASHBOARD_PASSWORD_HASH}"
       API_SERVER_ENABLED: "true"
       API_SERVER_HOST: "0.0.0.0"
       API_SERVER_PORT: "8642"
