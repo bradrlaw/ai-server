@@ -1507,8 +1507,13 @@ def _comfyui_ctl(action: str) -> tuple[bool, str]:
 
 def _comfyui_fp16_path(unit: str) -> str:
     """Env-file path holding the per-unit --fp16-unet flag (comfyui-open ->
-    /run/comfyui-fp16/open.env)."""
+    /run/comfyui-fp16/open.env). Callers already validate `unit` against the
+    QUIET_COMFYUI_UNITS allowlist before this is reached; the label is also
+    stripped to a safe filename charset here as defense-in-depth so this
+    function can never be used to escape COMFYUI_FP16_DIR even if called
+    with an unvalidated value in the future."""
     label = unit[len("comfyui-"):] if unit.startswith("comfyui-") else unit
+    label = re.sub(r"[^A-Za-z0-9_-]", "_", label)
     return os.path.join(COMFYUI_FP16_DIR, f"{label}.env")
 
 
