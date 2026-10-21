@@ -554,19 +554,20 @@ def import_workflow(
     dry_run: bool = False,
 ) -> dict:
     # Collapse to a bare filename-safe stem (no '.', '/', or '..' survive the
-    # substitution) and re-verify the resulting paths resolve inside dest_dir,
-    # so a crafted `name` can never escape the workflow directory.
+    # substitution), then independently re-verify with the normpath+startswith
+    # idiom CodeQL's path-injection sanitizer recognizes, so a crafted `name`
+    # can never be used to write outside the workflow directory.
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", name)
     templ, core = templatize(graph)
     templ_json = json.dumps(templ, indent=2, sort_keys=True)
 
-    dest_dir_resolved = dest_dir.resolve()
-    wf_path = (dest_dir / f"{safe}.json").resolve()
-    meta_path = (dest_dir / f"{safe}.meta.json").resolve()
-    if not wf_path.is_relative_to(dest_dir_resolved) or not meta_path.is_relative_to(
-        dest_dir_resolved
-    ):
+    base_path = os.path.normpath(str(dest_dir)) + os.sep
+    wf_path_str = os.path.normpath(os.path.join(str(dest_dir), f"{safe}.json"))
+    meta_path_str = os.path.normpath(os.path.join(str(dest_dir), f"{safe}.meta.json"))
+    if not wf_path_str.startswith(base_path) or not meta_path_str.startswith(base_path):
         raise ValueError(f"refusing to write outside {dest_dir}: {name!r}")
+    wf_path = Path(wf_path_str)
+    meta_path = Path(meta_path_str)
     prior = {}
     if meta_path.exists():
         try:
