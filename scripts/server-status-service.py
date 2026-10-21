@@ -52,6 +52,7 @@ import math
 import os
 import re
 import secrets
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -285,6 +286,19 @@ WORKFLOW_SYNC_ENABLED = os.environ.get("WORKFLOW_SYNC_ENABLED", "true").lower() 
 )
 COMFY_MCP_WORKFLOW_DIR = os.environ.get(
     "COMFY_MCP_WORKFLOW_DIR", "/srv/ai/config/comfyui-mcp/workflows"
+)
+# Surface the latest finding from the Hermes "v100-perf-scout" cron job/skill
+# (read-only — opens the kanban board's SQLite file directly, no docker exec).
+# See scripts/hermes-dashboard-password.sh neighbor doc + the v100-performance-scout
+# skill under /srv/ai/hermes/skills/research/ for how that job is produced.
+V100_SCOUT_ENABLED = os.environ.get("V100_SCOUT_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+V100_SCOUT_BOARD_DB = os.environ.get(
+    "V100_SCOUT_BOARD_DB",
+    "/srv/ai/hermes/kanban/boards/v100-perf-scout/kanban.db",
 )
 # Allow the dashboard to adjust per-GPU sustained power caps. The chosen watts are
 # written into the gpu-fan-control config, which the daemon treats as the live
@@ -709,6 +723,69 @@ def collect_workflows() -> list:
             "source_prefix": wid.replace("_", "-"),
         })
     return out
+
+
+def _v100_scout_excerpt(body: str, max_chars: int = 900) -> str:
+    """Trim a scout report down to its '## HIGH VALUE' section (or the head of
+    the doc if that heading isn't found) for a glanceable status-page preview.
+    The full report always stays intact in the kanban task itself.
+    """
+    if not body:
+        return ""
+    start = body.find("## HIGH VALUE")
+    text = body[start:] if start != -1 else body
+    # Stop at the next '## ' heading after the first one, or at max_chars.
+    next_heading = text.find("\n## ", 4)
+    if next_heading != -1:
+        text = text[:next_heading]
+    text = text.strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "\n…(truncated — see full card)"
+    return text
+
+
+def collect_v100_scout() -> dict | None:
+    """Latest card filed by the Hermes 'v100-performance-scout' cron skill.
+
+    Reads the kanban board's SQLite file directly (read-only URI, no docker exec,
+    no write lock contention with the dispatcher) — same trust level as any other
+    read-only collector here. Returns None if the feature is disabled or the board
+    doesn't exist yet (e.g. before the first run).
+    """
+    if not V100_SCOUT_ENABLED:
+        return None
+    db_path = Path(V100_SCOUT_BOARD_DB)
+    if not db_path.exists():
+        return None
+    try:
+        uri = f"file:{db_path}?mode=ro"
+        con = sqlite3.connect(uri, uri=True, timeout=5)
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT id, title, body, status, created_at FROM tasks "
+                "ORDER BY created_at DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+            cur.execute("SELECT COUNT(*) FROM tasks WHERE status NOT IN ('done','archived')")
+            open_count = cur.fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        return {"error": str(e)}
+    if not row:
+        return {"latest": None, "open_count": 0}
+    task_id, title, body, status, created_at = row
+    return {
+        "latest": {
+            "id": task_id,
+            "title": title,
+            "status": status,
+            "created_at": created_at,
+            "excerpt": _v100_scout_excerpt(body or ""),
+        },
+        "open_count": open_count,
+    }
 
 
 def _sync_workflow(name: str, source: str = "", dry_run: bool = False) -> tuple[bool, dict]:
@@ -1150,6 +1227,7 @@ def build_status() -> dict:
         "host": host,
         "power_mode": _power_state["mode"],
         "workflows": collect_workflows() if WORKFLOW_SYNC_ENABLED else [],
+        "v100_scout": collect_v100_scout(),
         "quiet": {
             "enabled": QUIET_HOURS_ENABLED,
             "paused": _QUIET_PAUSED.is_set(),
@@ -1886,6 +1964,10 @@ _HTML = """<!doctype html>
     <div class="sub" style="margin-bottom:8px">Re-import a workflow's defaults from its latest ComfyUI render. Tune the workflow in the ComfyUI UI, generate one image/video, then <b>Sync</b> — chat then uses your UI values (steps, LoRA, size…) and can override any exposed knob. <b>Preview</b> shows what would change without writing.</div>
     <div id="wfsync">…</div>
   </section>
+  <section id="v100scoutsec" style="display:none"><h2>Latest V100 findings <span class="hsub" id="v100scoutmsg"></span></h2>
+    <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>v100-perf-scout</code> research skill. Full history: <code>hermes kanban --board v100-perf-scout list</code> / <code>show &lt;id&gt;</code> (or the Hermes dashboard, :9119, once signed in).</div>
+    <div id="v100scout">…</div>
+  </section>
   <section id="quietsec" style="display:none"><h2>Quiet hours <span class="hsub" id="quietstate"></span></h2>
     <div id="quietctl">…</div>
     <div class="sub" id="quiethint" style="margin-top:8px"></div>
@@ -2182,6 +2264,7 @@ async function refresh(){  try{
     // long ComfyUI/LLM job can run through it without editing the unit.
     renderQuiet(d);
     renderWorkflows(d);
+    renderV100Scout(d);
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 function renderQuiet(d){
@@ -2272,6 +2355,20 @@ function renderWorkflows(d){
   document.getElementById('wfsync').innerHTML =
     '<table><tr><th>Workflow</th><th>Exposed knobs</th><th>Source / Action</th></tr>'+rows.join('')+'</table>'
     +'<div id="wfsyncout" class="sub" style="margin-top:8px;white-space:pre-wrap;font-family:monospace"></div>';
+}
+function renderV100Scout(d){
+  const sec=document.getElementById('v100scoutsec');
+  const sc=d.v100_scout;
+  if(!sc || sc.error || !sc.latest){ sec.style.display='none'; return; }
+  sec.style.display='';
+  const l=sc.latest;
+  const when=l.created_at ? new Date(l.created_at*1000).toLocaleString() : 'unknown';
+  document.getElementById('v100scoutmsg').textContent =
+    sc.open_count>1 ? (sc.open_count+' cards awaiting review') : '';
+  document.getElementById('v100scout').innerHTML =
+    '<div><b>'+esc(l.title||l.id)+'</b> <span class="hsub">'+esc(String(l.status||'?'))+' · '+esc(when)+'</span></div>'
+    +'<div class="sub" style="margin-top:6px;white-space:pre-wrap;font-family:monospace">'+esc(l.excerpt||'(no excerpt)')+'</div>'
+    +'<div class="hsub" style="margin-top:6px">hermes kanban --board v100-perf-scout show '+esc(l.id)+'</div>';
 }
 async function syncWorkflow(name, dryRun){
   const msg=document.getElementById('wfsyncmsg');
