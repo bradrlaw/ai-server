@@ -154,7 +154,7 @@ stays pinned at 1230 MHz (its memory clock sits at 877 MHz regardless); with eve
 unloaded the SM clock falls to 135 MHz and draw drops accordingly. Notably, keeping the two
 ComfyUI instances warm alone (LLMs unloaded) is enough to hold both V100s at ~36–37 W — the
 LLMs add only a few watts on top. Power caps applied at boot by the fan-control daemon cap
-the *ceiling* (slot 0 200 W, V100 175 W each), not this idle floor.
+the *ceiling* (slot 0 200 W, V100 idx1 175 W, idx2 225 W), not this idle floor.
 
 ### Whole-system idle (at the wall)
 

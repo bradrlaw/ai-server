@@ -1074,10 +1074,18 @@ The idx0 200 W cap carried over to the Titan X stopgap. A 250 W sustained-load t
 2026-07-27 showed why that is fine: Maxwell GPU Boost holds an 83 °C target and self-trims to
 ~200 W / ~1126 MHz, so 200 W and 250 W converge (see `_power_limits_note` in the config).
 
+**idx2 was raised to 225 W on 2026-10-19** (last 2026-10-19 addendum in
+[ADR-0009](adr/0009-gpu-shroud-fan-control.md)): after the dual-40mm shroud rework, soak,
+llama.cpp and ComfyUI tests showed idx2 holding 225 W sustained with peak HBM ≤ 80 °C (clear of
+the ~85 °C soft-throttle line) for a ~10–18% real-workload speedup. **idx1 stays at 175 W**: it
+still has the single blower cooler, so raise it only after its cooler matches idx2's shroud and
+the same soak/perf sequence is re-run. The 175 W "chosen" cell for idx2 in the table above is
+the original July choice.
+
 **These caps are now applied automatically at boot** by the `gpu-fan-control` service via
 a top-level `power_limits` object in `gpu-fan-control.config.json`:
 ```json
-"power_limits": { "0": 200, "1": 175, "2": 175 }   // gpu_index: watts
+"power_limits": { "0": 200, "1": 175, "2": 225 }   // gpu_index: watts
 ```
 `gpu-fan-control.py:reconcile_power_limits()` runs `nvidia-smi -i N -pm 1 -pl W` for each
 entry (logged as `power cap GPUN 250W -> 175W`). A capping failure is **non-fatal** — the

@@ -76,7 +76,7 @@ flowchart TD
 
 ## 2. GPU allocation & VRAM budget
 
-Power caps (ADR-0009): V100 175W each, idx0 200W. Caps don't affect VRAM.
+Power caps (ADR-0009): V100 idx1 175W, idx2 225W (dual-fan shroud, 2026-10-19), idx0 200W. Caps don't affect VRAM.
 
 | GPU | Idx / bus | Primary role | Resident VRAM (typical) | Spare |
 |-----|-----------|--------------|-------------------------|-------|
