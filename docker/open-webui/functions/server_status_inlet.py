@@ -155,25 +155,42 @@ class Filter:
             pass
         return None
 
-    def _models_row(self) -> Optional[_Row]:
+    def _models_row(self) -> List[_Row]:
         base = (self.valves.llama_swap_url or "").rstrip("/")
         if not base:
-            return None
+            return []
         running = self._get_json(f"{base}/running")
         if running is None:
-            return _Row("Loaded models", ["llama-swap unreachable"])
-        rows = running.get("running") or []
-        loaded = [
-            f"{m.get('model', '?')} ({m.get('state', '?')})"
-            for m in rows
-            if isinstance(m, dict)
-        ]
+            return [_Row("Loaded models", ["llama-swap unreachable"])]
         catalog = self._get_json(f"{base}/v1/models") or {}
-        total = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
+        catalog_entries = catalog.get("data") or [] if isinstance(catalog, dict) else []
+        names_by_id = {
+            c.get("id"): c.get("name")
+            for c in catalog_entries
+            if isinstance(c, dict) and c.get("id")
+        }
+        rows = running.get("running") or []
+        loaded_ids = set()
+        loaded = []
+        for m in rows:
+            if not isinstance(m, dict):
+                continue
+            mid = m.get("model", "?")
+            loaded_ids.add(mid)
+            display = names_by_id.get(mid)
+            loaded.append(
+                f"{mid}" + (f" — {display}" if display else "") + f" ({m.get('state', '?')})"
+            )
         items = [", ".join(loaded) if loaded else "none (idle — first request will load one)"]
-        if total:
-            items.append(f"{total} available")
-        return _Row("Loaded models", items)
+        result = [_Row("Loaded models", items)]
+        avail_items = [
+            f"{c.get('id', '?')}" + (f" — {c['name']}" if c.get("name") else "")
+            for c in catalog_entries
+            if isinstance(c, dict) and c.get("id") not in loaded_ids
+        ]
+        if avail_items:
+            result.append(_Row("Available models", avail_items, stack=True))
+        return result
 
     def _comfy_row(self) -> Optional[_Row]:
         spec = (self.valves.comfyui_urls or "").strip()
@@ -225,17 +242,26 @@ class Filter:
             else:
                 loaded = models.get("loaded") or []
                 names = [
-                    f"{m.get('model', '?')} ({m.get('state', '?')})"
+                    f"{m.get('model', '?')}"
+                    + (f" — {m['display_name']}" if m.get("display_name") else "")
+                    + f" ({m.get('state', '?')})"
                     for m in loaded
                     if isinstance(m, dict)
                 ]
                 items = [
                     ", ".join(names) if names else "none (idle — first request will load one)"
                 ]
-                total = models.get("available")
-                if total:
-                    items.append(f"{total} available")
                 rows.append(_Row("Loaded models", items))
+                available = models.get("available")
+                if isinstance(available, list) and available:
+                    avail_items = [
+                        f"{a.get('id', '?')}"
+                        + (f" — {a['name']}" if isinstance(a, dict) and a.get("name") else "")
+                        for a in available
+                        if isinstance(a, dict)
+                    ]
+                    if avail_items:
+                        rows.append(_Row("Available models", avail_items, stack=True))
 
         gpus = data.get("gpus")
         if isinstance(gpus, list) and gpus:
@@ -317,7 +343,7 @@ class Filter:
             else:
                 api_down = True
         # Fallback: query llama-swap / ComfyUI directly (no GPU data).
-        rows = [r for r in (self._models_row(), self._comfy_row()) if r]
+        rows = [*self._models_row(), *([r] if (r := self._comfy_row()) else [])]
         if api_down and not (self.valves.llama_swap_url or "").strip():
             # Without llama-swap there's no model line, so say why it's missing.
             rows.insert(0, _Row("Status service", ["unreachable (no model/GPU data)"]))

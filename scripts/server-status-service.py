@@ -661,15 +661,25 @@ def collect_mode() -> dict:
 def collect_models() -> dict:
     running = _get_json(f"{LLAMASWAP_URL}/running")
     cfg = collect_mode()
+    catalog = _get_json(f"{LLAMASWAP_URL}/v1/models") or {}
+    catalog_rows = catalog.get("data") or [] if isinstance(catalog, dict) else []
+    catalog_by_id = {
+        c["id"]: c for c in catalog_rows if isinstance(c, dict) and c.get("id")
+    }
     if running is None:
-        return {"reachable": False, "loaded": [], "available": 0,
+        return {"reachable": False, "loaded": [], "available": [],
                 "mode": cfg["mode"], "config": cfg["models"]}
     rows = running.get("running") or []
     loaded = []
+    loaded_ids = set()
     for m in rows:
         if isinstance(m, dict):
             name = m.get("model", "?")
+            loaded_ids.add(name)
             entry = {"model": name, "state": m.get("state", "?")}
+            cat = catalog_by_id.get(name)
+            if cat and cat.get("name"):
+                entry["display_name"] = cat["name"]
             mc = cfg["models"].get(name)
             if mc:
                 entry["parallel"] = mc.get("parallel")
@@ -681,8 +691,13 @@ def collect_models() -> dict:
                 if act is not None:
                     entry["activity"] = act
             loaded.append(entry)
-    catalog = _get_json(f"{LLAMASWAP_URL}/v1/models") or {}
-    available = len(catalog.get("data") or []) if isinstance(catalog, dict) else 0
+    # Catalog entries not currently loaded (id + friendly display name), so the
+    # status page can list what's available to swap in, not just a count.
+    available = [
+        {"id": c["id"], "name": c.get("name")}
+        for c in catalog_rows
+        if isinstance(c, dict) and c.get("id") and c["id"] not in loaded_ids
+    ]
     return {"reachable": True, "loaded": loaded, "available": available,
             "mode": cfg["mode"], "config": cfg["models"]}
 
@@ -725,23 +740,20 @@ def collect_workflows() -> list:
     return out
 
 
-def _v100_scout_excerpt(body: str, max_chars: int = 900) -> str:
-    """Trim a scout report down to its '## HIGH VALUE' section (or the head of
-    the doc if that heading isn't found) for a glanceable status-page preview.
-    The full report always stays intact in the kanban task itself.
+def _v100_scout_excerpt(body: str) -> str:
+    """Trim a scout report down to its '## HIGH VALUE' section (or the full doc
+    if that heading isn't found). Not char-truncated — the status page renders
+    this in a vertically scrollable box instead of cutting it off.
     """
     if not body:
         return ""
     start = body.find("## HIGH VALUE")
     text = body[start:] if start != -1 else body
-    # Stop at the next '## ' heading after the first one, or at max_chars.
+    # Stop at the next '## ' heading after the first one (keep just that section).
     next_heading = text.find("\n## ", 4)
     if next_heading != -1:
         text = text[:next_heading]
-    text = text.strip()
-    if len(text) > max_chars:
-        text = text[:max_chars].rstrip() + "\n…(truncated — see full card)"
-    return text
+    return text.strip()
 
 
 def collect_v100_scout() -> dict | None:
@@ -1355,7 +1367,7 @@ def banner_text(status: dict) -> str:
         if loaded:
             mtxt = "Models: " + ", ".join(m.get("model", "?") for m in loaded)
             if models.get("available"):
-                mtxt += f" ({models['available']} avail)"
+                mtxt += f" ({len(models['available'])} avail)"
         else:
             mtxt = "Models: idle"
     parts = [mtxt]
@@ -1902,24 +1914,55 @@ _HTML = """<!doctype html>
   header { padding: 16px 20px; background:#151922; border-bottom:1px solid #232a36; }
   h1 { font-size: 18px; margin:0; }
   .sub { color:#8b95a7; font-size: 12px; margin-top:4px; }
-  main { padding: 20px; display:grid; gap:20px; max-width: 900px; }
-  section { background:#151922; border:1px solid #232a36; border-radius:10px; padding:14px 16px; }
-  h2 { font-size: 13px; text-transform:uppercase; letter-spacing:.05em; color:#8b95a7; margin:0 0 10px; }
-  table { width:100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #202634; }
+  main { padding: 20px; display:grid; gap:16px; max-width: 1800px; margin:0 auto;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); grid-auto-flow: dense; }
+  section { background:#151922; border:1px solid #232a36; border-radius:10px; padding:14px 16px;
+    grid-column: span 1; min-width:0; max-width:100%; overflow-x:auto; container-type:inline-size; }
+  section.w-wide { grid-column: span 2; }
+  section.w-full { grid-column: 1 / -1; }
+  section.dragging { opacity:.4; }
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+    section.w-wide, section.w-full { grid-column: span 1; }
+  }
+  /* Responsive per-card reflow: react to the CARD's own width (container query),
+     not the viewport — a "normal" card in a wide grid is just as narrow as one
+     on a phone. table-layout:fixed (below) + fluid .spark/.bar already keep
+     tables from ever overflowing; this just tightens things further on very
+     narrow cards. */
+  @container (max-width: 520px) {
+    table { font-size:12px; }
+    th, td { padding:4px 6px; }
+  }
+  h2 { font-size: 13px; text-transform:uppercase; letter-spacing:.05em; color:#8b95a7; margin:0 0 10px;
+    display:flex; align-items:center; gap:6px; }
+  h2 .hgrow { flex:1 1 auto; display:flex; align-items:center; gap:6px; min-width:0; }
+  .drag-handle { cursor:grab; color:#4a5668; font-size:14px; letter-spacing:-1px; user-select:none; flex:0 0 auto; touch-action:none; }
+  .drag-handle:active { cursor:grabbing; }
+  button.wbtn { background:none; border:1px solid #2c3a4f; color:#6b7890; border-radius:5px; font-size:11px;
+    padding:1px 6px; cursor:pointer; flex:0 0 auto; font-family:inherit; }
+  button.wbtn:hover { color:#cdd6e4; border-color:#4b8ce0; }
+  /* table-layout:fixed is the load-bearing fix for "never scroll horizontally":
+     auto layout sizes columns to fit content first and overflows if that's
+     wider than the card; fixed layout divides the card's actual width among
+     columns and forces cell content (incl. the sparkline/bar SVGs below,
+     which are fluid %-width) to shrink/wrap to fit instead. */
+  table { width:100%; table-layout:fixed; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #202634;
+    overflow-wrap:anywhere; word-break:break-word; }
   th { color:#8b95a7; font-weight:600; }
   .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
   .idle { background:#1e2a1e; color:#7fce7f; }
   .busy { background:#2a2410; color:#e6c04b; }
   .bad  { background:#2a1616; color:#e07f7f; }
-  .bar { background:#202634; border-radius:4px; height:8px; overflow:hidden; width:120px; display:inline-block; vertical-align:middle; }
+  .bar { background:#202634; border-radius:4px; height:8px; overflow:hidden; width:100%; max-width:120px; display:inline-block; vertical-align:middle; }
   .bar > i { display:block; height:100%; background:#4b8ce0; }
   .bar > i.busy { background:#e6c04b; }
   .bar > i.bad { background:#e07f7f; }
-  .spark { display:inline-block; vertical-align:middle; background:#0f1115; border:1px solid #202634; border-radius:3px; }
+  .spark { display:inline-block; vertical-align:middle; background:#0f1115; border:1px solid #202634; border-radius:3px;
+    width:100%; max-width:150px; height:24px; }
   .spark path { vector-effect: non-scaling-stroke; }
   .cur { display:inline-block; min-width:52px; text-align:right; font-variant-numeric:tabular-nums; margin-left:6px; color:#cdd6e4; }
-  td.g { white-space:nowrap; }
   .hsub { color:#8b95a7; font-size:11px; }
   button.act { background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f; border-radius:6px;
     padding:3px 10px; font-size:12px; cursor:pointer; margin-left:6px; font-family:inherit; }
@@ -1939,7 +1982,8 @@ _HTML = """<!doctype html>
   .switch input:checked + .slider:before { transform:translateX(20px); }
   .switch input:disabled + .slider { opacity:.5; cursor:default; }
   select.plim { background:#1c2635; color:#cdd6e4; border:1px solid #2c3a4f; border-radius:6px;
-    padding:2px 6px; font-size:12px; font-family:inherit; cursor:pointer; }
+    padding:2px 6px; font-size:12px; font-family:inherit; cursor:pointer; width:100%; max-width:100%;
+    box-sizing:border-box; }
   select.plim:disabled { opacity:.5; cursor:default; }
   #svcmsg { margin-left:8px; }
   #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column;
@@ -1950,29 +1994,39 @@ _HTML = """<!doctype html>
     transition:opacity .25s ease, transform .25s ease; }
   .toast.show { opacity:1; transform:translateY(0); }
   .toast.bad { border-left-color:#e07f7f; }
+  /* Grid items stretch to match the tallest sibling in their row by default —
+     that's what makes this card line up with its row-mates (e.g. GPUs/History)
+     instead of using a hardcoded height. The excerpt's flex-basis just keeps
+     the card from becoming the row's tallest contributor on its own (long
+     report); flex-grow then fills whatever extra height the stretch gives it,
+     uncapped — the outer grid row already bounds the total height, so this
+     can't grow unboundedly. Scrolls only if the actual text overflows that. */
+  #v100scoutsec { display:flex; flex-direction:column; }
+  #v100scout { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #v100scout .excerpt { flex:1 1 180px; min-height:0; overflow-y:auto; }
 </style></head>
 <body>
 <div id="toasts"></div>
-<header><button class="act" style="float:right" onclick="logout()">Sign out</button><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
+<header><button class="act" style="float:right" onclick="logout()">Sign out</button><button class="act" style="float:right;margin-right:8px" onclick="resetLayout()" title="Restore default section order/widths">Reset layout</button><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
 <main>
-  <section><h2>Models (llama-swap) <span class="hsub" id="modebadge"></span></h2><div id="models">…</div></section>
-  <section><h2>GPUs</h2><div id="gpus">…</div></section>
-  <section><h2>History <span class="hsub" id="histspan"></span></h2><div id="history">…</div></section>
-  <section><h2>Host (CPU / RAM / Disk)</h2><div id="host">…</div></section>
-  <section><h2>Services <span class="hsub" id="svcactions"></span></h2><div id="services">…</div></section>
-  <section id="wfsyncsec" style="display:none"><h2>ComfyUI workflow sync <span class="hsub" id="wfsyncmsg"></span></h2>
+  <section id="modelssec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Models (llama-swap) <span class="hsub" id="modebadge"></span></span><button class="wbtn" onclick="cycleWidth('modelssec')" title="Resize">⤢</button></h2><div id="models">…</div></section>
+  <section id="gpussec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">GPUs</span><button class="wbtn" onclick="cycleWidth('gpussec')" title="Resize">⤢</button></h2><div id="gpus">…</div></section>
+  <section id="historysec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">History <span class="hsub" id="histspan"></span></span><button class="wbtn" onclick="cycleWidth('historysec')" title="Resize">⤢</button></h2><div id="history">…</div></section>
+  <section id="hostsec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Host (CPU / RAM / Disk)</span><button class="wbtn" onclick="cycleWidth('hostsec')" title="Resize">⤢</button></h2><div id="host">…</div></section>
+  <section id="servicessec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Services <span class="hsub" id="svcactions"></span></span><button class="wbtn" onclick="cycleWidth('servicessec')" title="Resize">⤢</button></h2><div id="services">…</div></section>
+  <section id="wfsyncsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">ComfyUI workflow sync <span class="hsub" id="wfsyncmsg"></span></span><button class="wbtn" onclick="cycleWidth('wfsyncsec')" title="Resize">⤢</button></h2>
     <div class="sub" style="margin-bottom:8px">Re-import a workflow's defaults from its latest ComfyUI render. Tune the workflow in the ComfyUI UI, generate one image/video, then <b>Sync</b> — chat then uses your UI values (steps, LoRA, size…) and can override any exposed knob. <b>Preview</b> shows what would change without writing.</div>
     <div id="wfsync">…</div>
   </section>
-  <section id="v100scoutsec" style="display:none"><h2>Latest V100 findings <span class="hsub" id="v100scoutmsg"></span></h2>
-    <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>v100-perf-scout</code> research skill. Full history: <code>hermes kanban --board v100-perf-scout list</code> / <code>show &lt;id&gt;</code> (or the Hermes dashboard, :9119, once signed in).</div>
+  <section id="v100scoutsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Latest V100 findings <span class="hsub" id="v100scoutmsg"></span></span><button class="wbtn" onclick="cycleWidth('v100scoutsec')" title="Resize">⤢</button></h2>
+    <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>v100-perf-scout</code> research skill.</div>
     <div id="v100scout">…</div>
   </section>
-  <section id="quietsec" style="display:none"><h2>Quiet hours <span class="hsub" id="quietstate"></span></h2>
+  <section id="quietsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Quiet hours <span class="hsub" id="quietstate"></span></span><button class="wbtn" onclick="cycleWidth('quietsec')" title="Resize">⤢</button></h2>
     <div id="quietctl">…</div>
     <div class="sub" id="quiethint" style="margin-top:8px"></div>
   </section>
-  <section id="benchsec"><h2>Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></h2>
+  <section id="benchsec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Benchmarks <span class="hsub">· <a id="benchlink" href="__BENCH_DOC_URL__" target="_blank" style="color:#8b95a7">docs/benchmarking.md</a></span></span><button class="wbtn" onclick="cycleWidth('benchsec')" title="Resize">⤢</button></h2>
     <div class="sub" style="margin-bottom:8px">llama-swap <code>--parallel</code> throughput sweep — peak aggregate tok/s per model (higher = more concurrent throughput; raising <code>--parallel</code> divides per-request context).</div>
     <a id="benchimglink" href="parallel-sweep.png" target="_blank"><img id="benchimg" src="parallel-sweep.png" alt="parallel throughput sweep chart" style="max-width:100%;border:1px solid #232a36;border-radius:8px" onerror="document.getElementById('benchsec').style.display='none'"></a>
   </section>
@@ -1991,6 +2045,42 @@ async function api(url, opts){
 async function logout(){ try{ await api('logout',{method:'POST'}); }catch(e){} location.href='login'; }
 function pill(state){const c=state==='idle'?'idle':(state==='busy'?'busy':'bad');return `<span class="pill ${c}">${state}</span>`;}
 function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+// Minimal markdown -> HTML for scout report excerpts (headings, lists, bold/italic, inline code, links).
+// Escapes everything first, so inline HTML in source markdown is inert.
+function mdToHtml(src){
+  const lines = esc(src||'').split('\\n');
+  let html = '', inList = null; // inList: 'ul' | 'ol' | null
+  function closeList(){ if(inList){ html += '</'+inList+'>'; inList=null; } }
+  function inline(t){
+    return t
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<i>$2</i>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" style="color:#4b8ce0">$1</a>');
+  }
+  for(const raw of lines){
+    const line = raw.trimEnd();
+    let m;
+    if((m=line.match(/^(#{2,4})\s+(.*)$/))){
+      closeList();
+      const lvl = Math.min(6, m[1].length+2); // ## -> h4, ### -> h5, #### -> h6 (keep compact in-card)
+      html += '<h'+lvl+' style="margin:10px 0 4px">'+inline(m[2])+'</h'+lvl+'>';
+    } else if((m=line.match(/^[-*]\s+(.*)$/))){
+      if(inList!=='ul'){ closeList(); html+='<ul style="margin:4px 0 4px 18px;padding:0">'; inList='ul'; }
+      html += '<li>'+inline(m[1])+'</li>';
+    } else if((m=line.match(/^\d+\.\s+(.*)$/))){
+      if(inList!=='ol'){ closeList(); html+='<ol style="margin:4px 0 4px 18px;padding:0">'; inList='ol'; }
+      html += '<li>'+inline(m[1])+'</li>';
+    } else if(line===''){
+      closeList();
+    } else {
+      closeList();
+      html += '<div>'+inline(line)+'</div>';
+    }
+  }
+  closeList();
+  return html;
+}
 function fmtK(n){ if(n==null) return '–'; return n>=1000? (n/1000).toFixed(1)+'k' : String(n); }
 function activityHtml(a){
   if(!a) return '<span class="sub">–</span>';
@@ -2152,13 +2242,20 @@ async function refresh(){  try{
       const ctxTxt = cps!=null ? (fmtK(cps) + (p>1? ' ×'+p : '')) : '–';
       return `<td>${p!=null? p : '–'}</td><td title="${ctx!=null? ctx+' total':''}">${ctxTxt}</td>`;
     }
+    function availHtml(avail){
+      if(!avail || !avail.length) return '';
+      const items = avail.map(a=>
+        `<span class="pill idle">${esc(a.id)}</span>${a.name? ' <span class="sub">'+esc(a.name)+'</span>':''}`
+      ).join('<br>');
+      return `<div class="sub" style="margin-top:8px">${avail.length} available:</div><div style="margin-top:4px;line-height:1.9">${items}</div>`;
+    }
     if(!m.reachable){ document.getElementById('models').innerHTML = pill('unreachable'); }
-    else if(!m.loaded.length){ document.getElementById('models').innerHTML = pill('idle') + ` <span class="sub">${m.available} available</span>`; }
+    else if(!m.loaded.length){ document.getElementById('models').innerHTML = pill('idle') + availHtml(m.available); }
     else {
       document.getElementById('models').innerHTML =
         '<table><tr><th>Model</th><th>State</th><th>Par</th><th>Ctx/slot</th><th>Activity</th></tr>' +
-        m.loaded.map(x=>`<tr><td>${esc(x.model)}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td>${cfgCols(x)}<td>${activityHtml(x.activity)}</td></tr>`).join('') +
-        `</table><div class="sub" style="margin-top:8px">${m.available} available</div>`;
+        m.loaded.map(x=>`<tr><td><b>${esc(x.model)}</b>${x.display_name? '<br><span class="sub">'+esc(x.display_name)+'</span>':''}</td><td>${pill(x.state==='ready'?'idle':'busy')} ${esc(x.state)}</td>${cfgCols(x)}<td>${activityHtml(x.activity)}</td></tr>`).join('') +
+        '</table>' + availHtml(m.available);
     }
     // gpus
     const gpuAct = d.actions && d.actions.gpu_power;
@@ -2167,10 +2264,10 @@ async function refresh(){  try{
     const fanWarn = (fd.state && fd.state!=='ok') ?
       `<div class="sub" style="margin-top:8px"><span class="pill ${fd.state==='unknown'?'busy':'bad'}">fans: ${esc(fd.state)}</span> ${esc(fd.msg||'')}</div>` : '';
     document.getElementById('gpus').innerHTML = d.gpus.length ?
-      '<table><tr><th>#</th><th>Name</th><th>Util</th><th>VRAM</th><th>Limit</th><th>Power</th><th>Temp</th><th>Fan</th></tr>' +
+      '<table><tr><th>GPU</th><th>Util</th><th>VRAM</th><th>Limit</th><th>Power</th><th>Temp</th><th>Fan</th></tr>' +
       d.gpus.map(g=>{
         const memPct = (g.mem_used!=null&&g.mem_total)? Math.round(100*g.mem_used/g.mem_total):0;
-        return `<tr><td>${g.index}</td><td>${esc(g.name)}</td>`+
+        return `<tr><td>${g.index} ${esc(g.name)}</td>`+
         `<td>${g.util!=null?g.util+'%':'–'}</td>`+
         `<td><span class="bar"><i style="width:${memPct}%"></i></span> ${g.mem_used??'–'}/${g.mem_total??'–'} MB</td>`+
         gpuLimitCell(g, gpuAct, plimRange)+
@@ -2367,8 +2464,8 @@ function renderV100Scout(d){
     sc.open_count>1 ? (sc.open_count+' cards awaiting review') : '';
   document.getElementById('v100scout').innerHTML =
     '<div><b>'+esc(l.title||l.id)+'</b> <span class="hsub">'+esc(String(l.status||'?'))+' · '+esc(when)+'</span></div>'
-    +'<div class="sub" style="margin-top:6px;white-space:pre-wrap;font-family:monospace">'+esc(l.excerpt||'(no excerpt)')+'</div>'
-    +'<div class="hsub" style="margin-top:6px">hermes kanban --board v100-perf-scout show '+esc(l.id)+'</div>';
+    +'<div class="sub excerpt" style="margin-top:6px;padding-right:4px">'+(l.excerpt?mdToHtml(l.excerpt):'(no excerpt)')+'</div>'
+    +'<div class="hsub" style="margin-top:6px"><a href="http://'+location.hostname+':9119/kanban" target="_blank" style="color:#4b8ce0">View on the Hermes kanban board</a></div>';
 }
 async function syncWorkflow(name, dryRun){
   const msg=document.getElementById('wfsyncmsg');
@@ -2420,6 +2517,111 @@ async function serviceAction(name, action){
   }catch(e){ if(msg) msg.textContent='error: '+e; }
   finally{ setTimeout(refresh, action==='start'?2500:1200); }
 }
+// --- Customizable layout: per-section width (normal/wide/full) + drag-to-reorder,
+// persisted in localStorage (client-only; never sent to the server). Order/width
+// apply once at load — refresh() only repopulates each section's inner content,
+// it never touches <main>'s children, so this survives every 5s poll untouched.
+const LAYOUT_KEY = 'statusLayout.v1';
+function loadLayout(){
+  try{ return JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}'); }catch(e){ return {}; }
+}
+function currentLayout(){
+  const main=document.querySelector('main');
+  const order=[...main.children].filter(s=>s.id).map(s=>s.id);
+  const widths={};
+  main.querySelectorAll('section[id]').forEach(s=>{ widths[s.id]=s.dataset.w||'normal'; });
+  return {order, widths};
+}
+function persistLayout(){
+  try{ localStorage.setItem(LAYOUT_KEY, JSON.stringify(currentLayout())); }catch(e){}
+}
+function applyLayout(){
+  const layout=loadLayout();
+  const main=document.querySelector('main');
+  if(layout.order && layout.order.length){
+    const bySec=new Map([...main.children].filter(s=>s.id).map(s=>[s.id,s]));
+    layout.order.forEach(id=>{ const el=bySec.get(id); if(el){ main.appendChild(el); bySec.delete(id); } });
+    // Sections not in a saved (older) layout — e.g. newly added cards — keep
+    // their original relative order, appended after the restored ones.
+    bySec.forEach(el=>main.appendChild(el));
+  }
+  if(layout.widths){
+    Object.entries(layout.widths).forEach(([id,w])=>{
+      const el=document.getElementById(id);
+      if(el){ el.classList.remove('w-normal','w-wide','w-full'); el.classList.add('w-'+w); el.dataset.w=w; }
+    });
+  }
+}
+function cycleWidth(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const steps=['normal','wide','full'];
+  const next=steps[(steps.indexOf(el.dataset.w||'normal')+1)%steps.length];
+  el.classList.remove('w-normal','w-wide','w-full');
+  el.classList.add('w-'+next);
+  el.dataset.w=next;
+  persistLayout();
+}
+function resetLayout(){
+  try{ localStorage.removeItem(LAYOUT_KEY); }catch(e){}
+  location.reload();
+}
+// Pointer Events instead of native HTML5 drag-and-drop: the native DnD API
+// needs dataTransfer wiring and behaves inconsistently with nested interactive
+// controls (selects/buttons) and scrollable (overflow-x:auto) cards across
+// browsers. Pointer events give full manual control and work the same for
+// mouse/touch/pen everywhere.
+let _dragSec=null, _dragPointerId=null;
+function _sectionAtPoint(main, x, y){
+  const secs=[...main.querySelectorAll(':scope > section')].filter(s=>s!==_dragSec);
+  for(const s of secs){
+    const r=s.getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return s;
+  }
+  // Pointer is over a gap (grid gutter) — fall back to nearest card center.
+  let best=null, bestDist=Infinity;
+  for(const s of secs){
+    const r=s.getBoundingClientRect();
+    const d=Math.hypot(x-(r.left+r.width/2), y-(r.top+r.height/2));
+    if(d<bestDist){ bestDist=d; best=s; }
+  }
+  return best;
+}
+function initDragReorder(){
+  const main=document.querySelector('main');
+  function onMove(e){
+    if(!_dragSec) return;
+    const target=_sectionAtPoint(main, e.clientX, e.clientY);
+    if(!target) return;
+    const r=target.getBoundingClientRect();
+    const before = e.clientY < r.top + r.height/2;
+    const ref = before ? target : target.nextElementSibling;
+    if(ref!==_dragSec) main.insertBefore(_dragSec, ref);
+  }
+  function onUp(){
+    if(!_dragSec) return;
+    _dragSec.classList.remove('dragging');
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    _dragSec=null; _dragPointerId=null;
+    persistLayout();
+  }
+  main.querySelectorAll(':scope > section').forEach(sec=>{
+    const handle=sec.querySelector(':scope > h2 .drag-handle');
+    if(!handle) return;
+    handle.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      _dragSec=sec; _dragPointerId=e.pointerId;
+      sec.classList.add('dragging');
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
+  });
+}
+applyLayout();
+initDragReorder();
 refresh(); setInterval(refresh, 5000);
 refreshHistory(); setInterval(refreshHistory, 15000);
 </script>

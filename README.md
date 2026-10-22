@@ -66,9 +66,17 @@ Capabilities:
   **banner into Open WebUI** — so the blank new-chat screen shows what's currently running
   on the box before you type a word.
 
-  | Open WebUI status banner | Host status page (`:9095`) |
-  |---|---|
-  | ![Live status banner on the Open WebUI new-chat screen](docs/images/owui-status-banner.png) | ![Host-side status dashboard served on port 9095](docs/images/server-status-page.png) |
+  **Open WebUI status banner** — the compact INFO banner at the top of a chat:
+
+  ![Live status banner on the Open WebUI new-chat screen](docs/images/owui-status-banner.png)
+
+  **Open WebUI status card** — the expanded status card on the blank new-chat screen:
+
+  ![Live server-status card on the Open WebUI new-chat screen](docs/images/owui-status-card.png)
+
+  **Host status page** (`:9095`) — responsive, customizable (drag to reorder, resize sections):
+
+  ![Host-side status dashboard served on port 9095](docs/images/server-status-page.png)
 
 ## Hardware
 
