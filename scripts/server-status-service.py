@@ -289,8 +289,8 @@ COMFY_MCP_WORKFLOW_DIR = os.environ.get(
 )
 # Surface the latest finding from the Hermes "v100-perf-scout" cron job/skill
 # (read-only — opens the kanban board's SQLite file directly, no docker exec).
-# See scripts/hermes-dashboard-password.sh neighbor doc + the v100-performance-scout
-# skill under /srv/ai/hermes/skills/research/ for how that job is produced.
+# Skill source: config/hermes/skills/research/v100-performance-scout/SKILL.md
+# (tracked; deployed to /srv/ai/hermes/skills/research/, gitignored live copy).
 V100_SCOUT_ENABLED = os.environ.get("V100_SCOUT_ENABLED", "true").lower() in (
     "1",
     "true",
