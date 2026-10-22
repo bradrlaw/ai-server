@@ -1,0 +1,12 @@
+== big
+  cold load + first reply: 13s status=200 reply='pong'
+  VRAM MiB: {'0': 8835, '1': 23884, '2': 28472}
+  code task: 24s gen=976 decode=41.8 t/s (prefill 122.0)
+  needle (65870 tok): 106s prefill=636.6 t/s decode=34.9 found=True finish=stop
+  VRAM MiB after: {'0': 8835, '1': 23884, '2': 28474}
+== coder-next
+  cold load + first reply: 315s status=200 reply='pong'
+  VRAM MiB: {'0': 8835, '1': 28718, '2': 27332}
+  code task: 5s gen=389 decode=80.0 t/s (prefill 253.4)
+  needle (64759 tok): 191s prefill=340.2 t/s decode=63.8 found=True finish=stop
+  VRAM MiB after: {'0': 8835, '1': 28770, '2': 27336}

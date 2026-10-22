@@ -1,0 +1,14 @@
+[e6-B-n4] build B, doc 19970 tokens, think on, extra '--spec-draft-n-max 4'
+  turn 1 | cache_n 0 | prompt_n 20023 | prefill_s 27.01 | gen_n 391 | decode_tps 43.0 | wall_s 36.13 | think_chars 922 | answer_chars 637 | finish stop
+  turn 2 | cache_n 20019 | prompt_n 199 | prefill_s 1.04 | gen_n 363 | decode_tps 44.3 | wall_s 9.25 | think_chars 994 | answer_chars 282 | finish stop
+  turn 3 | cache_n 20214 | prompt_n 118 | prefill_s 0.96 | gen_n 222 | decode_tps 48.6 | wall_s 5.59 | think_chars 610 | answer_chars 150 | finish stop
+  turn 4 | cache_n 20328 | prompt_n 76 | prefill_s 0.72 | gen_n 206 | decode_tps 48.7 | wall_s 5.02 | think_chars 576 | answer_chars 198 | finish stop
+  turn 5 | cache_n 20400 | prompt_n 88 | prefill_s 0.71 | gen_n 153 | decode_tps 49.8 | wall_s 3.85 | think_chars 269 | answer_chars 218 | finish stop
+  turn 6 | cache_n 20484 | prompt_n 103 | prefill_s 0.97 | gen_n 278 | decode_tps 46.4 | wall_s 6.98 | think_chars 982 | answer_chars 255 | finish stop
+  log 'forcing full prompt re-processing': 0
+  log 'restored context checkpoint': 0
+  log 'created context checkpoint': 0
+  log 'erased invalidated context checkpoint': 0
+  log 'erasing old context checkpoint': 0
+  log 'deprecated': 1
+  log 'warn': 0

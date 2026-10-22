@@ -1,0 +1,272 @@
+[
+ {
+  "model": "coder-next",
+  "case": "weather",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 17.8,
+  "tokens": 33
+ },
+ {
+  "model": "coder-next",
+  "case": "read_range",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 45
+ },
+ {
+  "model": "coder-next",
+  "case": "shell_timeout",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 40
+ },
+ {
+  "model": "coder-next",
+  "case": "event_nested",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.6,
+  "tokens": 107
+ },
+ {
+  "model": "coder-next",
+  "case": "calc",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 35
+ },
+ {
+  "model": "coder-next",
+  "case": "search_opts",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 47
+ },
+ {
+  "model": "coder-next",
+  "case": "repo_grep",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 44
+ },
+ {
+  "model": "coder-next",
+  "case": "parallel_weather",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.1,
+  "tokens": 67
+ },
+ {
+  "model": "coder-next",
+  "case": "parallel_time",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 50
+ },
+ {
+  "model": "coder-next",
+  "case": "write_escapes",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.9,
+  "tokens": 51
+ },
+ {
+  "model": "coder-next",
+  "case": "unicode_url",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.1,
+  "tokens": 67
+ },
+ {
+  "model": "coder-next",
+  "case": "no_tool_1",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.9,
+  "tokens": 54
+ },
+ {
+  "model": "coder-next",
+  "case": "no_tool_2",
+  "rep": 0,
+  "ok": false,
+  "why": "unexpected tool call ['send_message']",
+  "sec": 0.6,
+  "tokens": 34
+ },
+ {
+  "model": "coder-next",
+  "case": "roundtrip",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 14
+ },
+ {
+  "model": "coder-next",
+  "case": "forced_choice",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.5,
+  "tokens": 26
+ },
+ {
+  "model": "coder-next",
+  "case": "weather",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.6,
+  "tokens": 33
+ },
+ {
+  "model": "coder-next",
+  "case": "read_range",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 45
+ },
+ {
+  "model": "coder-next",
+  "case": "shell_timeout",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 40
+ },
+ {
+  "model": "coder-next",
+  "case": "event_nested",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.6,
+  "tokens": 107
+ },
+ {
+  "model": "coder-next",
+  "case": "calc",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 35
+ },
+ {
+  "model": "coder-next",
+  "case": "search_opts",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 47
+ },
+ {
+  "model": "coder-next",
+  "case": "repo_grep",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 44
+ },
+ {
+  "model": "coder-next",
+  "case": "parallel_weather",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.0,
+  "tokens": 67
+ },
+ {
+  "model": "coder-next",
+  "case": "parallel_time",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 50
+ },
+ {
+  "model": "coder-next",
+  "case": "write_escapes",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.9,
+  "tokens": 51
+ },
+ {
+  "model": "coder-next",
+  "case": "unicode_url",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.1,
+  "tokens": 67
+ },
+ {
+  "model": "coder-next",
+  "case": "no_tool_1",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.9,
+  "tokens": 61
+ },
+ {
+  "model": "coder-next",
+  "case": "no_tool_2",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.3,
+  "tokens": 10
+ },
+ {
+  "model": "coder-next",
+  "case": "roundtrip",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.7,
+  "tokens": 14
+ },
+ {
+  "model": "coder-next",
+  "case": "forced_choice",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 0.5,
+  "tokens": 26
+ }
+]

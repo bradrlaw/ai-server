@@ -1,0 +1,4 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,coding-sum-A1,3,500,0.893,562.1,39.7,73.1,25196
+stock,coding-sum-A1,3,4091,5.093,805.5,39.4,74.6,25296
+stock,coding-sum-A1,3,16376,22.077,744.7,39.5,79.2,25296

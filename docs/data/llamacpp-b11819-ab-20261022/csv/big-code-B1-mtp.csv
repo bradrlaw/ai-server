@@ -1,0 +1,7 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,big-code-B1,0,595,1.103,541.6,22.3,,33448
+stock,big-code-B1,0,5100,5.019,1018.7,21.8,,33448
+stock,big-code-B1,0,20827,21.22,984.5,20.6,,33448
+stock,big-code-B1,2,595,1.289,463.1,47.7,98.3,35072
+stock,big-code-B1,2,5100,5.885,868.5,46.8,98.3,35072
+stock,big-code-B1,2,20827,24.633,847.1,44.3,98.8,35072

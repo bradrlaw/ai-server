@@ -1,0 +1,76 @@
+0.00.751.912 W model has unused tensor blk.40.attn_norm.weight (size = 8192 bytes) -- ignoring
+0.00.751.920 W model has unused tensor blk.40.post_attention_norm.weight (size = 8192 bytes) -- ignoring
+0.00.751.931 W model has unused tensor blk.40.attn_q.weight (size = 17825792 bytes) -- ignoring
+0.00.751.935 W model has unused tensor blk.40.attn_k.weight (size = 1114112 bytes) -- ignoring
+0.00.751.939 W model has unused tensor blk.40.attn_v.weight (size = 1114112 bytes) -- ignoring
+0.00.751.953 W model has unused tensor blk.40.attn_output.weight (size = 8912896 bytes) -- ignoring
+0.00.751.957 W model has unused tensor blk.40.attn_q_norm.weight (size = 1024 bytes) -- ignoring
+0.00.751.961 W model has unused tensor blk.40.attn_k_norm.weight (size = 1024 bytes) -- ignoring
+0.00.751.965 W model has unused tensor blk.40.ffn_gate_inp.weight (size = 1048576 bytes) -- ignoring
+0.00.751.969 W model has unused tensor blk.40.ffn_down_exps.weight (size = 220200960 bytes) -- ignoring
+0.00.751.977 W model has unused tensor blk.40.ffn_gate_exps.weight (size = 220200960 bytes) -- ignoring
+0.00.751.981 W model has unused tensor blk.40.ffn_up_exps.weight (size = 220200960 bytes) -- ignoring
+0.00.751.986 W model has unused tensor blk.40.ffn_gate_inp_shexp.weight (size = 4096 bytes) -- ignoring
+0.00.751.990 W model has unused tensor blk.40.ffn_gate_shexp.weight (size = 1114112 bytes) -- ignoring
+0.00.751.994 W model has unused tensor blk.40.ffn_up_shexp.weight (size = 1114112 bytes) -- ignoring
+0.00.751.998 W model has unused tensor blk.40.ffn_down_shexp.weight (size = 1114112 bytes) -- ignoring
+0.00.752.003 W model has unused tensor blk.40.nextn.eh_proj.weight (size = 8912896 bytes) -- ignoring
+0.00.752.008 W model has unused tensor blk.40.nextn.enorm.weight (size = 8192 bytes) -- ignoring
+0.00.752.012 W model has unused tensor blk.40.nextn.hnorm.weight (size = 8192 bytes) -- ignoring
+0.00.752.025 W model has unused tensor blk.40.nextn.shared_head_norm.weight (size = 8192 bytes) -- ignoring
+0.07.513.344 I cmn          init: llama threadpool init, n_threads = 10
+0.07.591.181 I 
+0.07.591.288 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CUDA : ARCHS = 520,700 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.07.794.038 I kl_divergence: computing over 8 chunks, n_ctx=2048, batch_size=512, n_seq=1
+0.11.585.628 I kl_divergence: 3.79 seconds per pass - ETA 0.50 minutes
+
+chunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p
+   1       4.5520 ±    0.3261       0.00077 ±    0.00288       0.00280 ±    0.00025     1.779 ±  0.158 %    98.827 ±  0.337 %
+   2       5.7643 ±    0.3042      -0.00031 ±    0.00191       0.00253 ±    0.00015     1.531 ±  0.101 %    98.289 ±  0.287 %
+   3       6.0877 ±    0.2637      -0.00067 ±    0.00142       0.00224 ±    0.00012     1.381 ±  0.077 %    98.436 ±  0.224 %
+   4       6.1689 ±    0.2342      -0.00036 ±    0.00118       0.00200 ±    0.00010     1.308 ±  0.066 %    98.583 ±  0.185 %
+   5       6.0727 ±    0.2080      -0.00011 ±    0.00102       0.00195 ±    0.00008     1.277 ±  0.056 %    98.573 ±  0.166 %
+   6       5.2866 ±    0.1607      -0.00004 ±    0.00113       0.00220 ±    0.00013     1.462 ±  0.097 %    98.648 ±  0.147 %
+   7       4.8061 ±    0.1313      -0.00036 ±    0.00106       0.00248 ±    0.00032     1.770 ±  0.271 %    98.576 ±  0.140 %
+   8       4.8086 ±    0.1226      -0.00006 ±    0.00097       0.00245 ±    0.00028     1.727 ±  0.243 %    98.436 ±  0.137 %
+
+====== Perplexity statistics ======
+Mean PPL(Q)                   :   4.808559 ±   0.122581
+Mean PPL(base)                :   4.808825 ±   0.122367
+Cor(ln(PPL(Q)), ln(PPL(base))):  99.93%
+Mean ln(PPL(Q)/PPL(base))     :  -0.000055 ±   0.000968
+Mean PPL(Q)/PPL(base)         :   0.999945 ±   0.000968
+Mean PPL(Q)-PPL(base)         :  -0.000266 ±   0.004655
+
+====== KL divergence statistics ======
+Mean    KLD:   0.002450 ±   0.000282
+Maximum KLD:   2.130365
+99.9%   KLD:   0.126290
+99.0%   KLD:   0.030126
+95.0%   KLD:   0.008160
+90.0%   KLD:   0.004412
+Median  KLD:   0.000459
+10.0%   KLD:   0.000008
+ 5.0%   KLD:   0.000002
+ 1.0%   KLD:  -0.000001
+ 0.1%   KLD:  -0.000006
+Minimum KLD:  -0.000018
+
+====== Token probability statistics ======
+Mean    Δp:  0.036 ± 0.019 %
+Maximum Δp: 81.228%
+99.9%   Δp: 11.358%
+99.0%   Δp:  4.367%
+95.0%   Δp:  1.599%
+90.0%   Δp:  0.836%
+75.0%   Δp:  0.158%
+Median  Δp:  0.000%
+25.0%   Δp: -0.124%
+10.0%   Δp: -0.788%
+ 5.0%   Δp: -1.502%
+ 1.0%   Δp: -4.000%
+ 0.1%   Δp: -11.470%
+Minimum Δp: -26.042%
+RMS Δp    :  1.727 ± 0.243 %
+Same top p: 98.436 ± 0.137 %
+

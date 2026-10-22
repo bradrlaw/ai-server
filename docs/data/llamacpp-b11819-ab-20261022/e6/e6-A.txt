@@ -1,0 +1,14 @@
+[e6-A] build A, doc 19970 tokens, think on, extra ''
+  turn 1 | cache_n 0 | prompt_n 20023 | prefill_s 27.84 | gen_n 405 | decode_tps 33.9 | wall_s 39.86 | think_chars 919 | answer_chars 696 | finish stop
+  turn 2 | cache_n 17975 | prompt_n 2258 | prefill_s 4.2 | gen_n 346 | decode_tps 35.6 | wall_s 13.97 | think_chars 995 | answer_chars 238 | finish stop
+  turn 3 | cache_n 20203 | prompt_n 134 | prefill_s 0.88 | gen_n 212 | decode_tps 38.0 | wall_s 6.54 | think_chars 579 | answer_chars 150 | finish stop
+  turn 4 | cache_n 20308 | prompt_n 101 | prefill_s 0.9 | gen_n 207 | decode_tps 38.9 | wall_s 6.3 | think_chars 576 | answer_chars 195 | finish stop
+  turn 5 | cache_n 20379 | prompt_n 115 | prefill_s 0.9 | gen_n 154 | decode_tps 40.6 | wall_s 4.81 | think_chars 269 | answer_chars 217 | finish stop
+  turn 6 | cache_n 20467 | prompt_n 127 | prefill_s 0.85 | gen_n 349 | decode_tps 37.1 | wall_s 10.34 | think_chars 1266 | answer_chars 253 | finish stop
+  log 'forcing full prompt re-processing': 0
+  log 'restored context checkpoint': 0
+  log 'created context checkpoint': 0
+  log 'erased invalidated context checkpoint': 0
+  log 'erasing old context checkpoint': 0
+  log 'deprecated': 0
+  log 'warn': 0

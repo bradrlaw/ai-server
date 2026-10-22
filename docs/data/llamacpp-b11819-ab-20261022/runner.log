@@ -1,0 +1,146 @@
+[14:27:53] === phase smoke
+[14:27:53] mtp-bench smoke-B [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt code --sizes 512 --gen 64 --temp 0.0
+[14:28:11]   rc=0; 1 result lines
+[14:28:11] === done: smoke
+[14:29:02] === phase lb-coding
+[14:29:02] llama-bench coding-A1 [A]
+[14:29:59]   rc=0
+[14:29:59] llama-bench coding-B1 [B]
+[14:30:50]   rc=0
+[14:30:50] llama-bench coding-B2 [B]
+[14:31:42]   rc=0
+[14:31:42] llama-bench coding-A2 [A]
+[14:32:39]   rc=0
+[14:32:39] === phase mtp-coding
+[14:32:39] mtp-bench coding-code-A1 [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 0 3 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:35:10]   rc=0; 6 result lines
+[14:35:10] mtp-bench coding-code-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 0 3 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:37:30]   rc=0; 6 result lines
+[14:37:30] mtp-bench coding-code-B2 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 0 3 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:39:50]   rc=0; 6 result lines
+[14:39:50] mtp-bench coding-code-A2 [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 0 3 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:42:20]   rc=0; 6 result lines
+[14:42:20] mtp-bench coding-sum-A1 [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:43:12]   rc=0; 3 result lines
+[14:43:12] mtp-bench coding-sum-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:44:01]   rc=0; 3 result lines
+[14:44:01] mtp-bench coding-sum-B2 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:44:49]   rc=0; 3 result lines
+[14:44:49] mtp-bench coding-sum-A2 [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:45:40]   rc=0; 3 result lines
+[14:45:40] === phase lb-chat
+[14:45:40] llama-bench chat-A1 [A]
+[14:46:10]   rc=0
+[14:46:10] llama-bench chat-B1 [B]
+[14:46:38]   rc=0
+[14:46:38] llama-bench chat-B2 [B]
+[14:47:06]   rc=0
+[14:47:06] llama-bench chat-A2 [A]
+[14:47:35]   rc=0
+[14:47:35] === phase mtp-chat
+[14:47:35] mtp-bench chat-sum-A1 [A]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 0 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:48:45]   rc=0; 6 result lines
+[14:48:45] mtp-bench chat-sum-B1 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 0 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:50:03]   rc=0; 6 result lines
+[14:50:03] mtp-bench chat-sum-B2 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 0 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:51:23]   rc=0; 6 result lines
+[14:51:23] mtp-bench chat-sum-A2 [A]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 0 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[14:52:34]   rc=0; 6 result lines
+[14:52:34] mtp-bench chat-code-A1 [A]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:53:25]   rc=0; 2 result lines
+[14:53:25] mtp-bench chat-code-B1 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:54:09]   rc=0; 1 result lines
+[14:54:09] === phase lb-big
+[14:54:09] llama-bench big-A1 [A]
+[14:55:08]   rc=0
+[14:55:08] llama-bench big-B1 [B]
+[14:56:05]   rc=0
+[14:56:05] === phase mtp-big
+[14:56:05] mtp-bench big-code-A1 [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf --gpu 1,2 --split --kv f16 --ubatch 512 --ctx 40960 --nmax 0 2 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[14:58:34]   rc=0; 6 result lines
+[14:58:34] mtp-bench big-code-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf --gpu 1,2 --split --kv f16 --ubatch 512 --ctx 40960 --nmax 0 2 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[15:00:56]   rc=0; 6 result lines
+[15:00:56] === phase kld
+[15:00:57] kld coding: A saves logits
+[15:01:32]   A rc=0; size 3.8G
+[15:01:32] kld coding: B compares
+[15:02:05]   B rc=0
+[15:02:05] kld chat: A saves logits
+[15:02:45]   A rc=0; size 3.8G
+[15:02:45] kld chat: B compares
+[15:03:21]   B rc=0
+[15:03:22] kld big: A saves logits
+[15:03:59]   A rc=0; size 3.8G
+[15:03:59] kld big: B compares
+[15:04:32]   B rc=0
+[15:04:33] === phase ctxfit
+[15:04:33] mtp-bench ctxfit-coding-A [A]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 163840 --fill 150000 --nmax 3 --gen 128 --temp 0.0
+[15:11:58]   rc=0; 1 result lines
+[15:11:58] mtp-bench ctxfit-chat-A [A]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 98304 --fill 90000 --nmax 2 --gen 128 --temp 0.0
+[15:14:10]   rc=0; 1 result lines
+[15:14:10] mtp-bench ctxfit-coding-B [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 163840 --fill 150000 --nmax 3 --gen 128 --temp 0.0
+[15:21:21]   rc=0; 1 result lines
+[15:21:21] mtp-bench ctxfit-chat-B [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 98304 --fill 90000 --nmax 2 --gen 128 --temp 0.0
+[15:23:27]   rc=0; 1 result lines
+[15:23:27] === done: lb-coding mtp-coding lb-chat mtp-chat lb-big mtp-big kld ctxfit
+[15:24:20] === phase e6
+[15:25:52] e6 A rc=0
+[15:27:09] e6 B rc=0
+[15:27:09] === phase kldctl
+[15:27:09] kldctl: A ub512 saves base
+[15:27:50] kldctl: A ub256 vs A ub512 (same build, different kernel selection)
+[15:28:34] kldctl: B ub256 vs A ub512
+[15:29:16] === phase e2
+[15:29:16] mtp-bench coding-sumE2-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --spec-draft-sampling probabilistic
+[15:30:05]   rc=0; 3 result lines
+[15:30:05] mtp-bench coding-sumE2-B2 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --spec-draft-sampling probabilistic
+[15:30:53]   rc=0; 3 result lines
+[15:30:54] mtp-bench chat-sumE2-B1 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --spec-draft-sampling probabilistic
+[15:31:32]   rc=0; 3 result lines
+[15:31:33] mtp-bench chat-sumE2-B2 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --spec-draft-sampling probabilistic
+[15:32:11]   rc=0; 3 result lines
+[15:32:11] === phase small
+[15:32:11] llama-bench small-A1 [A]
+[15:34:20]   rc=0
+[15:34:20] llama-bench small-B1 [B]
+[15:36:31]   rc=0
+[15:36:31] === phase e5
+[15:36:31] mtp-bench coding-sumN-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 2 4 5 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[15:38:47]   rc=0; 9 result lines
+[15:38:47] mtp-bench coding-codeN-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 2 4 5 --prompt code --sizes 512,4096,16384 --gen 256 --temp 0.0
+[15:41:51]   rc=0; 9 result lines
+[15:41:51] mtp-bench coding-sumP5-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --spec-draft-p-min 0.5
+[15:42:39]   rc=0; 3 result lines
+[15:42:39] mtp-bench coding-sumBS-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra --no-spec-draft-backend-sampling
+[15:42:39]   rc=2; 0 result lines
+[15:42:39] === phase e10
+[15:42:39] mtp-bench coding-sumE10-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[15:43:27]   rc=0; 3 result lines
+[15:43:28] mtp-bench coding-sumE10-B2 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[15:44:16]   rc=0; 3 result lines
+[15:44:16] === done: e6 kldctl e2 small e5 e10
+[15:45:07] === phase small2
+[15:45:07] llama-bench small-B2 [B]
+[15:47:15]   rc=0
+[15:47:15] llama-bench small-A2 [A]
+[15:49:28]   rc=0
+[15:49:28] === phase bs
+[15:49:28] mtp-bench coding-sumBS-B1 [B]: --model /srv/ai/models/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf --gpu 1 --kv q8_0 --ctx 40960 --nmax 3 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6 --extra=--no-spec-draft-backend-sampling
+[15:50:16]   rc=0; 3 result lines
+[15:50:16] === done: small2 bs
+[15:51:53] === phase ng
+[15:51:53] llama-bench coding-NG-B1 [B]
+[15:52:44]   rc=0
+[15:52:44] === phase e10chat
+[15:52:44] mtp-bench chat-sumE10-B1 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[15:53:27]   rc=0; 3 result lines
+[15:53:27] mtp-bench chat-sumE10-B2 [B]: --model /srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf --gpu 2 --kv q8_0 --ctx 40960 --nmax 2 --prompt summary --sizes 512,4096,16384 --gen 256 --temp 0.6
+[15:54:07]   rc=0; 3 result lines
+[15:54:07] === phase e6n
+[15:55:25] e6 B n4 rc=0
+[15:56:42] e6 B n5 rc=0
+[15:56:42] === done: ng e10chat e6n
+[15:58:39] === phase ngchat
+[15:58:39] llama-bench chat-NG-B1 [B]
+[15:59:06]   rc=0
+[15:59:06] === done: ngchat

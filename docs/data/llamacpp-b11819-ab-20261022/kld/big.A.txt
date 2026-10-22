@@ -1,0 +1,10 @@
+0.08.360.192 I 
+0.08.360.301 I system_info: n_threads = 10 (n_threads_batch = 10) / 20 | CUDA : ARCHS = 520,600,610,700 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.08.360.360 I perplexity: saving all logits to /srv/ai/tmp/lcpp-test/ab1/kld/big.logits
+0.08.360.366 I perplexity: tokenizing the input ..
+0.08.995.194 I perplexity: tokenization took 634.821 ms
+0.08.995.411 I perplexity: calculating perplexity over 8 chunks, n_ctx=2048, batch_size=512, n_seq=1
+0.13.162.760 I perplexity: 3.77 seconds per pass - ETA 0.50 minutes
+[1]5.0896,[2]6.0423,[3]6.2128,[4]6.2234,[5]6.1819,[6]5.3492,[7]5.0861,[8]5.0755,
+0.36.588.149 I Final estimate: PPL = 5.0755 +/- 0.12993
+

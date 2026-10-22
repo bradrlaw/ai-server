@@ -1,0 +1,10 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,coding-codeN-B1,2,595,0.962,620.4,55.0,98.3,25154
+stock,coding-codeN-B1,2,5100,6.166,828.6,53.2,98.3,25250
+stock,coding-codeN-B1,2,20827,27.826,750.4,47.4,98.2,25250
+stock,coding-codeN-B1,4,595,0.972,614.2,68.3,96.2,25456
+stock,coding-codeN-B1,4,5100,6.194,826.0,65.9,96.7,25552
+stock,coding-codeN-B1,4,20827,27.769,751.3,56.8,93.5,25552
+stock,coding-codeN-B1,5,595,0.969,615.7,73.4,96.3,25604
+stock,coding-codeN-B1,5,5100,6.198,825.8,69.8,94.2,25700
+stock,coding-codeN-B1,5,20827,28.154,741.6,61.5,94.1,25700

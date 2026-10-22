@@ -1,0 +1,7 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,chat-sum-A2,0,500,0.816,614.9,90.2,,29750
+stock,chat-sum-A2,0,4091,3.486,1177.1,88.4,,29876
+stock,chat-sum-A2,0,16376,14.22,1155.6,81.8,,29878
+stock,chat-sum-A2,2,500,0.856,586.1,121.7,73.1,30348
+stock,chat-sum-A2,2,4091,3.76,1094.7,120.0,75.0,30600
+stock,chat-sum-A2,2,16376,15.556,1058.0,110.8,73.1,30602
