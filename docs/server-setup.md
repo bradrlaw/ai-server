@@ -293,7 +293,8 @@ less fragile and engines independently upgradable.
    (~233 tg t/s) with a 0.5B Q4_K_M test model.
    *(Rebuilt 2026-07-27 for archs `52;60;61;70` after the P100 died (ADR-0017). Since
    2026-10-15 the script builds into a staging folder before swapping; see "llama.cpp
-   usage notes" below.)*
+   usage notes" below. **Updated 2026-10-22 to b11819 / `0693dbfb9`** ([ADR-0030](adr/0030-llama-cpp-b11819-update.md)):
+   `coding` decode +17%, no flag changes. The b9850 build is kept as `build.b9850-golden/`.)*
 5. ✅ **Docker + NVIDIA Container Toolkit** (`scripts/install-docker-nvidia.sh`). llama.cpp
    stayed native; the CPU app tier runs in Docker Compose (ADR-0006).
 6. ✅ Evaluated **vLLM** on the V100s: it runs, but the track was dropped 2026-07-18 (ADR-0004).
@@ -314,8 +315,9 @@ GPUs:    nvidia-smi order: 0=Titan X (stopgap, was P100)  1=V100  2=V100
          → set CUDA_DEVICE_ORDER=PCI_BUS_ID to align with nvidia-smi
 NVLink:  none (all PHB / PCIe gen3)
 gcc:     13.3.0
-llama.cpp clone: /srv/ai/src/llama.cpp
+llama.cpp clone: /srv/ai/src/llama.cpp   (b11819 / 0693dbfb9 since 2026-10-22; was b9850 / 4f31eedb0)
 llama.cpp build: /srv/ai/src/llama.cpp/build/bin  (built by scripts/build-llama.sh)
+llama.cpp fallback: /srv/ai/src/llama.cpp/build.b9850-golden  (the pre-update build; ADR-0030)
 docker:  29.6.1 + Compose v5.3.0, NVIDIA Container Toolkit 1.19.1 (CPU app tier)
 ```
 
@@ -721,8 +723,24 @@ sudo systemctl poweroff
     build in place. Only the newest `build.prev-*` is kept.
 
   Models that are already loaded keep the old binary until llama-swap next starts them.
-  To roll back: `mv build build.bad && mv build.prev-<…> build`. To update llama.cpp:
-  `git checkout -- ggml/src/ggml-cuda/common.cuh && git pull`, then rerun the script.
+  To roll back: `mv build build.bad && mv build.prev-<…> build`, then unload and re-warm
+  (`curl 127.0.0.1:9090/unload && scripts/llama-swap-mode.py set daily`).
+  `build.b9850-golden/` is a hand-made copy of the pre-2026-10-22 build that the script never
+  touches (like `build.bak-*`); to fall all the way back to b9850, use
+  `mv build build.bad && cp -a build.b9850-golden build` (copy, so the golden stays).
+- **Updating llama.cpp:** don't pull straight into production. Fetch the new commit into a
+  separate clone and build it there (`src/llama.cpp-<tag>`, archs `52;70` is enough), A/B it
+  against the live build with the real `config/llama-swap.base.yaml` flags, and only then
+  promote it: `git checkout -- ggml/src/ggml-cuda/common.cuh`, `git fetch`/`git merge --ff-only`
+  in `src/llama.cpp`, rerun `scripts/build-llama.sh`. The 2026-10-22 update followed this
+  path ([ADR-0030](adr/0030-llama-cpp-b11819-update.md), results in
+  [benchmarking.md](benchmarking.md#llamacpp-update-b9850-to-b11819--ab-on-the-v100s-2026-10-22)).
+  The benchmark scripts take `LLAMA_SERVER_BIN` / `LLAMA_BENCH_BIN` so they can run against a
+  build that isn't `build/`.
+- **Version string:** since upstream's semantic-versioning change (#26839, 2026-08-12)
+  `llama-server --version` prints `version: 0.7.0-dev (build 11819, commit 0693dbfb9)` instead
+  of `version: 9850 (4f31eedb0)`. `build-llama.sh` reads both when it names the
+  `build.prev-<commit>-<time>` folder.
 - **GPU selection:** set `CUDA_DEVICE_ORDER=PCI_BUS_ID` so `CUDA_VISIBLE_DEVICES`
   indices match nvidia-smi (0=Titan X stopgap, 1/2=V100). Otherwise CUDA reorders V100s first.
 - **`-hf` auto-download hits HTTP 401** (HF API now requires auth for the commit
@@ -1144,7 +1162,7 @@ immediately (Gemma reasoning disabled).
 **Gemma-4 note:** Gemma-4 is a **hybrid reasoning** model (thoughts land in `reasoning_content`).
 `small` sets `--reasoning-budget 0` to skip thinking for snappy chat; the comparison models
 `gemma-31b`/`gemma-26b` keep reasoning on. All use QAT UD-Q4_K_XL (unsloth) — 4-bit quality
-close to full precision. Our llama.cpp build (9850, `LLM_ARCH_GEMMA4`) supports them natively.
+close to full precision. Our llama.cpp build (b11819; `LLM_ARCH_GEMMA4` has been there since at least b9850) supports them natively.
 
 **Behavioural notes:** these are reasoning models — final answer is in `content`, chain-of-thought
 in `reasoning_content`; budget `max_tokens` generously (≥512) or `content` returns empty with

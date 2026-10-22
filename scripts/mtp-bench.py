@@ -20,14 +20,18 @@ records prefill / decode / draft-acceptance / VRAM to docs/data/mtp/.
 Always exports CUDA_DEVICE_ORDER=PCI_BUS_ID and keeps the target GPU clear by
 repeatedly unloading llama-swap models while it runs; re-warms daily at the end
 unless --no-restore.
+
+To test a different llama.cpp build without touching production, set
+LLAMA_SERVER_BIN=<path to llama-server> and MTP_DATA_DIR=<csv output dir>
+(defaults: the production build and docs/data/mtp).
 """
 import argparse, csv, json, os, signal, socket, subprocess, sys, threading, time
 import urllib.request
 
 MODEL = "/srv/ai/models/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
-STOCK_BIN = "/srv/ai/src/llama.cpp/build/bin/llama-server"
+STOCK_BIN = os.environ.get("LLAMA_SERVER_BIN", "/srv/ai/src/llama.cpp/build/bin/llama-server")
 SWAP = "http://127.0.0.1:9090"
-DATA_DIR = "/srv/ai/docs/data/mtp"
+DATA_DIR = os.environ.get("MTP_DATA_DIR", "/srv/ai/docs/data/mtp")
 GPU = 1                     # free V100 for testing (idx1)
 CTX = 40960                 # test ctx: must exceed the largest prompt (32k) + gen +
                             # margin. 35B-A3B MoE q8_0 KV is cheap (prod runs 96k), so

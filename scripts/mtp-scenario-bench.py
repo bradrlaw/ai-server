@@ -29,9 +29,9 @@ import argparse, csv, json, os, signal, socket, subprocess, sys, threading, time
 import urllib.request
 
 MODEL = "/srv/ai/models/cold/qwen3.6-27b-mtp/Qwen3.6-27B-Q6_K.gguf"   # cold tier (bulk HDD)
-STOCK_BIN = "/srv/ai/src/llama.cpp/build/bin/llama-server"
+STOCK_BIN = os.environ.get("LLAMA_SERVER_BIN", "/srv/ai/src/llama.cpp/build/bin/llama-server")
 SWAP = "http://127.0.0.1:9090"
-DATA_DIR = "/srv/ai/docs/data/mtp"
+DATA_DIR = os.environ.get("MTP_DATA_DIR", "/srv/ai/docs/data/mtp")
 GPU = 1
 CTX = 8192
 BATCH = 2048

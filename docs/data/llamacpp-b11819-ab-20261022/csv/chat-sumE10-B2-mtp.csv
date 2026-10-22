@@ -1,0 +1,4 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,chat-sumE10-B2,2,500,0.781,644.6,124.7,71.0,30496
+stock,chat-sumE10-B2,2,4091,3.466,1186.1,123.8,73.8,30800
+stock,chat-sumE10-B2,2,16376,13.93,1179.7,113.3,72.1,30802

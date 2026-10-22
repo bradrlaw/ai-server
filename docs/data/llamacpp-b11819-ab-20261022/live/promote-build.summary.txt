@@ -1,0 +1,85 @@
+==> Toolchain
+Cuda compilation tools, release 12.9, V12.9.86
+cmake version 3.28.3
+    ccache: ccache version 4.9.1
+    repo: b11819
+    archs: 52;60;61;70
+==> P100 FAST_FP16 carveout (ADR-0014)
+    applied /srv/ai/scripts/patches/p100-fast-fp16-carveout.patch
+==> CLEAN: removing /srv/ai/src/llama.cpp/build.new (the live build/ is not touched)
+==> Configure into /srv/ai/src/llama.cpp/build.new (CUDA on, archs 52;60;61;70, ccache on)
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- llama.cpp version: 0.7.0-dev
+CMAKE_BUILD_TYPE=Release
+-- Found Git: /usr/bin/git (found version "2.43.0") 
+-- The ASM compiler identification is GNU
+-- Found assembler: /usr/bin/cc
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- ccache found, compilation results will be cached. Disable with GGML_CCACHE=OFF.
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Found OpenMP_C: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Including CPU backend
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -march=native 
+-- Found CUDAToolkit: /usr/local/cuda/targets/x86_64-linux/include (found version "12.9.86") 
+-- CUDA Toolkit found
+-- The CUDA compiler identification is NVIDIA 12.9.86
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Using CMAKE_CUDA_ARCHITECTURES=52;60;61;70 CMAKE_CUDA_ARCHITECTURES_NATIVE=70-real;52-real
+-- FlashAttention K-V type combinations: f16-f16;q4_0-q4_0;q8_0-q8_0;bf16-bf16
+-- Could NOT find NCCL (missing: NCCL_LIBRARY NCCL_INCLUDE_DIR) 
+-- Warning: NCCL not found, performance for multiple CUDA GPUs will be suboptimal
+-- CUDA host compiler is GNU 13.3.0
+-- Including CUDA backend
+-- ggml version: 0.27.0
+-- ggml commit:  0693dbfb9-dirty
+-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.13")  
+-- Performing Test OPENSSL_VERSION_SUPPORTED
+-- Performing Test OPENSSL_VERSION_SUPPORTED - Success
+-- OpenSSL found: 3.0.13
+-- Generating embedded license file for target: llama-app
+-- Configuring done (4.8s)
+-- Generating done (0.3s)
+-- Build files have been written to: /srv/ai/src/llama.cpp/build.new
+==> Build (using 20 jobs)
+-- UI: downloading from b11819: https://huggingface.co/buckets/ggml-org/llama-ui/resolve/b11819/dist.tar.gz
+-- UI: archive verified and extracted
+-- UI: HF download succeeded, stamp updated (ggml-org/llama-ui|b11819, resolved: b11819)
+-- UI: gzip compression applied (/srv/ai/src/llama.cpp/build.new/tools/ui/ui-gzip/_gzip)
+-- UI: embedded 70 assets
+==> Verify the new build (before it goes live)
+    version: 0.7.0-dev (build 11819, commit 0693dbfb9)
+    CUDA code for: sm_52 sm_60 sm_61 sm_70 
+==> Swap into place
+    live: version: 0.7.0-dev (build 11819, commit 0693dbfb9)
+    previous build kept for rollback: /srv/ai/src/llama.cpp/build.prev-4f31eedb0-20261022T165352Z
+    removing older rollback copy /srv/ai/src/llama.cpp/build.prev-4f31eedb0-20261015T083322Z
+
+==> DONE. Key binaries:
+    /srv/ai/src/llama.cpp/build/bin/llama-server
+    /srv/ai/src/llama.cpp/build/bin/llama-cli
+    /srv/ai/src/llama.cpp/build/bin/llama-bench
+    /srv/ai/src/llama.cpp/build/bin/llama-embedding
+
+    Loaded models keep the old binary until llama-swap next starts them.
+    Rollback: cd /srv/ai/src/llama.cpp && mv build build.bad && mv build.prev-4f31eedb0-20261022T165352Z build

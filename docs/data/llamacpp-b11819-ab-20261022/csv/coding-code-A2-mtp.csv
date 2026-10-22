@@ -1,0 +1,7 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,coding-code-A2,0,595,0.908,657.5,22.3,,23838
+stock,coding-code-A2,0,5100,6.041,845.9,21.7,,23886
+stock,coding-code-A2,0,20827,27.541,757.2,20.2,,23886
+stock,coding-code-A2,3,595,1.005,593.3,48.8,98.4,25200
+stock,coding-code-A2,3,5100,6.414,796.7,46.8,96.9,25296
+stock,coding-code-A2,3,20827,29.278,712.4,42.5,94.3,25296

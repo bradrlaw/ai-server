@@ -1,0 +1,4 @@
+chat weather: (raw <tool_call> blocks, parsed tool_calls) -> count: {(2, 2): 11, (1, 1): 1}
+chat time: (raw <tool_call> blocks, parsed tool_calls) -> count: {(2, 2): 12}
+small weather: (raw <tool_call> blocks, parsed tool_calls) -> count: {(2, 2): 12}
+small time: (raw <tool_call> blocks, parsed tool_calls) -> count: {(2, 2): 10, (1, 1): 2}

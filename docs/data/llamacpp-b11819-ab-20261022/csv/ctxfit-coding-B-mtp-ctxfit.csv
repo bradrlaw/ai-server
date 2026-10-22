@@ -1,0 +1,2 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,ctxfit-coding-B,3,149999,412.986,363.7,24.2,75.0,31274

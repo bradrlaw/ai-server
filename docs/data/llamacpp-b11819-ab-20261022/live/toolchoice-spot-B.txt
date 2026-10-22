@@ -1,0 +1,13 @@
+model            named  required      auto
+coding            6/10     10/10      8/10
+chat             10/10      9/10     10/10
+small            10/10     10/10     10/10
+
+# Other runs of the same prompt on b11819 the same day (inline, same post()/grade()):
+#   coding  named 3/10 | required 10/10 | auto 4/10
+#   chat    named 10/10 | required 9/10, then 20/20 | auto 10/10
+#   small   named 10/10 | required 10/10 | auto 10/10
+#   big     named 8/10 (n=10)
+# Combined coding: named + auto = 21/40 (52%), required = 20/20. llama.cpp does not honour the object
+# form of tool_choice (it falls back to "auto"), so "named" is the model's own choice, not a server feature.
+# b9850 was not measured for these (it was no longer live when this came up).

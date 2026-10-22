@@ -15,7 +15,7 @@ set -euo pipefail
 
 MODEL_DIR=/srv/ai/models/qwen3.8-27b
 COLD_DIR=/srv/ai/models/cold/qwen3.8-27b   # bulk HDD
-BIN=/srv/ai/src/llama.cpp/build/bin/llama-bench
+BIN=${LLAMA_BENCH_BIN:-/srv/ai/src/llama.cpp/build/bin/llama-bench}   # override to bench another build
 Q6K="$MODEL_DIR/Qwen3.8-27B-Q6_K.gguf"
 Q8XL="$MODEL_DIR/Qwen3.8-27B-UD-Q8_K_XL.gguf"
 UDXL="$COLD_DIR/Qwen3.8-27B-UD-Q6_K_XL.gguf"

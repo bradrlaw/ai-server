@@ -1,0 +1,2 @@
+engine,model,nmax,prompt_tokens,ttft_s,prefill_tok_s,decode_tok_s,accept_pct,vram_mib
+stock,chat-code-B1,2,20827,20.623,1012.0,132.3,98.8,30748

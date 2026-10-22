@@ -49,6 +49,7 @@ concurrent users" curve popularised by Alex Ziskind's local-LLM videos.
   - [coding context-window sweep (2026-07-02)](#coding-context-window-sweep-2026-07-02)
   - [Prompt-processing (prefill) tuning — `--ubatch-size` (2026-07-02)](#prompt-processing-prefill-tuning----ubatch-size-2026-07-02)
   - [Gemma-4 benchmarks + context/ubatch tuning (2026-07-02)](#gemma-4-benchmarks--contextubatch-tuning-2026-07-02)
+- [llama.cpp update b9850 to b11819 — A/B on the V100s (2026-10-22)](#llamacpp-update-b9850-to-b11819--ab-on-the-v100s-2026-10-22)
 - [Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)](#host-memory-bandwidth--stream-on-the-i7-6950x-2026-09-23)
 
 ## Tooling
@@ -1698,6 +1699,215 @@ was ruled out: ~55 GB weights + KV overflow 64 GB at 256k.
 max-quality slot. The quality delta over Q6 is below eval noise, so this is precision insurance
 rather than a measured win. (Raw study: `docs/data/lm-eval/qwen38-sampling-variance-20260815.csv`
 for the temperature effect; llama-bench numbers in the section above were taken on Q6_K_XL.)
+
+## llama.cpp update b9850 to b11819 — A/B on the V100s (2026-10-22)
+
+Production llama.cpp was **b9850** (`4f31eedb0`, 2026-06-30) from the July bring-up on. Upstream was
+1,969 commits ahead at **b11819** (`0693dbfb9`, 2026-10-22). The Qwen3.8-Flash-Next research and the
+Hermes `v100-perf-scout` cards both pointed at V100 wins in that range (CUDA graphs on Volta
+[#25749](https://github.com/ggml-org/llama.cpp/pull/25749), sm_70 K-quant tuning
+[#28912](https://github.com/ggml-org/llama.cpp/pull/28912)), but nobody had measured them with *our*
+flags. This section is the A/B that settled it. Decision record:
+[ADR-0030](adr/0030-llama-cpp-b11819-update.md). Raw data and every script:
+`docs/data/llamacpp-b11819-ab-20261022/`.
+
+**Verdict: promote b11819 as a drop-in (no flag changes).** `coding` decodes **+17%** faster, `chat`
++3–4%, `big` +1.3%, `small` unchanged; prefill is +2–13% on every slot; VRAM at the production
+contexts grows by at most 104 MiB; output quality is unchanged.
+
+### Method
+
+- **A** = the production `build/` (b9850, archs `52;60;61;70`). **B** = b11819 built in a separate clone
+  (`src/llama.cpp-b11819`, archs `52;70`, NCCL linked), so production `build/` was never touched.
+- One daytime window on 2026-10-22 (14:26–16:01Z). llama-swap was unloaded (the daily trio was down
+  about 95 minutes) and the GPUs were pinned with `CUDA_DEVICE_ORDER=PCI_BUS_ID`.
+- Every slot ran its **exact production flags** from `config/llama-swap.base.yaml` (context, KV
+  types, `-ngl`, MTP `n_max`). Only the binary changed.
+- Runs go A, B, B, A so thermal drift cancels. Tables show the median of the ABBA runs; a few `big`
+  and `chat` cells are a single A/B pair and are marked indicative.
+- Tools: `llama-bench` (pp512 / tg128 at depth 0 and 8192), `scripts/mtp-bench.py` (end-to-end decode
+  and prefill; `code` = echo-heavy prompt, `summary` = generative), a ctx-fit run (peak VRAM with the
+  production context filled), `llama-perplexity` KLD against A's logits (wikitext-2, 8×2048), and a
+  6-turn, ~20k-token prompt-cache test.
+
+### Results by slot
+
+| slot (quant) | decode, no MTP (`llama-bench` tg128) | decode with MTP | prefill (pp512) | VRAM at production ctx |
+|---|---|---|---|---|
+| `coding` (Qwen3.8-27B Q6_K, V100 idx1) | 22.5 → **26.4** t/s (**+17%**); at 8k depth 21.5 → 25.2 | code prompt **+23–25%** (n=3, 46.8 → 58.5 t/s at 5k); summary +11–26% | +4–7% | +104 MiB (ctx 163840, 150k fill: 31170 → 31274 MiB) |
+| `chat` (Qwen3.6-35B-A3B UD-Q6_K MoE, idx2) | 93.1 → 96.1 t/s (+3%); at 8k 87.9 → 91.4 (+4%) | +1.4–3.8% (n=2) | +5–13% | +36 MiB (ctx 98304, 90k fill: 31856 → 31892 MiB) |
+| `big` (Qwen3.8-27B UD-Q8_K_XL, dual V100) | 22.3 → 22.6 t/s (+1.3%) | +1–9% (n=2, indicative) | +7–10% | +278 MiB (ctx 40960 with MTP) |
+| `small` (Gemma-4-12B QAT, Titan X idx0) | 19.9 → 19.8 t/s (noise) | n/a (no MTP) | +2% | not measured |
+
+The `coding` row reproduces on real traffic: in the 6-turn prompt-cache test (thinking on, ~20k-token
+document) B decodes 42–49 t/s against A's 34–41 t/s, and the 20k-token context is cached better (see
+below).
+
+### Why it is faster, and what it is not
+
+The gain follows the **quant type**: Q6_K dense +17%, the MoE's UD-Q6_K +3%, `big`'s Q8_0-based
+Q8_K_XL +1.3% (already near 78% of the V100's memory bandwidth), the Titan X 0%. That points at
+the K-quant matrix-vector kernels, not at graph scheduling. The commits in `4f31eedb0..0693dbfb9` that
+touch them:
+
+- [#30517](https://github.com/ggml-org/llama.cpp/pull/30517) faster MMVQ for low-bit types,
+- [#29753](https://github.com/ggml-org/llama.cpp/pull/29753) routes sm_70 to the Turing MMVQ `nwarps` table (K-quants now launch at `nwarps=2`),
+- [#28912](https://github.com/ggml-org/llama.cpp/pull/28912) tunes the MMVQ→MMQ crossover for sm_70,
+- [#29184](https://github.com/ggml-org/llama.cpp/pull/29184) fuses the shared-expert MMVQ (helps the MoE).
+
+**It is not CUDA graphs.** The research notes credited #25749 (CUDA graphs on Volta). The control
+disproves that: B with `GGML_CUDA_DISABLE_GRAPHS=1` gives `coding` tg128 26.4 t/s (graphs on: 26.4 and
+26.3) and `chat` 97.4 t/s (graphs on: 96.0 and 96.1). I did not bisect the individual commits.
+`coder-next` (UD-Q4_K_XL, K-quants) should gain from the same kernels; it was only measured on b11819
+(80.0 t/s single-stream, in the live checks below), so there is no A-side number for it.
+
+### Quality gate (KLD / PPL, B against A's base logits)
+
+| slot | A PPL | ln(PPL B / PPL A) | mean KLD | same top-1 token |
+|---|---:|---:|---:|---:|
+| `coding` | 5.0688 | −0.0004 ± 0.0007 | 1.6e-4 | 99.87% |
+| `chat` | 4.8099 | −0.00006 ± 0.0010 | 2.45e-3 | 98.44% |
+| `big` | 5.0755 | +0.0010 ± 0.0007 | 4.2e-4 | 98.83% |
+
+`chat`'s KLD is the noise floor of a MoE at this batch size, not a regression: a control run of
+**A against itself** at `-ub 256` instead of `-ub 512` gives 2.39e-3 (`kld/ctl-A256-vs-A512.txt`).
+PPL is unchanged on all three.
+
+### Prompt cache (`coding`, production flags, ~20k-token document, 6 turns, thinking on)
+
+No defect on either build. B reuses more of the cached prefix on turn 2 (20,019 tokens reused and 191
+reprocessed, 1.03 s prefill, 8.97 s turn, against A's 17,975 and 2,258, 4.2 s, 13.97 s).
+
+### Flag experiments on b11819 (B only, each against the same B without the flag)
+
+| flag | `coding` | `chat` | verdict |
+|---|---|---|---|
+| `--spec-draft-sampling probabilistic` | +13.7 / −5.9 / −2.9% (500 / 4k / 16k tokens) | +8.4 / +3.3 / +2.1% | `chat` only, marginal; skipped for now |
+| `--spec-draft-n-max 4` (vs 3) | echo-heavy code **+8…+13%**; summary +4…+12%; real 6-turn traffic **+2%** | not run | worth a ctx-fit at 163840 first (+152 MiB) |
+| `--spec-draft-n-max 5` (vs 3) | code +17…+20%; real traffic +4% (noise) | not run | not worth +300 MiB |
+| `--spec-draft-n-max 2` (vs 3) | code −10% | not run | worse |
+| `--spec-draft-p-min 0.5` | 0 / +0.7 / +4.1% | not run | no gain |
+| `--no-spec-draft-backend-sampling` | −1% | not run | no gain |
+| `GGML_CUDA_GRAPH_OPT=1` | −0.1% | +0.1 / −1.3 / −1.0% | no-op |
+
+Not applicable on our hardware (checked in the source and `--help`): chunked GatedDeltaNet
+[#29353](https://github.com/ggml-org/llama.cpp/pull/29353) is only enabled on Ampere (GA10x) and newer,
+`--moe-cache-mib` only caches experts that are offloaded to the CPU (ours sit entirely in VRAM),
+flash-attention was already on, and `--fit` is already the default.
+
+### Live checks after the swap (2026-10-22)
+
+Run on the production build after the 16:55Z re-warm, in `daily` mode with the real slot flags.
+Raw output is in `live/` and the scripts in `harness/` (see the next heading).
+
+**Swap and smoke tests.** `scripts/build-llama.sh` built the four-arch binary in 13 min (niced) and
+swapped it in at 16:53:52Z. `--version` prints `0.7.0-dev (build 11819, commit 0693dbfb9)`, the SASS
+covers sm_52/60/61/70 and the carveout patch is applied. After `/unload` and
+`llama-swap-mode.py set daily` the trio was ready in 37 s with the same VRAM as on b9850 (idx0 8,598,
+idx1 30,774, idx2 31,524 MiB). One 300-token story per slot gave `coding` 53.6 t/s (MTP), `chat`
+129 t/s and `small` 20 t/s, matching `llama-bench`. The same question through LiteLLM `:4000`,
+streaming and not, was answered correctly on all three.
+
+**Tool-call suite** (`harness/toolcall-suite.py`: 15 cases, 2 repetitions per slot, temperature 0.6;
+A = b9850 before the swap, B = b11819 after):
+
+| slot | A | B | misses on B |
+|---|---:|---:|---|
+| `coding` | 28/30 | 30/30 | none |
+| `chat` | 30/30 | 29/30 | `parallel_weather` ×1 (one call of the two asked for) |
+| `small` | 28/30 | 27/30 | `parallel_time` ×1 (same), `repo_grep` ×2 (picks `run_shell`; 0/2 on A too) |
+| `big` | not run | 29/30 | `forced_choice` ×1 |
+| `coder-next` | not run | 29/30 | `no_tool_2` ×1 (called `send_message` on a prompt that needs no tool) |
+
+Neither build produced an HTTP error, malformed JSON or tool markup in the message content. The
+differences are not a regression:
+
+- **Parallel calls.** Asking llama-server for `verbose` output returns the raw generated text next to
+  the parsed message, so the two can be compared for the *same* sample (`harness/parcheck2.py`). For
+  12 + 12 samples per slot, the number of `<tool_call>` blocks the model wrote equalled the number of
+  parsed `tool_calls` every time (`chat`: 23 × two calls, 1 × one call; `small`: 22 × two, 2 × one).
+  A single call where two were asked for is the model writing one call, at a rate that moves from run
+  to run (an earlier unpaired run on `chat` saw 3/12 and 2/12 singles in the raw text).
+- **`forced_choice`.** The case sends `tool_choice: {"type":"function","function":{"name":"calculator"}}`.
+  llama.cpp reads `tool_choice` as a string (`json_value()` returns the default `auto` when the field
+  has another type), so the named form is **not** honoured on either build and the case only
+  measures how often the model chooses the tool. On b11819 `coding` called it in 21 of 40 tries
+  (named and `auto` together), `big` in 8/10, `chat` and `small` in 10/10. `coding`'s 0/2 on A and
+  2/2 on B is therefore noise, not a fix. `"tool_choice": "required"` *is* honoured (b11819:
+  `coding` 20/20, `chat` 38/40, `small` 20/20; b9850 not measured). Data:
+  `live/toolchoice-spot-B.txt`, script `harness/toolchoice-spot.py`.
+- **Completion length.** `chat`'s suite completions are the same length on both builds (median 203
+  tokens on A, 216 on B), so b11819 does not make the thinking longer.
+
+**OpenClaw `cron` request.** The owner-only `cron` tool schema that the Control UI sends
+(`live/openclaw-cron-req.json`, [ADR-0007](adr/0007-litellm-openai-api-gateway.md) addendum) was
+rejected with HTTP 400 by b9850 (grammar repetition limit). On b11819 it returns 200 straight from
+llama-swap on `chat`, `coding` and `small`, and a real "list my cron jobs" turn yields a valid
+`{"action":"list","includeDisabled":true}` call on all three. The LiteLLM hook stays until its
+cutoffs are re-measured.
+
+**30-minute soak** (`harness/soak.py`, 17:05:41–17:36Z, one worker per slot, 205 requests, decode in
+t/s over the first, middle and last third of the run):
+
+| slot | request | n | ok | hit the token budget | failed | decode (thirds) |
+|---|---|---:|---:|---:|---:|---|
+| `coding` | code | 19 | 19 | 0 | 0 | 49.5 / 48.6 / 49.4 |
+| `coding` | ~7.6k-token summary | 19 | 19 | 0 | 0 | 43.8 / 44.4 / 44.6 |
+| `coding` | short Q&A | 18 | 18 | 0 | 0 | 41.2 / 42.0 / 43.4 |
+| `coding` | 107,909-token needle | 1 | 1 | 0 | 0 | 29.9 (252 s, prefill 433 t/s) |
+| `chat` | code | 37 | 16 | 21 | 0 | 131.2 / 134.9 / 133.5 |
+| `chat` | ~7.6k-token summary | 36 | 0 | 36 | 0 | 117.7 / 118.2 / 117.7 |
+| `chat` | short Q&A | 36 | 32 | 4 | 0 | 126.6 / 125.7 / 126.5 |
+| `chat` | 33,281-token needle | 1 | 1 | 0 | 0 | 115.6 (40 s, prefill 932 t/s) |
+| `small` | code | 13 | 13 | 0 | 0 | 19.1 / 18.9 / 18.9 |
+| `small` | ~7.6k-token summary | 13 | 13 | 0 | 0 | 17.4 / 17.4 / 17.4 |
+| `small` | short Q&A | 12 | 12 | 0 | 0 | 19.1 / 19.1 / 19.1 |
+
+Both needles were found. "Hit the token budget" means `finish=length` with empty content: `chat` is a
+thinking model and spent the whole 1,200 (summary) or 3,000 (code) tokens thinking, which is the
+soak's budget rather than a defect (it is the same on the suite's completion lengths above). The
+llama-swap journal has no `CUDA error`, `GGML_ASSERT`, out-of-memory, abort or segfault line for
+the window. VRAM never moved (idx0 8,835, idx1 31,276, idx2 31,882–31,886 MiB; `live/soak-B-gpu.csv`,
+sampled every 15 s). Peak core temperatures were idx0 85 °C (last-third mean 83 °C, the Titan X's
+boost target), idx1 70 °C and idx2 57 °C.
+
+**On-demand slots** (`harness/bigcn.py`, single stream, production flags; they evict `coding` and
+`chat`, so the trio was restored with `set daily` afterwards, ready again in 57 s):
+
+| slot | cold load | VRAM idx1 / idx2 (MiB) | code decode | long prompt | tool-call suite |
+|---|---|---|---:|---|---:|
+| `big` (Q8_K_XL, dual V100, 262k) | 13 s (file cached) | 23,884 / 28,472 (+2 afterwards) | 41.8 t/s | 65,870 tokens, needle found, prefill 637 t/s, decode 34.9 t/s, 106 s | 29/30 |
+| `coder-next` (UD-Q4_K_XL, dual V100) | 315 s (cold HDD) | 28,718 / 27,332 (28,770 / 27,336 afterwards) | 80.0 t/s | 64,759 tokens, needle found, prefill 340 t/s, decode 63.8 t/s, 191 s | 29/30 |
+
+The 2026-08-24 parallel sweep measured `coder-next` at about 74 t/s single-stream on b9850 with a
+different prompt, so 80 t/s is consistent with a gain but is not an A/B number.
+
+**GSM8K parity** (`scripts/lm-eval-run.sh coding http://127.0.0.1:9090/v1/chat/completions gsm8k 100 6144 1 "until=<|im_end|>"`,
+5-shot, greedy, n = 100, run against the live `coding` slot in 14 min 34 s):
+
+| run | engine | effort | flexible-extract | strict-match |
+|---|---|---|---:|---:|
+| 2026-08-15 reference | standalone b9850 server | xhigh | 0.99 ± 0.01 | 0.92 ± 0.03 |
+| **2026-10-22** | live `coding` slot, b11819 | medium (production) | **0.99 ± 0.01** | **0.99 ± 0.01** |
+
+Accuracy is at parity. The one miss is the question every model trips on ("how many years before he
+starts earning money": the answer is year 13, the model said 12). The strict-match column is higher
+because strict only checks the `#### N` answer format; I do not attribute the 0.92 to 0.99 change to
+the build, since effort and server differ between the two runs. Per-sample output:
+`docs/data/lm-eval/coding-gsm8k-20261022/`.
+
+### Data and harness
+
+`docs/data/llamacpp-b11819-ab-20261022/`: `summary.md` (every A/B table above, generated by
+`harness/summ.py`), `csv/` (`mtp-bench.py` rows), `lb/` (`llama-bench`), `kld/`, `e6/` (prompt-cache
+test), `runner.log`, `flags-added-b11819.txt` (new `llama-server` flags), `live/` (the live checks:
+tool-call suite on both builds, paired parser check, `tool_choice` spot check, soak log, JSON and GPU
+CSV, `big` / `coder-next` output, the `cron` fixture, the promotion build summary) and `harness/` (the
+A/B scripts, the tool-call suite, parser and `tool_choice` checks, the soak and its analysis,
+`bigcn.py`). The scripts expect to be run from
+`/srv/ai/tmp/lcpp-test/` and honour `LLAMA_SERVER_BIN` / `LLAMA_BENCH_BIN` (added to
+`scripts/mtp-bench.py`, `mtp-scenario-bench.py`, `bench-qwen3.8-27b.sh`, `roster-gsm8k-eval.sh` and
+`parallel-sweep.py` for this work).
 
 ## Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)
 
