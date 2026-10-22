@@ -76,7 +76,7 @@ Capabilities:
 
   **Host status page** (`:9095`) — responsive, customizable (drag to reorder, resize sections):
 
-  ![Host-side status dashboard served on port 9095](docs/images/server-status-page.png)
+  ![Host-side status dashboard served on port 9095](docs/images/server-status-page.png?v=2)
 
 ## Hardware
 
