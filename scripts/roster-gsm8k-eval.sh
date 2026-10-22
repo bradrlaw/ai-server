@@ -9,7 +9,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-BIN=src/llama.cpp/build/bin/llama-server
+BIN=${LLAMA_SERVER_BIN:-src/llama.cpp/build/bin/llama-server}   # override to eval another build
 MODELS_DIR=/srv/ai/models
 LOGDIR=/srv/ai/tmp/roster-eval
 mkdir -p "$LOGDIR"

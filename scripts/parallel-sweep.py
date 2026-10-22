@@ -25,8 +25,8 @@ import argparse, asyncio, csv, os, re, subprocess, sys, time
 from datetime import datetime
 import aiohttp
 
-CONFIG = "/srv/ai/config/llama-swap.yaml"
-BACKUP = "/srv/ai/scratch/llama-swap.yaml.bak"
+CONFIG = os.environ.get("LLAMA_SWAP_CONFIG", "/srv/ai/config/llama-swap.yaml")
+BACKUP = os.environ.get("LLAMA_SWAP_CONFIG_BACKUP", "/srv/ai/scratch/llama-swap.yaml.bak")
 
 def ensure_backup():
     """Snapshot the current pristine config once so we always restore to it."""
@@ -34,7 +34,7 @@ def ensure_backup():
     os.makedirs(os.path.dirname(BACKUP), exist_ok=True)
     if not os.path.exists(BACKUP):
         open(BACKUP, "w").write(open(CONFIG).read())
-SWAP = "http://127.0.0.1:9090"
+SWAP = os.environ.get("LLAMA_SWAP_URL", "http://127.0.0.1:9090")
 CHAT_URL = f"{SWAP}/v1/chat/completions"
 RESULTS_DIR = "/srv/ai/benchmarks/llm-scaling-bench/results"
 PROMPT = "write me a 1000 word essay on the history and future of artificial intelligence"

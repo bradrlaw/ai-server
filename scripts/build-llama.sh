@@ -17,7 +17,7 @@
 #      then re-checks the result (and swaps back if it fails).
 # If anything fails before step 4, build/ is untouched. Models that are already
 # loaded keep running the old binary until llama-swap next starts them. Only the
-# newest build.prev-* is kept; hand-made build.bak-* copies are never touched.
+# newest build.prev-* is kept; hand-made copies (build.bak-*, build.b9850-golden) are never touched.
 #
 # Rollback:  cd /srv/ai/src/llama.cpp && mv build build.bad && mv build.prev-<...> build
 # Update:    cd /srv/ai/src/llama.cpp && git checkout -- ggml/src/ggml-cuda/common.cuh
@@ -113,7 +113,9 @@ PREV=""
 if [[ -d "$LIVE" ]]; then
   OLD_OUT=$("$LIVE/bin/llama-server" --version 2>&1 || true)
   OLD_SHA=unknown
-  [[ "$OLD_OUT" =~ \(([0-9a-f]+)\) ]] && OLD_SHA=${BASH_REMATCH[1]}
+  # "version: 9850 (4f31eedb0)" before upstream #26839 (semantic versioning, 2026-08-12),
+  # "version: 0.7.0-dev (build 11819, commit 0693dbfb9)" after
+  if [[ "$OLD_OUT" =~ \(([0-9a-f]+)\) || "$OLD_OUT" =~ commit\ ([0-9a-f]+) ]]; then OLD_SHA=${BASH_REMATCH[1]}; fi
   PREV="$REPO/build.prev-$OLD_SHA-$(date -u +%Y%m%dT%H%M%SZ)"
   mv "$LIVE" "$PREV"
 fi
