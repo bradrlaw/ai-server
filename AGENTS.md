@@ -73,6 +73,12 @@ Read this first, then the detailed docs:
 ## Serving stack (hybrid deploy — ADR-0006)
 - **GPU/low-level tiers run NATIVE** (systemd/venv): llama.cpp + **llama-swap** router,
   the ComfyUI instances, (future) whisper STT. (vLLM was abandoned 2026-07-18, ADR-0004.)
+- **llama.cpp build:** `src/llama.cpp/build/` is **b11819** (`0693dbfb9`) since 2026-10-22
+  (ADR-0030; `coding` decode +17% vs the old b9850, no flag changes). `scripts/build-llama.sh` builds
+  and swaps it (always `src/llama.cpp`). Fallback: `build.b9850-golden/` (never pruned; roll back with
+  `mv build build.bad && cp -a build.b9850-golden build`, then unload + `llama-swap-mode.py set daily`).
+  **Never pull a new upstream straight into production:** build it in a separate clone and A/B it
+  with the real slot flags first (`docs/benchmarking.md`, `LLAMA_SERVER_BIN` / `LLAMA_BENCH_BIN`).
 - **CPU app tier runs in Docker Compose** (`docker/docker-compose.yml`): **LiteLLM**
   (client-facing gateway `:4000`), Open WebUI (`:3000`), mcpo (MCP tools as OpenAPI, for Open
   WebUI/agents), SearXNG, filebrowser (`:8083`, file manager for ComfyUI media/models, ADR-0023), autoheal,
