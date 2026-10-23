@@ -60,6 +60,8 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-Q6_K.gguf
+      --mmproj ${models_dir}/qwen3.8-27b/mmproj-F16.gguf
+      --image-max-tokens 1024
       --ctx-size 163840
       --cache-type-k q8_0 --cache-type-v q8_0
       --parallel 1
@@ -88,6 +90,9 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.6-35b-a3b-mtp/Qwen3.6-35B-A3B-UD-Q6_K.gguf
+      --mmproj ${models_dir}/qwen3.6-35b-a3b-mtp/mmproj-F16.gguf
+      --no-mmproj-offload
+      --image-max-tokens 1024
       --ctx-size 98304
       --cache-type-k q8_0
       --cache-type-v q8_0
@@ -133,6 +138,8 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf
+      --mmproj ${models_dir}/qwen3.8-27b/mmproj-F16.gguf
+      --image-max-tokens 1024
       --ctx-size 262144
       --cache-type-k f16
       --cache-type-v f16
@@ -241,6 +248,7 @@ models:
     cmd: |
       ${llama-server}
       --model ${models_dir}/gemma-4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
+      --mmproj ${models_dir}/gemma-4-12b/mmproj-F16.gguf
       --ctx-size 32768
       --parallel 1
       --batch-size 2048 --ubatch-size 2048
