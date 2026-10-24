@@ -1,0 +1,8 @@
+{
+  "correctness": 3,
+  "rigor": 4,
+  "contradiction_handling": 4,
+  "clarity": 4,
+  "verification": 5,
+  "notes": "Finds both contradictions but its 'max-satisfying' table is only 10/12 (r1 reaches 11/12), so the 'maximum number of clues' claim is wrong; clue-by-clue table is honest about the 2 violations. Scored by Copilot, not the owner."
+}

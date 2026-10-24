@@ -1,0 +1,12 @@
+{"ts": "2026-10-23T00:36:09Z", "label": "q4a-b80-tailskip7", "test": "speed", "kind": "short", "decode_tps_median": 63.55, "decode_tps_all": [63.55, 64.22, 56.92], "ttft_median": 0.338}
+{"ts": "2026-10-23T00:36:23Z", "label": "q4a-b80-tailskip7", "test": "speed", "kind": "code", "decode_tps_median": 93.07, "decode_tps_all": [79.42, 93.07, 93.74], "ttft_median": 0.08}
+{"ts": "2026-10-23T00:36:44Z", "label": "q4a-b80-tailskip7", "test": "prompt", "target_tokens": 2048, "prompt_tokens": 2018, "ttft_s": 4.92, "prefill_tps": 410.2, "decode_tps": 54.99}
+{"ts": "2026-10-23T00:36:52Z", "label": "q4a-b80-tailskip7", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 7.322, "prefill_tps": 1088.2, "decode_tps": 62.43}
+{"ts": "2026-10-23T00:37:04Z", "label": "q4a-b80-tailskip7", "test": "prompt", "target_tokens": 16384, "prompt_tokens": 15930, "ttft_s": 10.748, "prefill_tps": 1482.1, "decode_tps": 71.02}
+{"ts": "2026-10-23T00:37:19Z", "label": "q4a-b80-tailskip7", "test": "prompt", "target_tokens": 24000, "prompt_tokens": 23297, "ttft_s": 14.122, "prefill_tps": 1649.7, "decode_tps": 63.96}
+{"ts": "2026-10-23T00:37:39Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 8000, "depth": 0.1, "expected": "615180", "ok": true, "prompt_tokens": 7807, "ttft_s": 7.245, "answer": "615180"}
+{"ts": "2026-10-23T00:37:46Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 8000, "depth": 0.5, "expected": "373968", "ok": true, "prompt_tokens": 7807, "ttft_s": 7.19, "answer": "373968"}
+{"ts": "2026-10-23T00:37:53Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 8000, "depth": 0.9, "expected": "851048", "ok": true, "prompt_tokens": 7807, "ttft_s": 7.231, "answer": "851048"}
+{"ts": "2026-10-23T00:38:08Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 24000, "depth": 0.1, "expected": "510323", "ok": true, "prompt_tokens": 23315, "ttft_s": 14.195, "answer": "510323"}
+{"ts": "2026-10-23T00:38:23Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 24000, "depth": 0.5, "expected": "931820", "ok": true, "prompt_tokens": 23315, "ttft_s": 14.152, "answer": "931820"}
+{"ts": "2026-10-23T00:38:37Z", "label": "q4a-b80-tailskip7", "test": "needle", "target_tokens": 24000, "depth": 0.9, "expected": "808272", "ok": true, "prompt_tokens": 23315, "ttft_s": 14.138, "answer": "808272"}

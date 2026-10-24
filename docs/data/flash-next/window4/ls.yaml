@@ -1,0 +1,7 @@
+healthCheckTimeout: 600
+models:
+  flash:
+    cmd: /srv/ai/var/flash-eval/strata-serve-port.sh /srv/ai/models/qwen3.8-flash-next/strata/strata-w4.json ${PORT}
+    proxy: http://127.0.0.1:${PORT}
+    checkEndpoint: /health
+    ttl: 0

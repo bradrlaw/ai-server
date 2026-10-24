@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>flash — logic-puzzle-reasoning</title>
+<style>
+:root{--bg:#09090b;--surface:#13111c;--border:rgba(255,255,255,.08);
+--accent:#7c5cfc;--teal:#00d4aa;--fg:#fafafa;--muted:#71717a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;max-width:1100px;margin:auto}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:15px;text-transform:uppercase;
+letter-spacing:.05em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.card .v{font-size:22px;font-weight:600;margin-top:4px}
+.card .v.teal{color:var(--teal)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+padding:14px 16px;overflow-x:auto;font-size:13px;color:#d4d4d8;white-space:pre-wrap;word-break:break-word}
+.frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:10px;background:#fff}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border)}
+.mtp-on{color:var(--teal);border-color:rgba(0,212,170,.4)}.mtp-off{color:var(--muted)}
+</style></head>
+<body>
+<h1>flash</h1>
+<p class="sub">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf &middot; logic-puzzle-reasoning
+&middot; 2026-10-23T09:35:10 UTC
+&middot; <a href="../../summary.html">← all runs</a>
+&middot; <a href="output.md">output</a>
+&middot; <a href="raw.txt">raw reply</a></p>
+<div class="grid">
+<div class="card"><div class="k">Objective</div><div class="v teal">12/12</div></div>
+<div class="card"><div class="k">Design</div><div class="v teal">unscored</div></div>
+<div class="card"><div class="k">TTFT</div><div class="v">137 ms</div></div>
+<div class="card"><div class="k">Prefill</div><div class="v">36.6 t/s</div></div>
+<div class="card"><div class="k">Decode</div><div class="v teal">22.5 t/s</div></div>
+<div class="card"><div class="k">Wall time</div><div class="v">600.5 s</div></div>
+<div class="card"><div class="k">Completion tok</div><div class="v">4952</div></div>
+<div class="card"><div class="k">Output size</div><div class="v">3792 B</div></div>
+<div class="card"><div class="k">MTP</div><div class="v"><span class="pill mtp-on">on</span> 63% accept</div></div>
+<div class="card"><div class="k">Finish</div><div class="v">stop</div></div>
+</div>
+<h2>Design scores (manual, 0–5 each)</h2>
+<div class="grid">
+<div class="card"><div class="k">Correctness</div><div class="v">—</div></div>
+<div class="card"><div class="k">Rigor / stepwise</div><div class="v">—</div></div>
+<div class="card"><div class="k">Contradiction handling</div><div class="v">—</div></div>
+<div class="card"><div class="k">Clarity</div><div class="v">—</div></div>
+<div class="card"><div class="k">Verification</div><div class="v">—</div></div>
+</div>
+
+<h2>Output (output.md)</h2>
+<pre># Logic Puzzle Solution
+
+## Step 1: Extract Direct Facts from the Clues
+
+| Clue | Direct Fact |
+|------|-------------|
+| 1 | Ada → NeurIPS, Computer Vision |
+| 11 | Clara → NLP |
+| 2 | NLP → June, so **Clara → June** |
+| 7 | Theory → ACL |
+| 5 | Robotics → ICLR |
+| 12 | ICML → March |
+| 8 | Ben → August |
+| 6 | Eli → January or October |
+| 3 | Ben ≠ ACL, Ben ≠ EMNLP, Ben ≠ Theory, Ben ≠ Robotics |
+| 4 | Clara&#x27;s month &lt; Dana&#x27;s month |
+| 9 | EMNLP ≠ January |
+| 10 | Dana ≠ Computer Vision |
+
+## Step 2: Deduce Ben&#x27;s Conference and Subfield
+
+**Ben&#x27;s conference:** From Clue 3, Ben ≠ ACL and Ben ≠ EMNLP. The five conferences are {ACL, EMNLP, NeurIPS, ICML, ICLR}. Ada occupies NeurIPS (Clue 1), so Ben ∈ {ICML, ICLR}.
+
+**Ben&#x27;s subfield:** From Clue 3, Ben ≠ Theory and Ben ≠ Robotics. The five subfields are {NLP, CV, RL, Theory, Robotics}. Clara has NLP (Clue 11) and Ada has Computer Vision (Clue 1), so the only remaining option is:
+
+&gt; **Ben → Reinforcement Learning**
+
+**Eliminating ICLR for Ben:** Clue 5 states the Robotics paper was at ICLR. Since each conference hosts exactly one paper, ICLR&#x27;s paper *is* the Robotics paper. Ben&#x27;s subfield is Reinforcement Learning ≠ Robotics, so:
+
+&gt; **Ben ≠ ICLR → Ben → ICML**
+
+## Step 3: Assign Months (and Encounter the Contradiction)
+
+We now have forced month assignments:
+
+- **Clara → June** (from Clues 11 + 2)
+- **Ben → August** (Clue 8)
+- **Dana &gt; Clara** (Clue 4): Dana&#x27;s month must come after June → Dana ∈ {August, October}. August is taken by Ben, so **Dana → October**.
+- **Eli ∈ {January, October}** (Clue 6): October is taken by Dana, so **Eli → January**.
+- The only remaining month is **March → Ada**.
+
+Now apply Clue 12: **ICML → March**. The only person in March is Ada. Therefore:
+
+&gt; Ada → ICML (because she is in March and ICML is the only conference in March)
+
+But Clue 1 states:
+
+&gt; Ada → NeurIPS
+
+## Step 4: Identify the Contradiction
+
+**Ada cannot present at both NeurIPS and ICML.** Each researcher presents at exactly one conference. The constraints force:
+
+1. Ada&#x27;s month = March (forced by elimination of all other months)
+2. ICML is the conference in March (Clue 12)
+3. Therefore Ada presents at ICML
+4. But Ada presents at NeurIPS (Clue 1)
+
+These are mutually exclusive. There is **no consistent assignment** that satisfies all twelve clues simultaneously.
+
+## Step 5: Verification of the Contradiction Chain
+
+Let me confirm no alternative reading avoids the clash:
+
+- Could Dana be in August? No—Ben is in August (Clue 8), and each researcher has a unique month.
+- Could Eli be in October and Dana in August? No—same reason; August is Ben&#x27;s.
+- Could Ada share a month with someone? No—each conference is in a different month, and each researcher attends a different conference.
+- Is &quot;ICML → March&quot; possibly about a different year or a loose reading? No—the puzzle states &quot;this year&quot; with five conferences in five distinct months.
+- Is Clue 3&#x27;s &quot;not ACL or EMNLP&quot; possibly an exclusive-or? No—the natural reading of &quot;did not present at X or Y&quot; is &quot;presented at neither X nor Y.&quot;
+
+Every link in the chain is forced. There is no branching point where a different choice avoids the conflict.
+
+## Conclusion
+
+&gt; **⚠️ The puzzle, as stated, contains a contradiction and has NO valid solution.**
+&gt;
+&gt; The specific inconsistency is: the combination of Clues 1, 2, 4, 6, 8, 11, and 12 forces Ada into March (the ICML slot), while Clue 1 simultaneously places her at NeurIPS. These cannot both be true.
+
+If one clue were modified—for example, if Clue 8 said &quot;Ben&#x27;s conference was in **October**&quot; instead of August—then the chain would break and a solution would emerge. But with the clues exactly as given, the puzzle is unsatisfiable.</pre>
+
+<h2>llama.cpp load command</h2>
+<pre>strata v0.2.2 Q8_0 budget80 2xV100 layer-split24 spec4 tail_skip0 effort=medium</pre>
+<h2>Sampler / request</h2>
+<pre>{
+  &quot;temperature&quot;: 0.7,
+  &quot;top_p&quot;: 0.95,
+  &quot;top_k&quot;: 20,
+  &quot;max_tokens&quot;: 32000,
+  &quot;min_p&quot;: null,
+  &quot;presence_penalty&quot;: null
+}</pre>
+<h2>meta.json</h2>
+<pre>{
+  &quot;test&quot;: &quot;logic-puzzle-reasoning&quot;,
+  &quot;model_slot&quot;: &quot;flash&quot;,
+  &quot;label&quot;: &quot;flash-q8b-r2&quot;,
+  &quot;model_name&quot;: &quot;Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf&quot;,
+  &quot;model_path&quot;: &quot;/srv/ai/models/qwen3.8-flash-next/unsloth/Q8_0/Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf&quot;,
+  &quot;endpoint&quot;: &quot;http://127.0.0.1:8080/v1/chat/completions&quot;,
+  &quot;proxy&quot;: null,
+  &quot;sampler&quot;: {
+    &quot;temperature&quot;: 0.7,
+    &quot;top_p&quot;: 0.95,
+    &quot;top_k&quot;: 20,
+    &quot;max_tokens&quot;: 32000,
+    &quot;min_p&quot;: null,
+    &quot;presence_penalty&quot;: null
+  },
+  &quot;load_command&quot;: &quot;strata v0.2.2 Q8_0 budget80 2xV100 layer-split24 spec4 tail_skip0 effort=medium&quot;,
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 392,
+    &quot;completion_tokens&quot;: 4952,
+    &quot;total_tokens&quot;: 5344,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 387
+    }
+  },
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;performance&quot;: {
+    &quot;wall_secs&quot;: 600.5,
+    &quot;ttft_ms&quot;: 136.6,
+    &quot;prefill_tps&quot;: 36.6,
+    &quot;decode_tps&quot;: 22.5,
+    &quot;prompt_tokens&quot;: 5,
+    &quot;predicted_tokens&quot;: 4952,
+    &quot;prefill_ms&quot;: 136.6,
+    &quot;decode_ms&quot;: 219893.4
+  },
+  &quot;mtp&quot;: {
+    &quot;draft_n&quot;: 551,
+    &quot;draft_n_accepted&quot;: 348,
+    &quot;accept_rate&quot;: 0.632,
+    &quot;enabled&quot;: true
+  },
+  &quot;server_timings&quot;: {
+    &quot;cache_n&quot;: 387,
+    &quot;prompt_n&quot;: 5,
+    &quot;prompt_ms&quot;: 136.6,
+    &quot;prompt_per_token_ms&quot;: 27.32,
+    &quot;prompt_per_second&quot;: 36.6,
+    &quot;predicted_n&quot;: 4952,
+    &quot;predicted_ms&quot;: 219893.4,
+    &quot;predicted_per_token_ms&quot;: 44.405,
+    &quot;predicted_per_second&quot;: 22.5,
+    &quot;draft_n&quot;: 551,
+    &quot;draft_n_accepted&quot;: 348
+  },
+  &quot;extraction&quot;: {
+    &quot;extracted&quot;: false,
+    &quot;kind&quot;: &quot;full-content&quot;
+  },
+  &quot;output_file&quot;: &quot;output.md&quot;,
+  &quot;output_bytes&quot;: 3792,
+  &quot;reasoning_bytes&quot;: 14237,
+  &quot;wall_secs&quot;: 600.5,
+  &quot;created_utc&quot;: &quot;2026-10-23T09:35:10+00:00&quot;
+}</pre>
+</body></html>

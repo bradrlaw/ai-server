@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>dungeon-adventure-engine</h1>
-<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 11 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 21 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -129,6 +129,134 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/coding/output.py">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/flash-q8b-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">73%</span></td>
+      <td>32658 B</td>
+      <td>7458</td>
+      <td>118.6 ms</td>
+      <td>42.2</td>
+      <td>34.2</td>
+      <td>617.9 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r2/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">67%</span></td>
+      <td>29849 B</td>
+      <td>7656</td>
+      <td>4365.8 ms</td>
+      <td>190.6</td>
+      <td>29.8</td>
+      <td>262.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r1/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>31690 B</td>
+      <td>7316</td>
+      <td>68.0 ms</td>
+      <td>73.5</td>
+      <td>29.1</td>
+      <td>256.3 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r3/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-ctl-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">78%</span></td>
+      <td>33407 B</td>
+      <td>8238</td>
+      <td>14743.8 ms</td>
+      <td>56.4</td>
+      <td>23.6</td>
+      <td>364.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r3/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-ctl-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">79%</span></td>
+      <td>34384 B</td>
+      <td>8372</td>
+      <td>14729.0 ms</td>
+      <td>56.5</td>
+      <td>23.2</td>
+      <td>376.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r1/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q8b-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>30700 B</td>
+      <td>7437</td>
+      <td>104.5 ms</td>
+      <td>47.8</td>
+      <td>19.1</td>
+      <td>398.6 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r3/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q8b-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>33933 B</td>
+      <td>7852</td>
+      <td>8908.2 ms</td>
+      <td>93.4</td>
+      <td>18.8</td>
+      <td>426.0 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r1/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-copilot/run.html"><span class="model">flash</span></a>
+        <div class="name">flash (Copilot CLI)</div></td>
+      <td><span class="score">29/29</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>30129 B</td>
+      <td>—</td>
+      <td>— ms</td>
+      <td>—</td>
+      <td>—</td>
+      <td>189.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-copilot/output.py">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/chat-uncensored-q6/run.html"><span class="model">chat-uncensored-q6</span></a>
         <div class="name">Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf</div></td>
       <td><span class="score">27/29</span> <span class="name">93%</span></td>
@@ -208,9 +336,41 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="name">2026-07-27</td>
       <td class="l"><a href="outputs/fast/output.py">output</a></td>
     </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-ctl-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">2/29</span> <span class="name">7%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">80%</span></td>
+      <td>34187 B</td>
+      <td>8295</td>
+      <td>8858.1 ms</td>
+      <td>93.9</td>
+      <td>37.3</td>
+      <td>595.9 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r2/output.py">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">2/29</span> <span class="name">7%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>32894 B</td>
+      <td>7393</td>
+      <td>67.3 ms</td>
+      <td>74.3</td>
+      <td>29.2</td>
+      <td>258.5 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r2/output.py">output</a></td>
+    </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-08-16T04:36:37+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-10-24T09:26:14+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

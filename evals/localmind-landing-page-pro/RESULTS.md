@@ -17,8 +17,17 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 41/41 | 41.9 | 1824 ms | 14469 | 43646 B | on 90% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 41/41 | 41.5 | 1728 ms | 18221 | 51195 B | on 85% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 41/41 | 39.9 | 1666 ms | 19104 | 52361 B | on 81% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 37.4 | 13578 ms | 19309 | 55187 B | on 91% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 33.2 | 133 ms | 19042 | 55380 B | on 86% | stop |
 | `fast-uncensored` | Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf | 41/41 | 29.2 | 4491 ms | 12433 | 33939 B | on 76% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 27.8 | 6873 ms | 19974 | 56716 B | on 87% | stop |
 | `gemma-31b` | gemma-4-31B-it-qat-UD-Q4_K_XL.gguf | 41/41 | 27.3 | 1862 ms | 13161 | 42929 B | on 32% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 25.7 | 66 ms | 17758 | 51257 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 25.5 | 66 ms | 17157 | 49855 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 24.1 | 21137 ms | 19182 | 54667 B | on 90% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 24.1 | 21155 ms | 17903 | 52480 B | on 88% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 16.2 | 14262 ms | 19201 | 55196 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 16.1 | 137 ms | 20017 | 57680 B | off | stop |
 
 ## Design quality (manual, 0–5 each; subtotal /25)
 
@@ -33,10 +42,19 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `fast-uncensored` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `gemma-31b` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-08-16T04:36:37+00:00._
+_Last generated 2026-10-24T09:26:14+00:00._

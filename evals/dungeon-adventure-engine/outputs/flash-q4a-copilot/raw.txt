@@ -1,0 +1,16 @@
+Now let me verify the game works end-to-end with a scripted playthrough:
+
+The file has `f "` with a space (invalid f-string prefix). Let me find all occurrences:
+
+Only line 296 is a real issue (others are `if "` matches). Fixing:
+
+Done. `output.py` is complete and verified in the working directory.
+
+**Deliverable summary:**
+- **Core engine**: `GameState` (room, inventory, visited, flags, history, won), `Room` (exits, items, locked doors, dynamic descriptions), `Item` (with `on_use` callbacks), and `GameEngine` (parsing, routing, rendering).
+- **Commands**: look / look at / go / move / bare directions / take / drop / inventory / i / use / help / history / quit — case-insensitive, with partial matching (`inv`, `scr`) and synonyms (`examine`, `grab`).
+- **World**: all 6 rooms and 5 items per spec — rusted key auto-opens the Armory door, lever reveals the west passage (with rewritten Library description), torch adds "flickering light" to the Armory, scroll triggers the secret ending + victory banner, coin has a witty description.
+- **Quality**: full type hints, docstrings, ASCII banner, separators, graceful EOF/KeyboardInterrupt handling, no global mutable state.
+
+Validation: `py_compile` clean plus scripted playthroughs covering the full win path, locked-door errors, unknown commands, EOF, and Ctrl-C — all passing.
+

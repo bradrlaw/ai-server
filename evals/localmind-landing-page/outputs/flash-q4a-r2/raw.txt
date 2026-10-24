@@ -1,0 +1,1097 @@
+===== reasoning_content =====
+Build a single HTML file with all the features. Just output the code.
+
+
+===== content =====
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<meta name="description" content="LocalMind lets you run powerful large language models on your own hardware. No cloud. No subscriptions to your data. No limits.">
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-soft: #0e0d15;
+    --surface: #13111c;
+    --surface-2: #181524;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(124,92,252,0.45);
+    --accent: #7c5cfc;
+    --accent-soft: rgba(124,92,252,0.14);
+    --accent-2: #00d4aa;
+    --text: #fafafa;
+    --muted: #9a9aa6;
+    --muted-2: #71717a;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(124,92,252,0.4); color: #fff; }
+
+  a { color: inherit; text-decoration: none; }
+  ul { list-style: none; }
+  img, svg { display: block; }
+
+  .container {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ============ NAV ============ */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(9,9,11,0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    transition: box-shadow 0.3s ease;
+  }
+  .nav.scrolled { box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 68px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+  }
+  .logo-mark {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent) 0%, #4f3fd8 60%, var(--accent-2) 130%);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 18px rgba(124,92,252,0.45);
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 17px; height: 17px; }
+  .logo span em { font-style: normal; color: var(--accent); }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-links a {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    color: var(--muted);
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .nav-cta {
+    display: none;
+    margin-left: 12px;
+    padding: 9px 18px !important;
+    background: var(--accent);
+    color: #fff !important;
+    border-radius: 9px !important;
+    font-weight: 600;
+    font-size: 0.9rem !important;
+    box-shadow: 0 0 0 rgba(124,92,252,0);
+    transition: transform 0.2s ease, box-shadow 0.25s ease, background 0.2s ease !important;
+  }
+  .nav-cta:hover {
+    background: #8d70ff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(124,92,252,0.45);
+  }
+  .nav-cta:active { transform: translateY(0) scale(0.97); }
+
+  /* Hamburger */
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 42px; height: 42px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 10px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .hamburger:hover { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.04); }
+  .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.3s cubic-bezier(0.65,0.05,0.36,1), opacity 0.25s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .mobile-menu {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-bottom: 1px solid transparent;
+    background: rgba(11,10,16,0.98);
+  }
+  .mobile-menu.open {
+    max-height: 360px;
+    border-bottom-color: var(--border);
+  }
+  .mobile-menu nav {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 20px 24px;
+    gap: 4px;
+  }
+  .mobile-menu a {
+    padding: 13px 12px;
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 1rem;
+    transition: color 0.2s ease, background 0.2s ease, padding-left 0.2s ease;
+  }
+  .mobile-menu a:hover { color: var(--text); background: rgba(255,255,255,0.05); padding-left: 18px; }
+  .mobile-menu .mob-cta {
+    margin-top: 10px;
+    background: var(--accent);
+    color: #fff;
+    text-align: center;
+    font-weight: 600;
+  }
+  .mobile-menu .mob-cta:hover { background: #8d70ff; }
+
+  @media (min-width: 860px) {
+    .nav-links, .nav-cta { display: flex; }
+    .hamburger, .mobile-menu { display: none; }
+  }
+
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    padding: 90px 0 100px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% -10%, rgba(124,92,252,0.16), transparent 70%),
+      radial-gradient(ellipse 40% 35% at 80% 30%, rgba(0,212,170,0.07), transparent 70%);
+    pointer-events: none;
+  }
+  .hero-inner { position: relative; z-index: 2; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    background: rgba(255,255,255,0.03);
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 28px;
+    transition: border-color 0.25s ease;
+  }
+  .badge:hover { border-color: var(--border-hover); }
+  .badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 10px var(--accent-2);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  h1 {
+    font-size: clamp(2.4rem, 7.5vw, 4.6rem);
+    line-height: 1.06;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    margin-bottom: 24px;
+  }
+  .grad-text {
+    background: linear-gradient(100deg, #a78bfa 0%, var(--accent) 40%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero-sub {
+    max-width: 620px;
+    margin: 0 auto 40px;
+    font-size: clamp(1.02rem, 2.2vw, 1.2rem);
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .hero-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (min-width: 520px) { .hero-actions { flex-direction: row; } }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 14px 30px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34,1.4,0.64,1), box-shadow 0.3s ease, background 0.25s ease, border-color 0.25s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(124,92,252,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .btn-primary:hover {
+    background: #8d70ff;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 10px 36px rgba(124,92,252,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.97); box-shadow: 0 2px 12px rgba(124,92,252,0.4); }
+  .btn-secondary {
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    transform: translateY(-2px);
+  }
+  .btn-secondary:active { transform: translateY(0) scale(0.97); }
+  .btn-secondary svg { transition: transform 0.25s ease; }
+  .btn-secondary:hover svg { transform: translateX(3px); }
+
+  /* Orb visual */
+  .orb-wrap {
+    position: relative;
+    margin: 72px auto 0;
+    width: min(320px, 78vw);
+    height: min(320px, 78vw);
+  }
+  .orb {
+    position: absolute;
+    inset: 16%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 30%, rgba(167,139,250,0.85), rgba(124,92,252,0.35) 45%, rgba(20,16,40,0.9) 75%);
+    box-shadow:
+      0 0 60px rgba(124,92,252,0.5),
+      0 0 140px rgba(124,92,252,0.25),
+      inset 0 0 60px rgba(0,212,170,0.15);
+    animation: orb-breathe 6s ease-in-out infinite;
+  }
+  @keyframes orb-breathe {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 60px rgba(124,92,252,0.5), 0 0 140px rgba(124,92,252,0.25), inset 0 0 60px rgba(0,212,170,0.15); }
+    50% { transform: scale(1.05); box-shadow: 0 0 90px rgba(124,92,252,0.7), 0 0 180px rgba(0,212,170,0.22), inset 0 0 80px rgba(0,212,170,0.25); }
+  }
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(124,92,252,0.3);
+    animation: ring-spin 14s linear infinite;
+  }
+  .ring::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: 50%;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 12px var(--accent-2);
+  }
+  .ring.r2 {
+    inset: 9%;
+    border-color: rgba(0,212,170,0.22);
+    animation: ring-spin 9s linear infinite reverse;
+  }
+  .ring.r2::before { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  @keyframes ring-spin { to { transform: rotate(360deg); } }
+
+  .hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 40px;
+    margin-top: 64px;
+  }
+  .stat { text-align: center; }
+  .stat b { display: block; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+  .stat span { font-size: 0.82rem; color: var(--muted-2); }
+
+  /* ============ SECTIONS SHARED ============ */
+  section { padding: 96px 0; position: relative; }
+  .section-head { text-align: center; max-width: 640px; margin: 0 auto 60px; }
+  .eyebrow {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  .section-head p { color: var(--muted); font-size: 1.05rem; }
+
+  /* Scroll reveal */
+  .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
+    transition-delay: var(--d, 0s);
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .orb, .ring, .badge .dot { animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ============ FEATURES ============ */
+  #features { background: linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%); }
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  @media (min-width: 640px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1020px) { .features-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease, box-shadow 0.35s ease, background 0.3s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--border-hover);
+    background: var(--surface-2);
+    box-shadow: 0 18px 44px rgba(0,0,0,0.5), 0 0 0 1px rgba(124,92,252,0.12), 0 0 40px rgba(124,92,252,0.1);
+  }
+  .feature-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(124,92,252,0.25);
+    display: grid;
+    place-items: center;
+    margin-bottom: 20px;
+    color: #a78bfa;
+    transition: transform 0.3s cubic-bezier(0.34,1.5,0.64,1), background 0.3s ease;
+  }
+  .feature-card:hover .feature-icon { transform: scale(1.08) rotate(-4deg); background: rgba(124,92,252,0.24); }
+  .feature-icon svg { width: 22px; height: 22px; }
+  .feature-card h3 { font-size: 1.08rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .feature-card p { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
+
+  /* ============ HOW IT WORKS ============ */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 44px;
+    position: relative;
+  }
+  @media (min-width: 860px) {
+    .steps { grid-template-columns: repeat(3, 1fr); gap: 28px; }
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 27px;
+      left: calc(33.33% + 24px);
+      width: calc(33.33% - 76px);
+      height: 1px;
+      background: linear-gradient(90deg, rgba(124,92,252,0.5), rgba(124,92,252,0.05));
+    }
+    .steps .step:nth-child(2)::after { left: calc(66.66% + 24px); }
+    .steps .step:last-child::after { display: none; }
+  }
+  .step { text-align: center; position: relative; }
+  .step-num {
+    width: 54px; height: 54px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 1.15rem;
+    background: linear-gradient(135deg, rgba(124,92,252,0.25), rgba(0,212,170,0.12));
+    border: 1px solid rgba(124,92,252,0.4);
+    color: #c4b5fd;
+    box-shadow: 0 0 24px rgba(124,92,252,0.2);
+    position: relative;
+    z-index: 2;
+    transition: transform 0.3s cubic-bezier(0.34,1.5,0.64,1), box-shadow 0.3s ease;
+  }
+  .step:hover .step-num { transform: scale(1.12); box-shadow: 0 0 40px rgba(124,92,252,0.45); }
+  .step h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .step p { font-size: 0.94rem; color: var(--muted); max-width: 300px; margin: 0 auto; }
+  .step-code {
+    display: inline-block;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--accent-2);
+    transition: border-color 0.25s ease;
+  }
+  .step:hover .step-code { border-color: rgba(0,212,170,0.35); }
+
+  /* ============ PRICING ============ */
+  #pricing { background: linear-gradient(180deg, var(--bg-soft) 0%, var(--bg) 100%); }
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+    align-items: stretch;
+  }
+  @media (min-width: 900px) { .pricing-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 34px 28px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease, box-shadow 0.35s ease;
+  }
+  .price-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--border-hover);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 44px rgba(124,92,252,0.12);
+  }
+  .price-card.popular {
+    border-color: rgba(124,92,252,0.5);
+    background: linear-gradient(180deg, rgba(124,92,252,0.09) 0%, var(--surface) 45%);
+    box-shadow: 0 0 50px rgba(124,92,252,0.14);
+  }
+  @media (min-width: 900px) { .price-card.popular { transform: scale(1.045); } .price-card.popular:hover { transform: scale(1.045) translateY(-8px); } }
+  .popular-tag {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, var(--accent), #9d7bff);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 100px;
+    box-shadow: 0 4px 16px rgba(124,92,252,0.5);
+    white-space: nowrap;
+  }
+  .tier-name { font-size: 1rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .tier-price { font-size: 2.7rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+  .tier-price small { font-size: 0.95rem; font-weight: 500; color: var(--muted-2); letter-spacing: 0; }
+  .tier-desc { font-size: 0.9rem; color: var(--muted); margin: 12px 0 24px; }
+  .tier-features { flex: 1; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+  .tier-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.92rem;
+    color: #d4d4dc;
+  }
+  .check {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: rgba(0,212,170,0.14);
+    display: grid;
+    place-items: center;
+  }
+  .check svg { width: 10px; height: 10px; stroke: var(--accent-2); }
+  .tier-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 13px 20px;
+    font-size: 0.95rem;
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.14);
+  }
+  .btn-outline:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: translateY(-2px);
+  }
+  .btn-outline:active { transform: translateY(0) scale(0.97); }
+
+  /* ============ ABOUT / TESTIMONIALS ============ */
+  .mission {
+    max-width: 680px;
+    margin: 0 auto 64px;
+    text-align: center;
+  }
+  .mission p { color: var(--muted); font-size: 1.08rem; line-height: 1.8; }
+  .mission p strong { color: var(--text); }
+  .mission p .hl { color: var(--accent-2); }
+
+  .testimonials {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  @media (min-width: 700px) { .testimonials { grid-template-columns: repeat(3, 1fr); } }
+  .t-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease, box-shadow 0.35s ease;
+  }
+  .t-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--border-hover);
+    box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+  }
+  .t-quote { font-size: 0.96rem; color: #d4d4dc; line-height: 1.7; flex: 1; margin-bottom: 24px; }
+  .t-quote::before { content: '"'; color: var(--accent); font-weight: 800; }
+  .t-quote::after { content: '"'; color: var(--accent); font-weight: 800; }
+  .t-person { display: flex; align-items: center; gap: 13px; }
+  .avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.12);
+    transition: transform 0.3s cubic-bezier(0.34,1.5,0.64,1);
+  }
+  .t-card:hover .avatar { transform: scale(1.1); }
+  .avatar.a1 { background: linear-gradient(135deg, #7c5cfc, #4f3fd8); }
+  .avatar.a2 { background: linear-gradient(135deg, #00b894, #007a63); }
+  .avatar.a3 { background: linear-gradient(135deg, #f59e0b, #b45309); }
+  .t-name { font-weight: 700; font-size: 0.93rem; line-height: 1.3; }
+  .t-role { font-size: 0.8rem; color: var(--muted-2); }
+
+  /* ============ FINAL CTA ============ */
+  .final-cta {
+    text-align: center;
+    padding: 80px 24px;
+    border: 1px solid rgba(124,92,252,0.28);
+    border-radius: 24px;
+    background:
+      radial-gradient(ellipse 80% 120% at 50% -30%, rgba(124,92,252,0.18), transparent 65%),
+      var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .final-cta h2 { margin-bottom: 14px; }
+  .final-cta p { color: var(--muted); margin-bottom: 32px; max-width: 480px; margin-left: auto; margin-right: auto; }
+
+  /* ============ FOOTER ============ */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 60px 0 40px;
+    background: #0b0b10;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    margin-bottom: 48px;
+  }
+  @media (min-width: 700px) { .footer-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+  .footer-brand p { color: var(--muted-2); font-size: 0.88rem; margin-top: 14px; max-width: 260px; line-height: 1.7; }
+  .footer-col h4 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-2);
+    margin-bottom: 16px;
+    font-weight: 700;
+  }
+  .footer-col ul { display: flex; flex-direction: column; gap: 10px; }
+  .footer-col a {
+    font-size: 0.92rem;
+    color: var(--muted);
+    transition: color 0.2s ease, transform 0.2s ease;
+    display: inline-block;
+  }
+  .footer-col a:hover { color: var(--text); transform: translateX(3px); }
+  .footer-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.83rem;
+    color: var(--muted-2);
+  }
+  .footer-bottom .status { display: flex; align-items: center; gap: 8px; }
+  .footer-bottom .status i {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 8px var(--accent-2);
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="container nav-inner">
+    <a href="#top" class="logo" aria-label="LocalMind home">
+      <span class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a5 5 0 0 1 5 5v1a4 4 0 0 1 0 8v1a5 5 0 0 1-10 0v-1a4 4 0 0 1 0-8V7a5 5 0 0 1 5-5z"/>
+          <circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/>
+        </svg>
+      </span>
+      <span>Local<em>Mind</em></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How It Works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#about">About</a>
+      <a href="#pricing" class="nav-cta">Get Early Access</a>
+    </div>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileMenu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#how">How It Works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#about">About</a>
+      <a href="#pricing" class="mob-cta">Get Early Access</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="badge reveal"><span class="dot"></span> v2.4 now supports Llama 4 &amp; Mistral Nova</div>
+      <h1 class="reveal" style="--d:.08s">Run AI Locally.<br><span class="grad-text">Own Your Data.</span><br>No Limits.</h1>
+      <p class="hero-sub reveal" style="--d:.16s">LocalMind turns your own machine into a private AI powerhouse. Run large language models on your hardware — no cloud, no API keys, no data leaving your device. Ever.</p>
+      <div class="hero-actions reveal" style="--d:.24s">
+        <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+        <a href="#how" class="btn btn-secondary">See How It Works
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+
+      <div class="orb-wrap reveal" style="--d:.32s" aria-hidden="true">
+        <div class="ring"></div>
+        <div class="ring r2"></div>
+        <div class="orb"></div>
+      </div>
+
+      <div class="hero-stats reveal" style="--d:.4s">
+        <div class="stat"><b>120+</b><span>Supported models</span></div>
+        <div class="stat"><b>0ms</b><span>Network latency</span></div>
+        <div class="stat"><b>100%</b><span>Offline capable</span></div>
+        <div class="stat"><b>84k+</b><span>Local builders</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section id="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Features</span>
+        <h2>Everything you need. Nothing watching you.</h2>
+        <p>A complete local inference stack, engineered to feel instant and disappear into the background.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal" style="--d:0s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+          </div>
+          <h3>Any Model</h3>
+          <p>Llama, Mistral, Gemma, Phi, Qwen — run any GGUF or safetensors model, or pull from the built-in curated library with one click.</p>
+        </div>
+        <div class="feature-card reveal" style="--d:.08s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          </div>
+          <h3>Zero Latency</h3>
+          <p>No round trips, no rate limits, no cold starts. Tokens stream the instant you hit send — as fast as your silicon allows.</p>
+        </div>
+        <div class="feature-card reveal" style="--d:.16s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <h3>Full Privacy</h3>
+          <p>Your prompts, chats, and files never touch a network. Everything is stored locally, encrypted at rest by default.</p>
+        </div>
+        <div class="feature-card reveal" style="--d:.24s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12M6 11l-2 6h16l-2-6M6 11l2-7h8l2 7"/><path d="M9 17v3M15 17v3M4 20h16"/></svg>
+          </div>
+          <h3>GPU Optimized</h3>
+          <p>Automatic offloading across CUDA, Metal, and ROCm. LocalMind squeezes every last tok/s out of your hardware.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section id="how">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">How It Works</span>
+        <h2>From install to first chat in 90 seconds</h2>
+        <p>No Docker wrangling. No Python environments. No config files.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal" style="--d:0s">
+          <div class="step-num">1</div>
+          <h3>Install</h3>
+          <p>One command, one binary. LocalMind detects your hardware and configures itself.</p>
+          <span class="step-code">curl localmind.sh | sh</span>
+        </div>
+        <div class="step reveal" style="--d:.12s">
+          <div class="step-num">2</div>
+          <h3>Choose a Model</h3>
+          <p>Browse the library or drop in your own weights. Quantization is handled automatically.</p>
+          <span class="step-code">localmind pull llama-4-8b</span>
+        </div>
+        <div class="step reveal" style="--d:.24s">
+          <div class="step-num">3</div>
+          <h3>Chat Locally</h3>
+          <p>Open the app and start chatting — fully offline, fully yours, fully unlimited.</p>
+          <span class="step-code">localmind chat &#10024;</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRICING ============ -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Pricing</span>
+        <h2>Simple plans. No hidden telemetry.</h2>
+        <p>Every plan runs 100% locally. We upgrade the tooling, never your data bill.</p>
+      </div>
+      <div class="pricing-grid">
+
+        <div class="price-card reveal" style="--d:0s">
+          <div class="tier-name">Free</div>
+          <div class="tier-price">$0<small> / forever</small></div>
+          <p class="tier-desc">For tinkerers and first-time local explorers.</p>
+          <ul class="tier-features">
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Run models up to 8B parameters</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Curated model library</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>CPU &amp; single-GPU inference</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local chat history &amp; export</li>
+          </ul>
+          <a href="#top" class="btn btn-outline tier-btn">Start Free</a>
+        </div>
+
+        <div class="price-card popular reveal" style="--d:.1s">
+          <span class="popular-tag">Most Popular</span>
+          <div class="tier-name">Pro</div>
+          <div class="tier-price">$12<small> / month</small></div>
+          <p class="tier-desc">For power users running AI as part of daily work.</p>
+          <ul class="tier-features">
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Unlimited model sizes</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Multi-GPU &amp; Metal offloading</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local RAG — chat with your files</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Custom system prompts &amp; presets</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Priority model support</li>
+          </ul>
+          <a href="#top" class="btn btn-primary tier-btn">Get Early Access</a>
+        </div>
+
+        <div class="price-card reveal" style="--d:.2s">
+          <div class="tier-name">Studio</div>
+          <div class="tier-price">$29<small> / month</small></div>
+          <p class="tier-desc">For teams and builders shipping local-first products.</p>
+          <ul class="tier-features">
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Everything in Pro</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local API server &amp; SDK access</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>LAN inference for your team</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Fine-tuning &amp; LoRA tools</li>
+            <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Priority support &amp; early builds</li>
+          </ul>
+          <a href="#top" class="btn btn-outline tier-btn">Contact Sales</a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ABOUT / SOCIAL PROOF ============ -->
+  <section id="about">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Our Mission</span>
+        <h2>AI should be personal</h2>
+      </div>
+      <div class="mission reveal" style="--d:.08s">
+        <p>We believe AI should be <strong>personal</strong> — running on <em>your</em> machine, answering to <em>you</em>, and keeping <em>your</em> words where they belong. LocalMind exists because incredible open models deserve incredible local tooling. No accounts required to think. <span class="hl">Your hardware is enough.</span></p>
+      </div>
+      <div class="testimonials">
+        <div class="t-card reveal" style="--d:0s">
+          <p class="t-quote">I deleted three cloud AI subscriptions after a week with LocalMind. My M2 Max writes my release notes faster than any API ever did — and my code never leaves the laptop.</p>
+          <div class="t-person">
+            <span class="avatar a1">SK</span>
+            <div>
+              <div class="t-name">Sana Khoury</div>
+              <div class="t-role">Staff Engineer, Kernelworks</div>
+            </div>
+          </div>
+        </div>
+        <div class="t-card reveal" style="--d:.1s">
+          <p class="t-quote">As a therapist, I can't send notes to a cloud, period. LocalMind let me build a private summarization workflow on a machine I own, in an afternoon. It's the only AI tool I trust.</p>
+          <div class="t-person">
+            <span class="avatar a2">DO</span>
+            <div>
+              <div class="t-name">Dr. Owen Reyes</div>
+              <div class="t-role">Clinical Psychologist, Private Practice</div>
+            </div>
+          </div>
+        </div>
+        <div class="t-card reveal" style="--d:.2s">
+          <p class="t-quote">The multi-GPU offloading is witchcraft. We run a 70B model on two used 3090s at our studio and it feels like magic — fully offline, zero monthly fees.</p>
+          <div class="t-person">
+            <span class="avatar a3">MT</span>
+            <div>
+              <div class="t-name">Mira Tanaka</div>
+              <div class="t-role">Creative Director, Field Studio</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL CTA ============ -->
+  <section style="padding-top:0;">
+    <div class="container">
+      <div class="final-cta reveal">
+        <h2>Your computer is ready.<br><span class="grad-text">Are you?</span></h2>
+        <p>Join 84,000+ builders who've already cut the cord. Early access opens weekly — no credit card required.</p>
+        <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <span class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a5 5 0 0 1 5 5v1a4 4 0 0 1 0 8v1a5 5 0 0 1-10 0v-1a4 4 0 0 1 0-8V7a5 5 0 0 1 5-5z"/>
+              <circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/>
+            </svg>
+          </span>
+          <span>Local<em>Mind</em></span>
+        </a>
+        <p>Run powerful AI on your own hardware. No cloud, no compromises, no limits.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#top">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#about">About</a></li>
+          <li><a href="#about">Blog</a></li>
+          <li><a href="#about">Careers</a></li>
+          <li><a href="#about">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#top">Privacy</a></li>
+          <li><a href="#top">Terms</a></li>
+          <li><a href="#top">License</a></li>
+          <li><a href="#top">Security</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2025 LocalMind Labs. All rights reserved. No model was harmed in the making of this site.</span>
+      <span class="status"><i></i> All systems offline — the way we like it.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Nav shadow on scroll ---------- */
+  var nav = document.getElementById('nav');
+  var onScroll = function () {
+    nav.classList.toggle('scrolled', window.scrollY > 8);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Mobile menu ---------- */
+  var burger = document.getElementById('hamburger');
+  var menu = document.getElementById('mobileMenu');
+
+  function setMenu(open) {
+    burger.classList.toggle('open', open);
+    menu.classList.toggle('open', open);
+    burger.setAttribute('aria-expanded', String(open));
+  }
+
+  burger.addEventListener('click', function () {
+    setMenu(!menu.classList.contains('open'));
+  });
+
+  // Close menu when a link is clicked
+  menu.querySelectorAll('a').forEach(function (link) {
+    link.addEventListener('click', function () { setMenu(false); });
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setMenu(false);
+  });
+
+  // Close if resized to desktop
+  window.addEventListener('resize', function () {
+    if (window.innerWidth >= 860) setMenu(false);
+  });
+
+  /* ---------- Scroll reveal (IntersectionObserver) ---------- */
+  var revealEls = document.querySelectorAll('.reveal');
+
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+    revealEls.forEach(function (el) { io.observe(el); });
+  } else {
+    revealEls.forEach(function (el) { el.classList.add('visible'); });
+  }
+
+  /* ---------- Smooth scroll fallback + nav offset ---------- */
+  document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+    anchor.addEventListener('click', function (e) {
+      var id = this.getAttribute('href');
+      if (id.length < 2) return;
+      var target = document.querySelector(id);
+      if (!target) return;
+      e.preventDefault();
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var top = target.getBoundingClientRect().top + window.scrollY - 76;
+      window.scrollTo({ top: top, behavior: reduce ? 'auto' : 'smooth' });
+      history.replaceState(null, '', id);
+    });
+  });
+
+  /* ---------- Subtle orb parallax (pointer, desktop only) ---------- */
+  var orb = document.querySelector('.orb-wrap');
+  if (orb && window.matchMedia('(pointer: fine)').matches) {
+    var hero = document.querySelector('.hero');
+    hero.addEventListener('mousemove', function (e) {
+      var r = hero.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      orb.style.transform = 'translate(' + (x * 18) + 'px,' + (y * 14) + 'px)';
+    });
+    hero.addEventListener('mouseleave', function () {
+      orb.style.transition = 'transform 0.6s ease';
+      orb.style.transform = 'translate(0,0)';
+      setTimeout(function () { orb.style.transition = ''; }, 600);
+    });
+  }
+})();
+</script>
+</body>
+</html>
+```

@@ -2237,3 +2237,22 @@ the NAS over SMB/SSH, or filesystem snapshots) so backups are selective,
 incremental, scriptable, and restorable without booting into Windows. Whole-disk
 imaging from Windows is a reasonable stopgap but is manual, all-or-nothing, and
 decoupled from this repo's tooling.
+
+## Strata engine (Qwen3.8-Flash-Next) — evaluation notes (ADR-0032)
+
+Not in production. Everything lives under gitignored paths: `src/strata` (source), `build-v100/strata`
+(sm_70 build), `venvs/strata`, `models/qwen3.8-flash-next/{unsloth,strata}` (GGUF, packs, configs).
+Tracked copies of the configs, results and harness are in `docs/data/flash-next/` and `scripts/flash-eval/`.
+
+- **Run it by hand (inside an eval window, the V100s must be idle):** `scripts/flash-eval/strata-serve.sh <config.json>` serves on
+  127.0.0.1:8080; stop it with **SIGTERM** (SIGINT is ignored). Load takes 2-3 minutes. Config keys: `gpu: [1, 2]` (sets
+  `CUDA_DEVICE_ORDER=PCI_BUS_ID`), `layer_split: "24"`, `env`, `reasoning_effort`.
+- **Behind llama-swap:** `docs/data/flash-next/window4/ls.yaml` is a working private entry (`exec` the server via
+  `scripts/flash-eval/strata-serve-port.sh <cfg> ${PORT}`, `checkEndpoint: /health`, `healthCheckTimeout: 600`). Unload with
+  **`GET /unload`** (a POST is a 405). Strata needs both V100s to itself, so unload the daily trio first.
+- **Memory:** default arena mode pins about 80 GiB of RAM for Q4_K_XL; Q8_0 needs `--resident-budget-gib 80`. Past 256K ctx each
+  V100 has only about 450 MiB of VRAM free and Strata logs a "VRAM LOW" warning.
+- **Eval harness:** `scripts/flash-eval/flash-bench.py` (speed, long-prompt, needle; `BENCH_MODEL=<name>` when going through
+  llama-swap), `parity.py` / `parity-cmp.py` (greedy parity), `strata-soak.py`, `toolcall-strata.py`. They have hard-coded
+  `/srv/ai/var/flash-eval` paths (the frozen needle corpus is `var/flash-eval/corpus-frozen-20261023.txt`, not tracked).
+- **Copilot CLI agent eval against it:** `scripts/eval-run-copilot.py --model flash --base-url http://127.0.0.1:9091/v1 ...`.

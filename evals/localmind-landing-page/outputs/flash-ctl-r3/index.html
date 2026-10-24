@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-2: #0e0d15;
+    --surface: #13111c;
+    --surface-2: #181624;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(124,92,252,0.45);
+    --accent: #7c5cfc;
+    --accent-soft: rgba(124,92,252,0.14);
+    --accent-2: #00d4aa;
+    --text: #fafafa;
+    --muted: #9a9aa6;
+    --muted-2: #71717a;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(124,92,252,0.4); color: #fff; }
+
+  .container {
+    width: 100%;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ---------- NAV ---------- */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(9,9,11,0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    transition: border-color .3s ease;
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .logo-mark {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #4a3ae8);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 18px rgba(124,92,252,0.45);
+  }
+  .logo-mark svg { width: 16px; height: 16px; }
+  .logo span em { font-style: normal; color: var(--accent); }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+  }
+  .nav-links a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color .2s ease;
+    position: relative;
+  }
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: -6px;
+    width: 100%; height: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .25s ease;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a:hover::after { transform: scaleX(1); }
+
+  .nav-cta {
+    display: none;
+  }
+
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 42px; height: 42px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 10px;
+    transition: border-color .2s ease, background .2s ease;
+  }
+  .hamburger:hover { border-color: var(--border-hover); background: var(--accent-soft); }
+  .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform .3s ease, opacity .3s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .mobile-menu {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .4s cubic-bezier(.4,0,.2,1);
+    border-bottom: 1px solid transparent;
+    background: rgba(9,9,11,0.95);
+  }
+  .mobile-menu.open {
+    max-height: 360px;
+    border-bottom-color: var(--border);
+  }
+  .mobile-menu ul { list-style: none; padding: 12px 20px 20px; }
+  .mobile-menu li { border-bottom: 1px solid var(--border); }
+  .mobile-menu li:last-child { border-bottom: none; padding-top: 16px; }
+  .mobile-menu a {
+    display: block;
+    padding: 14px 4px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: color .2s ease, padding-left .2s ease;
+  }
+  .mobile-menu a:hover { color: var(--text); padding-left: 10px; }
+
+  /* ---------- BUTTONS ---------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 26px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: var(--font);
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: transform .18s ease, box-shadow .25s ease, background .25s ease, border-color .25s ease;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #5f45e0);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(124,92,252,0.35);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 36px rgba(124,92,252,0.55);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 2px 12px rgba(124,92,252,0.4); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.14);
+  }
+  .btn-ghost:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 4px 20px rgba(124,92,252,0.2);
+  }
+  .btn-ghost:active { transform: translateY(0) scale(0.98); }
+  .btn-sm { padding: 9px 18px; font-size: 0.85rem; }
+  .btn-block { width: 100%; }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    position: relative;
+    padding: 90px 0 110px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% -5%, rgba(124,92,252,0.16), transparent 65%),
+      radial-gradient(ellipse 40% 30% at 80% 30%, rgba(0,212,170,0.06), transparent 70%);
+  }
+  .orb-wrap {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -46%);
+    width: 520px; height: 520px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, rgba(124,92,252,0.35), rgba(0,212,170,0.10) 45%, transparent 68%);
+    filter: blur(38px);
+    animation: orbPulse 6s ease-in-out infinite;
+  }
+  .orb-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 1px solid rgba(124,92,252,0.22);
+    animation: ringExpand 5s ease-out infinite;
+  }
+  .orb-ring:nth-child(2) { animation-delay: 1.6s; }
+  .orb-ring:nth-child(3) { animation-delay: 3.2s; }
+  @keyframes orbPulse {
+    0%, 100% { transform: scale(1); opacity: 0.85; }
+    50% { transform: scale(1.12); opacity: 1; }
+  }
+  @keyframes ringExpand {
+    0% { width: 120px; height: 120px; margin: -60px 0 0 -60px; opacity: 0.8; }
+    100% { width: 560px; height: 560px; margin: -280px 0 0 -280px; opacity: 0; }
+  }
+
+  .hero-content { position: relative; z-index: 1; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(124,92,252,0.3);
+    color: #b6a4ff;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin-bottom: 28px;
+  }
+  .badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  h1 {
+    font-size: clamp(2.4rem, 7.5vw, 4.6rem);
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin-bottom: 24px;
+  }
+  h1 .grad {
+    background: linear-gradient(92deg, var(--accent) 10%, #a78bfa 45%, var(--accent-2) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero-sub {
+    font-size: clamp(1rem, 2.4vw, 1.2rem);
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto 40px;
+  }
+  .hero-ctas {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-meta {
+    margin-top: 36px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    justify-content: center;
+  }
+  .hero-meta span::before { content: '✓ '; color: var(--accent-2); }
+
+  /* ---------- SECTIONS ---------- */
+  section { padding: 90px 0; position: relative; }
+  .section-head { text-align: center; margin-bottom: 56px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 14px;
+    display: block;
+  }
+  h2 {
+    font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+    letter-spacing: -0.03em;
+    font-weight: 750;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+  .section-head p { color: var(--muted); max-width: 520px; margin: 0 auto; }
+
+  /* ---------- FEATURES ---------- */
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(124,92,252,0.6), transparent);
+    opacity: 0;
+    transition: opacity .3s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--border-hover);
+    box-shadow: 0 14px 44px rgba(124,92,252,0.14);
+  }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(124,92,252,0.28);
+    display: grid;
+    place-items: center;
+    margin-bottom: 20px;
+    color: var(--accent);
+    transition: transform .3s ease, color .3s ease;
+  }
+  .feature-card:hover .feature-icon { transform: scale(1.08) rotate(-4deg); color: #a78bfa; }
+  .feature-icon svg { width: 22px; height: 22px; }
+  .feature-card h3 { font-size: 1.08rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .feature-card p { font-size: 0.92rem; color: var(--muted); }
+
+  /* ---------- HOW IT WORKS ---------- */
+  .how { background: linear-gradient(180deg, transparent, rgba(124,92,252,0.035) 30%, rgba(124,92,252,0.035) 70%, transparent); }
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    position: relative;
+  }
+  .step { text-align: center; position: relative; }
+  .step-num {
+    width: 58px; height: 58px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 1.25rem;
+    font-weight: 800;
+    font-family: var(--mono);
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), #4a3ae8);
+    box-shadow: 0 0 0 6px rgba(124,92,252,0.12), 0 8px 24px rgba(124,92,252,0.4);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .step:hover .step-num {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 10px rgba(124,92,252,0.16), 0 10px 32px rgba(124,92,252,0.55);
+  }
+  .step h3 { font-size: 1.1rem; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .step p { font-size: 0.92rem; color: var(--muted); max-width: 280px; margin: 0 auto; }
+  .step-arrow {
+    display: none;
+    position: absolute;
+    top: 22px;
+    right: -34px;
+    color: var(--muted-2);
+    font-size: 1.4rem;
+  }
+
+  /* ---------- PRICING ---------- */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: stretch;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 34px 28px;
+    display: flex;
+    flex-direction: column;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    position: relative;
+  }
+  .price-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--border-hover);
+    box-shadow: 0 16px 48px rgba(124,92,252,0.16);
+  }
+  .price-card.popular {
+    border-color: rgba(124,92,252,0.5);
+    background: linear-gradient(180deg, rgba(124,92,252,0.10), var(--surface) 45%);
+    box-shadow: 0 0 44px rgba(124,92,252,0.18);
+  }
+  .popular-tag {
+    position: absolute;
+    top: -13px; left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--accent), #5f45e0);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(124,92,252,0.5);
+  }
+  .price-tier { font-size: 0.95rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .price-amount {
+    font-size: 2.7rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .price-amount small { font-size: 0.95rem; font-weight: 500; color: var(--muted-2); letter-spacing: 0; }
+  .price-desc { font-size: 0.88rem; color: var(--muted); margin-bottom: 26px; }
+  .price-features { list-style: none; margin-bottom: 30px; flex: 1; }
+  .price-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #d4d4dc;
+    padding: 7px 0;
+  }
+  .price-features li svg { flex-shrink: 0; margin-top: 3px; width: 15px; height: 15px; color: var(--accent-2); }
+  .price-features li.off { color: var(--muted-2); }
+  .price-features li.off svg { color: var(--muted-2); }
+
+  /* ---------- ABOUT / TESTIMONIALS ---------- */
+  .about-text {
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: center;
+    color: var(--muted);
+    font-size: 1.05rem;
+  }
+  .about-text strong { color: var(--text); font-weight: 600; }
+  .testimonials {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-top: 56px;
+  }
+  .testimonial {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 26px;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+  }
+  .testimonial:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-hover);
+    box-shadow: 0 12px 36px rgba(124,92,252,0.12);
+  }
+  .stars { color: #f5b53f; letter-spacing: 2px; margin-bottom: 14px; font-size: 0.85rem; }
+  .testimonial blockquote { font-size: 0.95rem; color: #d4d4dc; margin-bottom: 20px; }
+  .t-author { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .av-1 { background: linear-gradient(135deg, #7c5cfc, #4a3ae8); }
+  .av-2 { background: linear-gradient(135deg, #00d4aa, #059669); }
+  .av-3 { background: linear-gradient(135deg, #f472b6, #c026d3); }
+  .t-name { font-size: 0.9rem; font-weight: 700; line-height: 1.3; }
+  .t-role { font-size: 0.8rem; color: var(--muted-2); }
+
+  /* ---------- FINAL CTA ---------- */
+  .final-cta {
+    text-align: center;
+    background: linear-gradient(180deg, rgba(124,92,252,0.08), transparent 80%);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .final-cta h2 { margin-bottom: 14px; }
+  .final-cta p { color: var(--muted); margin-bottom: 34px; }
+
+  /* ---------- FOOTER ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 56px 0 36px;
+    background: var(--bg-2);
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 36px;
+    margin-bottom: 44px;
+  }
+  .footer-brand p { color: var(--muted-2); font-size: 0.85rem; margin-top: 14px; max-width: 280px; }
+  .footer-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .footer-col h4 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted-2);
+    margin-bottom: 16px;
+    font-weight: 700;
+  }
+  .footer-col ul { list-style: none; }
+  .footer-col li { margin-bottom: 10px; }
+  .footer-col a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+    transition: color .2s ease;
+  }
+  .footer-col a:hover { color: var(--accent); }
+  .footer-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--muted-2);
+    font-size: 0.8rem;
+  }
+  .footer-bottom .status { display: flex; align-items: center; gap: 8px; }
+  .footer-bottom .status .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 8px rgba(0,212,170,0.6);
+  }
+
+  /* ---------- REVEAL ANIMATION ---------- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity .7s cubic-bezier(.2,.6,.2,1), transform .7s cubic-bezier(.2,.6,.2,1);
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .orb, .orb-ring, .badge .dot { animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ---------- BREAKPOINTS ---------- */
+  @media (min-width: 640px) {
+    .hero-ctas { flex-direction: row; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .footer-bottom { flex-direction: row; }
+  }
+  @media (min-width: 900px) {
+    .nav-links, .nav-cta { display: flex; }
+    .hamburger, .mobile-menu { display: none; }
+    .features-grid { grid-template-columns: repeat(4, 1fr); }
+    .steps { grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .step-arrow { display: block; }
+    .pricing-grid { grid-template-columns: repeat(3, 1fr); }
+    .price-card.popular { transform: scale(1.04); }
+    .price-card.popular:hover { transform: scale(1.04) translateY(-6px); }
+    .testimonials { grid-template-columns: repeat(3, 1fr); }
+    .footer-grid { grid-template-columns: 1.4fr 2fr; }
+    section { padding: 110px 0; }
+    .hero { padding: 120px 0 140px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="container nav-inner">
+    <a href="#top" class="logo">
+      <span class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1 0 8v1a4 4 0 0 1-8 0v-1a4 4 0 0 1 0-8V6a4 4 0 0 1 4-4z"/>
+          <circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/>
+        </svg>
+      </span>
+      <span>Local<em>Mind</em></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#about">About</a></li>
+    </ul>
+    <a href="#pricing" class="btn btn-primary btn-sm nav-cta">Get Early Access</a>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <nav class="mobile-menu" id="mobileMenu">
+    <ul>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#pricing" class="btn btn-primary btn-block">Get Early Access</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="orb-wrap" aria-hidden="true">
+      <div class="orb"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+    </div>
+    <div class="container hero-content">
+      <div class="badge"><span class="dot"></span> v2.4 now in private beta</div>
+      <h1>Run AI Locally.<br><span class="grad">Own Your Data.</span><br>No Limits.</h1>
+      <p class="hero-sub">LocalMind turns your own machine into a private AI powerhouse. Run frontier-class language models entirely on your hardware — no cloud, no API keys, no prying eyes.</p>
+      <div class="hero-ctas">
+        <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+        <a href="#how" class="btn btn-ghost">See How It Works ↓</a>
+      </div>
+      <div class="hero-meta">
+        <span>No telemetry, ever</span>
+        <span>Apple Silicon &amp; NVIDIA</span>
+        <span>Open source core</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Features</span>
+        <h2>Everything you need. Nothing you don't.</h2>
+        <p>A complete local inference stack, engineered to feel instant and disappear into the background.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <path d="M3.3 7L12 12l8.7-5M12 22V12"/>
+            </svg>
+          </div>
+          <h3>Any Model</h3>
+          <p>Llama, Mistral, Gemma, Phi, and 400+ GGUF &amp; safetensors models. One-click download, automatic quantization.</p>
+        </div>
+        <div class="feature-card reveal" style="transition-delay:.08s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <h3>Zero Latency</h3>
+          <p>No network round-trips. First tokens stream in under 50ms — faster than the cloud will ever be.</p>
+        </div>
+        <div class="feature-card reveal" style="transition-delay:.16s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+          </div>
+          <h3>Full Privacy</h3>
+          <p>Your prompts never leave your machine. Airplane-mode approved, with encrypted model storage at rest.</p>
+        </div>
+        <div class="feature-card reveal" style="transition-delay:.24s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="9" y="9" width="6" height="6"/>
+              <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
+            </svg>
+          </div>
+          <h3>GPU Optimized</h3>
+          <p>Smart offloading across Metal, CUDA, and Vulkan. Uses exactly the silicon you have — no config files.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="how">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">How It Works</span>
+        <h2>From install to first chat in 3 minutes</h2>
+        <p>No Python environments. No CUDA debugging. No YAML hell.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="step-num">1</div>
+          <h3>Install</h3>
+          <p>One command or one drag to Applications. LocalMind auto-detects your hardware.</p>
+          <span class="step-arrow">→</span>
+        </div>
+        <div class="step reveal" style="transition-delay:.12s">
+          <div class="step-num">2</div>
+          <h3>Choose a Model</h3>
+          <p>Browse the curated library by size, speed, and specialty — or import your own.</p>
+          <span class="step-arrow">→</span>
+        </div>
+        <div class="step reveal" style="transition-delay:.24s">
+          <div class="step-num">3</div>
+          <h3>Chat Locally</h3>
+          <p>Conversations stream instantly from your own GPU. Fully offline, forever free.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Pricing</span>
+        <h2>Simple pricing. Local forever.</h2>
+        <p>Every plan runs 100% on your hardware. You're paying for power features, not for compute.</p>
+      </div>
+      <div class="pricing-grid">
+        <div class="price-card reveal">
+          <div class="price-tier">Free</div>
+          <div class="price-amount">$0<small> / forever</small></div>
+          <p class="price-desc">For tinkerers and everyday local chat.</p>
+          <ul class="price-features">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Unlimited local chat</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Models up to 13B parameters</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Community model library</li>
+            <li class="off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Local API server</li>
+            <li class="off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Multi-model workflows</li>
+          </ul>
+          <a href="#" class="btn btn-ghost btn-block">Download Free</a>
+        </div>
+
+        <div class="price-card popular reveal" style="transition-delay:.1s">
+          <div class="popular-tag">Most Popular</div>
+          <div class="price-tier">Pro</div>
+          <div class="price-amount">$12<small> / month</small></div>
+          <p class="price-desc">For power users who live in their terminal and editor.</p>
+          <ul class="price-features">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Everything in Free</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Models up to 70B parameters</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> OpenAI-compatible local API</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> RAG over your local documents</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> GPU multi-streaming</li>
+          </ul>
+          <a href="#" class="btn btn-primary btn-block">Get Early Access</a>
+        </div>
+
+        <div class="price-card reveal" style="transition-delay:.2s">
+          <div class="price-tier">Studio</div>
+          <div class="price-amount">$29<small> / month</small></div>
+          <p class="price-desc">For teams shipping products on private inference.</p>
+          <ul class="price-features">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Everything in Pro</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Fine-tuning &amp; LoRA training</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Cluster inference (multi-machine)</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 5 team seats included</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Priority support &amp; SLA</li>
+          </ul>
+          <a href="#" class="btn btn-ghost btn-block">Contact Sales</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT / SOCIAL PROOF -->
+  <section id="about">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Our Mission</span>
+        <h2>AI should be personal</h2>
+      </div>
+      <p class="about-text reveal">We believe AI should be personal — running on <strong>your</strong> hardware, trained on <strong>your</strong> terms, answering to <strong>you</strong> alone. LocalMind exists because your thoughts, documents, and conversations shouldn't have to pass through someone else's datacenter to be useful. No subscriptions to inference. No rate limits. No terms of service between you and your own machine.</p>
+
+      <div class="testimonials">
+        <div class="testimonial reveal">
+          <div class="stars">★★★★★</div>
+          <blockquote>"I ripped out every cloud AI subscription we had. LocalMind on our M3 Ultra handles all our internal docs RAG faster than the API ever did — and legal stopped emailing me."</blockquote>
+          <div class="t-author">
+            <div class="avatar av-1">PN</div>
+            <div>
+              <div class="t-name">Priya Natarajan</div>
+              <div class="t-role">CTO, Fernwood Health</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial reveal" style="transition-delay:.1s">
+          <div class="stars">★★★★★</div>
+          <blockquote>"I wrote my novel's entire outline on a flight with zero signal. That used to be science fiction. Auto-offloading on my Steam Deck is genuinely absurd."</blockquote>
+          <div class="t-author">
+            <div class="avatar av-2">MO</div>
+            <div>
+              <div class="t-name">Marcus Oyelaran</div>
+              <div class="t-role">Novelist &amp; indie hacker</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial reveal" style="transition-delay:.2s">
+          <div class="stars">★★★★★</div>
+          <blockquote>"We evaluated six local inference stacks. LocalMind was the only one our non-technical researchers could install and use without filing an IT ticket."</blockquote>
+          <div class="t-author">
+            <div class="avatar av-3">EK</div>
+            <div>
+              <div class="t-name">Dr. Elena Kowalski</div>
+              <div class="t-role">Research Lead, Atlas Bio</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <div class="container reveal">
+      <h2>Your machine is already powerful enough.</h2>
+      <p>Join 40,000+ people who've stopped renting intelligence.</p>
+      <a href="#" class="btn btn-primary">Get Early Access</a>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <span class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1 0 8v1a4 4 0 0 1-8 0v-1a4 4 0 0 1 0-8V6a4 4 0 0 1 4-4z"/>
+              <circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/>
+            </svg>
+          </span>
+          <span>Local<em>Mind</em></span>
+        </a>
+        <p>Private, local-first AI for everyone. Built in Portland, runs everywhere.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#">Changelog</a></li>
+            <li><a href="#">Model Library</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#about">About</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy</a></li>
+            <li><a href="#">Terms</a></li>
+            <li><a href="#">License</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 LocalMind Labs, Inc. All rights reserved.</span>
+      <span class="status"><span class="dot"></span> All systems local</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Mobile hamburger menu
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+
+  hamburger.addEventListener('click', () => {
+    const isOpen = mobileMenu.classList.toggle('open');
+    hamburger.classList.toggle('open', isOpen);
+    hamburger.setAttribute('aria-expanded', isOpen);
+  });
+
+  // Close mobile menu when a link is clicked
+  mobileMenu.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      mobileMenu.classList.remove('open');
+      hamburger.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  // Close mobile menu on resize to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 900 && mobileMenu.classList.contains('open')) {
+      mobileMenu.classList.remove('open');
+      hamburger.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // Scroll reveal with IntersectionObserver
+  const revealEls = document.querySelectorAll('.reveal');
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (!prefersReduced && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    revealEls.forEach(el => observer.observe(el));
+  } else {
+    revealEls.forEach(el => el.classList.add('visible'));
+  }
+
+  // Nav border brightens on scroll
+  const nav = document.querySelector('.nav');
+  window.addEventListener('scroll', () => {
+    nav.style.borderBottomColor = window.scrollY > 10
+      ? 'rgba(255,255,255,0.10)'
+      : 'rgba(255,255,255,0.06)';
+  }, { passive: true });
+</script>
+
+</body>
+</html>

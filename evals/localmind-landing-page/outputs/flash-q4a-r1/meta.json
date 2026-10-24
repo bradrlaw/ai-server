@@ -1,0 +1,65 @@
+{
+  "test": "localmind-landing-page",
+  "model_slot": "flash",
+  "label": "flash-q4a-r1",
+  "model_name": "Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "strata v0.2.2 UD-Q4_K_XL 2xV100 layer-split24 spec4 tail_skip0 effort=medium",
+  "usage": {
+    "prompt_tokens": 838,
+    "completion_tokens": 15395,
+    "total_tokens": 16233,
+    "prompt_tokens_details": {
+      "cached_tokens": 833
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 570.1,
+    "ttft_ms": 206.7,
+    "prefill_tps": 24.2,
+    "decode_tps": 27.3,
+    "prompt_tokens": 5,
+    "predicted_tokens": 15395,
+    "prefill_ms": 206.7,
+    "decode_ms": 564628.3
+  },
+  "mtp": {
+    "draft_n": 210,
+    "draft_n_accepted": 168,
+    "accept_rate": 0.8,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 833,
+    "prompt_n": 5,
+    "prompt_ms": 206.7,
+    "prompt_per_token_ms": 41.34,
+    "prompt_per_second": 24.2,
+    "predicted_n": 15395,
+    "predicted_ms": 564628.3,
+    "predicted_per_token_ms": 36.676,
+    "predicted_per_second": 27.3,
+    "draft_n": 210,
+    "draft_n_accepted": 168
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 42454,
+  "reasoning_bytes": 86,
+  "wall_secs": 570.1,
+  "created_utc": "2026-10-23T02:49:05+00:00"
+}

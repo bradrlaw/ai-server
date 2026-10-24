@@ -1,0 +1,164 @@
+22:39:17Z window4 start
+22:39:17Z == stage ops-load
+22:40:41Z   first request through llama-swap OK in 83 s: Hello there, how are you?
+22:40:41Z   strata procs 2 vram [2, 32064, 32080]
+22:40:41Z RUN BENCH_MODEL=flash python3 /srv/ai/var/flash-eval/smoke.py 9091
+22:40:52Z   rc 0
+22:40:52Z == stage parity-strata
+22:40:52Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:9091/v1/chat/completions flash /srv/ai/var/flash-eval/w4/parity-strata.json
+22:41:26Z   rc 0
+22:41:26Z == stage toolcalls
+22:41:26Z RUN python3 /srv/ai/var/flash-eval/toolcall-strata.py --models flash --repeat 2 --out /srv/ai/var/flash-eval/w4/toolcalls.json
+22:44:53Z   rc 0
+22:44:53Z == stage vision
+22:44:53Z RUN python3 /srv/ai/var/flash-eval/vision.py http://127.0.0.1:9091/v1/chat/completions flash
+22:44:53Z   rc 0
+22:44:53Z == stage copilot
+22:44:53Z RUN python3 scripts/eval-run-copilot.py --test local-dungeon-web --model flash --label flash-q4a-copilot --base-url http://127.0.0.1:9091/v1 --ext html --max-prompt-tokens 400000 --max-output-tokens 32000 --timeout 1800
+22:50:25Z   rc 0
+22:50:25Z RUN python3 evals/local-dungeon-web/check.py
+22:50:25Z   rc 0
+22:50:25Z RUN python3 scripts/eval-summary.py --test local-dungeon-web
+22:50:25Z   rc 0
+22:50:25Z RUN python3 scripts/eval-run-copilot.py --test dungeon-adventure-engine --model flash --label flash-q4a-copilot --base-url http://127.0.0.1:9091/v1 --ext py --max-prompt-tokens 400000 --max-output-tokens 32000 --timeout 1800
+22:53:35Z   rc 0
+22:53:35Z RUN python3 evals/dungeon-adventure-engine/check.py
+22:53:37Z   rc 0
+22:53:37Z RUN python3 scripts/eval-summary.py --test dungeon-adventure-engine
+22:53:37Z   rc 0
+22:53:37Z == stage ram500k
+22:53:37Z RUN BENCH_MODEL=flash python3 /srv/ai/var/flash-eval/flash-bench.py prompt --url http://127.0.0.1:9091 --label q4w4-500k --sizes 500000
+23:01:51Z   rc 0
+23:01:51Z RUN BENCH_MODEL=flash python3 /srv/ai/var/flash-eval/flash-bench.py needle --url http://127.0.0.1:9091 --label q4w4-500k --filler real --sizes 500000 --depths 0.5
+23:08:30Z   rc 0
+23:08:30Z   MemAvailable before: MemAvailable:   45543380 kB after: MemAvailable:   46028348 kB
+23:08:30Z   guard/LOW lines: /srv/ai/var/flash-eval/w4-strata.log:strata generate: memory guard: limit 125.7 GiB (source: meminfo), current 5.9 GiB, reclaimable cache credited 0.0 GiB; available 119.8 GiB (MemAvailable 119.8 GiB), floor 2560 MiB
+/srv/ai/var/flash-eval/w4-strata.log:strata generate: layer split: CUDA1 holds its weights; 26.93 GiB free (its session follows the split search)
+/srv/ai/var/flash-eval/w4-strata.log:strata serve: STRATA_ROUTE_TAIL_SKIP=7 is ON (default): a missed expert that every token of a verify window routes at rank 7 or lower is skipped (+10..20% decode on 12-16 GB cards that miss experts, answers differ slightly from 0.1.41); STRATA_ROUTE_TAIL_SKIP=0 turns it off
+/srv/ai/var/flash-eval/w4-strata.log:strata serve: CUDA1: 456 MiB of VRAM free with everything loaded - LOW: its window graphs are captured on first use and need room too, and a full card can stall a request; add --vram-reserve-later-mib 1012 to the config's args (or lower --max-context)
+/srv/ai/var/flash-eval/w4-strata.log:strata serve: WARNING: only 472 MiB of VRAM free at the start of this request (below 512 MiB): when the card is this full the driver can page GPU memory to system RAM, decode falls to a few tok/s and a window may never finish (#2065). Add --vram-reserve-mib 768 to the config's args, or lower --max-context / --batch
+23:08:30Z == stage soak
+23:08:30Z RUN python3 /srv/ai/var/flash-eval/strata-soak.py http://127.0.0.1:9091/v1/chat/completions flash 30 /srv/ai/var/flash-eval/w4/soak.jsonl
+23:38:36Z   rc 0
+23:38:36Z == stage unload
+23:38:36Z   ERROR unload Traceback (most recent call last):
+  File "/srv/ai/var/flash-eval/window4.py", line 27, in run
+    try: fn(); mark(name)
+         ^^^^
+  File "/srv/ai/var/flash-eval/window4.py", line 101, in unload
+    t = time.time(); post("/unload");
+                    ^^^^^^^^^^^^^^^
+  File "/srv/ai/var/flash-eval/window4.py", line 32, in post
+    return urllib.request.urlopen(urllib.request.Request(LS + path, b"", method="POST"), timeout=tmo).read()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
+
+23:38:36Z == stage parity-lcpp
+23:39:42Z   ERROR parity-lcpp Traceback (most recent call last):
+  File "/usr/lib/python3.12/urllib/request.py", line 1344, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "/usr/lib/python3.12/http/client.py", line 1365, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1411, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1360, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1120, in _send_output
+    self.send(msg)
+  File "/usr/lib/python3.12/http/client.py", line 1064, in send
+    self.connect()
+  File "/usr/lib/python3.12/http/client.py", line 1030, in connect
+    self.sock = self._create_connection(
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 852, in create_connection
+    raise exceptions[0]
+  File "/usr/lib/python3.12/socket.py", line 837, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/srv/ai/var/flash-eval/window4.py", line 122, in parity_lcpp
+    try: urllib.request.urlopen("http://127.0.0.1:8081/health", timeout=3); break
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 515, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 532, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1373, in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1347, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/srv/ai/var/flash-eval/window4.py", line 124, in parity_lcpp
+    if p.poll() is not None: raise RuntimeError("llama-server died")
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: llama-server died
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/srv/ai/var/flash-eval/window4.py", line 27, in run
+    try: fn(); mark(name)
+         ^^^^
+  File "/srv/ai/var/flash-eval/window4.py", line 128, in parity_lcpp
+    os.killpg(p.pid, signal.SIGTERM); time.sleep(15)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ProcessLookupError: [Errno 3] No such process
+
+23:39:42Z xid total 0 strata procs 2 vram [2, 32124, 32152]
+23:39:42Z WINDOW4_DONE
+23:43:15Z window4 start
+23:43:15Z skip ops-load
+23:43:15Z skip parity-strata
+23:43:15Z skip toolcalls
+23:43:15Z skip vision
+23:43:15Z skip copilot
+23:43:15Z skip ram500k
+23:43:15Z skip soak
+23:43:15Z == stage unload
+23:44:54Z   load for unload test OK in 98 s, vram [2, 32064, 32080]
+23:46:59Z   unload 1: procs=1 after 125s vram=[2, 0, 0] xid=0
+23:47:04Z   vram settled [2, 0, 0]
+23:48:13Z   reload via proxy OK in 69 s Hello there, how are you?
+23:50:18Z   unload 2: procs=1 after 125s vram=[2, 0, 0] xid=0
+23:50:23Z   vram settled [2, 0, 0]
+23:51:30Z   after llama-swap exit: procs 1 vram [2, 0, 0]
+23:51:30Z == stage parity-lcpp
+23:52:10Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8081/v1/chat/completions x /srv/ai/var/flash-eval/w4/parity-lcpp.json
+23:53:49Z   rc 0
+23:53:49Z RUN python3 /srv/ai/var/flash-eval/parity-cmp.py /srv/ai/var/flash-eval/w4/parity-strata.json /srv/ai/var/flash-eval/w4/parity-lcpp.json
+23:53:49Z   rc 0
+23:54:04Z xid total 0 strata procs 1 vram [2, 0, 0]
+23:54:04Z WINDOW4_DONE

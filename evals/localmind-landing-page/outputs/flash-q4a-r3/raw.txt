@@ -1,0 +1,1147 @@
+===== reasoning_content =====
+Build a single HTML file that contains all the sections. Let's write comprehensive, polished code.
+
+
+===== content =====
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<meta name="description" content="LocalMind lets you run powerful large language models on your own hardware. No cloud, no accounts, no limits.">
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-2: #0e0d15;
+    --surface: #13111c;
+    --surface-2: #181524;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(124,92,252,0.45);
+    --accent: #7c5cfc;
+    --accent-soft: rgba(124,92,252,0.14);
+    --accent-2: #00d4aa;
+    --text: #fafafa;
+    --muted: #9a9aa6;
+    --muted-2: #71717a;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(124,92,252,0.4); color: #fff; }
+
+  a { color: inherit; text-decoration: none; }
+  ul { list-style: none; }
+
+  .container {
+    width: 100%;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    background: rgba(9,9,11,0.72);
+    border-bottom: 1px solid var(--border);
+    transition: background 0.3s ease;
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+  }
+  .logo-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #4f3df0 60%, var(--accent-2));
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 18px rgba(124,92,252,0.45);
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 16px; height: 16px; }
+  .logo span em { font-style: normal; color: var(--accent); }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 28px;
+  }
+  .nav-links a {
+    font-size: 0.9rem;
+    color: var(--muted);
+    transition: color 0.2s ease;
+    position: relative;
+  }
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 100%;
+    bottom: -4px;
+    height: 1.5px;
+    background: var(--accent);
+    transition: right 0.25s ease;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a:hover::after { right: 0; }
+
+  .nav-cta {
+    display: none;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    will-change: transform;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 0 rgba(124,92,252,0);
+  }
+  .btn-primary:hover {
+    background: #8d70ff;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 30px rgba(124,92,252,0.45);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.98); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: rgba(255,255,255,0.14);
+  }
+  .btn-ghost:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: translateY(-2px);
+  }
+  .btn-ghost:active { transform: translateY(0) scale(0.98); }
+  .btn-sm { padding: 9px 18px; font-size: 0.85rem; }
+
+  /* Hamburger */
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 42px;
+    height: 42px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 10px;
+    transition: border-color 0.2s ease;
+  }
+  .hamburger:hover { border-color: rgba(255,255,255,0.2); }
+  .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* Mobile menu */
+  .mobile-menu {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    z-index: 99;
+    background: rgba(12,11,18,0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .mobile-menu.open { max-height: 360px; }
+  .mobile-menu ul { padding: 12px 20px 24px; }
+  .mobile-menu li { border-bottom: 1px solid var(--border); }
+  .mobile-menu li:last-child { border-bottom: none; padding-top: 18px; }
+  .mobile-menu a {
+    display: block;
+    padding: 14px 4px;
+    color: var(--muted);
+    font-size: 1rem;
+    transition: color 0.2s ease, padding-left 0.2s ease;
+  }
+  .mobile-menu a:hover { color: var(--text); padding-left: 10px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    padding: 90px 0 100px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% -5%, rgba(124,92,252,0.18), transparent 70%),
+      radial-gradient(ellipse 40% 30% at 80% 20%, rgba(0,212,170,0.06), transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(124,92,252,0.35);
+    background: var(--accent-soft);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #c9bbff;
+    margin-bottom: 28px;
+    letter-spacing: 0.02em;
+  }
+  .hero-badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent-2); }
+    50% { opacity: 0.35; box-shadow: 0 0 0 rgba(0,212,170,0); }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.4rem, 7.5vw, 4.6rem);
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    max-width: 900px;
+    margin: 0 auto 24px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(100deg, #a68bff 0%, var(--accent) 45%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero p.sub {
+    font-size: clamp(1rem, 2.3vw, 1.2rem);
+    color: var(--muted);
+    max-width: 620px;
+    margin: 0 auto 40px;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 64px;
+  }
+
+  /* Orb visual */
+  .orb-scene {
+    position: relative;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  .orb {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #b7a5ff, var(--accent) 45%, #3a2a9e 80%, #1a1340);
+    animation: float 6s ease-in-out infinite;
+    box-shadow:
+      0 0 60px rgba(124,92,252,0.5),
+      0 0 140px rgba(124,92,252,0.25),
+      inset -18px -24px 50px rgba(0,0,0,0.55),
+      inset 8px 10px 30px rgba(255,255,255,0.18);
+  }
+  .orb::after {
+    content: '';
+    position: absolute;
+    inset: -30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,92,252,0.28), transparent 70%);
+    animation: pulse 3.2s ease-in-out infinite;
+    z-index: -1;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-16px); }
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.25); opacity: 0.35; }
+  }
+  .ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 1px solid rgba(124,92,252,0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .ring.r1 { width: 230px; height: 230px; animation: spin 14s linear infinite; border-style: dashed; }
+  .ring.r2 { width: 320px; height: 320px; border-color: rgba(0,212,170,0.18); animation: spin 26s linear infinite reverse; }
+  .ring.r3 { width: 420px; height: 420px; border-color: rgba(255,255,255,0.05); }
+  @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+  .ring .node {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    top: -5px; left: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 12px var(--accent-2);
+  }
+  .ring.r1 .node { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+
+  .orb-label {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted-2);
+    background: rgba(19,17,28,0.8);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .orb-label b { color: var(--accent-2); font-weight: 500; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 90px 0; position: relative; }
+  .section-head { text-align: center; margin-bottom: 56px; }
+  .eyebrow {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .section-head h2 {
+    font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+  .section-head p {
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto;
+    font-size: 1.02rem;
+  }
+
+  /* Reveal animation */
+  .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ---------- Features ---------- */
+  #features { background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%); }
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.3s ease, background 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(124,92,252,0.6), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--border-hover);
+    background: var(--surface-2);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.45), 0 0 24px rgba(124,92,252,0.10);
+  }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(124,92,252,0.28);
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    color: var(--accent);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .feature-card:hover .feature-icon {
+    transform: scale(1.08) rotate(-3deg);
+    box-shadow: 0 0 20px rgba(124,92,252,0.35);
+  }
+  .feature-icon svg { width: 22px; height: 22px; }
+  .feature-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .feature-card p { color: var(--muted); font-size: 0.93rem; }
+
+  /* ---------- How it works ---------- */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    position: relative;
+  }
+  .step {
+    text-align: center;
+    position: relative;
+    padding: 0 10px;
+  }
+  .step-num {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #4b39d6);
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 1.25rem;
+    margin: 0 auto 18px;
+    box-shadow: 0 0 26px rgba(124,92,252,0.4);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .step:hover .step-num {
+    transform: scale(1.12);
+    box-shadow: 0 0 40px rgba(124,92,252,0.65);
+  }
+  .step h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .step p { color: var(--muted); font-size: 0.93rem; max-width: 280px; margin: 0 auto; }
+  .step-arrow {
+    display: none;
+    position: absolute;
+    top: 22px;
+    right: -22px;
+    color: var(--muted-2);
+    z-index: 2;
+  }
+  .step-arrow svg { width: 26px; height: 26px; }
+
+  /* ---------- Pricing ---------- */
+  #pricing { background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%); }
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: stretch;
+    max-width: 1020px;
+    margin: 0 auto;
+  }
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.3s ease;
+    position: relative;
+  }
+  .price-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--border-hover);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(124,92,252,0.12);
+  }
+  .price-card.popular {
+    border-color: rgba(124,92,252,0.55);
+    background: linear-gradient(180deg, rgba(124,92,252,0.10), var(--surface) 45%);
+    box-shadow: 0 0 40px rgba(124,92,252,0.15);
+  }
+  .price-card.popular:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 55px rgba(124,92,252,0.28);
+  }
+  .popular-badge {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, var(--accent), #9d7bff);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 5px 16px;
+    border-radius: 999px;
+    box-shadow: 0 4px 18px rgba(124,92,252,0.5);
+    white-space: nowrap;
+  }
+  .tier-name { font-size: 1rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .price {
+    font-size: 2.7rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted-2); }
+  .tier-desc { color: var(--muted); font-size: 0.88rem; margin-bottom: 26px; }
+  .price-features { flex: 1; margin-bottom: 28px; }
+  .price-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #c9c9d2;
+    padding: 7px 0;
+  }
+  .check {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: rgba(0,212,170,0.14);
+    color: var(--accent-2);
+    display: grid;
+    place-items: center;
+  }
+  .check svg { width: 10px; height: 10px; }
+  .price-card .btn { width: 100%; }
+
+  /* ---------- About / Testimonials ---------- */
+  .mission {
+    max-width: 660px;
+    margin: 0 auto 64px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 1.08rem;
+  }
+  .mission strong { color: var(--text); font-weight: 600; }
+  .testimonials {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .testimonial {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.3s ease;
+  }
+  .testimonial:hover {
+    transform: translateY(-5px);
+    border-color: rgba(0,212,170,0.35);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.4);
+  }
+  .quote-mark { color: var(--accent); font-size: 2.2rem; line-height: 0.5; font-family: Georgia, serif; }
+  .testimonial blockquote {
+    color: #d6d6de;
+    font-size: 0.96rem;
+    flex: 1;
+  }
+  .t-author { display: flex; align-items: center; gap: 13px; }
+  .avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .av-1 { background: linear-gradient(135deg, #7c5cfc, #3d2fa8); }
+  .av-2 { background: linear-gradient(135deg, #00d4aa, #007a63); }
+  .av-3 { background: linear-gradient(135deg, #f06d9d, #9d2f63); }
+  .t-author .name { font-weight: 700; font-size: 0.92rem; line-height: 1.3; }
+  .t-author .role { color: var(--muted-2); font-size: 0.8rem; }
+
+  /* ---------- CTA banner ---------- */
+  .cta-banner {
+    text-align: center;
+    background: linear-gradient(135deg, rgba(124,92,252,0.14), rgba(0,212,170,0.06));
+    border: 1px solid rgba(124,92,252,0.28);
+    border-radius: 22px;
+    padding: 60px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-banner::before {
+    content: '';
+    position: absolute;
+    top: -60%; left: 50%;
+    transform: translateX(-50%);
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(124,92,252,0.25), transparent 70%);
+    pointer-events: none;
+  }
+  .cta-banner h2 {
+    font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .cta-banner p { color: var(--muted); margin-bottom: 30px; position: relative; }
+  .cta-banner .btn { position: relative; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 56px 0 40px;
+    background: #0b0a10;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    margin-bottom: 48px;
+  }
+  .footer-brand p {
+    color: var(--muted-2);
+    font-size: 0.85rem;
+    margin-top: 14px;
+    max-width: 280px;
+  }
+  .footer-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .footer-col h4 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-2);
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  .footer-col li { margin-bottom: 10px; }
+  .footer-col a {
+    font-size: 0.9rem;
+    color: var(--muted);
+    transition: color 0.2s ease, padding-left 0.2s ease;
+    display: inline-block;
+  }
+  .footer-col a:hover { color: var(--accent); padding-left: 4px; }
+  .footer-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 26px;
+    border-top: 1px solid var(--border);
+    color: var(--muted-2);
+    font-size: 0.8rem;
+  }
+  .footer-bottom .status { display: flex; align-items: center; gap: 8px; }
+  .footer-bottom .status i {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent-2);
+    display: inline-block;
+    box-shadow: 0 0 8px var(--accent-2);
+  }
+
+  /* ---------- Media queries ---------- */
+  @media (min-width: 640px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .testimonials { grid-template-columns: repeat(2, 1fr); }
+    .footer-grid { grid-template-columns: 1fr 1.4fr; }
+  }
+
+  @media (min-width: 900px) {
+    .nav-links { display: flex; }
+    .nav-cta { display: inline-flex; }
+    .hamburger { display: none; }
+    .mobile-menu { display: none; }
+    .features-grid { grid-template-columns: repeat(4, 1fr); }
+    .steps { grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .step-arrow { display: block; }
+    .pricing-grid { grid-template-columns: repeat(3, 1fr); }
+    .price-card.popular { transform: scale(1.04); }
+    .price-card.popular:hover { transform: scale(1.04) translateY(-8px); }
+    .testimonials { grid-template-columns: repeat(3, 1fr); }
+    .hero { padding: 120px 0 120px; }
+    section { padding: 110px 0; }
+    .orb { width: 190px; height: 190px; }
+    .ring.r1 { width: 280px; height: 280px; }
+    .ring.r2 { width: 380px; height: 380px; }
+    .ring.r3 { width: 500px; height: 500px; }
+    .orb-scene { height: 320px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001s !important;
+      transition-duration: 0.001s !important;
+    }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="top">
+  <div class="container nav-inner">
+    <a href="#top" class="logo" aria-label="LocalMind home">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a5 5 0 0 1 5 5v1a4 4 0 0 1 1 7.9V17a4 4 0 0 1-6 3.5A4 4 0 0 1 6 17v-1.1A4 4 0 0 1 7 8V7a5 5 0 0 1 5-5z"/>
+        </svg>
+      </span>
+      <span>Local<em>Mind</em></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How It Works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#about">About</a>
+    </nav>
+    <a href="#pricing" class="btn btn-primary btn-sm nav-cta">Get Early Access</a>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileMenu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<nav class="mobile-menu" id="mobileMenu" aria-label="Mobile">
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#pricing" class="btn btn-primary btn-sm" style="display:inline-flex;">Get Early Access</a></li>
+  </ul>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge reveal"><span class="dot"></span> Now in private beta · v0.9.4</div>
+    <h1 class="reveal">Run AI Locally.<br><span class="grad">Own Your Data.</span> No Limits.</h1>
+    <p class="sub reveal">LocalMind turns your laptop or desktop into a private AI powerhouse. Run state-of-the-art language models entirely on your hardware — no cloud, no API keys, no one reading your prompts. Ever.</p>
+    <div class="hero-actions reveal">
+      <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+      <a href="#how" class="btn btn-ghost">See How It Works</a>
+    </div>
+    <div class="orb-scene reveal" aria-hidden="true">
+      <div class="ring r3"></div>
+      <div class="ring r2"><span class="node"></span></div>
+      <div class="ring r1"><span class="node"></span></div>
+      <div class="orb"></div>
+      <div class="orb-label">local://llm&nbsp;·&nbsp;<b>100% on-device</b>&nbsp;·&nbsp;latency 12ms</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Features</span>
+      <h2>Everything you need. Nothing watching.</h2>
+      <p>A complete local inference stack, wrapped in an interface you'll actually enjoy using.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h3>Any Model</h3>
+        <p>Llama, Mistral, Gemma, Phi, and 200+ open models — one click to download, quantize, and run. GGUF, MLX, and ONNX out of the box.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <h3>Zero Latency</h3>
+        <p>No network round-trips. First token arrives in milliseconds, not seconds. Your CPU and GPU do the work — locally, instantly.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h3>Full Privacy</h3>
+        <p>Prompts, chats, and files never leave your machine. Airplane mode? It still works. There's literally nothing to send.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
+          </svg>
+        </div>
+        <h3>GPU Optimized</h3>
+        <p>Automatic acceleration for Apple Silicon, NVIDIA, and AMD. Smart memory management fits big models into small machines.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">How It Works</span>
+      <h2>From zero to local AI in 90 seconds</h2>
+      <p>No terminals. No CUDA debugging. No PhD required.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">1</div>
+        <h3>Install</h3>
+        <p>One native installer for macOS, Windows, and Linux. Auto-detects your hardware in seconds.</p>
+        <span class="step-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">2</div>
+        <h3>Choose a Model</h3>
+        <p>Browse a curated library with live benchmarks for your exact machine. Pick, download, done.</p>
+        <span class="step-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">3</div>
+        <h3>Chat Locally</h3>
+        <p>Ask anything. Streamed answers, file uploads, and system-wide hotkey — all fully offline.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Pricing</span>
+      <h2>Simple plans. No usage meters.</h2>
+      <p>Since there's no cloud to bill for, you'll never see a surprise invoice. Start free, forever.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card reveal">
+        <div class="tier-name">Free</div>
+        <div class="price">$0<small> / forever</small></div>
+        <p class="tier-desc">For the curious. Everything you need to try local AI.</p>
+        <ul class="price-features">
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Run models up to 8B parameters</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>5 models installed at once</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Unlimited local chats</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Community support</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Download Free</a>
+      </div>
+
+      <div class="price-card popular reveal">
+        <span class="popular-badge">Most Popular</span>
+        <div class="tier-name">Pro</div>
+        <div class="price">$12<small> / month</small></div>
+        <p class="tier-desc">For power users who want the full local toolkit.</p>
+        <ul class="price-features">
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Unlimited model size &amp; installs</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>GPU acceleration (Metal / CUDA / ROCm)</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local RAG — chat with your files</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>System-wide hotkey &amp; quick actions</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Priority support</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Get Early Access</a>
+      </div>
+
+      <div class="price-card reveal">
+        <div class="tier-name">Studio</div>
+        <div class="price">$29<small> / month</small></div>
+        <p class="tier-desc">For teams and tinkerers building on local inference.</p>
+        <ul class="price-features">
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Everything in Pro</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local API server (OpenAI-compatible)</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>LAN sharing across devices</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Fine-tuning &amp; LoRA manager</li>
+          <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Up to 5 team seats</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Start Studio Trial</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABOUT / SOCIAL PROOF ============ -->
+<section id="about">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Our Mission</span>
+      <h2>AI should be personal</h2>
+    </div>
+    <p class="mission reveal">We believe AI should be <strong>personal</strong> — running on <strong>your</strong> hardware, answering to <strong>your</strong> needs, keeping <strong>your</strong> data where it belongs. LocalMind exists because convenience shouldn't cost you privacy. Your thoughts, documents, and conversations deserve better than a server farm in a distant datacenter.</p>
+    <div class="testimonials">
+      <div class="testimonial reveal">
+        <div class="quote-mark">&ldquo;</div>
+        <blockquote>I ripped out every cloud AI subscription at our firm. LocalMind handles client document analysis on an M3 Mac Studio faster than the APIs ever did — and legal finally stopped panicking.</blockquote>
+        <div class="t-author">
+          <div class="avatar av-1">MR</div>
+          <div>
+            <div class="name">Maya Rodríguez</div>
+            <div class="role">CTO, Brightpath Legal</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <div class="quote-mark">&ldquo;</div>
+        <blockquote>I demo on flights for a living. Being able to open a laptop at 35,000 feet and run a full coding assistant offline gets gasps every single time. It just feels like the future.</blockquote>
+        <div class="t-author">
+          <div class="avatar av-2">JO</div>
+          <div>
+            <div class="name">Jonas Olsson</div>
+            <div class="role">Developer Advocate, Nordwave</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <div class="quote-mark">&ldquo;</div>
+        <blockquote>As a therapist, I can't use cloud tools with anything patient-adjacent. LocalMind's note summarization runs entirely on my laptop. It's the first AI product I actually trust.</blockquote>
+        <div class="t-author">
+          <div class="avatar av-3">PN</div>
+          <div>
+            <div class="name">Priya Nair</div>
+            <div class="role">Licensed Therapist, solo practice</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA BANNER ============ -->
+<section style="padding-top: 0;">
+  <div class="container">
+    <div class="cta-banner reveal">
+      <h2>Your hardware is already smart enough.</h2>
+      <p>Join 12,000+ people in the private beta. Free while in beta — no credit card.</p>
+      <a href="#pricing" class="btn btn-primary">Get Early Access</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <span class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a5 5 0 0 1 5 5v1a4 4 0 0 1 1 7.9V17a4 4 0 0 1-6 3.5A4 4 0 0 1 6 17v-1.1A4 4 0 0 1 7 8V7a5 5 0 0 1 5-5z"/>
+            </svg>
+          </span>
+          <span>Local<em>Mind</em></span>
+        </a>
+        <p>Private AI on your own hardware. Built by a small team who think your data is nobody's business but yours.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how">How It Works</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#">Changelog</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#about">About</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy</a></li>
+            <li><a href="#">Terms</a></li>
+            <li><a href="#">Security</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2025 LocalMind Labs, Inc. All rights reserved.</span>
+      <span class="status"><i></i> All systems local</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ----- Mobile menu ----- */
+  var hamburger = document.getElementById('hamburger');
+  var mobileMenu = document.getElementById('mobileMenu');
+
+  function toggleMenu(force) {
+    var open = typeof force === 'boolean' ? force : !mobileMenu.classList.contains('open');
+    mobileMenu.classList.toggle('open', open);
+    hamburger.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', String(open));
+  }
+
+  hamburger.addEventListener('click', function () { toggleMenu(); });
+
+  // Close menu when a link is clicked
+  mobileMenu.querySelectorAll('a').forEach(function (link) {
+    link.addEventListener('click', function () { toggleMenu(false); });
+  });
+
+  // Close menu on Escape
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') toggleMenu(false);
+  });
+
+  // Close menu if resized to desktop
+  window.addEventListener('resize', function () {
+    if (window.innerWidth >= 900) toggleMenu(false);
+  });
+
+  /* ----- Smooth scroll with sticky-nav offset ----- */
+  var NAV_OFFSET = 72;
+  document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+    anchor.addEventListener('click', function (e) {
+      var id = anchor.getAttribute('href');
+      if (id.length <= 1) return;
+      var target = document.querySelector(id);
+      if (!target) return;
+      e.preventDefault();
+      var top = target.getBoundingClientRect().top + window.pageYOffset - NAV_OFFSET;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+      history.pushState(null, '', id);
+    });
+  });
+
+  /* ----- Scroll reveal with stagger ----- */
+  var reveals = document.querySelectorAll('.reveal');
+
+  if ('IntersectionObserver' in window) {
+    // Group siblings for stagger effect
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var el = entry.target;
+        // Compute stagger index among visible siblings sharing the reveal class
+        var parent = el.parentElement;
+        var siblings = Array.prototype.filter.call(parent.children, function (c) {
+          return c.classList && c.classList.contains('reveal');
+        });
+        var idx = siblings.indexOf(el);
+        var delay = idx >= 0 ? Math.min(idx, 5) * 90 : 0;
+        setTimeout(function () {
+          el.classList.add('visible');
+        }, delay);
+        observer.unobserve(el);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+    reveals.forEach(function (el) { observer.observe(el); });
+  } else {
+    reveals.forEach(function (el) { el.classList.add('visible'); });
+  }
+
+  /* ----- Nav background on scroll ----- */
+  var nav = document.querySelector('.nav');
+  var lastKnown = 0;
+  window.addEventListener('scroll', function () {
+    var y = window.pageYOffset;
+    nav.style.background = y > 10 ? 'rgba(9,9,11,0.88)' : 'rgba(9,9,11,0.72)';
+    lastKnown = y;
+  }, { passive: true });
+})();
+</script>
+</body>
+</html>
+```

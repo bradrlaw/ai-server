@@ -1,0 +1,4 @@
+{"ts": "2026-10-23T00:41:56Z", "label": "q4a-default-tailskip7", "test": "speed", "kind": "short", "decode_tps_median": 77.72, "decode_tps_all": [84.72, 77.72, 62.17], "ttft_median": 0.328}
+{"ts": "2026-10-23T00:42:08Z", "label": "q4a-default-tailskip7", "test": "speed", "kind": "code", "decode_tps_median": 94.87, "decode_tps_all": [88.4, 94.87, 97.37], "ttft_median": 0.08}
+{"ts": "2026-10-23T00:42:17Z", "label": "q4a-default-tailskip7", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 7.835, "prefill_tps": 1017.0, "decode_tps": 64.91}
+{"ts": "2026-10-23T00:42:33Z", "label": "q4a-default-tailskip7", "test": "prompt", "target_tokens": 24000, "prompt_tokens": 23297, "ttft_s": 14.444, "prefill_tps": 1612.9, "decode_tps": 62.76}
