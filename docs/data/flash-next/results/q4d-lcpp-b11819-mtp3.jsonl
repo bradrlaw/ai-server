@@ -1,0 +1,4 @@
+{"ts": "2026-10-23T01:47:27Z", "label": "q4d-lcpp-b11819-mtp3", "test": "speed", "kind": "short", "decode_tps_median": 26.81, "decode_tps_all": [19.47, 29.95, 26.81], "ttft_median": 1.103}
+{"ts": "2026-10-23T01:47:57Z", "label": "q4d-lcpp-b11819-mtp3", "test": "speed", "kind": "code", "decode_tps_median": 41.14, "decode_tps_all": [39.71, 41.2, 41.14], "ttft_median": 0.305}
+{"ts": "2026-10-23T01:49:06Z", "label": "q4d-lcpp-b11819-mtp3", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 67.316, "prefill_tps": 118.4, "decode_tps": 33.33}
+{"ts": "2026-10-23T01:52:32Z", "label": "q4d-lcpp-b11819-mtp3", "test": "prompt", "target_tokens": 24000, "prompt_tokens": 23297, "ttft_s": 202.72, "prefill_tps": 114.9, "decode_tps": 28.52}

@@ -8,6 +8,8 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 
 | Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 34.6 | 195 ms | 15292 | 5005 B | on 66% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 30.8 | 80 ms | 9944 | 4902 B | off | stop |
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 12/12 | 114.8 | 802 ms | 16603 | 6013 B | on 79% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 12/12 | 81.1 | 1274 ms | 2227 | 6576 B | on 82% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 12/12 | 42.7 | 771 ms | 3732 | 4080 B | on 80% | stop |
@@ -15,8 +17,15 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 12/12 | 38.9 | 811 ms | 6552 | 4632 B | on 73% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 12/12 | 38.8 | 777 ms | 9559 | 6216 B | on 78% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 12/12 | 37.7 | 821 ms | 9166 | 6549 B | on 72% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 32.7 | 4357 ms | 11550 | 5898 B | on 71% | stop |
 | `gemma-31b` | gemma-4-31B-it-qat-UD-Q4_K_XL.gguf | 12/12 | 28.6 | 930 ms | 10708 | 2931 B | on 34% | stop |
 | `fast-uncensored` | Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf | 12/12 | 24.6 | 2018 ms | 28545 | 13444 B | on 64% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 12/12 | 22.8 | 8296 ms | 8461 | 5447 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 12/12 | 22.5 | 137 ms | 4952 | 3792 B | on 63% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 12/12 | 22.3 | 160 ms | 12808 | 5074 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 22.1 | 7337 ms | 11585 | 5370 B | on 73% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 21.6 | 7361 ms | 12138 | 4876 B | on 71% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 11/12 | 32.2 | 3568 ms | 13472 | 4430 B | off | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 11/12 | 38.9 | 822 ms | 3399 | 3589 B | on 73% | stop |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 10/12 | 124.5 | 779 ms | 7842 | 4180 B | on 80% | stop |
 
@@ -24,6 +33,8 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 
 | Model | Correctness | Rigor / stepwise | Contradiction handling | Clarity | Verification | Design | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `flash` | 4 | 4 | 4 | 4 | 5 | 21/25 | Flags the Ben/ICLR-Robotics clash and (correctly) a 2nd clash (Dana forced into March vs C4); gives best-effort 11/12 table by relaxing C12, with full clue check. Slightly muddled in Step 3-4 (proceeds before settling) and table presented before the verdict. Scored by Copilot (Opus/Sonnet pass), not the owner. |
+| `flash` | 3 | 4 | 4 | 4 | 5 | 20/25 | Finds both contradictions but its 'max-satisfying' table is only 10/12 (r1 reaches 11/12), so the 'maximum number of clues' claim is wrong; clue-by-clue table is honest about the 2 violations. Scored by Copilot, not the owner. |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -31,12 +42,19 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `gemma-31b` | · | · | · | · | · | — |  |
 | `fast-uncensored` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | 5 | 5 | 5 | 5 | 3 | 23/25 | Cleanest: derives both independent contradictions (Dana forced to ICML=March vs C4; Ben has no conference, elimination table), tries single-clue repairs and shows none works. No final all-clue verification table (hence check.py 'verifies' 0 - keyword miss, repairs are verification-like). Scored by Copilot, not the owner. |
 | `coding` | · | · | · | · | · | — |  |
 | `chat` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Correctness, Rigor / stepwise, Contradiction handling, Clarity, Verification.
 `·` = not yet scored.
 
-_Last generated 2026-08-16T04:36:37+00:00._
+_Last generated 2026-10-24T09:26:14+00:00._

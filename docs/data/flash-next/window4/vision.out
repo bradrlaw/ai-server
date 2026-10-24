@@ -1,0 +1,1 @@
+HTTP 400 b'{"error": {"type": "invalid_request_error", "message": "this server was started without the vision encoder (run setup again and choose \'vision\'), so it cannot read images"}}'

@@ -1,0 +1,2 @@
+{"ts": "2026-10-23T23:01:51Z", "label": "q4w4-500k", "test": "prompt", "target_tokens": 500000, "prompt_tokens": 485262, "ttft_s": 349.31, "prefill_tps": 1389.2, "decode_tps": 49.53}
+{"ts": "2026-10-23T23:08:30Z", "label": "q4w4-500k", "test": "needle", "target_tokens": 500000, "depth": 0.5, "expected": "380185", "ok": true, "filler": "real", "prompt_tokens": 522652, "ttft_s": 398.375, "answer": "380185"}

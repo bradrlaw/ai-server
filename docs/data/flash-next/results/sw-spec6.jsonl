@@ -1,0 +1,3 @@
+{"ts": "2026-10-23T01:41:52Z", "label": "sw-spec6", "test": "speed", "kind": "short", "decode_tps_median": 73.43, "decode_tps_all": [89.15, 73.43, 59.97], "ttft_median": 0.332}
+{"ts": "2026-10-23T01:42:05Z", "label": "sw-spec6", "test": "speed", "kind": "code", "decode_tps_median": 91.54, "decode_tps_all": [84.83, 92.67, 91.54], "ttft_median": 0.081}
+{"ts": "2026-10-23T01:42:17Z", "label": "sw-spec6", "test": "prompt", "target_tokens": 16384, "prompt_tokens": 15930, "ttft_s": 11.166, "prefill_tps": 1426.7, "decode_tps": 60.46}

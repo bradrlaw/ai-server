@@ -48,6 +48,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0029](0029-qwen3.8-27b-migration.md) | Migrate `coding` + `big` to Qwen3.8-27B (`reasoning_effort=medium`) | Accepted |
 | [0030](0030-llama-cpp-b11819-update.md) | Update llama.cpp from b9850 to b11819 (+17% `coding` decode, no flag changes) | Accepted |
 | [0031](0031-vision-projectors-on-chat-slots.md) | Vision (mmproj) on `coding`, `big`, `chat` (CPU) and `small` | Accepted |
+| [0032](0032-qwen3.8-flash-next-strata-evaluation.md) | Qwen3.8-Flash-Next on the Strata engine: evaluation result (Q4_K_XL candidate, not yet in production) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

@@ -1,0 +1,65 @@
+{
+  "test": "logic-puzzle-reasoning",
+  "model_slot": "flash",
+  "label": "flash-q8b-r3",
+  "model_name": "Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-flash-next/unsloth/Q8_0/Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf",
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "strata v0.2.2 Q8_0 budget80 2xV100 layer-split24 spec4 tail_skip0 effort=medium",
+  "usage": {
+    "prompt_tokens": 392,
+    "completion_tokens": 12808,
+    "total_tokens": 13200,
+    "prompt_tokens_details": {
+      "cached_tokens": 387
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 582.8,
+    "ttft_ms": 160.4,
+    "prefill_tps": 31.2,
+    "decode_tps": 22.3,
+    "prompt_tokens": 5,
+    "predicted_tokens": 12808,
+    "prefill_ms": 160.4,
+    "decode_ms": 574741.2
+  },
+  "mtp": {
+    "draft_n": 0,
+    "draft_n_accepted": 0,
+    "accept_rate": null,
+    "enabled": false
+  },
+  "server_timings": {
+    "cache_n": 387,
+    "prompt_n": 5,
+    "prompt_ms": 160.4,
+    "prompt_per_token_ms": 32.08,
+    "prompt_per_second": 31.2,
+    "predicted_n": 12808,
+    "predicted_ms": 574741.2,
+    "predicted_per_token_ms": 44.874,
+    "predicted_per_second": 22.3,
+    "draft_n": 0,
+    "draft_n_accepted": 0
+  },
+  "extraction": {
+    "extracted": false,
+    "kind": "full-content"
+  },
+  "output_file": "output.md",
+  "output_bytes": 5074,
+  "reasoning_bytes": 38219,
+  "wall_secs": 582.8,
+  "created_utc": "2026-10-23T09:34:53+00:00"
+}

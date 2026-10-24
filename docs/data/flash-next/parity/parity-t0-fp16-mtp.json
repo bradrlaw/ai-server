@@ -1,0 +1,82 @@
+[
+ {
+  "prompt": "Explain what a hash map is in two sentences.",
+  "text": "A hash map is a data structure that stores key-value pairs by using a hash function to compute an index into an array of buckets or slots. This allows for highly efficient, typically constant-time retrieval and insertion of values based on their unique keys."
+ },
+ {
+  "prompt": "Write a Python function that returns the nth Fibonacci number.",
+  "text": "```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2) for n > 1.\n    \n    Args:\n        n: A non-negative integer representing the position in the Fibonacci sequence.\n        \n    Returns:\n        The nth Fibonacci number.\n        \n    Raises:\n        ValueError: If n is negative.\n    \"\"\"\n    if n <"
+ },
+ {
+  "prompt": "List the planets of the solar system in order from the sun.",
+  "text": "Here are the eight planets of the Solar System listed in order of their distance from the Sun:\n\n1. **Mercury**\n2. **Venus**\n3. **Earth**\n4. **Mars**\n5. **Jupiter**\n6. **Saturn**\n7. **Uranus**\n8. **Neptune**\n\n*Note: Pluto was reclassified as a \"dwarf planet\" by the International Astronomical Union (IAU) in 2006 and is no longer considered one of the major planets.*"
+ },
+ {
+  "prompt": "What is the capital of Australia, and why is it not Sydney?",
+  "text": "The capital of Australia is **Canberra**.\n\n### Why is it not Sydney?\n\nSydney is the largest city in Australia and was historically the most prominent settlement, but it is not the capital due to a political compromise between two rival cities: **Sydney** (in New South Wales) and **Melbourne** (in Victoria).\n\n#### Historical Context:\n1. **Federation of Australia (1901):** When the six British colonies federated to form the Commonwealth of Australia, there was intense debate over which city should serve as the national capital.\n   - **Sydney** argued it was the oldest"
+ },
+ {
+  "prompt": "Translate 'Good morning, how are you?' into French, Spanish and German.",
+  "text": "Here is the translation of \"Good morning, how are you?\" into French, Spanish, and German:\n\n- **French**: Bonjour, comment allez-vous ?  \n  *(Formal/polite form; for informal use with friends/family: \"Bonjour, comment vas-tu ?\")*\n\n- **Spanish**: Buenos d\u00edas, \u00bfc\u00f3mo est\u00e1s?  \n  *(Informal; formal version: \"Buenos d\u00edas, \u00bfc\u00f3mo est\u00e1 usted?\")*\n\n- **German**: Guten Morgen, wie geht es Ihnen?  \n  *(Formal/polite form; informal version: \"Guten Morgen, wie geht\u2019s dir?"
+ },
+ {
+  "prompt": "Write a haiku about winter.",
+  "text": "White snow falls softly,\nSilence wraps the frozen world,\nBreath turns into mist."
+ },
+ {
+  "prompt": "Solve: 17 * 23 + 49. Show the steps.",
+  "text": "To solve the expression $17 \\times 23 + 49$, we must follow the order of operations (PEMDAS/BODMAS), which states that multiplication should be performed before addition.\n\n### Step 1: Perform the Multiplication\nFirst, calculate $17 \\times 23$.\n\nWe can break this down using standard multiplication or distribution:\n$$17 \\times 23 = 17 \\times (20 + 3)$$\n$$= (17 \\times 20) + (17 \\times 3)$$\n\nCalculate the parts:\n"
+ },
+ {
+  "prompt": "Explain the difference between TCP and UDP briefly.",
+  "text": "**TCP (Transmission Control Protocol)** and **UDP (User Datagram Protocol)** are both transport layer protocols used to send data over a network, but they differ significantly in how they handle reliability and speed.\n\n### Key Differences:\n\n| Feature | TCP | UDP |\n| :--- | :--- | :--- |\n| **Connection** | Connection-oriented (establishes a connection before sending data via a \"three-way handshake\"). | Connectionless (sends data without establishing a connection). |\n| **Reliability** | Reliable: Guarantees delivery, order, and error-checking. Retransmits lost packets. |"
+ },
+ {
+  "prompt": "Write a SQL query selecting the top 5 customers by total order value.",
+  "text": "# Top 5 Customers by Total Order Value\n\n## Assumed Schema\n\n```sql\n-- customers: customer_id, name, email, ...\n-- orders:    order_id, customer_id, order_date, total_amount, ...\n```\n\n## Query\n\n```sql\nSELECT \n    c.customer_id,\n    c.name,\n    SUM(o.total_amount) AS total_order_value\nFROM \n    customers c\nJOIN \n    orders o ON c.customer_id = o.customer_id\nGROUP BY \n    c.customer_id, c.name\nORDER BY \n    total_order_value DESC\nLIMIT 5;\n```\n\n##"
+ },
+ {
+  "prompt": "Summarize the plot of Romeo and Juliet in three sentences.",
+  "text": "Two young lovers from feuding families, the Montagues and Capulets, secretly marry with the help of Friar Laurence, hoping their union will end the ancient rivalry. A series of tragic misunderstandings and violent confrontations leads to a chain of events that results in both Romeo and Juliet taking their own lives. Their deaths finally reconcile the warring families, serving as a poignant reminder of the destructive power of hate."
+ },
+ {
+  "prompt": "What does the Linux command 'chmod 755 file' do?",
+  "text": "The command `chmod 755 file` changes the permissions of a specific file (or directory) named \"file\" in a Linux or Unix-like operating system.\n\nHere is the step-by-step logical deduction of what this command does:\n\n### 1. Breakdown of the Command Structure\n*   **`chmod`**: Stands for \"**Ch**ange **Mod**e\". It is the utility used to change file access permissions.\n*   **`755`**: This is an octal (base-8) representation of the permission bits.\n*   **`file`**: The target file"
+ },
+ {
+  "prompt": "Give three tips for writing readable code.",
+  "text": "Here are three essential tips for writing readable code:\n\n### 1. Use Descriptive and Consistent Naming Conventions\nNames are the most powerful tool for clarity. Avoid vague names like `x`, `data`, or `temp`. Instead, use names that clearly describe the variable\u2019s purpose, type, or content.\n- **Bad:** `d = 30` (What is `d`? Days? Distance? Dollars?)\n- **Good:** `days_until_expiration = 30`\n\nAdditionally, stick to a consistent style guide (e.g., `camelCase` for variables in JavaScript, `"
+ },
+ {
+  "prompt": "Write a JavaScript function that debounces another function.",
+  "text": "```javascript\nfunction debounce(func, wait) {\n  let timeoutId;\n  \n  return function (...args) {\n    const context = this;\n    \n    clearTimeout(timeoutId);\n    \n    timeoutId = setTimeout(() => {\n      func.apply(context, args);\n    }, wait);\n  };\n}\n```"
+ },
+ {
+  "prompt": "Why is the sky blue?",
+  "text": "The sky appears blue due to a phenomenon called **Rayleigh scattering**. Here\u2019s a step-by-step explanation:\n\n### 1. Sunlight is Made of All Colors\nSunlight looks white, but it is actually composed of all the colors of the visible spectrum (red, orange, yellow, green, blue, indigo, and violet). Each color travels as a wave with a different wavelength:\n- **Red light** has long wavelengths.\n- **Blue and violet light** have short wavelengths.\n\n### 2. Interaction with Earth\u2019s Atmosphere\nWhen sunlight enters Earth\u2019s atmosphere, it collides with gas molecules"
+ },
+ {
+  "prompt": "Describe the water cycle.",
+  "text": "The **water cycle**, also known as the **hydrologic cycle**, is the continuous movement of water on, above, and below the surface of the Earth. It is a closed system, meaning that the total amount of water on Earth remains relatively constant, but its state (solid, liquid, or gas) and location change constantly due to solar energy and gravity.\n\nHere is a step-by-step description of the key processes involved in the water cycle:\n\n### 1. Evaporation\n- **Process**: Solar energy heats water in oceans, lakes, rivers, and other bodies of water, causing it to change from a liquid state"
+ },
+ {
+  "prompt": "Write a bash one-liner that counts lines in all .py files in a directory tree.",
+  "text": "```bash\nfind . -name \"*.py\" -exec cat {} + | wc -l\n```"
+ },
+ {
+  "prompt": "What is the time complexity of binary search and why?",
+  "text": "### Logical Deduction\n\nTo determine the time complexity of Binary Search, we must analyze how the algorithm processes data compared to the total size of the input.\n\n#### 1. The Mechanism of Binary Search\nBinary search operates on a **sorted** array or list. Instead of checking every element one by one (like Linear Search), it follows this logic:\n1.  Identify the middle element of the current range.\n2.  Compare the target value with the middle element.\n3.  If they match, the search is complete.\n4.  If the target is smaller than the middle element, discard the"
+ },
+ {
+  "prompt": "Explain recursion to a ten year old.",
+  "text": "Imagine you are standing in a long line at the movies, and you really want to know how many people are in front of you. But you can\u2019t see past the person directly ahead of you.\n\nHere is how you figure it out using **recursion**:\n\n1. You tap the person in front of you on the shoulder and ask, *\"How many people are in front of you?\"*\n2. That person doesn\u2019t know either! So, they tap the person in front of *them* and ask the same question: *\"How many people are in front of you?\"*\n3. This keeps happening, person"
+ },
+ {
+  "prompt": "Name five common HTTP status codes and their meanings.",
+  "text": "Here are five of the most common HTTP status codes and their meanings:\n\n1. **200 OK**  \n   - **Category**: Success (2xx)  \n   - **Meaning**: The request has succeeded. The server has successfully processed the request and is returning the requested data in the response body. This is the standard response for successful HTTP requests.\n\n2. **301 Moved Permanently**  \n   - **Category**: Redirection (3xx)  \n   - **Meaning**: The requested resource has been permanently moved to a new URL. The server includes the new URL in the `Location` header"
+ },
+ {
+  "prompt": "Write a regex that matches a US ZIP code.",
+  "text": "# Regex for US ZIP Codes\n\nUS ZIP codes come in two formats:\n- **5-digit**: `12345`\n- **ZIP+4 (9-digit)**: `12345-6789`\n\n## Regex Pattern\n\n```regex\n^\\d{5}(-\\d{4})?$\n```\n\n## Breakdown\n\n| Component | Meaning |\n|-----------|---------|\n| `^`       | Start of string |\n| `\\d{5}`   | Exactly 5 digits |\n| `(-\\d{4})?` | Optional group"
+ }
+]

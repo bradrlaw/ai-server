@@ -1,0 +1,8 @@
+think-off: '156' reasoning: False stop
+think-on: '156' reasoning_len: 83 stop
+effort-medium: '156' 63 stop
+tools: [{'id': 'call_16a157b4cfd74bf89c7364f0', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': '{"city":"Paris","unit":"c"}'}}] tool_calls
+json_mode valid: True '{"name":"Elara Vance","age":29}'
+stop: '1, 2, 3, 4, 5, 6, ' stop
+length: length
+</think> literal: 'abc </think> def'

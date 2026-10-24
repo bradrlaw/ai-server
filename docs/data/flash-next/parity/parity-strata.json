@@ -1,0 +1,82 @@
+[
+ {
+  "prompt": "Explain what a hash map is in two sentences.",
+  "text": "A hash map is a data structure that stores key-value pairs by using a hash function to compute an index into an array of buckets or slots. This allows for highly efficient, near-constant time complexity for inserting, deleting, and retrieving values based on their unique keys."
+ },
+ {
+  "prompt": "Write a Python function that returns the nth Fibonacci number.",
+  "text": "```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Returns the nth Fibonacci number.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2) for n > 1.\n    \n    Args:\n        n: A non-negative integer representing the position in the Fibonacci sequence.\n        \n    Returns:\n        The nth Fibonacci number.\n        \n    Raises:\n        ValueError: If n is negative.\n    \"\"\"\n    if n <"
+ },
+ {
+  "prompt": "List the planets of the solar system in order from the sun.",
+  "text": "Here are the eight planets of the Solar System listed in order of their distance from the Sun:\n\n1. **Mercury**\n2. **Venus**\n3. **Earth**\n4. **Mars**\n5. **Jupiter**\n6. **Saturn**\n7. **Uranus**\n8. **Neptune**\n\n*Note: Pluto was reclassified as a \"dwarf planet\" by the International Astronomical Union (IAU) in 2006 and is no longer considered one of the major planets.*"
+ },
+ {
+  "prompt": "What is the capital of Australia, and why is it not Sydney?",
+  "text": "The capital of Australia is **Canberra**.\n\n### Why Canberra is the Capital (and Not Sydney)\n\nThe choice of Canberra as the capital was a result of a political compromise between Australia's two largest cities, **Sydney** and **Melbourne**, during the federation process in the late 19th and early 20th centuries.\n\n#### 1. The Rivalry Between Sydney and Melbourne\n- After the six British colonies federated to form the Commonwealth of Australia in 1901, there was intense debate over which city should serve as the national capital.\n- **Sydney** (New"
+ },
+ {
+  "prompt": "Translate 'Good morning, how are you?' into French, Spanish and German.",
+  "text": "Here is the translation of \"Good morning, how are you?\" into French, Spanish, and German:\n\n- **French**: Bonjour, comment allez-vous ?  \n  *(Formal/standard)*  \n  *Note: In informal settings, you might say \u201cBonjour, \u00e7a va ?\u201d*\n\n- **Spanish**: Buenos d\u00edas, \u00bfc\u00f3mo est\u00e1s?  \n  *(Informal)*  \n  *For formal address: \u201cBuenos d\u00edas, \u00bfc\u00f3mo est\u00e1 usted?\u201d*\n\n- **German**: Guten Morgen, wie geht es Ihnen?  \n  *(Formal)*  \n  *For informal address: \u201cGuten Morgen, wie"
+ },
+ {
+  "prompt": "Write a haiku about winter.",
+  "text": "White snow falls softly,\nSilence wraps the frozen world,\nBreath turns into mist."
+ },
+ {
+  "prompt": "Solve: 17 * 23 + 49. Show the steps.",
+  "text": "To solve the expression $17 \\times 23 + 49$, we must follow the order of operations (PEMDAS/BODMAS), which states that multiplication should be performed before addition.\n\n### Step 1: Perform the Multiplication\nFirst, calculate $17 \\times 23$.\n\nWe can break this down using standard multiplication or distribution:\n$$17 \\times 23 = 17 \\times (20 + 3)$$\n$$= (17 \\times 20) + (17 \\times 3)$$\n\nCalculate each part:\n"
+ },
+ {
+  "prompt": "Explain the difference between TCP and UDP briefly.",
+  "text": "The primary difference between **TCP** (Transmission Control Protocol) and **UDP** (User Datagram Protocol) lies in their approach to reliability, speed, and connection management.\n\n### Key Differences:\n\n| Feature | TCP | UDP |\n| :--- | :--- | :--- |\n| **Connection Type** | Connection-oriented (establishes a link before sending data). | Connectionless (sends data without establishing a link). |\n| **Reliability** | Reliable: Guarantees delivery, order, and error-checking. Retransmits lost packets. | Unreliable: No guarantee of delivery, order,"
+ },
+ {
+  "prompt": "Write a SQL query selecting the top 5 customers by total order value.",
+  "text": "```sql\nSELECT \n    c.customer_id,\n    c.customer_name,\n    SUM(o.order_value) AS total_order_value\nFROM \n    customers c\nJOIN \n    orders o ON c.customer_id = o.customer_id\nGROUP BY \n    c.customer_id, c.customer_name\nORDER BY \n    total_order_value DESC\nLIMIT 5;\n```"
+ },
+ {
+  "prompt": "Summarize the plot of Romeo and Juliet in three sentences.",
+  "text": "Two young lovers from feuding families, the Montagues and Capulets, secretly marry with the help of Friar Laurence, hoping their union will end the ancient rivalry. A series of tragic misunderstandings and violent confrontations leads to a chain of events that results in both Romeo and Juliet taking their own lives. Their deaths finally reconcile the warring families, serving as a poignant reminder of the destructive power of hatred."
+ },
+ {
+  "prompt": "What does the Linux command 'chmod 755 file' do?",
+  "text": "The Linux command `chmod 755 file` changes the permissions of a specific file (or directory) named \"file\" to allow different levels of access for three categories of users: the **Owner**, the **Group**, and **Others**.\n\nHere is the step-by-step breakdown of what this command does.\n\n### 1. Understanding the Numbers\nIn Linux, file permissions are represented by a set of three digits (octal notation). Each digit corresponds to a specific user category and represents the sum of allowed permission values:\n\n*   **Read (`r`)** = $4$\n*   **Write (`w"
+ },
+ {
+  "prompt": "Give three tips for writing readable code.",
+  "text": "Here are three essential tips for writing readable code:\n\n### 1. Use Descriptive and Consistent Naming Conventions\nNames are the most powerful tool for communication in code. Avoid vague names like `x`, `data`, or `temp`. Instead, use clear, intention-revealing names that describe *what* the variable, function, or class does.\n- **Bad:** `d = 10` (What is `d`? Days? Distance? Data?)\n- **Good:** `daysSinceLastLogin = 10`\n\nAlso, stick to a consistent style (e.g., `camel"
+ },
+ {
+  "prompt": "Write a JavaScript function that debounces another function.",
+  "text": "```javascript\nfunction debounce(func, wait = 0) {\n    let timeoutId;\n    return function (...args) {\n        const context = this;\n        clearTimeout(timeoutId);\n        timeoutId = setTimeout(() => {\n            func.apply(context, args);\n        }, wait);\n    };\n}\n```"
+ },
+ {
+  "prompt": "Why is the sky blue?",
+  "text": "The sky appears blue due to a phenomenon called **Rayleigh scattering**. Here\u2019s a step-by-step explanation:\n\n### 1. Sunlight is White Light\nSunlight looks white, but it is actually made up of all the colors of the visible spectrum (red, orange, yellow, green, blue, indigo, and violet). Each color travels as a wave with a different wavelength:\n- **Red light** has long wavelengths.\n- **Blue and violet light** have short wavelengths.\n\n### 2. Interaction with Earth\u2019s Atmosphere\nWhen sunlight enters Earth\u2019s atmosphere, it collides with gas molecules ("
+ },
+ {
+  "prompt": "Describe the water cycle.",
+  "text": "The **water cycle**, also known as the **hydrologic cycle**, is the continuous movement of water on, above, and below the surface of the Earth. It is a closed system, meaning that the total amount of water on Earth remains relatively constant, but its state (solid, liquid, or gas) and location change constantly.\n\nHere is a step-by-step description of the key processes involved in the water cycle:\n\n### 1. Evaporation\n- **Process**: Solar energy heats water in oceans, lakes, rivers, and other bodies of water, causing it to change from a **liquid** state to a **gas"
+ },
+ {
+  "prompt": "Write a bash one-liner that counts lines in all .py files in a directory tree.",
+  "text": "```bash\nfind . -name \"*.py\" -exec cat {} + | wc -l\n```"
+ },
+ {
+  "prompt": "What is the time complexity of binary search and why?",
+  "text": "### Logical Deduction\n\nTo determine the time complexity of Binary Search, we must analyze how the algorithm processes data compared to the total size of the dataset.\n\n#### 1. The Mechanism of Binary Search\nBinary search operates on a **sorted** array or list. Instead of checking every element one by one (like Linear Search), it follows this logic:\n1.  Identify the middle element of the current range.\n2.  Compare the target value with the middle element.\n3.  If they match, the search is complete.\n4.  If the target is smaller than the middle element, discard the"
+ },
+ {
+  "prompt": "Explain recursion to a ten year old.",
+  "text": "Imagine you are standing in a long line at the movies, and you want to know what row number you are in. But here\u2019s the catch: you can\u2019t see your own row number because it\u2019s hidden behind the seat in front of you.\n\nSo, how do you figure it out?\n\nYou tap the person in front of you on the shoulder and ask, **\"Hey, what row are you in?\"**\n\nBut that person doesn\u2019t know either! So, they tap the person *in front of them* and ask, **\"Hey, what row are you in?\"**\n\nThis keeps happening. Person A asks Person"
+ },
+ {
+  "prompt": "Name five common HTTP status codes and their meanings.",
+  "text": "Here are five of the most common HTTP status codes and their meanings:\n\n1. **200 OK**  \n   - **Category**: Success (2xx)  \n   - **Meaning**: The request has succeeded. The server has processed the request and returned the requested data in the response body. This is the standard response for successful HTTP requests.\n\n2. **301 Moved Permanently**  \n   - **Category**: Redirection (3xx)  \n   - **Meaning**: The requested resource has been permanently moved to a new URL. The server includes the new URL in the `Location` header of the"
+ },
+ {
+  "prompt": "Write a regex that matches a US ZIP code.",
+  "text": "# Regex for US ZIP Codes\n\nUS ZIP codes come in two formats:\n- **5-digit**: `12345`\n- **ZIP+4 (9-digit)**: `12345-6789`\n\n## Regex Pattern\n\n```regex\n^\\d{5}(-\\d{4})?$\n```\n\n## Breakdown\n\n| Component | Meaning |\n|-----------|---------|\n| `^`       | Start of string |\n| `\\d{5}`   | Exactly 5 digits |\n| `(-\\d{4})?` | Optional group"
+ }
+]

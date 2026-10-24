@@ -1909,6 +1909,124 @@ A/B scripts, the tool-call suite, parser and `tool_choice` checks, the soak and 
 `scripts/mtp-bench.py`, `mtp-scenario-bench.py`, `bench-qwen3.8-27b.sh`, `roster-gsm8k-eval.sh` and
 `parallel-sweep.py` for this work).
 
+## Qwen3.8-Flash-Next on the Strata engine vs llama.cpp (2026-10-23/24)
+
+Qwen3.8-Flash-Next is a 125B-parameter MoE (about 6B active per token). It does not fit the V100s
+as a normal llama.cpp model, so we tried the **Strata** engine (v0.2.2, built from source for sm_70),
+which keeps the hot experts on the GPUs and streams the rest from pinned host RAM. llama.cpp b11819
+(with its MTP draft) was the control. Decision record: [ADR-0032](adr/0032-qwen3.8-flash-next-strata-evaluation.md).
+Raw data, configs and logs: `docs/data/flash-next/`. Harness scripts: `scripts/flash-eval/`.
+
+**Verdict: Strata with UD-Q4_K_XL passes the quality and ops gates and is 2.3-2.7x faster at decode (about 12x at prefill) than the
+llama.cpp control. Q8_0 is a reference only.** Production was not changed (see the ADR for what
+adoption would still need).
+
+### Setup
+
+- 2x V100-32GB (idx1/idx2, `CUDA_DEVICE_ORDER=PCI_BUS_ID`), layer split 24, `--kv int8`, MTP `--spec 4`,
+  default `STRATA_ROUTE_TAIL_SKIP=7`, reasoning effort `medium`. Quants allowed by owner policy: Q4_K_XL and Q8_0 only.
+- Every window had the daily trio unloaded (`/unload` every ~4 s) and `daily` restored afterwards.
+  All windows: 0 `NVRM: Xid` in `journalctl -k`, `verify-gpu-state.sh` ALL GOOD.
+- **Control:** llama.cpp b11819, same Q4_K_XL file, `-ngl 99 -sm layer -ts 31,17 --n-cpu-moe 16-18`, MTP
+  `draft-mtp` n=3, `-fa on`. The Titan X was not used.
+
+### Speed (UD-Q4_K_XL, tok/s)
+
+| | Strata | llama.cpp b11819 + MTP |
+|---|---|---|
+| Short decode | 72-78 | 27 |
+| Code decode | 94 | 41 |
+| Prefill, 4K / 16K / 32K | 529 / 1,225 / 1,495 | about 115 |
+| Decode at 512K ctx (short / code) | 72 / 94 | not run |
+| Prefill at 254K / 382K / 485K | 1,677 / 1,516 / 1,390 | not run |
+| TTFT at 254K / 485K | 152 s / 349 s | not run |
+| 4 concurrent clients, total | 66 (no batching gain; about 16 each) | not run |
+
+Context past 32K is YaRN x2 up to 524,288 tokens. Decode does not fall at 512K because the KV streams from
+pinned RAM. At 256K+ each V100 has only about 450 MiB of VRAM free, and the server logs a "VRAM LOW" warning.
+`STRATA_ROUTE_TAIL_SKIP=0` costs about 8% short decode. K8V4 KV and `--kv-resident 64K` had no speed cost.
+The control later decoded 21-26 tok/s under the two-slot eval load.
+
+### Q8_0 vs Q4_K_XL (Strata, RAM-budget mode `--resident-budget-gib 80`)
+
+| | Q8_0 | Q4_K_XL |
+|---|---|---|
+| Short / code decode | 32 / 49 | 72 / 94 |
+| Decode at 512K ctx | 28 / 41 | 72 / 94 |
+| Prefill 8K-23K | 515-741 | 1,100-1,600 |
+| TTFT at 485K | 614 s | 349 s |
+| GSM8K (n=100) | 0.99 | 0.99 |
+| Code evals at 100% | 15 of 15 | 12 of 15 |
+| Needles at 250K / 500K | 6/6 | 9/9 |
+
+The rule was that Q8 must beat Q4 by at least 2 points on quality. It did not, so Q4_K_XL is the
+serving candidate. (Q4's three misses are one model syntax error that the control also made, one real
+small spec deviation plus a checker false negative, and one checker keyword miss; see below.) The Q8 shards were deleted afterwards to stay under the NVMe cap
+(the pack was kept, re-download takes about 21 minutes).
+
+### Quality: Strata vs the llama.cpp control
+
+Same model file, same prompts, temperature 0.7 for the code evals, thinking at `medium`.
+
+| | Strata Q4_K_XL | llama.cpp control |
+|---|---|---|
+| GSM8K strict / flexible (n=100) | 0.99 / 0.99 (tail-skip 0 and 7) | 0.99 / 0.99 |
+| Code evals at 100% (5 tests x 3 runs, `check.py`) | 12 of 15 | 13 of 15 |
+| dungeon-adventure-engine r2 | 6.9% (syntax error) | 6.9% (same syntax error) |
+| Other misses | web r1 92.7%, logic r3 91.7% | web r2 97.6% |
+
+For reference the older single-run slots score: coding 29/29, 41/41, 27/27, 41/41, 11/12 and big
+27/29, 41/41, 27/27, 41/41, 12/12 on the same five tests. Flash-Next matches or exceeds them on four of
+five tests by median run; the dungeon test is a tie because its one failure is the model's own.
+Why the sub-100% scores happened:
+- **dungeon r2 (both engines):** an unescaped apostrophe in `'I don't see...'` is a Python syntax error. This is model sampling at temperature 0.7, not an engine bug.
+- **web r1:** the model named a room "Treasure Vault" instead of "Treasure Room" (a real -2), plus a checker false negative on unquoted JS keys (`partial_match`).
+- **logic r3:** the answer lacked the word "verif", a checker keyword miss.
+- **Manual rubric:** logic-puzzle r1-r3 were scored by Copilot (4/4/4/4/5, 3/4/4/4/5, 5/5/5/5/3). The HTML/dungeon visual axes are unscored (no headless browser).
+
+### Needle retrieval and the "cannot provide" refusals
+
+Real-text needles at 250K / 400K / 500K passed 9/9, 128K-250K 11/12 on the first pass. The two misses were
+the model refusing: the needle read "IMPORTANT: the vault access code is N.", and the model's prompt-injection
+defence treated it as an instruction hidden in untrusted text. It was deterministic at 128K depth 0.9,
+passed with thinking on or with the needle in its own paragraph, and passed on re-run at 240K depth 0.1.
+The harness now defaults to a neutral needle ("the passphrase for the blue door is N") on a frozen corpus
+(`var/flash-eval/corpus-frozen-20261023.txt`); `--needle vault` reproduces the old wording. Real filler text
+runs about 2.7 characters per token, not 3.3, so prompts overshoot their token targets.
+
+### Greedy parity with llama.cpp
+
+20 prompts, temperature 0, 128 tokens, thinking off (`scripts/flash-eval/parity.py`).
+
+| Comparison | Identical | Median chars before first difference |
+|---|---|---|
+| Strata (production settings) vs llama.cpp no-MTP | 3 / 20 | 92 |
+| Strata tail-skip 0, int8 KV, spec 4 | 1 / 20 | 70 |
+| Strata tail-skip 0, fp16 KV, spec 4 | 2 / 20 | 77 |
+| Strata tail-skip 0, fp16 KV, spec 2 | 2 / 20 | 77 |
+| llama.cpp no-MTP vs llama.cpp MTP (same engine) | 6 / 20 | 227 |
+
+Tail-skip, KV precision and speculation depth are not the cause. Two engines with different kernels
+drift apart once two tokens are near-tied; llama.cpp does it to itself when MTP is switched on. Strata
+diverges 2-3x earlier, but the answers stay equivalent and the GSM8K and code scores match, so the
+adoption gate is quality, not byte identity. (A no-spec run is impossible: the native pack needs `--spec` of 2 or more.)
+
+### Ops, soak and agent tests (Strata behind a private llama-swap on 127.0.0.1:9091)
+
+- **Load / unload:** first request loads in 83-98 s (reload 69 s) through `checkEndpoint: /health`. `GET /unload`
+  (not POST, that is a 405) frees both V100s to 0 MiB with no Xid, twice; stopping llama-swap also stops Strata and frees VRAM.
+- **Smoke:** thinking on/off, reasoning effort, tool calls, JSON mode, stop sequences and `</think>` literals all pass.
+- **Tool calls:** 30/30 valid on the 15-case suite x 2 repeats (`scripts/flash-eval/toolcall-strata.py`).
+- **Copilot CLI agent (BYOK to Strata):** `local-dungeon-web` 41/41 and `dungeon-adventure-engine` 29/29 (100%), 331 s for the web page.
+- **Soak, 30 minutes** (shortened from 4 h by the owner so the cards are not driven that hard): two workers,
+  286 requests (121 short, 122 code, 42 x 17K-token needle, 1 x 84K-token needle at 56 s), 0 HTTP failures, 0 wrong
+  answers. GPU temperatures were about 53 C and power peaked at about 141 W in the samples. The full telemetry
+  CSV was overwritten by a runner relaunch, so only spot samples exist.
+- **512K RAM:** one 500K-token prompt completed with about 45 GB of host RAM still available and no pinned-RAM guard
+  trip (only the VRAM-low warning above).
+- **Vision:** not enabled. A request with an image returns 400, "started without the vision encoder (run setup
+  again and choose 'vision')". Not tested further.
+
 ## Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)
 
 Sustained main-memory (DDR4) bandwidth of the host, measured with **McCalpin's

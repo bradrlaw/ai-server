@@ -1,0 +1,10 @@
+{"ts": "2026-10-23T09:44:49Z", "label": "q8b-512k", "test": "prompt", "target_tokens": 262144, "prompt_tokens": 254410, "ttft_s": 306.395, "prefill_tps": 830.3, "decode_tps": 23.98}
+{"ts": "2026-10-23T09:57:30Z", "label": "q8b-512k", "test": "prompt", "target_tokens": 500000, "prompt_tokens": 485262, "ttft_s": 613.701, "prefill_tps": 790.7, "decode_tps": 27.96}
+{"ts": "2026-10-23T10:02:53Z", "label": "q8b-512k", "test": "needle", "target_tokens": 250000, "depth": 0.1, "expected": "160619", "ok": true, "filler": "real", "prompt_tokens": 273728, "ttft_s": 322.535, "answer": "160619"}
+{"ts": "2026-10-23T10:08:12Z", "label": "q8b-512k", "test": "needle", "target_tokens": 250000, "depth": 0.5, "expected": "545135", "ok": true, "filler": "real", "prompt_tokens": 273025, "ttft_s": 318.865, "answer": "545135"}
+{"ts": "2026-10-23T10:13:20Z", "label": "q8b-512k", "test": "needle", "target_tokens": 250000, "depth": 0.9, "expected": "910965", "ok": true, "filler": "real", "prompt_tokens": 263251, "ttft_s": 307.916, "answer": "910965"}
+{"ts": "2026-10-23T10:24:24Z", "label": "q8b-512k", "test": "needle", "target_tokens": 500000, "depth": 0.1, "expected": "961294", "ok": true, "filler": "real", "prompt_tokens": 522987, "ttft_s": 663.597, "answer": "961294"}
+{"ts": "2026-10-23T10:35:28Z", "label": "q8b-512k", "test": "needle", "target_tokens": 500000, "depth": 0.5, "expected": "380185", "ok": true, "filler": "real", "prompt_tokens": 522652, "ttft_s": 663.427, "answer": "380185"}
+{"ts": "2026-10-23T10:46:30Z", "label": "q8b-512k", "test": "needle", "target_tokens": 500000, "depth": 0.9, "expected": "818878", "ok": true, "filler": "real", "prompt_tokens": 519488, "ttft_s": 661.644, "answer": "818878"}
+{"ts": "2026-10-23T10:47:03Z", "label": "q8b-512k", "test": "speed", "kind": "short", "decode_tps_median": 28.23, "decode_tps_all": [27.0, 30.77, 28.23], "ttft_median": 0.647}
+{"ts": "2026-10-23T10:47:35Z", "label": "q8b-512k", "test": "speed", "kind": "code", "decode_tps_median": 40.63, "decode_tps_all": [31.86, 40.66, 40.63], "ttft_median": 0.231}
