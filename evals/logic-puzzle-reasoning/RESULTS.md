@@ -13,6 +13,8 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 12/12 | 114.8 | 802 ms | 16603 | 6013 B | on 79% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 12/12 | 81.1 | 1274 ms | 2227 | 6576 B | on 82% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 12/12 | 42.7 | 771 ms | 3732 | 4080 B | on 80% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 42.1 | 764 ms | 8389 | 5155 B | on 83% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 41.0 | 770 ms | 16182 | 6571 B | on 81% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 39.0 | 861 ms | 21820 | 6620 B | on 80% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 12/12 | 38.9 | 811 ms | 6552 | 4632 B | on 73% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 12/12 | 38.8 | 777 ms | 9559 | 6216 B | on 78% | stop |
@@ -26,6 +28,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 22.1 | 7337 ms | 11585 | 5370 B | on 73% | stop |
 | `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 21.6 | 7361 ms | 12138 | 4876 B | on 71% | stop |
 | `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 11/12 | 32.2 | 3568 ms | 13472 | 4430 B | off | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 11/12 | 42.3 | 768 ms | 4111 | 4579 B | on 82% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 11/12 | 38.9 | 822 ms | 3399 | 3589 B | on 73% | stop |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 10/12 | 124.5 | 779 ms | 7842 | 4180 B | on 80% | stop |
 
@@ -37,6 +40,8 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | 3 | 4 | 4 | 4 | 5 | 20/25 | Finds both contradictions but its 'max-satisfying' table is only 10/12 (r1 reaches 11/12), so the 'maximum number of clues' claim is wrong; clue-by-clue table is honest about the 2 violations. Scored by Copilot, not the owner. |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
@@ -51,10 +56,11 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | · | · | · | · | · | — |  |
 | `flash` | · | · | · | · | · | — |  |
 | `flash` | 5 | 5 | 5 | 5 | 3 | 23/25 | Cleanest: derives both independent contradictions (Dana forced to ICML=March vs C4; Ben has no conference, elimination table), tries single-clue repairs and shows none works. No final all-clue verification table (hence check.py 'verifies' 0 - keyword miss, repairs are verification-like). Scored by Copilot, not the owner. |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `chat` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Correctness, Rigor / stepwise, Contradiction handling, Clarity, Verification.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T09:26:14+00:00._
+_Last generated 2026-10-24T19:14:04+00:00._

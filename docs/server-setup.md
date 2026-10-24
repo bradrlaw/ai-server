@@ -2256,3 +2256,11 @@ Tracked copies of the configs, results and harness are in `docs/data/flash-next/
   llama-swap), `parity.py` / `parity-cmp.py` (greedy parity), `strata-soak.py`, `toolcall-strata.py`. They have hard-coded
   `/srv/ai/var/flash-eval` paths (the frozen needle corpus is `var/flash-eval/corpus-frozen-20261023.txt`, not tracked).
 - **Copilot CLI agent eval against it:** `scripts/eval-run-copilot.py --model flash --base-url http://127.0.0.1:9091/v1 ...`.
+
+### Strata vision encoder (added 2026-10-24)
+
+Build the CPU encoder from the llama.cpp commit pinned in Strata's `setup.py` (`LLAMA_CPP_COMMIT`):
+`cmake -G Ninja -DSTRATA_VISION_CUDA=OFF -DSTRATA_PORTABLE=OFF` in `src/strata-vision` (gitignored), producing
+`build/bin/strata-vision`. Add to the Strata config a `vision` block (`exe`, `mmproj` = `unsloth/mmproj-BF16.gguf`,
+`model` = Q4 shard 1, `threads` 8, `max_tokens` 1024) and pass `--vision`. The CPU encoder is used because the GPU
+one reserves about 700 MiB per card, which does not fit at 512K. Reference: `models/qwen3.8-flash-next/strata/strata-w6.json`.

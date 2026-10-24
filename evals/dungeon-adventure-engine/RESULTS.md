@@ -9,6 +9,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 29/29 | 126.4 | 1140 ms | 16189 | 15036 B | on 86% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.9 | 1435 ms | 8761 | 30241 B | on 83% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.7 | 1420 ms | 10472 | 34531 B | on 83% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.6 | 1416 ms | 12523 | 36960 B | on 83% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 29/29 | 39.9 | 1366 ms | 14078 | 16218 B | on 83% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 29/29 | 39.8 | 1266 ms | 13259 | 15851 B | on 77% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 39.7 | 1610 ms | 9465 | 35277 B | on 79% | stop |
@@ -21,6 +24,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 29/29 | 23.2 | 14729 ms | 8372 | 34384 B | on 79% | stop |
 | `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 29/29 | 19.1 | 104 ms | 7437 | 30700 B | off | stop |
 | `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 29/29 | 18.8 | 8908 ms | 7852 | 33933 B | off | stop |
+| `big` | big (Copilot CLI) | 29/29 | — | — | — | 28366 B | off | stop |
 | `flash` | flash (Copilot CLI) | 29/29 | — | — | — | 30129 B | off | stop |
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 27/29 | 112.8 | 1183 ms | 10240 | 22389 B | on 74% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 27/29 | 41.9 | 1352 ms | 9377 | 35232 B | on 80% | stop |
@@ -36,6 +40,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
@@ -47,6 +54,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | · | · | · | · | · | — |  |
 | `flash` | · | · | · | · | · | — |  |
 | `flash` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `flash` | · | · | · | · | · | — |  |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -59,4 +67,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Architecture, Code quality, Completeness, Robustness, Output polish.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T09:26:14+00:00._
+_Last generated 2026-10-24T19:14:03+00:00._

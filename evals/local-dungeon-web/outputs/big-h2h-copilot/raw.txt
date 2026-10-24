@@ -1,0 +1,31 @@
+Now let me validate the JavaScript syntax and test the game logic:
+
+
+
+Stale extracted engine (pre-fix). Re-extract and rerun with corrected move count (9, I miscounted):
+
+
+
+Both remaining FAILs are test-ordering artifacts (inventory checked after `reset()`). Now a full UI smoke test with a stub DOM to verify the UI layer, typewriter, history, and reset:
+
+
+
+Engine + UI output is correct — the earlier failures look like an artifact of my file assembly. Rerunning the full UI test cleanly:
+
+
+
+All 18 UI tests pass. Final verification: the two earlier engine test artifacts, HTML well-formedness, and zero external references:
+
+
+
+Done. `index.html` is complete in the working directory — a single self-contained file (zero external references verified).
+
+**Delivered:**
+- **Layout:** sticky header with inline-SVG logo, tagline, and Reset Game button; lore hero; `<details>` "How to Play" accordion; 70/30 dashboard that stacks under 820px
+- **Game:** ES6 `GameEngine`/`Room`/`Item` classes; all 6 required rooms, 4 items, lever → secret chamber flag, rusted key → armory's locked north door, garden end-game (with a completion line if all 4 treasures are collected)
+- **Parser:** case-insensitive, synonyms (`examine`/`grab`/`pull`/`light`...), partial matches (`n`, `inv`, `scroll`), stopword handling, graceful errors
+- **Polish:** character-by-character typewriter with Skip button + click-to-skip, Up/Down command history, auto-scroll, console-click focuses input, live Stats/Inventory/Location sidebar, full no-page-reload reset (button or `reset` command)
+- **Design:** #1a1a1a dark theme, amber #ffb000 monospace console, system-ui sans sidebar, inline SVG icons
+
+**Verified:** 40+ assertions passed via Node — full engine walkthrough (lock/lever/secret paths, take/drop/re-take, reset) plus a stub-DOM UI smoke test covering typewriter flush, history cycling, dynamic stats/inventory updates, and both reset paths. Two real bugs found and fixed during testing (`findObject` now also searches inventory; `drop` id handling).
+

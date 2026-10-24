@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-2: #0d0d12;
+    --surface: #13111c;
+    --surface-2: #181627;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+    --accent: #7c5cfc;
+    --accent-2: #9b7fff;
+    --teal: #00d4aa;
+    --text: #fafafa;
+    --muted: #a1a1aa;
+    --muted-2: #71717a;
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(124,92,252,0.35); }
+
+  .container {
+    width: 100%;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ============ NAV ============ */
+  .nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(9,9,11,0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .logo-mark {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 18px rgba(124,92,252,0.45);
+    flex-shrink: 0;
+  }
+
+  .logo-mark svg { display: block; }
+
+  .nav-links {
+    display: none;
+    list-style: none;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .nav-links a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+
+  .nav-links a:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+  }
+
+  .nav-cta {
+    display: none;
+    background: var(--accent);
+    color: #fff !important;
+    font-weight: 600;
+  }
+  .nav-cta:hover {
+    background: var(--accent-2) !important;
+    box-shadow: 0 0 20px rgba(124,92,252,0.5);
+  }
+
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 42px; height: 42px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+  }
+  .hamburger:hover { background: rgba(255,255,255,0.06); }
+
+  .hamburger span {
+    display: block;
+    width: 22px; height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    transform-origin: center;
+  }
+
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .mobile-menu {
+    position: fixed;
+    top: 64px; left: 0; right: 0;
+    background: rgba(13,13,18,0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    z-index: 99;
+    transform: translateY(-110%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
+  }
+
+  .mobile-menu.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mobile-menu ul {
+    list-style: none;
+    padding: 12px 20px 20px;
+  }
+
+  .mobile-menu a {
+    display: block;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 14px 12px;
+    border-radius: 10px;
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+
+  .mobile-menu a:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .mobile-menu .m-cta {
+    margin-top: 8px;
+    background: var(--accent);
+    color: #fff;
+    text-align: center;
+    font-weight: 600;
+  }
+  .mobile-menu .m-cta:hover {
+    background: var(--accent-2) !important;
+  }
+
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    padding: 150px 0 90px;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% -10%, rgba(124,92,252,0.22), transparent 65%),
+      radial-gradient(ellipse 40% 35% at 80% 20%, rgba(0,212,170,0.08), transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 30%, transparent 75%);
+    pointer-events: none;
+  }
+
+  .orb-wrap {
+    position: absolute;
+    top: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 340px; height: 340px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .orb {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(155,127,255,0.55), rgba(124,92,252,0.25) 45%, rgba(0,212,170,0.08) 70%, transparent 75%);
+    filter: blur(2px);
+    animation: orbPulse 5s ease-in-out infinite;
+  }
+
+  .orb-ring {
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    border: 1px solid rgba(124,92,252,0.25);
+    animation: ringSpin 14s linear infinite;
+  }
+
+  .orb-ring::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: 50%;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 14px var(--teal);
+  }
+
+  .orb-ring-2 {
+    position: absolute;
+    inset: -55px;
+    border-radius: 50%;
+    border: 1px dashed rgba(255,255,255,0.08);
+    animation: ringSpin 28s linear infinite reverse;
+  }
+
+  @keyframes orbPulse {
+    0%, 100% { transform: scale(1); opacity: 0.85; }
+    50% { transform: scale(1.08); opacity: 1; }
+  }
+
+  @keyframes ringSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: rgba(255,255,255,0.03);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+
+  .badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+    animation: dotBlink 2s ease-in-out infinite;
+  }
+
+  @keyframes dotBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.4rem, 7vw, 4.4rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    margin-bottom: 22px;
+  }
+
+  .hero h1 .grad {
+    background: linear-gradient(100deg, var(--accent-2) 10%, var(--teal) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero p {
+    font-size: clamp(1rem, 2.2vw, 1.2rem);
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto 38px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 12px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: transform 0.18s ease, box-shadow 0.25s ease, background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #6447e8);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(124,92,252,0.35);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 34px rgba(124,92,252,0.55);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 14px rgba(124,92,252,0.4);
+  }
+
+  .btn-secondary {
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+
+  .btn-secondary:hover {
+    transform: translateY(-2px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.22);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+  }
+
+  .btn-secondary:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px 36px;
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .stat { text-align: center; }
+  .stat strong {
+    display: block;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .stat span {
+    font-size: 0.78rem;
+    color: var(--muted-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ============ SECTIONS ============ */
+  section { padding: 80px 0; }
+
+  .section-head {
+    text-align: center;
+    max-width: 620px;
+    margin: 0 auto 56px;
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent-2);
+    margin-bottom: 14px;
+  }
+
+  .section-head h2 {
+    font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+
+  .section-head p {
+    color: var(--muted);
+    font-size: 1rem;
+  }
+
+  /* ============ FEATURES ============ */
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(124,92,252,0.4);
+    background: var(--surface-2);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,92,252,0.15), 0 0 34px rgba(124,92,252,0.12);
+  }
+
+  .feature-icon {
+    width: 44px; height: 44px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(124,92,252,0.18), rgba(0,212,170,0.1));
+    border: 1px solid rgba(124,92,252,0.25);
+  }
+
+  .feature-card h3 {
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+
+  .feature-card p {
+    font-size: 0.9rem;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  /* ============ HOW IT WORKS ============ */
+  .how {
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    counter-reset: step;
+  }
+
+  .step {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    transition: transform 0.25s ease, border-color 0.25s ease;
+  }
+
+  .step:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #5a3fe0);
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+    box-shadow: 0 0 18px rgba(124,92,252,0.35);
+  }
+
+  .step h3 {
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .step p {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .step-connector {
+    display: none;
+  }
+
+  /* ============ PRICING ============ */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .price-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(124,92,252,0.45);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.45), 0 0 40px rgba(124,92,252,0.14);
+  }
+
+  .price-card.popular {
+    border-color: rgba(124,92,252,0.55);
+    background: linear-gradient(180deg, rgba(124,92,252,0.09), var(--surface) 45%);
+    box-shadow: 0 0 0 1px rgba(124,92,252,0.25), 0 14px 44px rgba(124,92,252,0.15);
+  }
+
+  .price-card.popular:hover {
+    box-shadow: 0 0 0 1px rgba(124,92,252,0.4), 0 20px 55px rgba(0,0,0,0.5), 0 0 55px rgba(124,92,252,0.25);
+  }
+
+  .popular-tag {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    color: #05050a;
+    font-size: 0.7rem;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 5px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .price-card .tier {
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .price-card .price {
+    font-size: 2.6rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin-bottom: 4px;
+  }
+
+  .price-card .price small {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--muted-2);
+    letter-spacing: 0;
+  }
+
+  .price-card .desc {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 24px;
+    min-height: 2.6em;
+  }
+
+  .feature-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    margin-bottom: 28px;
+    flex-grow: 1;
+  }
+
+  .feature-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.88rem;
+    color: #d4d4d8;
+  }
+
+  .check {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(0,212,170,0.14);
+    display: grid;
+    place-items: center;
+    margin-top: 2px;
+  }
+
+  .check svg { display: block; }
+
+  .price-card .btn { width: 100%; }
+
+  /* ============ ABOUT / TESTIMONIALS ============ */
+  .about {
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+  }
+
+  .mission {
+    text-align: center;
+    max-width: 680px;
+    margin: 0 auto 60px;
+  }
+
+  .mission p {
+    font-size: clamp(1.05rem, 2.5vw, 1.3rem);
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .mission p strong {
+    color: var(--text);
+    font-weight: 650;
+  }
+
+  .testimonials {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .testimonial {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 26px 24px;
+    transition: transform 0.25s ease, border-color 0.25s ease;
+  }
+
+  .testimonial:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+  }
+
+  .quote {
+    font-size: 0.92rem;
+    color: #d4d4d8;
+    line-height: 1.7;
+    margin-bottom: 22px;
+  }
+
+  .quote::before { content: '“'; color: var(--accent-2); font-weight: 800; }
+  .quote::after { content: '”'; color: var(--accent-2); font-weight: 800; }
+
+  .t-author {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .av-1 { background: linear-gradient(135deg, #7c5cfc, #4c2fd4); }
+  .av-2 { background: linear-gradient(135deg, #00d4aa, #008a6e); }
+  .av-3 { background: linear-gradient(135deg, #f59e0b, #b45309); }
+
+  .t-name { font-size: 0.9rem; font-weight: 650; }
+  .t-role { font-size: 0.78rem; color: var(--muted-2); }
+
+  /* ============ FOOTER ============ */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 0 40px;
+    background: var(--bg);
+  }
+
+  .footer-top {
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+    margin-bottom: 40px;
+  }
+
+  .footer-brand p {
+    color: var(--muted-2);
+    font-size: 0.85rem;
+    margin-top: 14px;
+    max-width: 240px;
+  }
+
+  .footer-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .footer-cols h4 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-2);
+    margin-bottom: 14px;
+    font-weight: 700;
+  }
+
+  .footer-cols ul { list-style: none; }
+
+  .footer-cols a {
+    display: inline-block;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+    padding: 5px 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+
+  .footer-cols a:hover {
+    color: var(--text);
+    transform: translateX(3px);
+  }
+
+  .footer-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--muted-2);
+    text-align: center;
+  }
+
+  /* ============ SCROLL REVEAL ============ */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
+    transition-delay: var(--d, 0s);
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .orb, .orb-ring, .orb-ring-2, .badge .dot { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ============ BREAKPOINTS ============ */
+  @media (min-width: 560px) {
+    .cta-row { flex-direction: row; justify-content: center; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (min-width: 768px) {
+    .hamburger { display: none; }
+    .nav-links { display: flex; }
+    .nav-cta { display: inline-block; }
+    .mobile-menu { display: none; }
+
+    .steps {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .step-connector {
+      display: block;
+      position: absolute;
+      top: 46px;
+      right: -20px;
+      width: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(124,92,252,0.5), transparent);
+      pointer-events: none;
+    }
+    .step:last-child .step-connector { display: none; }
+
+    .testimonials { grid-template-columns: repeat(3, 1fr); }
+
+    .footer-top {
+      flex-direction: row;
+      justify-content: space-between;
+    }
+
+    .footer-bottom {
+      flex-direction: row;
+      justify-content: space-between;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .features-grid { grid-template-columns: repeat(4, 1fr); }
+
+    .pricing-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .price-card.popular {
+      transform: scale(1.04);
+    }
+    .price-card.popular:hover {
+      transform: scale(1.04) translateY(-6px);
+    }
+
+    section { padding: 104px 0; }
+    .hero { padding: 180px 0 110px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav">
+  <div class="container nav-inner">
+    <a href="#top" class="logo">
+      <span class="logo-mark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          <circle cx="12" cy="12" r="4" fill="#fff" stroke="none"/>
+        </svg>
+      </span>
+      LocalMind
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#pricing" class="nav-cta">Get Early Access</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#pricing" class="m-cta">Get Early Access</a></li>
+  </ul>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <div class="hero-grid-bg"></div>
+  <div class="orb-wrap" aria-hidden="true">
+    <div class="orb"></div>
+    <div class="orb-ring"></div>
+    <div class="orb-ring-2"></div>
+  </div>
+  <div class="container hero-content">
+    <div class="badge reveal"><span class="dot"></span> Now in early access — macOS, Windows &amp; Linux</div>
+    <h1 class="reveal" style="--d:.08s">Run AI Locally.<br><span class="grad">Own Your Data. No Limits.</span></h1>
+    <p class="reveal" style="--d:.16s">LocalMind puts state-of-the-art language models on your own hardware. No cloud, no subscriptions to inference, no data leaving your machine. Just raw intelligence, at your fingertips.</p>
+    <div class="cta-row reveal" style="--d:.24s">
+      <a href="#pricing" class="btn btn-primary">Get Early Access
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a href="#how" class="btn btn-secondary">See How It Works</a>
+    </div>
+    <div class="hero-stats reveal" style="--d:.32s">
+      <div class="stat"><strong>50ms</strong><span>avg. latency</span></div>
+      <div class="stat"><strong>100%</strong><span>on-device</span></div>
+      <div class="stat"><strong>40+</strong><span>supported models</span></div>
+      <div class="stat"><strong>0</strong><span>cloud calls</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ FEATURES ============ -->
+<section id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Features</span>
+      <h2>Everything you need. Nothing you don't.</h2>
+      <p>A local AI engine designed for speed, privacy, and total control over your models.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal" style="--d:0s">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9b7fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7l8.7 5 8.7-5M12 22V12"/></svg>
+        </div>
+        <h3>Any Model</h3>
+        <p>One-click install for Llama, Mistral, Gemma, Phi, and 40+ other open models. Quantized, fine-tuned, or raw — it all runs.</p>
+      </div>
+      <div class="feature-card reveal" style="--d:.1s">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9b7fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Zero Latency</h3>
+        <p>No network round-trips. Tokens stream directly from your silicon at speeds up to 120 tok/s on modern hardware.</p>
+      </div>
+      <div class="feature-card reveal" style="--d:.2s">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>Full Privacy</h3>
+        <p>Your prompts, documents, and conversations never leave your machine. Airplane mode friendly by design.</p>
+      </div>
+      <div class="feature-card reveal" style="--d:.3s">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9b7fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+        </div>
+        <h3>GPU Optimized</h3>
+        <p>Native kernels for NVIDIA CUDA, AMD ROCm, Apple Metal, and Intel Arc. Automatic offloading when VRAM is tight.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">How It Works</span>
+      <h2>From install to inference in minutes</h2>
+      <p>No API keys. No servers. No waiting on someone else's data center.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal" style="--d:0s">
+        <span class="step-connector"></span>
+        <div class="step-num">1</div>
+        <h3>Install</h3>
+        <p>Download a single native app for your platform. No Docker, no Python, no fuss.</p>
+      </div>
+      <div class="step reveal" style="--d:.12s">
+        <span class="step-connector"></span>
+        <div class="step-num">2</div>
+        <h3>Choose a Model</h3>
+        <p>Browse the model library and pick one that fits your hardware — we tell you exactly what runs fastest.</p>
+      </div>
+      <div class="step reveal" style="--d:.24s">
+        <span class="step-connector"></span>
+        <div class="step-num">3</div>
+        <h3>Chat Locally</h3>
+        <p>Start talking. Every token is generated on your own machine, instantly and privately.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Pricing</span>
+      <h2>Simple plans. Powerful machines.</h2>
+      <p>Start free. Upgrade when you need more horsepower and polish.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card reveal" style="--d:0s">
+        <div class="tier">Free</div>
+        <div class="price">$0 <small>/ forever</small></div>
+        <p class="desc">Everything you need to experience local AI.</p>
+        <ul class="feature-list">
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Up to 8B parameter models</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>CPU + basic GPU acceleration</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Chat interface</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Community support</li>
+        </ul>
+        <a href="#" class="btn btn-secondary">Download Free</a>
+      </div>
+
+      <div class="price-card popular reveal" style="--d:.12s">
+        <span class="popular-tag">Most Popular</span>
+        <div class="tier">Pro</div>
+        <div class="price">$12 <small>/ month</small></div>
+        <p class="desc">For power users who want speed and scale.</p>
+        <ul class="feature-list">
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Up to 70B parameter models</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Full GPU optimization (CUDA / Metal / ROCm)</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Document chat &amp; RAG</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Custom model imports &amp; quantization</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Priority support</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Start Pro Trial</a>
+      </div>
+
+      <div class="price-card reveal" style="--d:.24s">
+        <div class="tier">Studio</div>
+        <div class="price">$29 <small>/ month</small></div>
+        <p class="desc">For teams building on local AI infrastructure.</p>
+        <ul class="feature-list">
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Everything in Pro</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Local API server (OpenAI-compatible)</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Multi-model routing &amp; load balancing</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Up to 5 seats</li>
+          <li><span class="check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Dedicated support channel</li>
+        </ul>
+        <a href="#" class="btn btn-secondary">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABOUT ============ -->
+<section class="about" id="about">
+  <div class="container">
+    <div class="mission reveal">
+      <p><strong>We believe AI should be personal.</strong> Not a service you rent, not a black box you trust blindly — a tool that lives on your machine, learns your work, and answers to you. LocalMind is built by engineers who got tired of watching their data cross the internet just to get a sentence back.</p>
+    </div>
+    <div class="testimonials">
+      <div class="testimonial reveal" style="--d:0s">
+        <p class="quote">I run a 13B model on my M3 Max and it's faster than the cloud API I was paying for. My clients' data never leaves the office — that alone sold our compliance team.</p>
+        <div class="t-author">
+          <div class="avatar av-1">SK</div>
+          <div>
+            <div class="t-name">Sarah Kim</div>
+            <div class="t-role">CTO, Northbeam Legal</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal" style="--d:.12s">
+        <p class="quote">Setup took four minutes. I picked a model, it told me my GPU could handle it, and I was chatting in under five. The latency difference is honestly night and day.</p>
+        <div class="t-author">
+          <div class="avatar av-2">MR</div>
+          <div>
+            <div class="t-name">Marcus Reyes</div>
+            <div class="t-role">Staff Engineer, DevOps @ Finstack</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial reveal" style="--d:.24s">
+        <p class="quote">As a writer working with unpublished manuscripts, privacy isn't optional. LocalMind is the first LLM tool I've actually trusted with my drafts. Zero cloud, zero anxiety.</p>
+        <div class="t-author">
+          <div class="avatar av-3">AO</div>
+          <div>
+            <div class="t-name">Amara Osei</div>
+            <div class="t-role">Novelist &amp; Researcher</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <span class="logo-mark">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+              <circle cx="12" cy="12" r="4" fill="#fff" stroke="none"/>
+            </svg>
+          </span>
+          LocalMind
+        </a>
+        <p>Local AI for people who own their data. Built for your hardware, not the cloud.</p>
+      </div>
+      <div class="footer-cols">
+        <div>
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#how">Documentation</a></li>
+            <li><a href="#">Changelog</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#about">About</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Press Kit</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms of Service</a></li>
+            <li><a href="#">Security</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 LocalMind, Inc. All rights reserved.</span>
+      <span>Made entirely offline. Naturally.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ---------- Mobile menu ----------
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+
+  function closeMenu() {
+    hamburger.classList.remove('open');
+    mobileMenu.classList.remove('open');
+    hamburger.setAttribute('aria-expanded', 'false');
+  }
+
+  hamburger.addEventListener('click', () => {
+    const isOpen = mobileMenu.classList.toggle('open');
+    hamburger.classList.toggle('open', isOpen);
+    hamburger.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  // Close menu when a mobile link is tapped
+  mobileMenu.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', closeMenu);
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  // ---------- Smooth scroll with nav offset ----------
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      const targetId = this.getAttribute('href');
+      if (targetId === '#' || targetId.length < 2) {
+        e.preventDefault();
+        return;
+      }
+      const target = document.querySelector(targetId);
+      if (!target) return;
+      e.preventDefault();
+      const navHeight = 64;
+      const top = target.getBoundingClientRect().top + window.pageYOffset - navHeight + 1;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  });
+
+  // ---------- Scroll reveal ----------
+  const revealEls = document.querySelectorAll('.reveal');
+
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+    revealEls.forEach(el => observer.observe(el));
+  } else {
+    revealEls.forEach(el => el.classList.add('visible'));
+  }
+
+  // ---------- Nav shadow on scroll ----------
+  const nav = document.querySelector('.nav');
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        if (window.scrollY > 10) {
+          nav.style.boxShadow = '0 8px 30px rgba(0,0,0,0.45)';
+        } else {
+          nav.style.boxShadow = 'none';
+        }
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }, { passive: true });
+</script>
+</body>
+</html>

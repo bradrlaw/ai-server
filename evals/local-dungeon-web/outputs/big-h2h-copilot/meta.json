@@ -1,0 +1,34 @@
+{
+  "test": "local-dungeon-web",
+  "model_slot": "big",
+  "label": "big-h2h-copilot",
+  "model_name": "big (Copilot CLI)",
+  "model_path": null,
+  "endpoint": "http://127.0.0.1:8082/v1",
+  "proxy": "litellm",
+  "harness": "github-copilot-cli",
+  "harness_version": "GitHub Copilot CLI 1.0.75.\nRun 'copilot update' to check for updates.",
+  "sampler": {
+    "note": "sampler controlled by Copilot CLI (not set by harness)",
+    "max_prompt_tokens": 163840,
+    "max_output_tokens": 32000,
+    "reasoning_effort": null
+  },
+  "prompt_wrapped": true,
+  "usage": {},
+  "finish_reason": "stop",
+  "performance": {},
+  "mtp": {
+    "enabled": false
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "agent-file-write"
+  },
+  "output_file": "index.html",
+  "output_bytes": 33928,
+  "wall_secs": 1097.7,
+  "return_code": 0,
+  "timed_out": false,
+  "created_utc": "2026-10-24T17:37:25+00:00"
+}

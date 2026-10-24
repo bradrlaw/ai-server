@@ -1,0 +1,65 @@
+{
+  "test": "logic-puzzle-reasoning",
+  "model_slot": "big",
+  "label": "big-h2h-r1",
+  "model_name": "Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "endpoint": "http://127.0.0.1:8082/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "llama.cpp b11819 Qwen3.8-27B UD-Q8_K_XL MTP2 reasoning medium (big slot)",
+  "usage": {
+    "completion_tokens": 16182,
+    "prompt_tokens": 392,
+    "total_tokens": 16574,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 396.7,
+    "ttft_ms": 770.469,
+    "prefill_tps": 508.7810151998328,
+    "decode_tps": 40.97359283214688,
+    "prompt_tokens": 392,
+    "predicted_tokens": 16182,
+    "prefill_ms": 770.469,
+    "decode_ms": 394912.891
+  },
+  "mtp": {
+    "draft_n": 12318,
+    "draft_n_accepted": 10022,
+    "accept_rate": 0.814,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 392,
+    "prompt_ms": 770.469,
+    "prompt_per_token_ms": 1.965482142857143,
+    "prompt_per_second": 508.7810151998328,
+    "predicted_n": 16182,
+    "predicted_ms": 394912.891,
+    "predicted_per_token_ms": 24.405963228477844,
+    "predicted_per_second": 40.97359283214688,
+    "draft_n": 12318,
+    "draft_n_accepted": 10022
+  },
+  "extraction": {
+    "extracted": false,
+    "kind": "full-content"
+  },
+  "output_file": "output.md",
+  "output_bytes": 6571,
+  "reasoning_bytes": 47887,
+  "wall_secs": 396.7,
+  "created_utc": "2026-10-24T19:09:02+00:00"
+}

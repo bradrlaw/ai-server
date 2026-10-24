@@ -13,6 +13,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 27/27 | 79.3 | 2035 ms | 7318 | 26903 B | on 84% | stop |
 | `thinkingcap` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 27/27 | 45.7 | 1320 ms | 11266 | 31703 B | on 93% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 27/27 | 45.6 | 1366 ms | 13318 | 36222 B | on 93% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.2 | 1440 ms | 14390 | 38641 B | on 95% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.1 | 1437 ms | 13947 | 37795 B | on 94% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.1 | 1435 ms | 12800 | 34786 B | on 94% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 27/27 | 44.4 | 1261 ms | 12746 | 35269 B | on 92% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 27/27 | 43.8 | 1282 ms | 13132 | 35781 B | on 91% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 43.5 | 1528 ms | 12743 | 34849 B | on 93% | stop |
@@ -38,6 +41,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | · | · | · | · | · | — |  |
 | `thinkingcap` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
@@ -57,4 +63,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T09:26:14+00:00._
+_Last generated 2026-10-24T19:14:03+00:00._

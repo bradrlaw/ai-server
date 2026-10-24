@@ -1,0 +1,44 @@
+[
+ {
+  "case": "color",
+  "pass": true,
+  "sec": 1.4,
+  "answer": "Red",
+  "ptok": 88
+ },
+ {
+  "case": "ocr",
+  "pass": true,
+  "sec": 1.2,
+  "answer": "INVOICE 4417\nTOTAL $82.50",
+  "ptok": 142
+ },
+ {
+  "case": "count",
+  "pass": true,
+  "sec": 1.9,
+  "answer": "There are **two circles** in the image, and they are both **blue**.\n\nAdditionally, there is one green square on the right, but it is not a circle.\n\n\u2705 Final Answer: **2 blue circles**",
+  "ptok": 154
+ },
+ {
+  "case": "chart",
+  "pass": true,
+  "sec": 1.0,
+  "answer": "B",
+  "ptok": 178
+ },
+ {
+  "case": "two-images",
+  "pass": true,
+  "sec": 2.8,
+  "answer": "Based on a visual analysis of the two images provided:\n\n- The first image is a solid, uniform field of color. This color is **red**.\n- The second image is also a solid, uniform field of color. This color is **blue**.\n\nTherefore, the dominant colors of the two images, in order, are **red** and **blue",
+  "ptok": 157
+ },
+ {
+  "case": "long-ctx",
+  "pass": true,
+  "sec": 69.5,
+  "answer": "1. TANGERINE-4471\n2. Red",
+  "ptok": 46997
+ }
+]

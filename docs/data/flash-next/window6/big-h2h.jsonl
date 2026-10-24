@@ -1,0 +1,11 @@
+{"ts": "2026-10-24T16:40:46Z", "label": "big-h2h", "test": "speed", "kind": "short", "decode_tps_median": 39.67, "decode_tps_all": [43.76, 39.67, 37.89], "ttft_median": 0.463}
+{"ts": "2026-10-24T16:41:13Z", "label": "big-h2h", "test": "speed", "kind": "code", "decode_tps_median": 44.68, "decode_tps_all": [44.68, 44.75, 44.63], "ttft_median": 0.371}
+{"ts": "2026-10-24T16:41:24Z", "label": "big-h2h", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 9.166, "prefill_tps": 869.3, "decode_tps": 35.18}
+{"ts": "2026-10-24T16:42:09Z", "label": "big-h2h", "test": "prompt", "target_tokens": 32768, "prompt_tokens": 31833, "ttft_s": 42.815, "prefill_tps": 743.5, "decode_tps": 34.91}
+{"ts": "2026-10-24T16:47:07Z", "label": "big-h2h", "test": "prompt", "target_tokens": 131072, "prompt_tokens": 127208, "ttft_s": 285.557, "prefill_tps": 445.5, "decode_tps": 22.25}
+{"ts": "2026-10-24T16:50:18Z", "label": "big-h2h", "test": "needle", "target_tokens": 100000, "depth": 0.1, "expected": "466719", "ok": true, "filler": "real", "prompt_tokens": 97882, "ttft_s": 191.033, "answer": "466719"}
+{"ts": "2026-10-24T16:53:52Z", "label": "big-h2h", "test": "needle", "target_tokens": 100000, "depth": 0.5, "expected": "961294", "ok": true, "filler": "real", "prompt_tokens": 103986, "ttft_s": 213.288, "answer": "961294"}
+{"ts": "2026-10-24T16:57:22Z", "label": "big-h2h", "test": "needle", "target_tokens": 100000, "depth": 0.9, "expected": "121648", "ok": true, "filler": "real", "prompt_tokens": 102880, "ttft_s": 209.773, "answer": "121648"}
+{"ts": "2026-10-24T17:04:29Z", "label": "big-h2h", "test": "needle", "target_tokens": 160000, "depth": 0.1, "expected": "143636", "ok": true, "filler": "real", "prompt_tokens": 163355, "ttft_s": 427.152, "answer": "143636"}
+{"ts": "2026-10-24T17:12:05Z", "label": "big-h2h", "test": "needle", "target_tokens": 160000, "depth": 0.5, "expected": "104820", "ok": true, "filler": "real", "prompt_tokens": 171101, "ttft_s": 455.79, "answer": "104820"}
+{"ts": "2026-10-24T17:19:07Z", "label": "big-h2h", "test": "needle", "target_tokens": 160000, "depth": 0.9, "expected": "636233", "ok": true, "filler": "real", "prompt_tokens": 163022, "ttft_s": 421.603, "answer": "636233"}

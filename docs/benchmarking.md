@@ -2024,8 +2024,31 @@ adoption gate is quality, not byte identity. (A no-spec run is impossible: the n
   CSV was overwritten by a runner relaunch, so only spot samples exist.
 - **512K RAM:** one 500K-token prompt completed with about 45 GB of host RAM still available and no pinned-RAM guard
   trip (only the VRAM-low warning above).
-- **Vision:** not enabled. A request with an image returns 400, "started without the vision encoder (run setup
-  again and choose 'vision')". Not tested further.
+- **Vision:** enabled in Window 6, see the next section (first tested without it: HTTP 400).
+
+### Vision and head-to-head against `big` (Window 6, 2026-10-24)
+
+Vision on Strata uses its CPU encoder (`strata-vision`, built from the pinned llama.cpp commit with
+`-DSTRATA_VISION_CUDA=OFF`, because only about 450 MiB of VRAM per card is free at 512K context) plus a
+`vision` block in the Strata config (`models/qwen3.8-flash-next/strata/strata-w6.json`) and the `--vision` arg.
+`big` = Qwen3.8-27B UD-Q8_K_XL, llama.cpp b11819, MTP n2, 256K ctx, GPU mmproj. Same harness for both.
+
+| | Strata Flash-Next Q4_K_XL (512K, vision) | `big` |
+|---|---|---|
+| Vision cases (`vision2.py`, 6: colour, OCR, count, chart, two images, 47K text + image) | 6/6, 4-5 s per image, long case 32 s | 6/6, 1-3 s per image, long case 69.5 s |
+| Decode short / code, tok/s | 69 / 96 (no regression from vision) | 39.7 / 44.7 |
+| Prefill tok/s at 8K / 32K / 127K | about 1.1-1.6K | 869 / 744 / 446 |
+| TTFT 127K prompt | about 70 s | 286 s |
+| Needles, about 100K and 163K tokens, depths .1/.5/.9 | 9/9 at 64-250K (earlier windows) | 6/6; TTFT 191-213 s at 100K, 421-456 s at 163K |
+| GSM8K n=100 (strict) | 0.99 | 0.98 |
+| Tool-call suite | 30/30 | 30/30 |
+| Code evals, runs at 100% (5 tests x 3) | 12/15 | 13/15 |
+| Copilot BYOK (dungeon, web) | 100% / 100% | 100% / 100% |
+
+`big` misses: `local-dungeon-web` r2 97.6% (`partial_match`), `logic-puzzle` r2 91.7% (`ben_is_rl`). Strata misses are listed above.
+Quality is at parity on every measured axis; Flash-Next is about 1.7-2.2x faster at decode and 2.5-6x faster at prefill, `big` is
+faster at image encoding (GPU vs CPU encoder) and needs one GPU pair less RAM (no 80 GiB pinned arena).
+Data: `docs/data/flash-next/window6/`, `docs/data/lm-eval/big-h2h-gsm8k-20261024/`, `evals/*/outputs/big-h2h-*`.
 
 ## Host memory bandwidth — STREAM on the i7-6950X (2026-09-23)
 

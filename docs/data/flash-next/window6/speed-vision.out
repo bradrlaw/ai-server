@@ -1,0 +1,2 @@
+{"ts": "2026-10-24T16:36:30Z", "label": "q4w6-vision", "test": "speed", "kind": "short", "decode_tps_median": 68.8, "decode_tps_all": [83.57, 68.8, 64.65], "ttft_median": 0.347}
+{"ts": "2026-10-24T16:36:43Z", "label": "q4w6-vision", "test": "speed", "kind": "code", "decode_tps_median": 95.75, "decode_tps_all": [80.83, 97.3, 95.75], "ttft_median": 0.087}

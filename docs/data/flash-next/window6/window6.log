@@ -1,0 +1,56 @@
+16:33:55Z window6 start
+16:33:55Z == stage strata-vision
+16:35:20Z RUN python3 /srv/ai/var/flash-eval/vision2.py http://127.0.0.1:8080/v1/chat/completions flash /srv/ai/var/flash-eval/w6/vision-flash.json
+16:36:15Z   rc 0
+16:36:15Z RUN python3 /srv/ai/var/flash-eval/flash-bench.py speed --url http://127.0.0.1:8080 --label q4w6-vision --tokens 384 --repeats 3
+16:36:43Z   rc 0
+16:37:02Z == stage big
+16:37:42Z   step vision
+16:37:42Z RUN python3 /srv/ai/var/flash-eval/vision2.py http://127.0.0.1:8082/v1/chat/completions x /srv/ai/var/flash-eval/w6/vision-big.json
+16:39:00Z   rc 0
+16:39:00Z   step tools
+16:39:00Z RUN python3 /srv/ai/var/flash-eval/toolcall-big.py --models x --repeat 2 --out /srv/ai/var/flash-eval/w6/toolcalls-big.json
+16:40:18Z   rc 0
+16:40:18Z   step speed
+16:40:18Z RUN python3 /srv/ai/var/flash-eval/flash-bench.py speed --url http://127.0.0.1:8082 --label big-h2h --tokens 384 --repeats 3
+16:41:13Z   rc 0
+16:41:13Z RUN python3 /srv/ai/var/flash-eval/flash-bench.py prompt --url http://127.0.0.1:8082 --label big-h2h --sizes 8192,32768,131072
+16:47:07Z   rc 0
+16:47:07Z   step needle
+16:47:07Z RUN python3 /srv/ai/var/flash-eval/flash-bench.py needle --url http://127.0.0.1:8082 --label big-h2h --filler real --sizes 100000,160000 --depths 0.1,0.5,0.9
+17:19:07Z   rc 0
+17:19:07Z   step copilot
+17:19:07Z RUN python3 scripts/eval-run-copilot.py --test local-dungeon-web --model big --label big-h2h-copilot --base-url http://127.0.0.1:8082/v1 --ext html --max-prompt-tokens 163840 --max-output-tokens 32000 --timeout 3000
+17:37:25Z   rc 0
+17:37:25Z RUN python3 scripts/eval-run-copilot.py --test dungeon-adventure-engine --model big --label big-h2h-copilot --base-url http://127.0.0.1:8082/v1 --ext py --max-prompt-tokens 163840 --max-output-tokens 32000 --timeout 3000
+17:43:50Z   rc 0
+17:43:50Z   step gsm8k
+17:43:50Z RUN scripts/lm-eval-run.sh big-h2h http://127.0.0.1:8082/v1/chat/completions gsm8k 100 6144 1 'until=<|im_end|>'
+18:01:33Z   rc 0
+18:01:33Z   step code
+18:14:21Z   eval done dungeon-adventure-engine [0, 0, 0]
+18:27:05Z   eval done local-dungeon-web [0, 0, 0]
+18:42:24Z   eval done localmind-landing-page [0, 0, 0]
+19:02:25Z   eval done localmind-landing-page-pro [0, 0, 0]
+19:14:01Z   eval done logic-puzzle-reasoning [0, 0, 0]
+19:14:01Z RUN python3 evals/dungeon-adventure-engine/check.py
+19:14:03Z   rc 0
+19:14:03Z RUN python3 scripts/eval-summary.py --test dungeon-adventure-engine
+19:14:03Z   rc 0
+19:14:03Z RUN python3 evals/local-dungeon-web/check.py
+19:14:03Z   rc 0
+19:14:03Z RUN python3 scripts/eval-summary.py --test local-dungeon-web
+19:14:03Z   rc 0
+19:14:03Z RUN python3 evals/localmind-landing-page/check.py
+19:14:03Z   rc 0
+19:14:03Z RUN python3 scripts/eval-summary.py --test localmind-landing-page
+19:14:03Z   rc 0
+19:14:03Z RUN python3 evals/localmind-landing-page-pro/check.py
+19:14:03Z   rc 0
+19:14:03Z RUN python3 scripts/eval-summary.py --test localmind-landing-page-pro
+19:14:03Z   rc 0
+19:14:03Z RUN python3 evals/logic-puzzle-reasoning/check.py
+19:14:03Z   rc 0
+19:14:03Z RUN python3 scripts/eval-summary.py --test logic-puzzle-reasoning
+19:14:04Z   rc 0
+19:14:17Z WINDOW6_DONE

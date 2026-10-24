@@ -12,6 +12,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 41/41 | 125.3 | 1594 ms | 19380 | 54952 B | on 93% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 41/41 | 77.4 | 2986 ms | 13139 | 43321 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 41/41 | 44.5 | 1714 ms | 19265 | 54311 B | on 92% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 43.7 | 1778 ms | 20067 | 56921 B | on 92% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 43.6 | 1788 ms | 15342 | 45177 B | on 90% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 43.4 | 1782 ms | 16596 | 50185 B | on 90% | stop |
 | `thinkingcap-27b` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 41/41 | 43.1 | 1707 ms | 14927 | 44504 B | on 87% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 42.1 | 1919 ms | 19711 | 55928 B | on 90% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 41/41 | 41.9 | 1824 ms | 14469 | 43646 B | on 90% | stop |
@@ -37,6 +40,9 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `thinkingcap-27b` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -57,4 +63,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T09:26:14+00:00._
+_Last generated 2026-10-24T19:14:03+00:00._
