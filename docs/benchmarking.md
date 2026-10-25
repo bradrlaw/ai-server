@@ -2051,6 +2051,8 @@ Vision on Strata uses its CPU encoder (`strata-vision`, built from the pinned ll
 about 0.6 GiB free per card. Image checks 6/6 at 2.5-4 s per image (CPU encoder 4-5 s); decode 66.7 tok/s on a 476K-token
 prompt plus an image (331 s) that retrieved the needle and the colour, no OOM, 0 Xid. The earlier "does not fit" was an estimate.
 
+Speed with the GPU encoder and smaller expert cache vs the CPU encoder: short 68.0 vs 68.8 tok/s, code 93.5 vs 95.8 (within run-to-run noise); 127K-token prefill 70.6 s (1,802 tok/s), same as the CPU-encoder run. No measurable hit.
+
 `big` misses: `local-dungeon-web` r2 97.6% (`partial_match`), `logic-puzzle` r2 91.7% (`ben_is_rl`). Strata misses are listed above.
 Quality is at parity on every measured axis; Flash-Next is about 1.7-2.2x faster at decode and 2.5-6x faster at prefill, `big` is
 faster at image encoding (GPU vs CPU encoder) and needs one GPU pair less RAM (no 80 GiB pinned arena).
