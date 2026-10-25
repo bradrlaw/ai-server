@@ -2262,5 +2262,5 @@ Tracked copies of the configs, results and harness are in `docs/data/flash-next/
 Build the CPU encoder from the llama.cpp commit pinned in Strata's `setup.py` (`LLAMA_CPP_COMMIT`):
 `cmake -G Ninja -DSTRATA_VISION_CUDA=OFF -DSTRATA_PORTABLE=OFF` in `src/strata-vision` (gitignored), producing
 `build/bin/strata-vision`. Add to the Strata config a `vision` block (`exe`, `mmproj` = `unsloth/mmproj-BF16.gguf`,
-`model` = Q4 shard 1, `threads` 8, `max_tokens` 1024) and pass `--vision`. The CPU encoder is used because the GPU
-one reserves about 700 MiB per card, which does not fit at 512K. Reference: `models/qwen3.8-flash-next/strata/strata-w6.json`.
+`model` = Q4 shard 1, `threads` 8, `max_tokens` 1024) and pass `--vision`. The CPU encoder is the default; a GPU encoder
+(`-DSTRATA_VISION_CUDA=ON`, `"gpu": true`, `--vram-reserve-mib 700`, `strata-w7.json`) also fits at 512K (tested) by shrinking the expert cache. Reference: `models/qwen3.8-flash-next/strata/strata-w6.json`.
