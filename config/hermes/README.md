@@ -12,6 +12,7 @@ for this server — currently just one:
 | Skill | Live path | What it does |
 |-------|-----------|---------------|
 | `v100-performance-scout` | `/srv/ai/hermes/skills/research/v100-performance-scout/SKILL.md` | Weekly-cron research skill that scans the web for new llama.cpp/ComfyUI techniques, quantization formats, and tuning tips relevant to this server's Tesla V100 (Volta, `sm_70`) GPUs, filters out anything that doesn't apply to Volta (fp8, FlashAttention-2, CUDA 13+), and files a single reviewable kanban card per run on the `v100-perf-scout` board. Observe-and-report only — never changes server config directly. Surfaced on the status dashboard's "Latest V100 findings" card (`scripts/server-status-service.py`). |
+| `model-engine-scout` | `/srv/ai/hermes/skills/research/model-engine-scout/SKILL.md` | Cron research skill (02:00 ET on the same days as `v100-perf-scout`, one hour later) that looks for new models, Q4_K_XL/Q8 quantizations, Strata releases and llama.cpp releases that fit this server's VRAM/RAM budgets, and files a single reviewable kanban card per run on the `model-engine-scout` board. Observe-and-report only. |
 
 To deploy a change: edit the file under `config/hermes/skills/...` here, then copy it to
 the matching live path under `/srv/ai/hermes/skills/...` (no restart needed — Hermes reads

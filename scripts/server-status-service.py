@@ -611,6 +611,55 @@ def _http_status(url: str):
         return None, None
 
 
+MODES_DIR = os.environ.get("LLAMASWAP_MODES_DIR", "/srv/ai/config/modes")
+MODE_SCRIPT = os.environ.get("LLAMASWAP_MODE_SCRIPT", "/srv/ai/scripts/llama-swap-mode.py")
+_MODE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_mode_switch = {"name": None, "since": 0.0, "error": ""}
+_mode_lock = threading.Lock()
+
+
+def list_modes() -> list:
+    """Serving modes the switcher knows: [{name, label}] from config/modes/*.yaml."""
+    out = []
+    try:
+        for f in sorted(Path(MODES_DIR).glob("*.yaml")):
+            text = f.read_text()
+            nm = re.search(r"^name:\s*(\S+)", text, re.M)
+            lb = re.search(r'^label:\s*"?([^"\n]+?)"?\s*$', text, re.M)
+            if nm and _MODE_NAME_RE.match(nm.group(1)):
+                out.append({"name": nm.group(1), "label": lb.group(1) if lb else nm.group(1)})
+    except OSError:
+        pass
+    return out
+
+
+def _run_mode_switch(name: str) -> None:
+    """`llama-swap-mode.py set <name>` in the background: it renders the config and then warms
+    the mode's models, which can take minutes (a Strata cold load is about 90 s)."""
+    err = ""
+    try:
+        r = subprocess.run([sys.executable, MODE_SCRIPT, "set", name], capture_output=True,
+                           text=True, timeout=1800)
+        if r.returncode != 0:
+            err = (r.stderr or r.stdout or f"exit {r.returncode}").strip()[-300:]
+    except Exception as exc:  # noqa: BLE001
+        err = str(exc)[:300]
+    with _mode_lock:
+        _mode_switch.update(name=None, error=err)
+    _cache["at"] = 0.0
+
+
+def start_mode_switch(name: str) -> tuple[int, str]:
+    if name not in {m["name"] for m in list_modes()}:
+        return 400, f"unknown mode {name!r}"
+    with _mode_lock:
+        if _mode_switch["name"]:
+            return 409, f"already switching to {_mode_switch['name']}"
+        _mode_switch.update(name=name, since=time.time(), error="")
+    threading.Thread(target=_run_mode_switch, args=(name,), daemon=True).start()
+    return 202, f"switching to {name}"
+
+
 def collect_mode() -> dict:
     """Read the active llama-swap mode marker + per-model --parallel / --ctx-size.
 
@@ -668,7 +717,9 @@ def collect_models() -> dict:
     }
     if running is None:
         return {"reachable": False, "loaded": [], "available": [],
-                "mode": cfg["mode"], "config": cfg["models"]}
+                "mode": cfg["mode"], "config": cfg["models"],
+            "modes": list_modes(), "switching": _mode_switch["name"],
+            "switch_error": _mode_switch["error"]}
     rows = running.get("running") or []
     loaded = []
     loaded_ids = set()
@@ -699,7 +750,9 @@ def collect_models() -> dict:
         if isinstance(c, dict) and c.get("id") and c["id"] not in loaded_ids
     ]
     return {"reachable": True, "loaded": loaded, "available": available,
-            "mode": cfg["mode"], "config": cfg["models"]}
+            "mode": cfg["mode"], "config": cfg["models"],
+            "modes": list_modes(), "switching": _mode_switch["name"],
+            "switch_error": _mode_switch["error"]}
 
 
 def collect_workflows() -> list:
@@ -1260,6 +1313,7 @@ def build_status() -> dict:
             "comfyui": STATUS_ACTIONS_ENABLED and bool(QUIET_COMFYUI_UNITS),
             "services": STATUS_ACTIONS_ENABLED and bool(MANAGED_SERVICES),
             "quiet": STATUS_ACTIONS_ENABLED and QUIET_HOURS_ENABLED,
+            "mode": STATUS_ACTIONS_ENABLED,
             "gpu_power": GPU_POWER_ACTIONS_ENABLED,
             "gpu_power_range": [GPU_POWER_MIN_W, GPU_POWER_MAX_W, GPU_POWER_STEP_W],
             "workflow_sync": STATUS_ACTIONS_ENABLED and WORKFLOW_SYNC_ENABLED,
@@ -1913,6 +1967,8 @@ _HTML = """<!doctype html>
   body { font-family: system-ui, sans-serif; margin: 0; background:#0f1115; color:#e6e6e6; }
   header { padding: 16px 20px; background:#151922; border-bottom:1px solid #232a36; }
   h1 { font-size: 18px; margin:0; }
+  .modebar { margin-top:6px; font-size:13px; color:#c9d1e0; }
+  .modebar select { background:#1b2230; color:#e6edf3; border:1px solid #2f3a4f; border-radius:6px; padding:3px 6px; }
   .sub { color:#8b95a7; font-size: 12px; margin-top:4px; }
   main { padding: 20px; display:grid; gap:16px; max-width: 1800px; margin:0 auto;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); grid-auto-flow: dense; }
@@ -2007,7 +2063,7 @@ _HTML = """<!doctype html>
 </style></head>
 <body>
 <div id="toasts"></div>
-<header><button class="act" style="float:right" onclick="logout()">Sign out</button><button class="act" style="float:right;margin-right:8px" onclick="resetLayout()" title="Restore default section order/widths">Reset layout</button><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
+<header><button class="act" style="float:right" onclick="logout()">Sign out</button><button class="act" style="float:right;margin-right:8px" onclick="resetLayout()" title="Restore default section order/widths">Reset layout</button><h1>AI Server Status</h1><div class="modebar" id="modebar" style="display:none">Mode <select id="modesel" onchange="switchMode(this)" title="Switch the llama-swap serving mode"></select> <span class="sub" id="modemsg"></span></div><div class="sub" id="sub">loading…</div></header>
 <main>
   <section id="modelssec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Models (llama-swap) <span class="hsub" id="modebadge"></span></span><button class="wbtn" onclick="cycleWidth('modelssec')" title="Resize">⤢</button></h2><div id="models">…</div></section>
   <section id="gpussec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">GPUs</span><button class="wbtn" onclick="cycleWidth('gpussec')" title="Resize">⤢</button></h2><div id="gpus">…</div></section>
@@ -2228,6 +2284,28 @@ async function refreshHistory(){
     document.getElementById('history').innerHTML = html;
   }catch(e){ document.getElementById('history').innerHTML = '<span class="sub">history error: '+esc(String(e))+'</span>'; }
 }
+function renderModeBar(m, actions){
+  const bar=document.getElementById('modebar'), sel=document.getElementById('modesel'), msg=document.getElementById('modemsg');
+  if(!bar||!sel||!m||!m.modes||!m.modes.length||!(actions&&actions.mode)){ if(bar) bar.style.display='none'; return; }
+  bar.style.display='';
+  if(document.activeElement!==sel){
+    sel.innerHTML=m.modes.map(x=>'<option value="'+esc(x.name)+'">'+esc(x.label)+'</option>').join('');
+    sel.value=m.mode;
+  }
+  sel.disabled=!!m.switching;
+  msg.textContent=m.switching? 'switching to '+m.switching+'… (models reload, can take a few minutes)' : (m.switch_error? 'last switch failed: '+m.switch_error : '');
+}
+async function switchMode(el){
+  const name=el.value;
+  if(!confirm('Switch serving mode to "'+name+'"?\\nThis unloads and reloads models; in-flight requests may fail.')){ setTimeout(refresh,0); return; }
+  el.disabled=true;
+  try{
+    const r=await api('actions/mode?name='+encodeURIComponent(name),{method:'POST'});
+    const dd=await r.json();
+    toast(dd.ok? 'Switching to '+name+'…' : 'Mode switch failed: '+esc(dd.detail||dd.error||String(r.status)), !dd.ok);
+  }catch(e){ toast('Mode switch error: '+esc(String(e)), true); }
+  finally{ setTimeout(refresh, 800); }
+}
 async function refresh(){  try{
     const r = await api('status.json'); const d = await r.json();
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
@@ -2235,6 +2313,7 @@ async function refresh(){  try{
     let m = d.models;
     const mode = m.mode && m.mode!=='unknown' ? m.mode : null;
     document.getElementById('modebadge').textContent = mode ? '· mode: '+mode : '';
+    renderModeBar(m, d.actions);
     function cfgCols(x){
       const p = x.parallel!=null ? x.parallel : (m.config&&m.config[x.model]? m.config[x.model].parallel : null);
       const cps = x.ctx_per_slot!=null ? x.ctx_per_slot : (m.config&&m.config[x.model]? m.config[x.model].ctx_per_slot : null);
@@ -3109,6 +3188,17 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": ok, "paused": _QUIET_PAUSED.is_set(), "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
+        elif path == "/actions/mode":
+            if not STATUS_ACTIONS_ENABLED:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "actions disabled"}).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            code, detail = start_mode_switch(qs.get("name", [""])[0])
+            _cache["at"] = 0.0
+            self._send(code, json.dumps(
+                {"ok": code == 202, "detail": detail}).encode("utf-8"), "application/json")
         elif path == "/actions/gpu-power":
             if not GPU_POWER_ACTIONS_ENABLED:
                 self._send(403, json.dumps(
