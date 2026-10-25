@@ -31,8 +31,10 @@ LiteLLM `:4000` -> llama-swap `:9090`, as model `flash`:
   `llama-swap-mode.py set daily`, and restart `litellm`.
 
 ## Addendum 2026-10-25: Open WebUI info icon (speed stats) needs a local Strata patch
-Open WebUI shows the per-answer info icon from `timings` (llama.cpp's field) merged with `usage`. Strata put both on the
-finish chunk and omitted `system_fingerprint`; through LiteLLM that chunk lost `timings` (llama.cpp sends `timings` on the finish
-chunk with `system_fingerprint`, then `usage` in a separate chunk with empty `choices`). `config/strata/openai-stream-timings.patch`
-(apply in `src/strata` with `git apply`, then reload `flash`) makes Strata's streaming writer emit that same shape.
-`src/strata` is gitignored, so **re-apply the patch after any Strata update**.
+Open WebUI shows the per-answer info icon from `timings` (llama.cpp's field) merged with `usage`. Through LiteLLM, `flash` answers had
+none. Root cause is a LiteLLM proxy bug: `_fast_serialize_simple_model_response_stream` (litellm/proxy/proxy_server.py) serializes
+simple chunks without extra fields, and only falls back to the full serializer when the chunk has `system_fingerprint`, `usage` or
+`provider_specific_fields`. llama.cpp always sends `system_fingerprint`, so its `timings` survive; Strata did not, so they were dropped.
+Verified: adding `system_fingerprint` to Strata's chunks that carry `timings` is enough (stream shape unchanged).
+`config/strata/openai-stream-timings.patch` (3 lines; `git apply` in `src/strata`, then reload `flash`) does that. `src/strata` is
+gitignored, so **re-apply it after any Strata update**. The proper fix is upstream in LiteLLM (draft issue kept outside the repo).
