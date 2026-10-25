@@ -49,6 +49,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0030](0030-llama-cpp-b11819-update.md) | Update llama.cpp from b9850 to b11819 (+17% `coding` decode, no flag changes) | Accepted |
 | [0031](0031-vision-projectors-on-chat-slots.md) | Vision (mmproj) on `coding`, `big`, `chat` (CPU) and `small` | Accepted |
 | [0032](0032-qwen3.8-flash-next-strata-evaluation.md) | Qwen3.8-Flash-Next on the Strata engine: evaluation result (Q4_K_XL candidate, not yet in production) | Accepted |
+| [0033](0033-flash-next-strata-in-llama-swap.md) | Flash-Next (Strata) as a swappable `flash` model in llama-swap + LiteLLM | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

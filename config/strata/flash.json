@@ -1,0 +1,53 @@
+{
+  "exe": "/srv/ai/src/strata/build-v100/strata",
+  "args": [
+    "--pack",
+    "/srv/ai/models/qwen3.8-flash-next/strata/packs/ud-q4_k_xl",
+    "--native",
+    "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+    "--expert-profile",
+    "/srv/ai/src/strata/data/expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--prefill",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "/srv/ai/models/qwen3.8-flash-next/strata/mtp/rt",
+    "--kv",
+    "int8",
+    "--max-context",
+    "524288",
+    "--rope-scaling",
+    "yarn",
+    "--rope-scale",
+    "2",
+    "--vision",
+    "--vram-reserve-mib",
+    "700"
+  ],
+  "cwd": "/srv/ai/src/strata",
+  "gpu": [
+    1,
+    2
+  ],
+  "layer_split": "24",
+  "tokenizer": "/srv/ai/models/qwen3.8-flash-next/strata/packs/ud-q4_k_xl/tokenizer",
+  "model_name": "flash",
+  "log": "/srv/ai/var/strata/flash.log",
+  "host": "127.0.0.1",
+  "port": 8080,
+  "reasoning_effort": "medium",
+  "env": {},
+  "vision": {
+    "exe": "/srv/ai/src/strata-vision/build-cuda/bin/strata-vision",
+    "mmproj": "/srv/ai/models/qwen3.8-flash-next/unsloth/mmproj-BF16.gguf",
+    "model": "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+    "threads": 8,
+    "max_tokens": 1024,
+    "gpu": true
+  }
+}
