@@ -300,6 +300,11 @@ V100_SCOUT_BOARD_DB = os.environ.get(
     "V100_SCOUT_BOARD_DB",
     "/srv/ai/hermes/kanban/boards/v100-perf-scout/kanban.db",
 )
+# Same for the "model-engine-scout" cron job/skill (models, quants, Strata, llama.cpp).
+MODEL_SCOUT_BOARD_DB = os.environ.get(
+    "MODEL_SCOUT_BOARD_DB",
+    "/srv/ai/hermes/kanban/boards/model-engine-scout/kanban.db",
+)
 # Allow the dashboard to adjust per-GPU sustained power caps. The chosen watts are
 # written into the gpu-fan-control config, which the daemon treats as the live
 # source of truth: it re-reads power_limits every power_recheck_sec and applies any
@@ -809,17 +814,14 @@ def _v100_scout_excerpt(body: str) -> str:
     return text.strip()
 
 
-def collect_v100_scout() -> dict | None:
-    """Latest card filed by the Hermes 'v100-performance-scout' cron skill.
+def _collect_scout(db_path: Path, excerpt_fn) -> dict | None:
+    """Latest card filed by a Hermes scout cron skill, read from its kanban board.
 
-    Reads the kanban board's SQLite file directly (read-only URI, no docker exec,
+    Reads the board's SQLite file directly (read-only URI, no docker exec,
     no write lock contention with the dispatcher) — same trust level as any other
-    read-only collector here. Returns None if the feature is disabled or the board
-    doesn't exist yet (e.g. before the first run).
+    read-only collector here. Returns None if the board doesn't exist yet
+    (e.g. before the first run).
     """
-    if not V100_SCOUT_ENABLED:
-        return None
-    db_path = Path(V100_SCOUT_BOARD_DB)
     if not db_path.exists():
         return None
     try:
@@ -847,10 +849,24 @@ def collect_v100_scout() -> dict | None:
             "title": title,
             "status": status,
             "created_at": created_at,
-            "excerpt": _v100_scout_excerpt(body or ""),
+            "excerpt": excerpt_fn(body or ""),
         },
         "open_count": open_count,
     }
+
+
+def collect_v100_scout() -> dict | None:
+    """Latest card from the 'v100-performance-scout' skill (its '## HIGH VALUE' section)."""
+    if not V100_SCOUT_ENABLED:
+        return None
+    return _collect_scout(Path(V100_SCOUT_BOARD_DB), _v100_scout_excerpt)
+
+
+def collect_model_scout() -> dict | None:
+    """Latest card from the 'model-engine-scout' skill (the whole report, three short sections)."""
+    if not V100_SCOUT_ENABLED:
+        return None
+    return _collect_scout(Path(MODEL_SCOUT_BOARD_DB), lambda body: body.strip())
 
 
 def _sync_workflow(name: str, source: str = "", dry_run: bool = False) -> tuple[bool, dict]:
@@ -1293,6 +1309,7 @@ def build_status() -> dict:
         "power_mode": _power_state["mode"],
         "workflows": collect_workflows() if WORKFLOW_SYNC_ENABLED else [],
         "v100_scout": collect_v100_scout(),
+        "model_scout": collect_model_scout(),
         "quiet": {
             "enabled": QUIET_HOURS_ENABLED,
             "paused": _QUIET_PAUSED.is_set(),
@@ -2057,9 +2074,9 @@ _HTML = """<!doctype html>
      report); flex-grow then fills whatever extra height the stretch gives it,
      uncapped — the outer grid row already bounds the total height, so this
      can't grow unboundedly. Scrolls only if the actual text overflows that. */
-  #v100scoutsec { display:flex; flex-direction:column; }
-  #v100scout { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-  #v100scout .excerpt { flex:1 1 180px; min-height:0; overflow-y:auto; }
+  #v100scoutsec, #modelscoutsec { display:flex; flex-direction:column; }
+  #v100scout, #modelscout { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #v100scout .excerpt, #modelscout .excerpt { flex:1 1 180px; min-height:0; overflow-y:auto; }
 </style></head>
 <body>
 <div id="toasts"></div>
@@ -2077,6 +2094,10 @@ _HTML = """<!doctype html>
   <section id="v100scoutsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Latest V100 findings <span class="hsub" id="v100scoutmsg"></span></span><button class="wbtn" onclick="cycleWidth('v100scoutsec')" title="Resize">⤢</button></h2>
     <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>v100-perf-scout</code> research skill.</div>
     <div id="v100scout">…</div>
+  </section>
+  <section id="modelscoutsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Latest model &amp; engine findings <span class="hsub" id="modelscoutmsg"></span></span><button class="wbtn" onclick="cycleWidth('modelscoutsec')" title="Resize">⤢</button></h2>
+    <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>model-engine-scout</code> research skill (models, quants, Strata, llama.cpp).</div>
+    <div id="modelscout">…</div>
   </section>
   <section id="quietsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Quiet hours <span class="hsub" id="quietstate"></span></span><button class="wbtn" onclick="cycleWidth('quietsec')" title="Resize">⤢</button></h2>
     <div id="quietctl">…</div>
@@ -2441,6 +2462,7 @@ async function refresh(){  try{
     renderQuiet(d);
     renderWorkflows(d);
     renderV100Scout(d);
+    renderModelScout(d);
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 function renderQuiet(d){
@@ -2532,20 +2554,22 @@ function renderWorkflows(d){
     '<table><tr><th>Workflow</th><th>Exposed knobs</th><th>Source / Action</th></tr>'+rows.join('')+'</table>'
     +'<div id="wfsyncout" class="sub" style="margin-top:8px;white-space:pre-wrap;font-family:monospace"></div>';
 }
-function renderV100Scout(d){
-  const sec=document.getElementById('v100scoutsec');
-  const sc=d.v100_scout;
+function renderScout(secId, msgId, bodyId, sc, board){
+  const sec=document.getElementById(secId);
+  if(!sec) return;
   if(!sc || sc.error || !sc.latest){ sec.style.display='none'; return; }
   sec.style.display='';
   const l=sc.latest;
   const when=l.created_at ? new Date(l.created_at*1000).toLocaleString() : 'unknown';
-  document.getElementById('v100scoutmsg').textContent =
+  document.getElementById(msgId).textContent =
     sc.open_count>1 ? (sc.open_count+' cards awaiting review') : '';
-  document.getElementById('v100scout').innerHTML =
+  document.getElementById(bodyId).innerHTML =
     '<div><b>'+esc(l.title||l.id)+'</b> <span class="hsub">'+esc(String(l.status||'?'))+' · '+esc(when)+'</span></div>'
     +'<div class="sub excerpt" style="margin-top:6px;padding-right:4px">'+(l.excerpt?mdToHtml(l.excerpt):'(no excerpt)')+'</div>'
-    +'<div class="hsub" style="margin-top:6px"><a href="http://'+location.hostname+':9119/kanban" target="_blank" style="color:#4b8ce0">View on the Hermes kanban board</a></div>';
+    +'<div class="hsub" style="margin-top:6px"><a href="http://'+location.hostname+':9119/kanban" target="_blank" style="color:#4b8ce0">View on the Hermes kanban board</a> ('+esc(board)+')</div>';
 }
+function renderV100Scout(d){ renderScout('v100scoutsec','v100scoutmsg','v100scout',d.v100_scout,'v100-perf-scout'); }
+function renderModelScout(d){ renderScout('modelscoutsec','modelscoutmsg','modelscout',d.model_scout,'model-engine-scout'); }
 async function syncWorkflow(name, dryRun){
   const msg=document.getElementById('wfsyncmsg');
   const out=document.getElementById('wfsyncout');
