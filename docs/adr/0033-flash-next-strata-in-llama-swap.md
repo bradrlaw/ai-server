@@ -29,3 +29,10 @@ LiteLLM `:4000` -> llama-swap `:9090`, as model `flash`:
 - Strata gives no batching gain (about 66 tok/s total for 4 clients) and was soaked for only 30 minutes.
 - Roll back: delete the `flash` entry, var and set, the LiteLLM entry and `config/modes/flash.yaml`, re-run
   `llama-swap-mode.py set daily`, and restart `litellm`.
+
+## Addendum 2026-10-25: Open WebUI info icon (speed stats) needs a local Strata patch
+Open WebUI shows the per-answer info icon from `timings` (llama.cpp's field) merged with `usage`. Strata put both on the
+finish chunk and omitted `system_fingerprint`; through LiteLLM that chunk lost `timings` (llama.cpp sends `timings` on the finish
+chunk with `system_fingerprint`, then `usage` in a separate chunk with empty `choices`). `config/strata/openai-stream-timings.patch`
+(apply in `src/strata` with `git apply`, then reload `flash`) makes Strata's streaming writer emit that same shape.
+`src/strata` is gitignored, so **re-apply the patch after any Strata update**.
