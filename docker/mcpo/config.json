@@ -41,6 +41,11 @@
       "type": "streamable-http",
       "url": "http://172.31.250.1:9001/mcp"
     },
+    "browser-fetch": {
+      "//": "Headless Chromium fetch for sites that block plain HTTP clients (Reddit). Native host service scripts/browser-fetch-mcp.service (docker/mcpo/browser_fetch_mcp.py) on :9130; port is in the ADR-0028 container->host allowlist. Tools: browser_fetch, reddit_search. SSRF-guarded to public hosts. ADR-0034.",
+      "type": "streamable-http",
+      "url": "http://host.docker.internal:9130/mcp"
+    },
     "llama-swap-mode": {
       "//": "Switch the llama-swap SERVING MODE (daily / heavy-coding / ...) from a client. Runs NATIVELY on the host (scripts/llama-swap-mode-mcp.service, docker/mcpo/llama_swap_mode_mcp.py) at :9120 because it edits config/llama-swap.yaml + calls llama-swap :9090; mcpo proxies it here. Tools: list_modes, current_mode, show_mode, set_mode. Modes are overlays in config/modes/ applied over config/llama-swap.base.yaml by scripts/llama-swap-mode.py.",
       "type": "streamable-http",

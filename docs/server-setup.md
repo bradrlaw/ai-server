@@ -1458,6 +1458,13 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
   (use the LAN IP or Tailscale name the client reaches the server by). Any other
   MCP-over-HTTP client connects to the same `:9120/mcp` endpoint.
 
+### Headless-browser fetch MCP (`browser-fetch`, :9130) — Reddit and other fetch-blocked sites
+- Reddit 403s plain HTTP clients from this host but serves a real Chromium. Tools (source `docker/mcpo/browser_fetch_mcp.py`):
+  `browser_fetch(url, max_chars, wait_seconds, html)` and `reddit_search(query, subreddit, sort, time)`. CLI: `scripts/browser-fetch.py URL`.
+- Native service `scripts/browser-fetch-mcp.service` on `0.0.0.0:9130/mcp`, venv `venvs/browser` (Playwright + `mcp<2`, Chromium in
+  `venvs/browser/pw`). SSRF-guarded to public hosts. Install + firewall + restart steps: ADR-0034.
+- Reaches clients via mcpo (`http://mcpo:8000/browser-fetch`) and Hermes (`mcp_servers` in `hermes/config.yaml`).
+
 ### Model context-window / ubatch tuning → see [benchmarking.md](benchmarking.md)
 
 The `coding` context-window sweep, the `--ubatch-size` prefill tuning, and the
@@ -2027,7 +2034,7 @@ What it enforces:
 
 | Source | Allowed |
 | --- | --- |
-| Docker containers (`172.16.0.0/12`) → host | **only** TCP `4000` LiteLLM, `8188` ComfyUI open, `9000`/`9001` MCP bridges, `9095` status JSON, `9120` mode MCP. Everything else is **rejected** ("connection refused" right away), including SSH, Samba, `:9100`, `:8675`, `:8189`, `:8190`. |
+| Docker containers (`172.16.0.0/12`) → host | **only** TCP `4000` LiteLLM, `8188` ComfyUI open, `9000`/`9001` MCP bridges, `9095` status JSON, `9120` mode MCP, `9130` browser-fetch MCP. Everything else is **rejected** ("connection refused" right away), including SSH, Samba, `:9100`, `:8675`, `:8189`, `:8190`. |
 | LAN (`192.168.4.0/22`, the ULA `/64`, link-local) | everything |
 | Tailnet (`tailscale0`, plus `41641/udp` for direct connections) | everything |
 | Anywhere else | SSH `22/tcp` only (anti-lockout) |
