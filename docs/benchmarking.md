@@ -2027,6 +2027,24 @@ window, `daily` restored and verified. Data: `docs/data/flash-next/w8-1m-context
 - **Cost:** about 19 minutes to first token at 1M and ~37 tok/s decode at depth (short-sample), versus 66-70 tok/s short. Static YaRN x4 left short-prompt decode within ~5% (code ~17% lower, within run-to-run spread seen elsewhere).
 - Not measured: short-prompt quality (GSM8K/tool-calls) at YaRN x4, and RULER-style multi-needle. Production stays at 512K.
 
+#### 1M config: short-prompt quality check (Window 9, 2026-10-27 06:55-07:43Z)
+Same eval-only 1M config (YaRN x4), run against short/medium prompts to see whether static YaRN x4 hurts normal use. Data: `docs/data/flash-next/w9-1m-quality/`,
+`docs/data/lm-eval/flash-1m-gsm8k-gsm8k-20261027/`, `evals/*/outputs/flash-1m-r1`.
+
+| Test | 1M config (YaRN x4) | 512K config (YaRN x2) |
+|---|---|---|
+| GSM8K (n=100) | 0.99 | 0.99 |
+| Tool-call suite (2 reps x 15) | 29/30 (one `repo_grep` arg returned `"false"` as a string) | 30/30 |
+| Vision checks | 6/6 | 6/6 |
+| Needles 32K (0.1/0.5/0.9) | 3/3 | pass |
+| Needles 128K (0.1/0.5) | 2/2 | 2/2 |
+| Needle 128K depth 0.9 (prompt is 149K tokens) | miss | miss (same prompt, same result) |
+| Code evals, one run each (5 tests) | 5/5 at 100% | 12/15 at 100% over 15 runs |
+| Decode, short / code | 65 / 88 tok/s | 69 / 96 tok/s |
+
+Verdict: no measurable short-prompt quality loss from YaRN x4 beyond sampling noise (one tool-call type error in 30 and a 5-8% decode difference are within run-to-run spread; n=1 per code eval).
+The 128K depth-0.9 miss is the same prompt on both configs, so it is not a YaRN effect. 1M is a viable opt-in, but costs ~19 min to first token at 1M.
+
 ### Ops, soak and agent tests (Strata behind a private llama-swap on 127.0.0.1:9091)
 
 - **Load / unload:** first request loads in 83-98 s (reload 69 s) through `checkEndpoint: /health`. `GET /unload`

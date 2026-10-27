@@ -9,6 +9,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 29/29 | 126.4 | 1140 ms | 16189 | 15036 B | on 86% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 29/29 | 76.0 | 5223 ms | 8159 | 35477 B | on 73% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.9 | 1435 ms | 8761 | 30241 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.7 | 1420 ms | 10472 | 34531 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 29/29 | 41.6 | 1416 ms | 12523 | 36960 B | on 83% | stop |
@@ -39,6 +40,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Architecture | Code quality | Completeness | Robustness | Output polish | Design | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -67,4 +69,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Architecture, Code quality, Completeness, Robustness, Output polish.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T19:14:03+00:00._
+_Last generated 2026-10-27T07:48:16+00:00._

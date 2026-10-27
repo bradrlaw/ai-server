@@ -10,6 +10,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 41/41 | 129.8 | 1552 ms | 15570 | 45898 B | on 90% | stop |
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 41/41 | 125.3 | 1594 ms | 19380 | 54952 B | on 93% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 78.5 | 8206 ms | 20334 | 59156 B | on 87% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 41/41 | 77.4 | 2986 ms | 13139 | 43321 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 41/41 | 44.5 | 1714 ms | 19265 | 54311 B | on 92% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 43.7 | 1778 ms | 20067 | 56921 B | on 92% | stop |
@@ -38,6 +39,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -63,4 +65,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T19:14:03+00:00._
+_Last generated 2026-10-27T07:48:16+00:00._

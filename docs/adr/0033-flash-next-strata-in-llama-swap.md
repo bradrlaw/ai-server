@@ -43,4 +43,4 @@ gitignored, so **re-apply it after any Strata update**. The proper fix is upstre
 Window 8 ran the same Q4 config at `--max-context 1048576 --rope-scale 4` (eval copy, trio unloaded, `daily` restored): no OOM, host RAM never below ~44 GB available,
 needles found at 589K-619K (3/3), 913K (2/2) and 1,032,643 tokens (1/1). Cost: ~19 min to first token at 1M (907 tok/s prefill), decode ~37 tok/s at 970K
 (66 tok/s short). Details in `docs/benchmarking.md` ("1M context"). Switching production to 1M would only change `--max-context`/`--rope-scale` in `config/strata/flash.json`, but
-static YaRN x4's short-prompt quality was not measured, so it is not recommended without a GSM8K/tool-call check.
+Window 9 then checked short-prompt quality at YaRN x4: GSM8K 0.99 (same as 512K), vision 6/6, tool calls 29/30 (30/30 at 512K), code evals 5/5 at 100%, decode 65/88 vs 69/96 tok/s (short/code). No measurable loss. Production stays at 512K by choice (a 1M prompt costs ~19 min to first token); 1M is available by editing `--max-context`/`--rope-scale` in `config/strata/flash.json`.
