@@ -295,7 +295,7 @@ done
 # http://mcpo:8000/<name> would silently break once the reject rule is live.
 # Pre-flight checks only the ports the live rule already allows: a port being ADDED in
 # this run cannot connect yet (it is verified after apply). First run: use the new list.
-LIVE_PORTS=$("$UFW" status 2>/dev/null | sed -n "s|^.*[[:space:]]\([0-9][0-9,]*\)/tcp[[:space:]]*ALLOW IN[[:space:]]*$DOCKER_NET[[:space:]].*ai-fw:docker-.*|\1|p" | head -1)
+LIVE_PORTS=$("$UFW" status numbered 2>/dev/null | sed -n "s|^.*[[:space:]]\([0-9][0-9,]*\)/tcp[[:space:]]*ALLOW\( IN\)\{0,1\}[[:space:]]*$DOCKER_NET[[:space:]].*ai-fw:docker-.*|\1|p" | head -1)
 PRE_PORTS=${LIVE_PORTS:-$DOCKER_HOST_PORTS}
 echo "== Pre-flight: what must keep working (verify-firewall.sh --preflight, ports $PRE_PORTS)"
 DOCKER_HOST_PORTS=$PRE_PORTS "$HERE/verify-firewall.sh" --preflight | sed 's/^/  /' \
