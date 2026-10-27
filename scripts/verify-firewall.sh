@@ -34,7 +34,7 @@ case "${1:-}" in
   *) echo "unknown arg: $1 (see --help)"; exit 2 ;;
 esac
 
-DOCKER_HOST_PORTS=${DOCKER_HOST_PORTS:-4000,8188,9000,9001,9095,9120}
+DOCKER_HOST_PORTS=${DOCKER_HOST_PORTS:-4000,8188,9000,9001,9095,9120,9130}
 DOCKER_NET=${DOCKER_NET:-172.16.0.0/12}
 AI_FW_SETUP=${AI_FW_SETUP:-0}
 TAG=ai-fw
@@ -199,6 +199,7 @@ declare -A WHO=(
   [9000]="mcpo|ComfyUI MCP bridge (open)"
   [9095]="open-webui|status JSON (chat banner)"
   [9120]="mcpo|llama-swap-mode MCP"
+  [9130]="mcpo|browser-fetch MCP"
 )
 for p in ${DOCKER_HOST_PORTS//,/ }; do
   if [[ $p == 9001 ]]; then

@@ -67,7 +67,7 @@ BEGIN_MARK="# BEGIN ai-fw DOCKER-USER (managed by /srv/ai/scripts/setup-firewall
 END_MARK="# END ai-fw DOCKER-USER"
 
 DOCKER_NET=${DOCKER_NET:-172.16.0.0/12}
-DOCKER_HOST_PORTS=${DOCKER_HOST_PORTS:-4000,8188,9000,9001,9095,9120}
+DOCKER_HOST_PORTS=${DOCKER_HOST_PORTS:-4000,8188,9000,9001,9095,9120,9130}
 TS_IF=${TS_IF:-tailscale0}
 TS_UDP_PORT=${TS_UDP_PORT:-41641}
 SSH_PORT=22
@@ -293,8 +293,12 @@ done
 # Everything containers need must already work AND stay inside the allowlist —
 # e.g. an Open WebUI tool server configured with a host address instead of
 # http://mcpo:8000/<name> would silently break once the reject rule is live.
-echo "== Pre-flight: what must keep working (verify-firewall.sh --preflight)"
-DOCKER_HOST_PORTS=$DOCKER_HOST_PORTS "$HERE/verify-firewall.sh" --preflight | sed 's/^/  /' \
+# Pre-flight checks only the ports the live rule already allows: a port being ADDED in
+# this run cannot connect yet (it is verified after apply). First run: use the new list.
+LIVE_PORTS=$("$UFW" status numbered 2>/dev/null | sed -n "s|^.*[[:space:]]\([0-9][0-9,]*\)/tcp[[:space:]]*ALLOW\( IN\)\{0,1\}[[:space:]]*$DOCKER_NET[[:space:]].*ai-fw:docker-.*|\1|p" | head -1)
+PRE_PORTS=${LIVE_PORTS:-$DOCKER_HOST_PORTS}
+echo "== Pre-flight: what must keep working (verify-firewall.sh --preflight, ports $PRE_PORTS)"
+DOCKER_HOST_PORTS=$PRE_PORTS "$HERE/verify-firewall.sh" --preflight | sed 's/^/  /' \
   || die "pre-flight FAILs above would break (or already are broken) — fix them, then re-run"
 echo
 

@@ -1,0 +1,29 @@
+[Unit]
+Description=Headless-browser fetch MCP server (HTTP) — Reddit and other sites that block plain fetches
+Documentation=https://github.com/bradrlaw/ai-server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brad
+Group=brad
+WorkingDirectory=/srv/ai
+Environment=BF_MCP_TRANSPORT=streamable-http
+# 0.0.0.0 so containers reach it via host.docker.internal; the host firewall
+# (ADR-0028 allowlist, port 9130) is what limits who can connect. NO auth, like
+# the other MCP bridges — private LAN/Tailscale only. SSRF guard is in the server.
+Environment=BF_MCP_HOST=0.0.0.0
+Environment=BF_MCP_PORT=9130
+Environment=BF_MAX_CONCURRENT=2
+Environment=PLAYWRIGHT_BROWSERS_PATH=/srv/ai/venvs/browser/pw
+Environment=HOME=/home/brad
+ExecStart=/srv/ai/venvs/browser/bin/python /srv/ai/docker/mcpo/browser_fetch_mcp.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillMode=mixed
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target

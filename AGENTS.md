@@ -47,7 +47,7 @@ Read this first, then the detailed docs:
   EST/EDT (~4–5 h offset). Any wall-clock scheduling (cron, timers, the quiet-hours window) must
   be timezone-aware — e.g. quiet-hours reads `QUIET_TZ=America/New_York`, not the system clock.
 - **Host firewall (ufw, ADR-0028).** Containers can reach only host TCP
-  `4000,8188,9000,9001,9095,9120`; every other host port is **rejected** for them. A new
+  `4000,8188,9000,9001,9095,9120,9130`; every other host port is **rejected** for them. A new
   container→host dependency must be added to `DOCKER_HOST_PORTS` in `scripts/setup-firewall.sh`
   **and** `scripts/verify-firewall.sh`, then the owner re-runs `sudo scripts/setup-firewall.sh`.
   Containers reach each other by Docker DNS name (`http://mcpo:8000/...`), never via the host

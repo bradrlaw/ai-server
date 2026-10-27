@@ -82,6 +82,12 @@ newer GPU"):
    release notes + popular custom-node repos, r/LocalLLaMA, Hacker News,
    Hugging Face trending GGUF/quantized model releases, unsloth/bartowski/other
    quantizer blogs.
+
+   **Reddit and other sites that block plain fetches:** the normal web/fetch tools get a 403 from
+   Reddit. Use the `browser-fetch` MCP tools instead: `reddit_search(query, subreddit="LocalLLaMA",
+   sort="new", time="month")` to find posts, then `browser_fetch(url)` on a post URL to read the thread
+   and its comments (about 5-15 s each, so fetch only the few most relevant posts). If the tools are
+   unavailable, say so in the card and fall back to search snippets; do not invent thread content.
 2. For each candidate finding, explicitly check it against the constraints above
    before including it. If uncertain whether something runs on sm_70, say so
    rather than guessing — mark it "needs verification" rather than recommending it
