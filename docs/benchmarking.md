@@ -2011,6 +2011,22 @@ drift apart once two tokens are near-tied; llama.cpp does it to itself when MTP 
 diverges 2-3x earlier, but the answers stay equivalent and the GSM8K and code scores match, so the
 adoption gate is quality, not byte identity. (A no-spec run is impossible: the native pack needs `--spec` of 2 or more.)
 
+### 1M context (YaRN x4), Q4_K_XL, 2026-10-27 (Window 8, 04:57-06:45Z)
+Same Strata config as production `flash` but `--max-context 1048576 --rope-scale 4` (eval-only copy; production stays at 512K). Trio unloaded for the
+window, `daily` restored and verified. Data: `docs/data/flash-next/w8-1m-context.jsonl`, `w8-1m-resources.csv`.
+
+| Test | Prompt tokens | Time to first token | Prefill | Result |
+|---|---|---|---|---|
+| Needle, depths 0.1 / 0.5 / 0.9 | 589K / 619K / 588K | 496 s / 532 s / 493 s | ~1.2K tok/s | 3/3 found |
+| Needle, depths 0.1 / 0.9 | 913K / 913K | 942 s / 942 s | ~970 tok/s | 2/2 found |
+| Needle, depth 0.5 | 1,032,643 | 1,139 s (19 min) | 907 tok/s | found |
+| Fresh 970K prompt, decode | 970,437 | 1,028 s | 944 tok/s | decode 37 tok/s (64-token sample) |
+| Short prompts at 1M config | - | 0.5 s | - | 66 tok/s short, 80 tok/s code (512K config: 69 / 96) |
+
+- **Fit:** no OOM. VRAM sat at ~31.8 GB on idx1 and ~32.2 GB (reading from nvidia-smi MiB) on idx2 at the peak; host `MemAvailable` never fell below ~43.9 GB, so RAM is not the constraint. Pinned/locked memory was ~26 MiB (Strata mmaps the experts).
+- **Cost:** about 19 minutes to first token at 1M and ~37 tok/s decode at depth (short-sample), versus 66-70 tok/s short. Static YaRN x4 left short-prompt decode within ~5% (code ~17% lower, within run-to-run spread seen elsewhere).
+- Not measured: short-prompt quality (GSM8K/tool-calls) at YaRN x4, and RULER-style multi-needle. Production stays at 512K.
+
 ### Ops, soak and agent tests (Strata behind a private llama-swap on 127.0.0.1:9091)
 
 - **Load / unload:** first request loads in 83-98 s (reload 69 s) through `checkEndpoint: /health`. `GET /unload`
