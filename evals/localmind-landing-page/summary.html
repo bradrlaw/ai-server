@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>localmind-landing-page</h1>
-<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 11 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 23 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -113,6 +113,54 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/big/index.html">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/big-h2h-r3/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.8-27B-UD-Q8_K_XL.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">95%</span></td>
+      <td>38641 B</td>
+      <td>14390</td>
+      <td>1439.8 ms</td>
+      <td>582.0</td>
+      <td>45.2</td>
+      <td>320.9 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/big-h2h-r3/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/big-h2h-r2/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.8-27B-UD-Q8_K_XL.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">94%</span></td>
+      <td>37795 B</td>
+      <td>13947</td>
+      <td>1437.2 ms</td>
+      <td>583.1</td>
+      <td>45.1</td>
+      <td>918.8 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/big-h2h-r2/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/big-h2h-r1/run.html"><span class="model">big</span></a>
+        <div class="name">Qwen3.8-27B-UD-Q8_K_XL.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">94%</span></td>
+      <td>34786 B</td>
+      <td>12800</td>
+      <td>1435.4 ms</td>
+      <td>583.8</td>
+      <td>45.1</td>
+      <td>607.3 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/big-h2h-r1/index.html">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/coding-qwen3.6/run.html"><span class="model">coding</span></a>
         <div class="name">Qwen3.6-27B-Q6_K.gguf</div></td>
       <td><span class="score">27/27</span> <span class="name">100%</span></td>
@@ -177,6 +225,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="l"><a href="outputs/big-qwen3.6/index.html">output</a></td>
     </tr>
     <tr>
+      <td class="l"><a href="outputs/flash-ctl-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">91%</span></td>
+      <td>36502 B</td>
+      <td>13035</td>
+      <td>9573.7 ms</td>
+      <td>87.5</td>
+      <td>38.5</td>
+      <td>924.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r3/index.html">output</a></td>
+    </tr>
+    <tr>
       <td class="l"><a href="outputs/fast-uncensored/run.html"><span class="model">fast-uncensored</span></a>
         <div class="name">Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf</div></td>
       <td><span class="score">27/27</span> <span class="name">100%</span></td>
@@ -191,6 +255,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>stop</td>
       <td class="name">2026-07-27</td>
       <td class="l"><a href="outputs/fast-uncensored/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q8b-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">87%</span></td>
+      <td>37498 B</td>
+      <td>13402</td>
+      <td>123.3 ms</td>
+      <td>40.6</td>
+      <td>29.7</td>
+      <td>1406.7 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r2/index.html">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/gemma-31b/run.html"><span class="model">gemma-31b</span></a>
@@ -208,9 +288,121 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td class="name">2026-07-27</td>
       <td class="l"><a href="outputs/gemma-31b/index.html">output</a></td>
     </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">80%</span></td>
+      <td>42454 B</td>
+      <td>15395</td>
+      <td>206.7 ms</td>
+      <td>24.2</td>
+      <td>27.3</td>
+      <td>570.1 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r1/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>41130 B</td>
+      <td>15149</td>
+      <td>4766.7 ms</td>
+      <td>175.8</td>
+      <td>27.0</td>
+      <td>566.7 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r2/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q4a-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>40028 B</td>
+      <td>14510</td>
+      <td>70.5 ms</td>
+      <td>70.9</td>
+      <td>26.7</td>
+      <td>548.2 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q4a-r3/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-ctl-r2/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
+      <td>38259 B</td>
+      <td>14092</td>
+      <td>15675.3 ms</td>
+      <td>53.5</td>
+      <td>25.2</td>
+      <td>575.4 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r2/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-ctl-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">92%</span></td>
+      <td>40890 B</td>
+      <td>14718</td>
+      <td>15691.1 ms</td>
+      <td>53.4</td>
+      <td>24.8</td>
+      <td>609.4 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-24</td>
+      <td class="l"><a href="outputs/flash-ctl-r1/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q8b-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>39723 B</td>
+      <td>14274</td>
+      <td>10050.7 ms</td>
+      <td>83.4</td>
+      <td>15.1</td>
+      <td>955.0 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r1/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-q8b-r3/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-off">off</span></td>
+      <td>42165 B</td>
+      <td>16172</td>
+      <td>131.2 ms</td>
+      <td>38.1</td>
+      <td>15.1</td>
+      <td>1077.9 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-23</td>
+      <td class="l"><a href="outputs/flash-q8b-r3/index.html">output</a></td>
+    </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-08-16T04:36:37+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-10-24T19:14:03+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

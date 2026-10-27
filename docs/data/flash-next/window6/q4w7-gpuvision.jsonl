@@ -1,0 +1,5 @@
+{"ts": "2026-10-25T00:14:51Z", "label": "q4w7-gpuvision", "test": "speed", "kind": "short", "decode_tps_median": 67.98, "decode_tps_all": [73.91, 67.98, 57.45], "ttft_median": 0.436}
+{"ts": "2026-10-25T00:15:04Z", "label": "q4w7-gpuvision", "test": "speed", "kind": "code", "decode_tps_median": 93.52, "decode_tps_all": [81.13, 93.52, 97.06], "ttft_median": 0.087}
+{"ts": "2026-10-25T00:15:14Z", "label": "q4w7-gpuvision", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 9.167, "prefill_tps": 869.2, "decode_tps": 54.34}
+{"ts": "2026-10-25T00:15:38Z", "label": "q4w7-gpuvision", "test": "prompt", "target_tokens": 32768, "prompt_tokens": 31833, "ttft_s": 21.315, "prefill_tps": 1493.5, "decode_tps": 64.02}
+{"ts": "2026-10-25T00:16:59Z", "label": "q4w7-gpuvision", "test": "prompt", "target_tokens": 131072, "prompt_tokens": 127208, "ttft_s": 70.603, "prefill_tps": 1801.7, "decode_tps": 73.79}

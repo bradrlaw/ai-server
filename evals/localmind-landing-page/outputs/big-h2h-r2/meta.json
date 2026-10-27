@@ -1,0 +1,65 @@
+{
+  "test": "localmind-landing-page",
+  "model_slot": "big",
+  "label": "big-h2h-r2",
+  "model_name": "Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-27b/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+  "endpoint": "http://127.0.0.1:8082/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "llama.cpp b11819 Qwen3.8-27B UD-Q8_K_XL MTP2 reasoning medium (big slot)",
+  "usage": {
+    "completion_tokens": 13947,
+    "prompt_tokens": 838,
+    "total_tokens": 14785,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 918.8,
+    "ttft_ms": 1437.246,
+    "prefill_tps": 583.0595458258363,
+    "decode_tps": 45.10395457314432,
+    "prompt_tokens": 838,
+    "predicted_tokens": 13947,
+    "prefill_ms": 1437.246,
+    "decode_ms": 309196.835
+  },
+  "mtp": {
+    "draft_n": 9650,
+    "draft_n_accepted": 9121,
+    "accept_rate": 0.945,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 838,
+    "prompt_ms": 1437.246,
+    "prompt_per_token_ms": 1.7150906921241051,
+    "prompt_per_second": 583.0595458258363,
+    "predicted_n": 13947,
+    "predicted_ms": 309196.835,
+    "predicted_per_token_ms": 22.171004947655245,
+    "predicted_per_second": 45.10395457314432,
+    "draft_n": 9650,
+    "draft_n_accepted": 9121
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 37795,
+  "reasoning_bytes": 91,
+  "wall_secs": 918.8,
+  "created_utc": "2026-10-24T18:42:24+00:00"
+}

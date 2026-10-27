@@ -1,0 +1,272 @@
+[
+ {
+  "model": "x",
+  "case": "weather",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 5.1,
+  "tokens": 55
+ },
+ {
+  "model": "x",
+  "case": "read_range",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 2.0,
+  "tokens": 75
+ },
+ {
+  "model": "x",
+  "case": "shell_timeout",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.9,
+  "tokens": 70
+ },
+ {
+  "model": "x",
+  "case": "event_nested",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 4.8,
+  "tokens": 199
+ },
+ {
+  "model": "x",
+  "case": "calc",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.9,
+  "tokens": 68
+ },
+ {
+  "model": "x",
+  "case": "search_opts",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 2.2,
+  "tokens": 82
+ },
+ {
+  "model": "x",
+  "case": "repo_grep",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 2.0,
+  "tokens": 74
+ },
+ {
+  "model": "x",
+  "case": "parallel_weather",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 2.3,
+  "tokens": 90
+ },
+ {
+  "model": "x",
+  "case": "parallel_time",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.9,
+  "tokens": 72
+ },
+ {
+  "model": "x",
+  "case": "write_escapes",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 5.4,
+  "tokens": 202
+ },
+ {
+  "model": "x",
+  "case": "unicode_url",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 2.4,
+  "tokens": 95
+ },
+ {
+  "model": "x",
+  "case": "no_tool_1",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 3.1,
+  "tokens": 106
+ },
+ {
+  "model": "x",
+  "case": "no_tool_2",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 0.8,
+  "tokens": 17
+ },
+ {
+  "model": "x",
+  "case": "roundtrip",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.3,
+  "tokens": 29
+ },
+ {
+  "model": "x",
+  "case": "forced_choice",
+  "rep": 0,
+  "ok": true,
+  "why": null,
+  "sec": 1.2,
+  "tokens": 36
+ },
+ {
+  "model": "x",
+  "case": "weather",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.5,
+  "tokens": 51
+ },
+ {
+  "model": "x",
+  "case": "read_range",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.0,
+  "tokens": 75
+ },
+ {
+  "model": "x",
+  "case": "shell_timeout",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.9,
+  "tokens": 71
+ },
+ {
+  "model": "x",
+  "case": "event_nested",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 5.0,
+  "tokens": 209
+ },
+ {
+  "model": "x",
+  "case": "calc",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.9,
+  "tokens": 68
+ },
+ {
+  "model": "x",
+  "case": "search_opts",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.2,
+  "tokens": 82
+ },
+ {
+  "model": "x",
+  "case": "repo_grep",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.5,
+  "tokens": 88
+ },
+ {
+  "model": "x",
+  "case": "parallel_weather",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.3,
+  "tokens": 90
+ },
+ {
+  "model": "x",
+  "case": "parallel_time",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.1,
+  "tokens": 80
+ },
+ {
+  "model": "x",
+  "case": "write_escapes",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 9.0,
+  "tokens": 341
+ },
+ {
+  "model": "x",
+  "case": "unicode_url",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 2.3,
+  "tokens": 91
+ },
+ {
+  "model": "x",
+  "case": "no_tool_1",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 3.0,
+  "tokens": 101
+ },
+ {
+  "model": "x",
+  "case": "no_tool_2",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.3,
+  "tokens": 39
+ },
+ {
+  "model": "x",
+  "case": "roundtrip",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.2,
+  "tokens": 28
+ },
+ {
+  "model": "x",
+  "case": "forced_choice",
+  "rep": 1,
+  "ok": true,
+  "why": null,
+  "sec": 1.4,
+  "tokens": 47
+ }
+]

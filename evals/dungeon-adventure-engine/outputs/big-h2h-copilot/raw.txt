@@ -1,0 +1,37 @@
+Now let me test the game and fix issues I anticipate (the `examine` synonym mapping, and door unlock logic). First, review the relevant sections and patch:
+
+
+
+Now fix the door logic so the unlock message fires on first passage (auto-use of the key) and the door stays open:
+
+
+
+Now test a full playthrough:
+
+
+
+The bound-method signature mismatch — fix the callback type and call sites:
+
+
+
+Full playthrough works. Now test edge cases: locked doors, torch effect, synonyms, errors, and EOF:
+
+
+
+All edge cases pass. Final check — partial matches and lint:
+
+
+
+Small grammar fix for the decorative-item message (double article):
+
+
+
+`output.py` is complete and verified. The implementation includes:
+
+- **Core classes**: `GameState` (current room, inventory, visited, flags, history), `Room` (name, description, exits, items, `DoorLock` for locked doors), `Item` (name, description, `on_use` callback), and `GameEngine` (parsing, dispatch, state mutation, output).
+- **Command system**: `look`/`look at`, `go`/`move`/bare directions, `take`/`drop`, `use`, `inventory`, `help`, `history` (last 10), `quit` — case-insensitive with prefix matches (`inv`→inventory, `n`→north), synonyms (`examine`→look at, `grab`/`get`→take), and graceful errors.
+- **Dungeon**: all 6 rooms with the specified exits and 5 items; rusted key auto-opens the Armory's north door (stays open), lever permanently unlocks the Library's west passage and rewrites its description, torch changes the Armory to "flickering light," scroll triggers the secret ending and `won` flag, coin is witty and cosmetic.
+- **Polish**: ASCII banner, per-command separator, type hints and docstrings throughout, `__main__` loop, graceful EOF/KeyboardInterrupt handling, no global mutable state.
+
+Tested: full victory playthrough, locked-door messages, torch side effect, drop/re-take, ambiguous/unknown inputs, and EOF exit — all pass, `py_compile` clean.
+

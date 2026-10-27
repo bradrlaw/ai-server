@@ -13,12 +13,24 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 27/27 | 79.3 | 2035 ms | 7318 | 26903 B | on 84% | stop |
 | `thinkingcap` | ThinkingCap-Qwen3.6-27B-Q6_K-MTP.gguf | 27/27 | 45.7 | 1320 ms | 11266 | 31703 B | on 93% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 27/27 | 45.6 | 1366 ms | 13318 | 36222 B | on 93% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.2 | 1440 ms | 14390 | 38641 B | on 95% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.1 | 1437 ms | 13947 | 37795 B | on 94% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 45.1 | 1435 ms | 12800 | 34786 B | on 94% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 27/27 | 44.4 | 1261 ms | 12746 | 35269 B | on 92% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 27/27 | 43.8 | 1282 ms | 13132 | 35781 B | on 91% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 27/27 | 43.5 | 1528 ms | 12743 | 34849 B | on 93% | stop |
 | `big` | Qwen3.6-27B-UD-Q6_K_XL.gguf | 27/27 | 42.8 | 1475 ms | 11312 | 32613 B | on 92% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 38.5 | 9574 ms | 13035 | 36502 B | on 91% | stop |
 | `fast-uncensored` | Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf | 27/27 | 30.9 | 3219 ms | 7821 | 24438 B | on 77% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 27/27 | 29.7 | 123 ms | 13402 | 37498 B | on 87% | stop |
 | `gemma-31b` | gemma-4-31B-it-qat-UD-Q4_K_XL.gguf | 27/27 | 28.2 | 1465 ms | 8925 | 29927 B | on 32% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 27.3 | 207 ms | 15395 | 42454 B | on 80% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 27.0 | 4767 ms | 15149 | 41130 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 26.7 | 70 ms | 14510 | 40028 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 25.2 | 15675 ms | 14092 | 38259 B | on 92% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 27/27 | 24.8 | 15691 ms | 14718 | 40890 B | on 92% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 27/27 | 15.1 | 10051 ms | 14274 | 39723 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 27/27 | 15.1 | 131 ms | 16172 | 42165 B | off | stop |
 
 ## Design quality (manual, 0–5 each; subtotal /25)
 
@@ -29,14 +41,26 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `fast` | · | · | · | · | · | — |  |
 | `thinkingcap` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `fast-uncensored` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `gemma-31b` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Visual polish, Responsiveness, Interaction, Hero visual, Code quality.
 `·` = not yet scored.
 
-_Last generated 2026-08-16T04:36:37+00:00._
+_Last generated 2026-10-24T19:14:03+00:00._

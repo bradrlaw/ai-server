@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Local Dungeon</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --panel: #222222;
+    --panel-border: #333333;
+    --green: #00ff00;
+    --amber: #ffb000;
+    --text: #d8d8d8;
+    --dim: #888888;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #111;
+    border-bottom: 2px solid var(--panel-border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .title-block h1 {
+    font-size: 1.3rem;
+    color: var(--amber);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-block .tagline {
+    font-size: 0.8rem;
+    color: var(--dim);
+  }
+  #resetBtn {
+    background: #2a2a2a;
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, color 0.15s;
+  }
+  #resetBtn:hover { background: var(--amber); color: #111; }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .hero {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+  }
+  details.howto {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  details.howto summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 600;
+    color: var(--amber);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  details.howto summary::-webkit-details-marker { display: none; }
+  details.howto summary::before {
+    content: "";
+    width: 0; height: 0;
+    border-left: 6px solid var(--amber);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  details.howto[open] summary::before { transform: rotate(90deg); }
+  .howto-body {
+    padding: 0 18px 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px;
+  }
+  .cmd-row {
+    display: flex;
+    gap: 10px;
+    font-size: 0.85rem;
+    align-items: baseline;
+  }
+  .cmd-row code {
+    background: #111;
+    color: var(--green);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-family: monospace, "Courier New", monospace;
+    white-space: nowrap;
+    min-width: 78px;
+    text-align: center;
+  }
+  .dashboard {
+    display: grid;
+    grid-template-columns: 7fr 3fr;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 760px) {
+    .dashboard { grid-template-columns: 1fr; }
+  }
+  .console-wrap {
+    background: #0d0d0d;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .console-bar {
+    background: #161616;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    letter-spacing: 1px;
+  }
+  #skipBtn {
+    background: transparent;
+    border: 1px solid var(--dim);
+    color: var(--dim);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    padding: 2px 10px;
+    cursor: pointer;
+  }
+  #skipBtn:hover { color: var(--green); border-color: var(--green); }
+  #console {
+    height: 420px;
+    overflow-y: auto;
+    padding: 14px 16px;
+    font-family: monospace, "Courier New", monospace;
+    font-size: 0.9rem;
+    color: var(--green);
+    cursor: text;
+  }
+  #console .line { margin-bottom: 10px; white-space: pre-wrap; word-break: break-word; }
+  #console .line.user { color: var(--amber); }
+  #console .line.system { color: var(--dim); }
+  #console .cursor {
+    display: inline-block;
+    width: 9px;
+    background: var(--green);
+    animation: blink 0.8s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .input-row {
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--panel-border);
+    background: #111;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .input-row .prompt {
+    font-family: monospace, "Courier New", monospace;
+    color: var(--green);
+    font-weight: bold;
+  }
+  #cmdInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: monospace, "Courier New", monospace;
+    font-size: 0.95rem;
+    caret-color: var(--green);
+  }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--amber);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .stat {
+    background: #111;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat .num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--green);
+    font-family: monospace, "Courier New", monospace;
+  }
+  .stat .label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--dim);
+  }
+  #invList {
+    list-style: none;
+    font-size: 0.88rem;
+  }
+  #invList li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--panel-border);
+  }
+  #invList li:last-child { border-bottom: none; }
+  #invList li svg { flex-shrink: 0; }
+  .inv-empty {
+    color: var(--dim);
+    font-style: italic;
+    font-size: 0.85rem;
+  }
+  .footer-note {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffb000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 21V8l9-5 9 5v13"/>
+        <path d="M9 21v-6h6v6"/>
+        <path d="M3 21h18"/>
+      </svg>
+      The Local Dungeon
+    </h1>
+    <div class="tagline">A tiny text adventure beneath your neighborhood.</div>
+  </div>
+  <button id="resetBtn" type="button">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/>
+      <path d="M3 4v5h5"/>
+    </svg>
+    Reset Game
+  </button>
+</header>
+
+<main>
+  <section class="hero">
+    Beneath the cracked pavement of Elm Street lies a forgotten warren of stone — the Local Dungeon,
+    where a rusted key, a forgotten lever, and one very old scroll have been waiting for a curious
+    neighbor. The air smells of damp brick and candle wax. Your flashlight battery is dying.
+    Move quickly.
+  </section>
+
+  <details class="howto">
+    <summary>How to Play</summary>
+    <div class="howto-body">
+      <div class="cmd-row"><code>look</code><span>Describe the current room.</span></div>
+      <div class="cmd-row"><code>go north</code><span>Move (north, south, east, west; "n", "s", "e", "w" also work).</span></div>
+      <div class="cmd-row"><code>take &lt;item&gt;</code><span>Pick up an item in the room.</span></div>
+      <div class="cmd-row"><code>drop &lt;item&gt;</code><span>Put an item on the floor.</span></div>
+      <div class="cmd-row"><code>inventory</code><span>List what you're carrying ("inv" works).</span></div>
+      <div class="cmd-row"><code>use &lt;item&gt;</code><span>Use an item (try the lever).</span></div>
+      <div class="cmd-row"><code>examine &lt;thing&gt;</code><span>Look closely at a room or item.</span></div>
+      <div class="cmd-row"><code>help</code><span>Show this list again in the console.</span></div>
+      <div class="cmd-row"><code>↑ / ↓</code><span>Cycle through command history.</span></div>
+    </div>
+  </details>
+
+  <div class="dashboard">
+    <div class="console-wrap">
+      <div class="console-bar">
+        <span>DUNGEON CONSOLE v1.0</span>
+        <button id="skipBtn" type="button">Skip ▸</button>
+      </div>
+      <div id="console" aria-live="polite"></div>
+      <div class="input-row">
+        <span class="prompt">&gt;</span>
+        <input id="cmdInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command...">
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffb000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
+          </svg>
+          Stats
+        </h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="num" id="movesCount">0</div>
+            <div class="label">Moves Made</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="itemsCount">0</div>
+            <div class="label">Items Found</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffb000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+            <path d="M3 6h18"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+          Inventory
+        </h2>
+        <ul id="invList"><li class="inv-empty">Inventory is empty.</li></ul>
+      </div>
+    </aside>
+  </div>
+
+  <div class="footer-note">The Local Dungeon — a self-contained text adventure. No pixels were harmed.</div>
+</main>
+
+<script>
+"use strict";
+
+const ITEM_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00ff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>`;
+
+class Item {
+  constructor(id, name, description) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+class Room {
+  constructor(id, name, description) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.items = [];
+    // exits: { direction: { to: roomId, locked?: bool, keyItem?: itemId, lockedText?: string, unlockText?: string, secret?: bool } }
+    this.exits = {};
+  }
+}
+
+class GameEngine {
+  constructor() {
+    this.items = {
+      rustedKey: new Item("rustedKey", "rusted key", "A small iron key, corroded green with age. It must fit somewhere around here."),
+      lever: new Item("lever", "lever", "A heavy iron lever mounted in a stone bracket. It clicks ominously when you touch it."),
+      torch: new Item("torch", "torch", "A stubby iron torch with a wick still soaked in oil. It burns with a steady amber flame."),
+      goldenCoin: new Item("goldenCoin", "golden coin", "A heavy gold coin stamped with the face of a long-dead mayor. It is definitely yours now."),
+      ancientScroll: new Item("ancientScroll", "ancient scroll", "A brittle scroll in a sealed glass tube. The faded ink reads: 'To whoever found this — you are the neighborhood's luckiest. Go enjoy the garden.'")
+    };
+
+    this.rooms = new Map([
+      ["entrance", new Room("entrance", "Entrance Hall",
+        "A low vaulted hall of damp brick. Water drips somewhere in the dark, and the smell of old stone fills the air. A faint draft pushes through from the north, and a worn flagstone path leads east.")],
+      ["library", new Room("library", "Library",
+        "Rows of collapsed bookshelves line the walls, their spines cracked and titleless. A thick iron lever is mounted on the far wall, and a strange seam in the western wall suggests a hidden door.")],
+      ["armory", new Room("armory", "Armory",
+        "Racks of corroded spears and dented shields crowd the room. A torch lies on a stone bench, waiting to be lit. A heavy door blocks the northern passage, its lock glinting dully.")],
+      ["treasure", new Room("treasure", "Treasure Room",
+        "A small circular chamber. On a velvet-dusted pedestal sits a single golden coin, catching light that shouldn't exist down here.")],
+      ["secret", new Room("secret", "Secret Chamber",
+        "A narrow chamber you never would have found. The walls are covered in scratched tally marks. An ancient scroll rests in a glass tube on a ledge.")],
+      ["garden", new Room("garden", "Garden",
+        "Impossibly, the dungeon opens into a sunlit garden. Moss-covered stepping stones wind between beds of wildflowers, and a stone well gurgles softly. After all that dark, the air feels like a gift. You have seen everything the Local Dungeon has to show.")]
+    ]);
+
+    const r = id => this.rooms.get(id);
+    r("entrance").exits = { north: { to: "library" }, east: { to: "armory" }, south: { to: "garden" } };
+    r("library").exits = { south: { to: "entrance" },
+      west: { to: "secret", locked: true, secret: true,
+        lockedText: "The seam in the western wall is airtight. Something mechanical must open it.",
+        unlockText: "You reach for the seam and find a hidden catch. A grinding rumble, and the wall swings inward, revealing a hidden passage." } };
+    r("armory").exits = { west: { to: "entrance" },
+      north: { to: "treasure", locked: true, keyItem: "rustedKey",
+        lockedText: "The northern door is locked. A small keyhole glints in the gloom.",
+        unlockText: "The rusted key turns with a satisfying click, and the heavy door swings open." } };
+    r("treasure").exits = { south: { to: "armory" } };
+    r("secret").exits = { east: { to: "library" } };
+    r("garden").exits = { north: { to: "entrance" } };
+
+    // Seed items
+    r("entrance").items.push(this.items.rustedKey);
+    r("library").items.push(this.items.lever);
+    r("armory").items.push(this.items.torch);
+    r("treasure").items.push(this.items.goldenCoin);
+    r("secret").items.push(this.items.ancientScroll);
+
+    this.synonyms = {
+      look: ["look", "l", "examine", "x", "inspect", "ex", "explore", "e"],
+      inv: ["inventory", "inv", "i", "bag", "pocket", "items", "carry"],
+      take: ["take", "t", "grab", "g", "get", "pick", "loot", "steal"],
+      drop: ["drop", "d", "discard", "throw", "leave"],
+      go: ["go", "walk", "move", "head", "goto", "travel"],
+      use: ["use", "u", "pull", "operate", "activate", "turn", "press"],
+      help: ["help", "h", "?", "commands", "howto"],
+      north: ["north", "n", "northern"],
+      south: ["south", "s", "southern"],
+      east: ["east", "e", "eastern"],
+      west: ["west", "w", "western"]
+    };
+
+    this.reset();
+  }
+
+  reset() {
+    this.currentRoom = this.rooms.get("entrance");
+    this.inventory = [];
+    this.visited = new Set(["entrance"]);
+    this.moves = 0;
+    this.itemsFound = 0;
+    this.leverPulled = false;
+    this.keyUsed = false;
+    this.gardenReached = false;
+  }
+
+  // ---------- Output ----------
+  print(text, cls = "") {
+    this.out(text, cls);
+  }
+
+  // ---------- Command handling ----------
+  handle(raw) {
+    const input = raw.trim();
+    if (!input) return;
+    this.print("> " + input, "user");
+
+    const tokens = input.toLowerCase().split(/\s+/);
+    const first = tokens[0];
+
+    if (this.match(first, "help")) { this.cmdHelp(); return; }
+    if (this.match(first, "look")) { this.cmdLook(tokens); return; }
+    if (this.match(first, "inv")) { this.cmdInventory(); return; }
+    if (this.match(first, "take")) { this.cmdTake(tokens); return; }
+    if (this.match(first, "drop")) { this.cmdDrop(tokens); return; }
+    if (this.match(first, "use")) { this.cmdUse(tokens); return; }
+    if (this.match(first, "go") || this.isDirection(first)) { this.cmdGo(first, tokens); return; }
+
+    this.print("That command doesn't ring a bell. Type 'help' to see what you can do.", "system");
+    this.onCommandEnd();
+  }
+
+  isDirection(word) {
+    return ["north", "south", "east", "west"].includes(this.resolveDirection(word));
+  }
+
+  resolveDirection(word) {
+    for (const dir of ["north", "south", "east", "west"]) {
+      if (this.synonyms[dir].includes(word)) return dir;
+    }
+    return null;
+  }
+
+  match(word, group) {
+    return this.synonyms[group].includes(word);
+  }
+
+  // ---------- Commands ----------
+  cmdHelp() {
+    this.print("Available commands:");
+    this.print("  look / examine <thing>   — describe the room or an item");
+    this.print("  go <direction>           — move (n, s, e, w work too)");
+    this.print("  take <item>              — pick something up");
+    this.print("  drop <item>              — put something down");
+    this.print("  use <item>               — use something (try the lever)");
+    this.print("  inventory                — list what you carry ('inv')");
+    this.print("  help                     — show this message");
+    this.print("  ↑ / ↓ arrows             — repeat past commands");
+    this.onCommandEnd();
+  }
+
+  cmdLook(tokens) {
+    if (tokens.length > 1) {
+      const target = this.items.find(it => this.fuzzyMatch(tokens.slice(1).join(" "), it.name));
+      if (target) {
+        if (this.inventory.includes(target)) {
+          this.print(target.description);
+        } else if (this.currentRoom.items.includes(target)) {
+          this.print(`You examine the ${target.name}. ${target.description}`);
+        } else {
+          this.print(`You don't see any ${target.name} here.`);
+        }
+      } else if (this.fuzzyMatch(tokens.slice(1).join(" "), this.currentRoom.name)) {
+        this.print(this.currentRoom.description);
+      } else {
+        this.print(`There's nothing here that matches "${tokens.slice(1).join(" ")}."`);
+      }
+    } else {
+      this.describeRoom();
+    }
+    this.onCommandEnd();
+  }
+
+  describeRoom() {
+    this.print(`— ${this.currentRoom.name} —`);
+    this.print(this.currentRoom.description);
+    const here = this.currentRoom.items;
+    if (here.length > 0) {
+      this.print(here.length === 1
+        ? `You notice: a ${here[0].name}.`
+        : `You notice: ${here.map(i => i.name).join(" and a ")} here.`);
+    }
+    const exits = Object.keys(this.currentRoom.exits).filter(d => {
+      const e = this.currentRoom.exits[d];
+      return !(e.secret && e.locked);
+    });
+    this.print(`Exits: ${exits.join(", ")}.`);
+  }
+
+  cmdInventory() {
+    if (this.inventory.length === 0) {
+      this.print("Your pockets are empty. The dungeon has more to give.");
+    } else {
+      this.print("You are carrying:");
+      this.inventory.forEach(it => this.print(`  • ${it.name} — ${it.description}`));
+    }
+    this.onCommandEnd();
+  }
+
+  findItemInRoom(tokens) {
+    const phrase = tokens.slice(1).join(" ");
+    if (!phrase) return { missing: true };
+    const inRoom = this.currentRoom.items.find(it => this.fuzzyMatch(phrase, it.name));
+    if (inRoom) return { item: inRoom, location: "room" };
+    const inInv = this.inventory.find(it => this.fuzzyMatch(phrase, it.name));
+    return { missing: true, phrase, inInv };
+  }
+
+  cmdTake(tokens) {
+    const res = this.findItemInRoom(tokens);
+    if (res.missing) {
+      if (res.inInv) {
+        this.print(`You're already carrying the ${res.inInv.name}.`);
+      } else {
+        this.print(`There's no "${res.phrase}" here to take.`);
+      }
+      this.onCommandEnd();
+      return;
+    }
+    const it = res.item;
+    this.currentRoom.items = this.currentRoom.items.filter(x => x !== it);
+    this.inventory.push(it);
+    this.itemsFound++;
+    this.print(`You pick up the ${it.name}.`);
+    this.onCommandEnd();
+  }
+
+  cmdDrop(tokens) {
+    const phrase = tokens.slice(1).join(" ");
+    const it = this.inventory.find(x => this.fuzzyMatch(phrase, x.name));
+    if (!it) {
+      this.print(`You aren't carrying anything that matches "${phrase || "?"}."`);
+      this.onCommandEnd();
+      return;
+    }
+    this.inventory = this.inventory.filter(x => x !== it);
+    this.currentRoom.items.push(it);
+    this.print(`You set the ${it.name} down on the floor.`);
+    this.onCommandEnd();
+  }
+
+  cmdUse(tokens) {
+    const phrase = tokens.slice(1).join(" ");
+    const it = this.inventory.find(x => this.fuzzyMatch(phrase, x.name));
+    if (!it) {
+      const inRoom = this.currentRoom.items.find(x => this.fuzzyMatch(phrase, x.name));
+      if (inRoom && inRoom.id === "lever") {
+        this.useLever();
+        this.onCommandEnd();
+        return;
+      }
+      this.print(`You don't have anything to use that matches "${phrase || "?"}." (Try 'take' first.)`);
+      this.onCommandEnd();
+      return;
+    }
+    switch (it.id) {
+      case "lever":
+        this.useLever();
+        break;
+      case "torch":
+        this.print("You strike the torch. It flares to life, casting long amber shadows across the walls. The dark feels a little less personal now.");
+        break;
+      case "rustedKey":
+        this.print("You turn the rusted key over in your hand. It's too small to use on your own belt — it fits a lock, not a pocket.");
+        break;
+      case "goldenCoin":
+        this.print("You hold the golden coin up to the light. Warm, heavy, and unmistakably valuable. Best kept close.");
+        break;
+      case "ancientScroll":
+        this.print("You unroll the ancient scroll carefully. 'To whoever found this — you are the neighborhood's luckiest. Go enjoy the garden.'");
+        break;
+      default:
+        this.print(`Using the ${it.name} achieves nothing.`);
+    }
+    this.onCommandEnd();
+  }
+
+  useLever() {
+    if (this.leverPulled) {
+      this.print("The lever is already pulled. It grinds uselessly against its stop.");
+      return;
+    }
+    this.leverPulled = true;
+    const secretExit = this.rooms.get("library").exits.west;
+    secretExit.locked = false;
+    this.print("You yank the lever with both hands. Deep below the floor, a heavy mechanism groans and locks into place.");
+    this.print("A section of the western wall slides open, revealing a narrow passage into a hidden chamber.");
+  }
+
+  cmdGo(first, tokens) {
+    let dir = null;
+    if (this.isDirection(first)) {
+      dir = this.resolveDirection(first);
+    } else if (tokens.length > 1) {
+      dir = this.resolveDirection(tokens[1]);
+    }
+    if (!dir) {
+      this.print("Go where? You can head north, south, east, or west.");
+      this.onCommandEnd();
+      return;
+    }
+    const exit = this.currentRoom.exits[dir];
+    if (!exit) {
+      if (dir === "west" && this.currentRoom.id === "library" && !this.leverPulled) {
+        this.print("The western wall is solid stone. Or so it looks. Maybe a mechanism somewhere opens it.");
+      } else {
+        this.print(`There's no way to go ${dir} from here.`);
+      }
+      this.onCommandEnd();
+      return;
+    }
+    if (exit.locked) {
+      if (exit.keyItem) {
+        const key = this.items[exit.keyItem];
+        if (this.inventory.includes(key)) {
+          exit.locked = false;
+          this.keyUsed = true;
+          this.print(exit.unlockText);
+          this.moveTo(exit.to);
+        } else {
+          this.print(exit.lockedText);
+          this.print("You'll need a key.");
+        }
+      } else {
+        this.print(exit.lockedText);
+      }
+      this.onCommandEnd();
+      return;
+    }
+    this.moveTo(exit.to);
+  }
+
+  moveTo(roomId) {
+    const room = this.rooms.get(roomId);
+    this.currentRoom = room;
+    this.moves++;
+    const firstVisit = !this.visited.has(roomId);
+    this.visited.add(roomId);
+    if (firstVisit) {
+      this.describeRoom();
+    } else {
+      this.print(`— ${room.name} (you've been here before) —`);
+      this.print(`Exits: ${Object.keys(room.exits).filter(d => !(room.exits[d].secret && room.exits[d].locked)).join(", ")}.`);
+    }
+    if (roomId === "garden" && !this.gardenReached) {
+      this.gardenReached = true;
+      this.print("");
+      this.print("★ CONGRATULATIONS ★");
+      this.print(`You escaped the Local Dungeon in ${this.moves} moves, having found ${this.itemsFound} item${this.itemsFound === 1 ? "" : "s"}.`);
+      this.print("The wildflowers hum. You can keep exploring, or head home a legend.");
+    }
+    this.onCommandEnd();
+  }
+
+  fuzzyMatch(phrase, name) {
+    phrase = phrase.toLowerCase();
+    name = name.toLowerCase();
+    if (name === phrase) return true;
+    if (name.includes(phrase) || phrase.includes(name)) return true;
+    // word-level match: every word in phrase appears in name
+    const words = phrase.split(/\s+/).filter(w => w && w !== "the" && w !== "a" && w !== "an");
+    if (words.length > 0 && words.every(w => name.includes(w))) return true;
+    return false;
+  }
+
+  // ---------- UI hooks (wired up by App) ----------
+  onCommandEnd() {
+    if (this.onEnd) this.onEnd();
+  }
+}
+
+// ================= App / UI layer =================
+class App {
+  constructor() {
+    this.game = new GameEngine();
+    this.consoleEl = document.getElementById("console");
+    this.inputEl = document.getElementById("cmdInput");
+    this.skipBtn = document.getElementById("skipBtn");
+    this.resetBtn = document.getElementById("resetBtn");
+    this.movesEl = document.getElementById("movesCount");
+    this.itemsEl = document.getElementById("itemsCount");
+    this.invEl = document.getElementById("invList");
+
+    this.history = [];
+    this.historyIndex = -1;
+    this.typing = false;
+    this.skipRequested = false;
+    this.typeQueue = [];
+
+    this.game.out = (text, cls) => this.queuePrint(text, cls);
+    this.game.onEnd = () => this.updateSidebar();
+
+    this.bindEvents();
+    this.reset(true);
+  }
+
+  bindEvents() {
+    this.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const v = this.inputEl.value;
+        this.inputEl.value = "";
+        this.historyIndex = -1;
+        if (v.trim()) {
+          this.history.push(v);
+          this.game.handle(v);
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (this.history.length === 0) return;
+        this.historyIndex = this.historyIndex === -1 ? this.history.length - 1 : Math.max(0, this.historyIndex - 1);
+        this.inputEl.value = this.history[this.historyIndex];
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (this.historyIndex === -1) return;
+        this.historyIndex++;
+        if (this.historyIndex >= this.history.length) {
+          this.historyIndex = -1;
+          this.inputEl.value = "";
+        } else {
+          this.inputEl.value = this.history[this.historyIndex];
+        }
+      }
+    });
+
+    this.consoleEl.addEventListener("click", () => this.inputEl.focus());
+    this.skipBtn.addEventListener("click", () => { this.skipRequested = true; });
+    this.consoleEl.addEventListener("click", () => { this.skipRequested = true; }, { passive: true });
+    this.resetBtn.addEventListener("click", () => this.reset(false));
+  }
+
+  queuePrint(text, cls) {
+    this.typeQueue.push({ text, cls });
+    if (!this.typing) this.processQueue();
+  }
+
+  processQueue() {
+    if (this.typeQueue.length === 0) {
+      this.typing = false;
+      this.skipRequested = false;
+      this.removeCursor();
+      this.inputEl.focus();
+      this.updateSidebar();
+      return;
+    }
+    this.typing = true;
+    const { text, cls } = this.typeQueue.shift();
+    const line = document.createElement("div");
+    line.className = "line " + cls;
+    this.consoleEl.appendChild(line);
+
+    const cursor = document.createElement("span");
+    cursor.className = "cursor";
+    cursor.style.height = "1em";
+    cursor.style.verticalAlign = "text-bottom";
+
+    let i = 0;
+    const speed = 12; // ms per char
+
+    const tick = () => {
+      if (this.skipRequested) {
+        line.textContent = text;
+        this.removeCursor();
+        this.autoScroll();
+        setTimeout(() => this.processQueue(), 40);
+        return;
+      }
+      if (i < text.length) {
+        // Append a chunk
+        const chunk = text.slice(i, i + 2);
+        line.textContent = text.slice(0, i + 2);
+        line.appendChild(cursor);
+        i += 2;
+        this.autoScroll();
+        setTimeout(tick, speed);
+      } else {
+        this.removeCursor();
+        this.autoScroll();
+        setTimeout(() => this.processQueue(), 60);
+      }
+    };
+
+    line.appendChild(cursor);
+    tick();
+  }
+
+  removeCursor() {
+    const c = this.consoleEl.querySelector(".cursor");
+    if (c) c.remove();
+  }
+
+  autoScroll() {
+    this.consoleEl.scrollTop = this.consoleEl.scrollHeight;
+  }
+
+  updateSidebar() {
+    this.movesEl.textContent = this.game.moves;
+    this.itemsEl.textContent = this.game.itemsFound;
+    this.invEl.innerHTML = "";
+    if (this.game.inventory.length === 0) {
+      const li = document.createElement("li");
+      li.className = "inv-empty";
+      li.textContent = "Inventory is empty.";
+      this.invEl.appendChild(li);
+    } else {
+      this.game.inventory.forEach(it => {
+        const li = document.createElement("li");
+        li.innerHTML = ITEM_SVG;
+        const span = document.createElement("span");
+        span.textContent = it.name;
+        li.appendChild(span);
+        this.invEl.appendChild(li);
+      });
+    }
+  }
+
+  reset(silent) {
+    this.game.reset();
+    this.history = [];
+    this.historyIndex = -1;
+    this.typeQueue = [];
+    this.typing = false;
+    this.skipRequested = false;
+    this.consoleEl.innerHTML = "";
+
+    if (!silent) {
+      this.queuePrint("The game has been reset. The dungeon groans, rearranging itself behind you.", "system");
+    }
+    this.queuePrint("═══════════════════════════════════════", "system");
+    this.queuePrint("  THE LOCAL DUNGEON — a text adventure", "system");
+    this.queuePrint("═══════════════════════════════════════", "system");
+    this.queuePrint("You squeeze through a loose grate in the pavement of Elm Street and descend a spiral of cold stone steps. Your flashlight beam catches brick walls sweating condensation.");
+    this.queuePrint("Type 'help' to see the available commands, or just start with 'look'.");
+    this.game.describeRoom();
+    this.updateSidebar();
+    this.inputEl.focus();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => { new App(); });
+</script>
+</body>
+</html>

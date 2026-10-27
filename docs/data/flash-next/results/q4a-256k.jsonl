@@ -1,0 +1,14 @@
+{"ts": "2026-10-23T01:06:46Z", "label": "q4a-256k", "test": "prompt", "target_tokens": 32768, "prompt_tokens": 31833, "ttft_s": 20.181, "prefill_tps": 1577.4, "decode_tps": 55.57}
+{"ts": "2026-10-23T01:07:23Z", "label": "q4a-256k", "test": "prompt", "target_tokens": 65536, "prompt_tokens": 63687, "ttft_s": 33.066, "prefill_tps": 1926.1, "decode_tps": 64.54}
+{"ts": "2026-10-23T01:08:41Z", "label": "q4a-256k", "test": "prompt", "target_tokens": 131072, "prompt_tokens": 127208, "ttft_s": 67.099, "prefill_tps": 1895.8, "decode_tps": 58.97}
+{"ts": "2026-10-23T01:10:52Z", "label": "q4a-256k", "test": "prompt", "target_tokens": 200000, "prompt_tokens": 194108, "ttft_s": 106.981, "prefill_tps": 1814.4, "decode_tps": 57.07}
+{"ts": "2026-10-23T01:13:50Z", "label": "q4a-256k", "test": "prompt", "target_tokens": 250000, "prompt_tokens": 242697, "ttft_s": 139.782, "prefill_tps": 1736.3, "decode_tps": 60.76}
+{"ts": "2026-10-23T01:14:26Z", "label": "q4a-256k", "test": "needle", "target_tokens": 64000, "depth": 0.1, "expected": "170971", "ok": true, "prompt_tokens": 62108, "ttft_s": 33.205, "answer": "170971"}
+{"ts": "2026-10-23T01:15:02Z", "label": "q4a-256k", "test": "needle", "target_tokens": 64000, "depth": 0.5, "expected": "533678", "ok": true, "prompt_tokens": 62108, "ttft_s": 33.227, "answer": "533678"}
+{"ts": "2026-10-23T01:15:31Z", "label": "q4a-256k", "test": "needle", "target_tokens": 64000, "depth": 0.9, "expected": "490291", "ok": true, "prompt_tokens": 62108, "ttft_s": 26.494, "answer": "490291"}
+{"ts": "2026-10-23T01:16:48Z", "label": "q4a-256k", "test": "needle", "target_tokens": 128000, "depth": 0.1, "expected": "881187", "ok": true, "prompt_tokens": 124350, "ttft_s": 67.26, "answer": "881187"}
+{"ts": "2026-10-23T01:18:05Z", "label": "q4a-256k", "test": "needle", "target_tokens": 128000, "depth": 0.5, "expected": "355995", "ok": true, "prompt_tokens": 124350, "ttft_s": 67.201, "answer": "355995"}
+{"ts": "2026-10-23T01:19:15Z", "label": "q4a-256k", "test": "needle", "target_tokens": 128000, "depth": 0.9, "expected": "609914", "ok": true, "prompt_tokens": 124350, "ttft_s": 60.612, "answer": "609914"}
+{"ts": "2026-10-23T01:22:12Z", "label": "q4a-256k", "test": "needle", "target_tokens": 250000, "depth": 0.1, "expected": "160619", "ok": true, "prompt_tokens": 242715, "ttft_s": 140.487, "answer": "160619"}
+{"ts": "2026-10-23T01:25:03Z", "label": "q4a-256k", "test": "needle", "target_tokens": 250000, "depth": 0.5, "expected": "545135", "ok": true, "prompt_tokens": 242715, "ttft_s": 133.624, "answer": "545135"}
+{"ts": "2026-10-23T01:27:54Z", "label": "q4a-256k", "test": "needle", "target_tokens": 250000, "depth": 0.9, "expected": "910965", "ok": true, "prompt_tokens": 242715, "ttft_s": 133.508, "answer": "910965"}

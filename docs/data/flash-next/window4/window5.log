@@ -1,0 +1,75 @@
+07:09:56Z window5 start
+07:09:56Z == stage par-t0-int8-mtp
+07:11:16Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8080/v1/chat/completions flash /srv/ai/var/flash-eval/w5/parity-t0-int8-mtp.json
+07:11:51Z   rc 0
+07:12:10Z == stage par-t0-fp16-mtp
+07:13:35Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8080/v1/chat/completions flash /srv/ai/var/flash-eval/w5/parity-t0-fp16-mtp.json
+07:14:09Z   rc 0
+07:14:22Z == stage par-t0-fp16-nospec
+07:14:27Z   server died
+07:14:40Z == ctl try np=2 ctx=98304 ncm=17
+07:15:21Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8081/v1/chat/completions x /srv/ai/var/flash-eval/w5/parity-lcpp-mtp.json
+07:15:26Z   rc 1
+07:15:26Z RUN scripts/lm-eval-run.sh flash-ctl-gsm8k http://127.0.0.1:8081/v1/chat/completions gsm8k 100 6144 2 'until=<|im_end|>'
+07:15:41Z   rc 1
+07:15:41Z   eval done dungeon-adventure-engine [1, 1, 1]
+07:15:41Z   eval done local-dungeon-web [1, 1, 1]
+07:15:41Z   eval done localmind-landing-page [1, 1, 1]
+07:15:41Z   eval done localmind-landing-page-pro [1, 1, 1]
+07:15:42Z   eval done logic-puzzle-reasoning [1, 1, 1]
+07:15:42Z RUN python3 evals/dungeon-adventure-engine/check.py
+07:15:43Z   rc 0
+07:15:43Z RUN python3 scripts/eval-summary.py --test dungeon-adventure-engine
+07:15:43Z   rc 0
+07:15:43Z RUN python3 evals/local-dungeon-web/check.py
+07:15:43Z   rc 0
+07:15:43Z RUN python3 scripts/eval-summary.py --test local-dungeon-web
+07:15:43Z   rc 0
+07:15:43Z RUN python3 evals/localmind-landing-page/check.py
+07:15:43Z   rc 0
+07:15:43Z RUN python3 scripts/eval-summary.py --test localmind-landing-page
+07:15:43Z   rc 0
+07:15:43Z RUN python3 evals/localmind-landing-page-pro/check.py
+07:15:43Z   rc 0
+07:15:43Z RUN python3 scripts/eval-summary.py --test localmind-landing-page-pro
+07:15:43Z   rc 0
+07:15:43Z RUN python3 evals/logic-puzzle-reasoning/check.py
+07:15:43Z   rc 0
+07:15:43Z RUN python3 scripts/eval-summary.py --test logic-puzzle-reasoning
+07:15:43Z   rc 0
+07:15:56Z WINDOW5_DONE
+07:17:24Z window5 start
+07:17:24Z == stage par-t0-fp16-spec2
+07:19:04Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8080/v1/chat/completions flash /srv/ai/var/flash-eval/w5/parity-t0-fp16-spec2.json
+07:19:44Z   rc 0
+07:20:00Z == ctl try np=2 ctx=65536 ncm=18
+07:20:43Z RUN python3 /srv/ai/var/flash-eval/parity.py http://127.0.0.1:8081/v1/chat/completions x /srv/ai/var/flash-eval/w5/parity-lcpp-mtp.json
+07:22:01Z   rc 0
+07:22:01Z RUN scripts/lm-eval-run.sh flash-ctl-gsm8k http://127.0.0.1:8081/v1/chat/completions gsm8k 100 6144 2 'until=<|im_end|>'
+08:00:43Z   rc 0
+08:10:39Z   eval done dungeon-adventure-engine [0, 0, 0]
+08:27:57Z   eval done local-dungeon-web [0, 0, 0]
+08:43:22Z   eval done localmind-landing-page [0, 0, 0]
+09:04:58Z   eval done localmind-landing-page-pro [0, 0, 0]
+09:19:50Z   eval done logic-puzzle-reasoning [0, 0, 0]
+09:19:50Z RUN python3 evals/dungeon-adventure-engine/check.py
+09:19:52Z   rc 0
+09:19:52Z RUN python3 scripts/eval-summary.py --test dungeon-adventure-engine
+09:19:52Z   rc 0
+09:19:52Z RUN python3 evals/local-dungeon-web/check.py
+09:19:52Z   rc 0
+09:19:52Z RUN python3 scripts/eval-summary.py --test local-dungeon-web
+09:19:52Z   rc 0
+09:19:52Z RUN python3 evals/localmind-landing-page/check.py
+09:19:52Z   rc 0
+09:19:52Z RUN python3 scripts/eval-summary.py --test localmind-landing-page
+09:19:52Z   rc 0
+09:19:52Z RUN python3 evals/localmind-landing-page-pro/check.py
+09:19:52Z   rc 0
+09:19:52Z RUN python3 scripts/eval-summary.py --test localmind-landing-page-pro
+09:19:52Z   rc 0
+09:19:52Z RUN python3 evals/logic-puzzle-reasoning/check.py
+09:19:52Z   rc 0
+09:19:52Z RUN python3 scripts/eval-summary.py --test logic-puzzle-reasoning
+09:19:52Z   rc 0
+09:20:05Z WINDOW5_DONE

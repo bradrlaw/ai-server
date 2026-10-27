@@ -1,0 +1,5 @@
+{"ts": "2026-10-23T03:13:47Z", "label": "q4a-512k", "test": "prompt", "target_tokens": 262144, "prompt_tokens": 254410, "ttft_s": 151.729, "prefill_tps": 1676.7, "decode_tps": 54.24}
+{"ts": "2026-10-23T03:19:28Z", "label": "q4a-512k", "test": "prompt", "target_tokens": 393216, "prompt_tokens": 381602, "ttft_s": 251.768, "prefill_tps": 1515.7, "decode_tps": 59.67}
+{"ts": "2026-10-23T03:27:41Z", "label": "q4a-512k", "test": "prompt", "target_tokens": 500000, "prompt_tokens": 485262, "ttft_s": 349.031, "prefill_tps": 1390.3, "decode_tps": 59.04}
+{"ts": "2026-10-23T04:14:31Z", "label": "q4a-512k", "test": "speed", "kind": "short", "decode_tps_median": 71.78, "decode_tps_all": [73.29, 71.78, 60.36], "ttft_median": 0.36}
+{"ts": "2026-10-23T04:14:44Z", "label": "q4a-512k", "test": "speed", "kind": "code", "decode_tps_median": 93.76, "decode_tps_all": [81.75, 93.76, 96.73], "ttft_median": 0.09}

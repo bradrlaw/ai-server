@@ -1,0 +1,44 @@
+[
+ {
+  "case": "color",
+  "pass": true,
+  "sec": 2.5,
+  "answer": "Red",
+  "ptok": 88
+ },
+ {
+  "case": "ocr",
+  "pass": true,
+  "sec": 3.0,
+  "answer": "INVOICE 4417\nTOTAL $82.50",
+  "ptok": 142
+ },
+ {
+  "case": "count",
+  "pass": true,
+  "sec": 4.0,
+  "answer": "Looking at the image:\n\n- There are **two blue circles** on the left side.\n- On the right, there is a **green square**, which is not a circle.\n\n\u2705 So, the total number of **circles** is **2**, and they are both **blue**.\n\n---\n\n**Answer:**  \nThere are **2 circles**, and they are **blue**.",
+  "ptok": 154
+ },
+ {
+  "case": "chart",
+  "pass": true,
+  "sec": 3.2,
+  "answer": "B",
+  "ptok": 178
+ },
+ {
+  "case": "two-images",
+  "pass": true,
+  "sec": 3.7,
+  "answer": "Based on the visual information from the two images provided, we can determine their dominant colors.\n\n- The first image is a solid, uniform field of color. This color is clearly identifiable as red.\n- The second image is also a solid, uniform field of color. This color is clearly identifiable as bl",
+  "ptok": 157
+ },
+ {
+  "case": "long-ctx",
+  "pass": true,
+  "sec": 32.6,
+  "answer": "The passphrase for the blue door is TANGERINE-4471. The attached image is red.",
+  "ptok": 46997
+ }
+]

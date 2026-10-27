@@ -9,13 +9,27 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Weights | Objective | Decode t/s | TTFT | Compl. tok | Output | MTP | Finish |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
 | `chat` | Qwen3.6-35B-A3B-UD-Q6_K.gguf | 41/41 | 127.7 | 1212 ms | 11256 | 37613 B | on 86% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 42.6 | 1416 ms | 10438 | 33332 B | on 85% | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 41.2 | 1416 ms | 11979 | 33967 B | on 81% | stop |
 | `coding` | Qwen3.6-27B-Q6_K.gguf | 41/41 | 40.8 | 1222 ms | 13374 | 45599 B | on 82% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 41/41 | 40.7 | 1534 ms | 11037 | 30929 B | on 76% | stop |
 | `big-q8` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 41/41 | 39.7 | 1487 ms | 12347 | 33379 B | on 80% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 34.2 | 115 ms | 11476 | 37009 B | on 78% | stop |
 | `coding` | Qwen3.8-27B-Q6_K.gguf | 41/41 | 33.8 | 1251 ms | 16372 | 29847 B | on 62% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 29.4 | 179 ms | 11963 | 36093 B | on 66% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 29.2 | 8970 ms | 11741 | 31973 B | on 71% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 28.0 | 55 ms | 11003 | 35922 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 41/41 | 20.9 | 14055 ms | 15859 | 41169 B | on 70% | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 16.5 | 9204 ms | 11645 | 34474 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-Q8_0-00001-of-00006.gguf | 41/41 | 16.3 | 89 ms | 12100 | 40201 B | off | stop |
+| `big` | big (Copilot CLI) | 41/41 | — | — | — | 33928 B | off | stop |
 | `coding` | coding (Copilot CLI) | 41/41 | — | — | — | 28592 B | off | stop |
+| `flash` | flash (Copilot CLI) | 41/41 | — | — | — | 39609 B | off | stop |
+| `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 40/41 | 43.2 | 1416 ms | 9578 | 31218 B | on 87% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 40/41 | 22.3 | 14070 ms | 13640 | 39223 B | on 75% | stop |
 | `fast` | gemma-4-12B-it-qat-UD-Q4_K_XL.gguf | 40/41 | 18.2 | 5443 ms | 5107 | 18687 B | off | stop |
 | `chat` | chat (Copilot CLI) | 39/41 | — | — | — | 34849 B | off | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 38/41 | 27.9 | 4188 ms | 10796 | 32745 B | off | stop |
 | `fast` | fast (Copilot CLI) | 38/41 | — | — | — | 20747 B | off | stop |
 
 ## Design quality (manual, 0–5 each; subtotal /25)
@@ -23,16 +37,30 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | Model | Architecture | Completeness | Parser robustness | Interaction/UX | Visual polish | Design | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `chat` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big-q8` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
 | `coding` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
+| `big` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 | `chat` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
 
 Axes (see this test's `README.md` for what each measures): Architecture, Completeness, Parser robustness, Interaction/UX, Visual polish.
 `·` = not yet scored.
 
-_Last generated 2026-08-16T04:36:37+00:00._
+_Last generated 2026-10-24T19:14:03+00:00._

@@ -1,0 +1,65 @@
+{
+  "test": "dungeon-adventure-engine",
+  "model_slot": "flash",
+  "label": "flash-q4a-r1",
+  "model_name": "Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "strata v0.2.2 UD-Q4_K_XL 2xV100 layer-split24 spec4 tail_skip0 effort=medium",
+  "usage": {
+    "prompt_tokens": 832,
+    "completion_tokens": 7656,
+    "total_tokens": 8488,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 262.1,
+    "ttft_ms": 4365.8,
+    "prefill_tps": 190.6,
+    "decode_tps": 29.8,
+    "prompt_tokens": 832,
+    "predicted_tokens": 7656,
+    "prefill_ms": 4365.8,
+    "decode_ms": 257316.3
+  },
+  "mtp": {
+    "draft_n": 238,
+    "draft_n_accepted": 160,
+    "accept_rate": 0.672,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 832,
+    "prompt_ms": 4365.8,
+    "prompt_per_token_ms": 5.247,
+    "prompt_per_second": 190.6,
+    "predicted_n": 7656,
+    "predicted_ms": 257316.3,
+    "predicted_per_token_ms": 33.61,
+    "predicted_per_second": 29.8,
+    "draft_n": 238,
+    "draft_n_accepted": 160
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "output.py",
+  "output_bytes": 29849,
+  "reasoning_bytes": 3167,
+  "wall_secs": 262.1,
+  "created_utc": "2026-10-23T02:32:42+00:00"
+}

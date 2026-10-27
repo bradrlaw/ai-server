@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMind — Run AI Locally. Own Your Data.</title>
+<style>
+  :root {
+    --bg-0: #07070a;
+    --bg-1: #0b0b10;
+    --bg-2: #12121a;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --purple: #7c5cfc;
+    --teal: #00d4aa;
+    --text: #fafafa;
+    --muted: #71717a;
+    --muted-2: #a1a1aa;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg-0);
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1.625;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(124,92,252,0.4); }
+
+  a { color: var(--muted-2); text-decoration: none; position: relative; }
+  a::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: -3px;
+    width: 100%;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.28s ease;
+  }
+  a:hover { color: var(--text); }
+  a:hover::after { transform: scaleX(1); }
+
+  .container {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ============ BUTTONS ============ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    white-space: nowrap;
+  }
+  .btn:hover { transform: scale(1.03); }
+  .btn:active { transform: scale(0.98); }
+
+  .btn-primary {
+    background: var(--purple);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(124,92,252,0.35);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 8px 32px rgba(124,92,252,0.55);
+    background: #8d70ff;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+  .btn-outline:hover {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgba(124,92,252,0.15), 0 6px 24px rgba(0,0,0,0.4);
+  }
+
+  .btn-teal {
+    background: var(--teal);
+    color: #04241c;
+    box-shadow: 0 4px 20px rgba(0,212,170,0.3);
+  }
+  .btn-teal:hover { box-shadow: 0 8px 32px rgba(0,212,170,0.5); background: #17e3bb; }
+
+  /* ============ NAV ============ */
+  .nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    transition: background 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease;
+    border-bottom: 1px solid transparent;
+  }
+  .nav.scrolled {
+    background: rgba(7,7,10,0.72);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom-color: var(--border);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .logo::after { display: none; }
+  .logo-mark {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--teal));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 12px rgba(124,92,252,0.4);
+  }
+  .logo-mark svg { width: 17px; height: 17px; }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+  }
+  .nav-links a {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted);
+    transition: color 0.2s ease;
+  }
+  .nav-links a:hover, .nav-links a.active { color: var(--text); }
+  .nav-links a.active::after { transform: scaleX(1); background: var(--purple); }
+  .nav-cta { display: none; }
+
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 42px; height: 42px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    gap: 5px;
+    transition: border-color 0.2s ease;
+  }
+  .hamburger:hover { border-color: var(--border-strong); }
+  .hamburger span {
+    display: block;
+    width: 18px; height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.25s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(7,7,10,0.97);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .mobile-menu.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .mobile-menu a {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
+    padding: 12px 24px;
+    letter-spacing: -0.01em;
+  }
+  .mobile-menu a:hover { color: var(--purple); }
+  .mobile-menu .btn { margin-top: 20px; font-size: 1rem; }
+
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #heroCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(7,7,10,0.9) 0%, transparent 70%),
+                radial-gradient(ellipse 70% 50% at 50% 0%, rgba(7,7,10,0.5) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 120px 20px 80px;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 6px 16px;
+    margin-bottom: 28px;
+    background: rgba(18,18,26,0.6);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  .hero-badge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+    animation: pulseDot 2.2s ease-in-out infinite;
+  }
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin-bottom: 24px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(100deg, var(--purple) 10%, var(--teal) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero p {
+    font-size: clamp(1.0625rem, 2vw, 1.25rem);
+    color: var(--muted-2);
+    max-width: 580px;
+    margin: 0 auto 40px;
+    line-height: 1.6;
+  }
+  .hero-ctas {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .hero-ctas .btn { padding: 14px 28px; font-size: 1rem; }
+  .hero-stats {
+    display: flex;
+    gap: 36px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 56px;
+  }
+  .hero-stat { text-align: center; }
+  .hero-stat .num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--text), var(--muted-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero-stat .lbl {
+    font-size: 0.8125rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ============ SECTIONS ============ */
+  section { padding: 88px 0; }
+  .section-head {
+    text-align: center;
+    max-width: 640px;
+    margin: 0 auto 56px;
+  }
+  .section-eyebrow {
+    display: inline-block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--purple);
+    margin-bottom: 14px;
+  }
+  .section-head h2 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    letter-spacing: -0.03em;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+  .section-head p {
+    color: var(--muted);
+    font-size: 1.0625rem;
+  }
+
+  /* Fade-up entrance */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+  /* ============ FEATURES ============ */
+  .features { background: var(--bg-1); }
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 30px 28px;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  }
+  .feature-card:hover {
+    border-color: rgba(124,92,252,0.55);
+    box-shadow: 0 0 0 1px rgba(124,92,252,0.25), 0 8px 40px rgba(124,92,252,0.12);
+    transform: translateY(-2px);
+  }
+  .feature-icon {
+    width: 46px; height: 46px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    background: rgba(124,92,252,0.12);
+    border: 1px solid rgba(124,92,252,0.25);
+  }
+  .feature-icon svg { width: 22px; height: 22px; }
+  .feature-icon.teal { background: rgba(0,212,170,0.1); border-color: rgba(0,212,170,0.25); }
+  .feature-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .feature-card p {
+    font-size: 0.9375rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ============ HOW IT WORKS ============ */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    position: relative;
+  }
+  .step {
+    display: flex;
+    gap: 22px;
+    align-items: flex-start;
+    position: relative;
+    padding-bottom: 48px;
+  }
+  .step:last-child { padding-bottom: 0; }
+  .step-line-v {
+    position: absolute;
+    left: 29px;
+    top: 64px;
+    bottom: 8px;
+    width: 2px;
+    background: linear-gradient(to bottom, rgba(124,92,252,0.5), rgba(0,212,170,0.35));
+  }
+  .step:last-child .step-line-v { display: none; }
+  .step-num {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.375rem;
+    font-weight: 700;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--purple);
+    box-shadow: 0 0 24px rgba(124,92,252,0.15), inset 0 0 12px rgba(124,92,252,0.08);
+    position: relative;
+    z-index: 1;
+  }
+  .step:nth-child(3) .step-num { color: var(--teal); box-shadow: 0 0 24px rgba(0,212,170,0.15), inset 0 0 12px rgba(0,212,170,0.08); }
+  .step-body h3 {
+    font-size: 1.1875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 12px 0 8px;
+  }
+  .step-body p { color: var(--muted); font-size: 0.9375rem; max-width: 340px; }
+
+  /* ============ PRICING ============ */
+  .pricing { background: var(--bg-1); }
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+    align-items: stretch;
+  }
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 34px 28px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .price-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  .price-card.popular {
+    border-color: rgba(124,92,252,0.6);
+    box-shadow: 0 0 0 1px rgba(124,92,252,0.3), 0 0 48px rgba(124,92,252,0.18);
+  }
+  .price-card.popular:hover {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 1px rgba(124,92,252,0.5), 0 0 64px rgba(124,92,252,0.28), 0 12px 40px rgba(0,0,0,0.45);
+  }
+  .pop-badge {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, var(--purple), #9d7fff);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 999px;
+    box-shadow: 0 4px 16px rgba(124,92,252,0.45);
+    white-space: nowrap;
+  }
+  .tier-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--muted-2);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.8125rem;
+  }
+  .price {
+    font-size: 2.75rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 12px 0 4px;
+  }
+  .price .per { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .tier-pitch {
+    color: var(--muted);
+    font-size: 0.9375rem;
+    margin-bottom: 26px;
+    min-height: 44px;
+  }
+  .tier-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 30px;
+    flex: 1;
+  }
+  .tier-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9375rem;
+    color: var(--muted-2);
+  }
+  .tier-features svg {
+    width: 17px; height: 17px;
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--teal);
+  }
+  .price-card .btn { width: 100%; }
+
+  /* ============ TERMINAL DEMO ============ */
+  .terminal-wrap { max-width: 720px; margin: 0 auto; }
+  .terminal {
+    background: #0c0c12;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 48px rgba(124,92,252,0.08);
+  }
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .term-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .term-dot.r { background: #ff5f57; }
+  .term-dot.y { background: #febc2e; }
+  .term-dot.g { background: #28c840; }
+  .term-title {
+    margin-left: 10px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .term-body {
+    padding: 24px 20px;
+    font-family: var(--mono);
+    font-size: 0.875rem;
+    line-height: 1.65;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 300px;
+  }
+  .msg { display: flex; flex-direction: column; gap: 4px; }
+  .msg .who {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .msg.user .who { color: var(--purple); }
+  .msg.ai .who { color: var(--teal); }
+  .msg .text { color: var(--muted-2); }
+  .msg .text .hl { color: var(--text); }
+  .msg .text .cmd { color: var(--teal); }
+  .typing {
+    display: inline-flex;
+    gap: 5px;
+    padding: 8px 0;
+  }
+  .typing i {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+    animation: bounceDot 1.2s ease-in-out infinite;
+  }
+  .typing i:nth-child(2) { animation-delay: 0.15s; }
+  .typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounceDot {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+  .term-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+  .term-input .prompt { color: var(--purple); font-weight: 700; }
+  .term-input .placeholder { flex: 1; opacity: 0.7; }
+  .term-input .cursor {
+    display: inline-block;
+    width: 8px; height: 15px;
+    background: var(--muted);
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ============ TESTIMONIALS ============ */
+  .testimonials { background: var(--bg-1); }
+  .testi-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .testi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+  }
+  .testi-card:hover {
+    border-color: rgba(0,212,170,0.45);
+    transform: translateY(-2px);
+  }
+  .testi-quote {
+    font-size: 0.9688rem;
+    color: var(--muted-2);
+    line-height: 1.65;
+    flex: 1;
+  }
+  .testi-quote::before { content: '“'; color: var(--teal); font-weight: 700; margin-right: 2px; }
+  .testi-quote::after { content: '”'; color: var(--teal); font-weight: 700; margin-left: 2px; }
+  .testi-person { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+  }
+  .avatar.a1 { background: linear-gradient(135deg, #7c5cfc, #b98aff); }
+  .avatar.a2 { background: linear-gradient(135deg, #00d4aa, #38bdf8); }
+  .avatar.a3 { background: linear-gradient(135deg, #7c5cfc, #00d4aa); }
+  .testi-name { font-size: 0.9375rem; font-weight: 600; }
+  .testi-role { font-size: 0.8125rem; color: var(--muted); }
+
+  /* ============ FAQ ============ */
+  .faq-list {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .faq-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.25s ease;
+  }
+  .faq-item.open { border-color: rgba(124,92,252,0.45); }
+  .faq-q {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 19px 22px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .faq-q:hover { color: #c4b5fd; }
+  .faq-q .chev {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    color: var(--muted);
+    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), color 0.2s ease;
+  }
+  .faq-item.open .chev { transform: rotate(180deg); color: var(--purple); }
+  .faq-a {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1);
+  }
+  .faq-a-inner {
+    padding: 0 22px 20px;
+    color: var(--muted);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+  }
+
+  /* ============ CTA BANNER ============ */
+  .cta-banner {
+    position: relative;
+    padding: 96px 0;
+    background: linear-gradient(135deg, rgba(124,92,252,0.16) 0%, rgba(11,11,16,0.4) 45%, rgba(0,212,170,0.12) 100%), var(--bg-2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .cta-banner::before {
+    content: '';
+    position: absolute;
+    top: -120px; left: 50%;
+    transform: translateX(-50%);
+    width: 560px; height: 560px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,92,252,0.25) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .cta-inner { position: relative; text-align: center; }
+  .cta-inner h2 {
+    font-size: clamp(1.875rem, 4.5vw, 2.75rem);
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    line-height: 1.12;
+    margin-bottom: 14px;
+  }
+  .cta-inner p {
+    color: var(--muted-2);
+    max-width: 480px;
+    margin: 0 auto 34px;
+    font-size: 1.0625rem;
+  }
+  .waitlist-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+  .waitlist-form input {
+    flex: 1;
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    color: var(--text);
+    background: rgba(7,7,10,0.7);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 14px 18px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    width: 100%;
+  }
+  .waitlist-form input::placeholder { color: var(--muted); }
+  .waitlist-form input:focus {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgba(124,92,252,0.2);
+  }
+  .waitlist-form .btn { width: 100%; }
+  .waitlist-form .btn.done {
+    background: var(--teal);
+    color: #04241c;
+    box-shadow: 0 4px 24px rgba(0,212,170,0.4);
+    pointer-events: none;
+  }
+  .cta-note {
+    margin-top: 18px;
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 0 40px;
+    background: var(--bg-0);
+  }
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+  }
+  .footer-brand p {
+    color: var(--muted);
+    font-size: 0.875rem;
+    margin-top: 14px;
+    max-width: 260px;
+  }
+  .footer-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .footer-col h4 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .footer-col a { font-size: 0.875rem; color: var(--muted); }
+  .footer-col a:hover { color: var(--text); }
+  .footer-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+
+  /* ============ BREAKPOINTS ============ */
+  @media (min-width: 640px) {
+    .waitlist-form { flex-direction: row; }
+    .footer-cols { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (min-width: 768px) {
+    section { padding: 110px 0; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); gap: 22px; }
+    .testi-grid { grid-template-columns: repeat(3, 1fr); }
+    .steps {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+    .step { flex-direction: column; align-items: center; text-align: center; padding-bottom: 0; }
+    .step-body p { max-width: none; }
+    .step-line-v { display: none; }
+    .step-line-h {
+      position: absolute;
+      top: 29px;
+      left: calc(50% + 44px);
+      width: calc(100% - 88px + 32px);
+      height: 2px;
+      background: linear-gradient(to right, rgba(124,92,252,0.5), rgba(0,212,170,0.35));
+    }
+    .step:nth-child(2) .step-line-h {
+      background: linear-gradient(to right, rgba(124,92,252,0.5), rgba(0,212,170,0.5));
+    }
+    .step:last-child .step-line-h { display: none; }
+    .footer-bottom { flex-direction: row; justify-content: space-between; }
+  }
+
+  @media (min-width: 1024px) {
+    .nav-links { display: flex; }
+    .nav-cta { display: inline-flex; }
+    .hamburger { display: none; }
+    .pricing-grid { grid-template-columns: repeat(3, 1fr); }
+    .price-card.popular { transform: scale(1.03); }
+    .price-card.popular:hover { transform: scale(1.03) translateY(-4px); }
+  }
+
+  @media (max-width: 767px) {
+    .step-line-h { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <a href="#top" class="logo">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+          <circle cx="12" cy="12" r="3.2" fill="#fff" stroke="none"/>
+        </svg>
+      </span>
+      LocalMind
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features" class="nav-link">Features</a></li>
+      <li><a href="#how" class="nav-link">How It Works</a></li>
+      <li><a href="#pricing" class="nav-link">Pricing</a></li>
+      <li><a href="#faq" class="nav-link">FAQ</a></li>
+      <li><a href="#waitlist" class="btn btn-primary nav-cta">Get Early Access</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#features" class="mobile-link">Features</a>
+  <a href="#how" class="mobile-link">How It Works</a>
+  <a href="#pricing" class="mobile-link">Pricing</a>
+  <a href="#faq" class="mobile-link">FAQ</a>
+  <a href="#waitlist" class="btn btn-primary mobile-link">Get Early Access</a>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <canvas id="heroCanvas"></canvas>
+  <div class="hero-content">
+    <div class="hero-badge"><span class="dot"></span> v0.9 · macOS, Windows &amp; Linux</div>
+    <h1>Run AI Locally.<br><span class="grad">Own Your Data. No Limits.</span></h1>
+    <p>LocalMind puts production-grade large language models on your own hardware. Zero cloud, zero telemetry, zero per-token bills — just fast, private inference on the machine already sitting under your desk.</p>
+    <div class="hero-ctas">
+      <a href="#waitlist" class="btn btn-primary">Get Early Access</a>
+      <a href="#how" class="btn btn-outline">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">45 tok/s</div><div class="lbl">sustained on Apple M3</div></div>
+      <div class="hero-stat"><div class="num">128K</div><div class="lbl">context window support</div></div>
+      <div class="hero-stat"><div class="num">0 bytes</div><div class="lbl">sent to the cloud, ever</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ FEATURES ============ -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">Why LocalMind</span>
+      <h2>Full-stack LLMs, with none of the cloud tax</h2>
+      <p>Every capability you expect from a hosted API, delivered from silicon you control.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="5" width="14" height="14" rx="2"/>
+            <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+            <rect x="9" y="9" width="6" height="6" rx="1"/>
+          </svg>
+        </div>
+        <h3>Hardware-Aware Inference</h3>
+        <p>LocalMind auto-detects your GPU, NPU, and unified memory, then picks the optimal quantization and batch size. No config files, no YAML archaeology.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon teal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <h3>Air-Gapped by Design</h3>
+        <p>LocalMind opens no outbound sockets. Not for telemetry, not for "improving your experience." Your prompts stay in VRAM and nowhere else — verifiable with any network monitor.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M7 10l5 5 5-5"/>
+            <path d="M12 15V3"/>
+          </svg>
+        </div>
+        <h3>One-Click Model Library</h3>
+        <p>Browse, benchmark, and pull 40+ community models — Llama, Mistral, Phi, Gemma — with automatic GGUF conversion and memory-fit previews before download.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon teal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 17l6-6-6-6"/>
+            <path d="M12 19h8"/>
+          </svg>
+        </div>
+        <h3>Local API Endpoint</h3>
+        <p>Every model you load exposes an OpenAI-compatible endpoint at <span style="font-family:var(--mono);font-size:0.85em;color:var(--text)">localhost:8080</span>. Point your existing scripts, agents, and IDE plugins at it — no code changes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">How It Works</span>
+      <h2>From download to first token in under five minutes</h2>
+      <p>No cluster setup. No API keys. No DevOps interview.</p>
+    </div>
+    <div class="steps fade-up">
+      <div class="step">
+        <div class="step-line-v"></div>
+        <div class="step-line-h"></div>
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Install</h3>
+          <p>Download a single signed binary for macOS, Windows, or Linux. LocalMind detects your hardware and installs the right inference backend automatically.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-line-v"></div>
+        <div class="step-line-h"></div>
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Choose a Model</h3>
+          <p>Pick from the built-in library — or drop in any GGUF file. Live memory-fit estimates show exactly what will run at what speed before you commit.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-line-v"></div>
+        <div class="step-line-h"></div>
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Chat Locally</h3>
+          <p>Start a conversation in the built-in chat, or hit your local API from anything that speaks HTTP. Every token is generated on your machine.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">Pricing</span>
+      <h2>Paid for the app, never for the tokens</h2>
+      <p>Inference is free forever because it never leaves your hardware. You only pay for the tools that make it effortless.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card fade-up">
+        <div class="tier-name">Free</div>
+        <div class="price">$0<span class="per"> /forever</span></div>
+        <p class="tier-pitch">Everything you need to run a model and see why the cloud is optional.</p>
+        <ul class="tier-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Run up to 7B parameter models</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>10 curated models in the library</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Built-in chat interface</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Local API endpoint (localhost)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Community support on Discord</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-outline">Start Free</a>
+      </div>
+      <div class="price-card popular fade-up">
+        <div class="pop-badge">Most Popular</div>
+        <div class="tier-name">Pro</div>
+        <div class="price">$12<span class="per"> /month</span></div>
+        <p class="tier-pitch">For developers who want the full model catalog and serious throughput.</p>
+        <ul class="tier-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Everything in Free</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Run up to 70B parameter models</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Full 40+ model library</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Automatic GGUF conversion &amp; quantization</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Multi-model hot-swap &amp; benchmarking</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Priority support</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-primary">Get Pro Access</a>
+      </div>
+      <div class="price-card fade-up">
+        <div class="tier-name">Studio</div>
+        <div class="price">$29<span class="per"> /month</span></div>
+        <p class="tier-pitch">For teams and researchers shipping local inference into production.</p>
+        <ul class="tier-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Everything in Pro</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Up to 5 seats per license</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Lan-mode API for local networks</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Custom model fine-tune hosting</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Usage analytics (all on-device)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Slack channel with the core team</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-outline">Get Studio Access</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TERMINAL DEMO ============ -->
+<section id="demo">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">Live Demo</span>
+      <h2>What a local session looks like</h2>
+      <p>A real conversation shape — every token below was the kind LocalMind generates on your machine in real time.</p>
+    </div>
+    <div class="terminal-wrap fade-up">
+      <div class="terminal">
+        <div class="term-bar">
+          <span class="term-dot r"></span>
+          <span class="term-dot y"></span>
+          <span class="term-dot g"></span>
+          <span class="term-title">localmind — llama-3.1-8b-q4 · 42 tok/s</span>
+        </div>
+        <div class="term-body">
+          <div class="msg user">
+            <span class="who">you</span>
+            <span class="text">$ <span class="cmd">localmind run llama-3.1-8b-q4</span><br>Model loaded in 3.1s · 4.9 GB in VRAM · 0 bytes sent to cloud</span>
+          </div>
+          <div class="msg ai">
+            <span class="who">LocalMind</span>
+            <span class="text"><span class="hl">You're running Llama 3.1 8B at Q4_K_M on your M3 Max. Sustained throughput is tracking 42 tokens per second with 64K context headroom. Want me to summarize a document?</span></span>
+          </div>
+          <div class="msg user">
+            <span class="who">you</span>
+            <span class="text">Summarize my Q3 incident postmortems into a single risk brief for leadership.</span>
+          </div>
+          <div class="msg ai">
+            <span class="who">LocalMind</span>
+            <span class="typing"><i></i><i></i><i></i></span>
+          </div>
+        </div>
+        <div class="term-input">
+          <span class="prompt">❯</span>
+          <span class="placeholder">Ask anything — it never leaves this machine…</span>
+          <span class="cursor"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TESTIMONIALS ============ -->
+<section class="testimonials" id="testimonials">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">Early Access Users</span>
+      <h2>People who stopped renting their own intelligence</h2>
+      <p>From beta testers running LocalMind on everything from a 2019 MacBook to a rack of RTX 4090s.</p>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card fade-up">
+        <p class="testi-quote">I pointed our internal doc-search agent at LocalMind's localhost endpoint and deleted our $4,000/month API bill. Same queries, same latency, and now it works on the plane.</p>
+        <div class="testi-person">
+          <div class="avatar a1">JM</div>
+          <div>
+            <div class="testi-name">Julia Marsh</div>
+            <div class="testi-role">Staff Engineer, Fathom Systems</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card fade-up">
+        <p class="testi-quote">We're a law firm — client privilege isn't optional. LocalMind is the first time I've been able to use a serious LLM on sensitive files without a compliance committee involved.</p>
+        <div class="testi-person">
+          <div class="avatar a2">DK</div>
+          <div>
+            <div class="testi-name">David Kim</div>
+            <div class="testi-role">Managing Partner, Kim &amp; Associates</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card fade-up">
+        <p class="testi-quote">The memory-fit previews alone are worth it. I've stopped guessing whether a 70B model will fit — it just tells me, honestly, what speed to expect before I download a single byte.</p>
+        <div class="testi-person">
+          <div class="avatar a3">SR</div>
+          <div>
+            <div class="testi-name">Sofia Reyes</div>
+            <div class="testi-role">ML Researcher, OpenLab Collective</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section id="faq">
+  <div class="container">
+    <div class="section-head fade-up">
+      <span class="section-eyebrow">FAQ</span>
+      <h2>Questions we hear a lot</h2>
+      <p>If yours isn't here, the Discord has answers from people who run this daily.</p>
+    </div>
+    <div class="faq-list fade-up">
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          What hardware do I actually need to run a good model?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">A comfortable baseline is 16 GB of unified or system memory for 7B–8B models at Q4 quantization. An Apple M-series Mac, a PC with 32 GB RAM, or any machine with an 8 GB+ discrete GPU will run our recommended models. LocalMind shows you a live memory-fit estimate for every model before you download it, so you'll always know what will run and at what speed.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Is it really true that nothing is sent to the cloud?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Yes. LocalMind makes no outbound network connections during inference — no telemetry, no crash reports, no model updates pushed to you. The only time it touches the network is when you explicitly choose to download a model. You can verify this yourself: run LocalMind behind a firewall with no egress rules and it will work identically.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Can I use my own models, not just the ones in the library?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Absolutely. Drop any GGUF file into your LocalMind models folder (or use the "Import Model" button) and it appears in your library immediately. Pro users also get automatic conversion: bring a Hugging Face checkpoint in safetensors format and LocalMind quantizes it to the size that best fits your hardware.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          How is this different from just using Ollama?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Ollama is a great tool for developers who are happy living in the terminal. LocalMind is a full application: a curated model library with honest memory-fit previews, a polished chat UI with context management, one-click quantization, benchmarking, and multi-model hot-swapping — all with the same OpenAI-compatible local API underneath if you prefer scripting.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          What happens to my subscription if I upgrade my hardware?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Nothing — your license follows your account, not your machine. Move to a new Mac or PC, sign in, and you're covered. You can also run LocalMind on two machines at once (one active session each) on Pro and Studio plans, which is handy if you have a laptop and a home server.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA BANNER ============ -->
+<section class="cta-banner" id="waitlist">
+  <div class="container cta-inner fade-up">
+    <h2>Your data deserves to stay yours.</h2>
+    <p>Join the waitlist and get early access, founding-user pricing locked for life, and a direct line to the team building LocalMind.</p>
+    <form class="waitlist-form" id="waitlistForm" novalidate>
+      <input type="email" id="waitlistEmail" placeholder="you@company.com" aria-label="Email address" required>
+      <button type="submit" class="btn btn-primary" id="waitlistBtn">Join the Waitlist</button>
+    </form>
+    <div class="cta-note">No spam. One launch email, then silence unless you ask for more.</div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <span class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+              <circle cx="12" cy="12" r="3.2" fill="#fff" stroke="none"/>
+            </svg>
+          </span>
+          LocalMind
+        </a>
+        <p>Large language models on your hardware. No cloud, no telemetry, no limits.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#demo">Live Demo</a></li>
+            <li><a href="#waitlist">Early Access</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#how">How It Works</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="#top">Hardware Guide</a></li>
+            <li><a href="#top">Model Catalog</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#top">About</a></li>
+            <li><a href="#top">Privacy</a></li>
+            <li><a href="#top">Terms</a></li>
+            <li><a href="#top">Contact</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="year"></span> LocalMind Labs, Inc. All rights reserved.</span>
+        <span>Built locally, obviously.</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Year ---------- */
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  /* ---------- Nav scroll state ---------- */
+  var nav = document.getElementById('nav');
+  function onScroll() {
+    if (window.scrollY > 50) nav.classList.add('scrolled');
+    else nav.classList.remove('scrolled');
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Mobile menu ---------- */
+  var hamburger = document.getElementById('hamburger');
+  var mobileMenu = document.getElementById('mobileMenu');
+  function setMenu(open) {
+    hamburger.classList.toggle('open', open);
+    mobileMenu.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', String(open));
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  hamburger.addEventListener('click', function () {
+    setMenu(!mobileMenu.classList.contains('open'));
+  });
+  mobileMenu.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () { setMenu(false); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && mobileMenu.classList.contains('open')) setMenu(false);
+  });
+
+  /* ---------- Smooth scroll (JS fallback + offset) ---------- */
+  function smoothScrollTo(target) {
+    if (!target) return;
+    var top = target.getBoundingClientRect().top + window.scrollY - 70;
+    if ('scrollBehavior' in document.documentElement.style) {
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    } else {
+      var start = window.scrollY, dist = top - start, dur = 500, t0 = null;
+      function step(t) {
+        if (t0 === null) t0 = t;
+        var p = Math.min((t - t0) / dur, 1);
+        var ease = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+        window.scrollTo(0, start + dist * ease);
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      var id = a.getAttribute('href');
+      if (id.length > 1) {
+        e.preventDefault();
+        smoothScrollTo(document.querySelector(id));
+      }
+    });
+  });
+
+  /* ---------- Active nav link via IntersectionObserver ---------- */
+  var navLinks = document.querySelectorAll('.nav-links a.nav-link');
+  var sections = [];
+  navLinks.forEach(function (link) {
+    var sec = document.querySelector(link.getAttribute('href'));
+    if (sec) sections.push({ link: link, sec: sec });
+  });
+  var activeObs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function (l) { l.classList.remove('active'); });
+        sections.forEach(function (s) {
+          if (s.sec === entry.target) s.link.classList.add('active');
+        });
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  sections.forEach(function (s) { activeObs.observe(s.sec); });
+
+  /* ---------- Fade-up entrances, staggered 100ms per section ---------- */
+  var fadeEls = document.querySelectorAll('.fade-up');
+  // Group by section for stagger
+  var groups = [];
+  fadeEls.forEach(function (el) {
+    var sec = el.closest('section, header, footer') || document.body;
+    var g = groups.find(function (x) { return x.sec === sec; });
+    if (!g) { g = { sec: sec, els: [] }; groups.push(g); }
+    g.els.push(el);
+  });
+  var fadeObs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var g = groups.find(function (x) { return x.sec === entry.target; });
+        if (g) {
+          g.els.forEach(function (el, i) {
+            setTimeout(function () { el.classList.add('visible'); }, i * 100);
+          });
+        }
+        fadeObs.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  groups.forEach(function (g) { fadeObs.observe(g.sec); });
+
+  /* ---------- FAQ accordion (one open at a time) ---------- */
+  var faqItems = document.querySelectorAll('.faq-item');
+  faqItems.forEach(function (item) {
+    var btn = item.querySelector('.faq-q');
+    var ans = item.querySelector('.faq-a');
+    btn.addEventListener('click', function () {
+      var isOpen = item.classList.contains('open');
+      faqItems.forEach(function (other) {
+        other.classList.remove('open');
+        other.querySelector('.faq-a').style.maxHeight = '0px';
+        other.querySelector('.faq-q').setAttribute('aria-expanded', 'false');
+      });
+      if (!isOpen) {
+        item.classList.add('open');
+        ans.style.maxHeight = ans.scrollHeight + 'px';
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  window.addEventListener('resize', function () {
+    var open = document.querySelector('.faq-item.open .faq-a');
+    if (open) open.style.maxHeight = open.scrollHeight + 'px';
+  });
+
+  /* ---------- Waitlist form ---------- */
+  var form = document.getElementById('waitlistForm');
+  var email = document.getElementById('waitlistEmail');
+  var btn = document.getElementById('waitlistBtn');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var val = email.value.trim();
+    if (!val || val.indexOf('@') < 1) {
+      email.style.borderColor = '#ff5f57';
+      email.style.boxShadow = '0 0 0 3px rgba(255,95,87,0.2)';
+      email.focus();
+      setTimeout(function () {
+        email.style.borderColor = '';
+        email.style.boxShadow = '';
+      }, 1600);
+      return;
+    }
+    btn.textContent = "You're in! 🎉";
+    btn.classList.add('done');
+    email.value = '';
+    email.placeholder = 'Welcome aboard — check your inbox soon.';
+  });
+
+  /* ---------- Hero particle field ---------- */
+  var canvas = document.getElementById('heroCanvas');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var particles = [];
+  var mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
+  var COUNT = 70;
+
+  function resize() {
+    var rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // adjust density for small screens
+    COUNT = W < 640 ? 38 : 70;
+    initParticles();
+  }
+
+  function initParticles() {
+    particles = [];
+    for (var i = 0; i < COUNT; i++) {
+      particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: (Math.random() - 0.5) * 0.25,
+        r: Math.random() * 1.8 + 0.6,
+        hue: Math.random() < 0.55 ? '124,92,252' : '0,212,170',
+        a: Math.random() * 0.4 + 0.15
+      });
+    }
+  }
+
+  function draw() {
+    // ease mouse toward target (subtle clamp)
+    mouse.x += (mouse.tx - mouse.x) * 0.04;
+    mouse.y += (mouse.ty - mouse.y) * 0.04;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // soft gradient orbs
+    var gx = W * 0.5 + (mouse.x - 0.5) * 90;
+    var gy = H * 0.35 + (mouse.y - 0.5) * 60;
+    var g1 = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.55);
+    g1.addColorStop(0, 'rgba(124,92,252,0.14)');
+    g1.addColorStop(1, 'rgba(124,92,252,0)');
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+
+    var gx2 = W * 0.5 - (mouse.x - 0.5) * 70;
+    var gy2 = H * 0.8 - (mouse.y - 0.5) * 50;
+    var g2 = ctx.createRadialGradient(gx2, gy2, 0, gx2, gy2, Math.max(W, H) * 0.5);
+    g2.addColorStop(0, 'rgba(0,212,170,0.08)');
+    g2.addColorStop(1, 'rgba(0,212,170,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, W, H);
+
+    // particles
+    var mx = (mouse.x - 0.5) * 26; // subtle parallax
+    var my = (mouse.y - 0.5) * 18;
+
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -10) p.x = W + 10; if (p.x > W + 10) p.x = -10;
+      if (p.y < -10) p.y = H + 10; if (p.y > H + 10) p.y = -10;
+
+      var px = p.x + mx, py = p.y + my;
+      ctx.beginPath();
+      ctx.arc(px, py, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + p.hue + ',' + p.a + ')';
+      ctx.fill();
+    }
+
+    // connect nearby particles
+    var LINK = W < 640 ? 110 : 140;
+    for (var a = 0; a < particles.length; a++) {
+      for (var b = a + 1; b < particles.length; b++) {
+        var pa = particles[a], pb = particles[b];
+        var dx = (pa.x + mx) - (pb.x + mx);
+        var dy = (pa.y + my) - (pb.y + my);
+        var d2 = dx * dx + dy * dy;
+        if (d2 < LINK * LINK) {
+          var alpha = (1 - Math.sqrt(d2) / LINK) * 0.14;
+          ctx.beginPath();
+          ctx.moveTo(pa.x + mx, pa.y + my);
+          ctx.lineTo(pb.x + mx, pb.y + my);
+          ctx.strokeStyle = 'rgba(124,92,252,' + alpha.toFixed(3) + ')';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  canvas.parentElement.addEventListener('mousemove', function (e) {
+    var rect = canvas.getBoundingClientRect();
+    mouse.tx = (e.clientX - rect.left) / rect.width;
+    mouse.ty = (e.clientY - rect.top) / rect.height;
+  });
+  canvas.parentElement.addEventListener('mouseleave', function () {
+    mouse.tx = 0.5; mouse.ty = 0.5;
+  });
+  // touch support (subtle)
+  canvas.parentElement.addEventListener('touchmove', function (e) {
+    if (e.touches.length) {
+      var rect = canvas.getBoundingClientRect();
+      mouse.tx = (e.touches[0].clientX - rect.left) / rect.width;
+      mouse.ty = (e.touches[0].clientY - rect.top) / rect.height;
+    }
+  }, { passive: true });
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

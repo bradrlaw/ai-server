@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Local Dungeon</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --bg-alt: #222222;
+    --bg-panel: #252525;
+    --border: #3a3a3a;
+    --green: #00ff00;
+    --amber: #ffb000;
+    --dim: #888888;
+    --text: #d4d4d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  /* ---------- Header ---------- */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(20,20,20,0.95);
+    border-bottom: 2px solid var(--green);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    backdrop-filter: blur(4px);
+  }
+  .header-title h1 {
+    font-size: 1.4rem;
+    color: var(--green);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-title p {
+    font-size: 0.8rem;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+  #reset-btn {
+    background: transparent;
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, color 0.15s;
+  }
+  #reset-btn:hover { background: var(--amber); color: #111; }
+  #reset-btn:hover svg { stroke: #111; }
+  #reset-btn svg { stroke: var(--amber); transition: stroke 0.15s; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(135deg, #1f1f1f, #1a1a1a);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--amber);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 18px 0;
+  }
+  .hero h2 { color: var(--amber); font-size: 1.05rem; margin-bottom: 8px; }
+  .hero p { line-height: 1.6; font-size: 0.92rem; color: #bbb; }
+
+  /* ---------- Accordion ---------- */
+  .accordion {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .accordion-toggle {
+    width: 100%;
+    background: var(--bg-panel);
+    color: var(--text);
+    border: none;
+    padding: 14px 18px;
+    text-align: left;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .accordion-toggle:hover { background: #2c2c2c; }
+  .accordion-toggle .chevron { transition: transform 0.25s; color: var(--green); }
+  .accordion.open .chevron { transform: rotate(90deg); }
+  .accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: #1e1e1e;
+  }
+  .accordion.open .accordion-body { max-height: 500px; }
+  .cmd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 10px;
+    padding: 16px 18px;
+  }
+  .cmd-item {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+  .cmd-item code {
+    font-family: "Courier New", monospace;
+    color: var(--green);
+    font-weight: bold;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .cmd-item span { color: var(--dim); }
+
+  /* ---------- Dashboard ---------- */
+  .dashboard {
+    display: grid;
+    grid-template-columns: 70fr 30fr;
+    gap: 16px;
+  }
+  @media (max-width: 800px) {
+    .dashboard { grid-template-columns: 1fr; }
+  }
+
+  /* Console */
+  .console-wrap {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 480px;
+    box-shadow: 0 0 30px rgba(0,255,0,0.05), inset 0 0 60px rgba(0,255,0,0.02);
+  }
+  .console-titlebar {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .console-titlebar .dots span {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  .dot-r { background: #ff5f56; } .dot-y { background: #ffbd2e; } .dot-g { background: #27c93f; }
+  #skip-btn {
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    display: none;
+  }
+  #console-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: var(--green);
+    white-space: pre-wrap;
+    word-break: break-word;
+    cursor: text;
+    max-height: 420px;
+    min-height: 380px;
+  }
+  #console-output .sys { color: var(--amber); }
+  #console-output .err { color: #ff6b6b; }
+  #console-output .echo { color: #6a9955; }
+  #console-output .room-title { color: #ffffff; font-weight: bold; }
+  #console-output .item-line { color: #4dd0e1; }
+  #console-output .dim { color: #557755; }
+  .input-line {
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    background: #111;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .prompt-symbol {
+    color: var(--green);
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    font-size: 1.05rem;
+  }
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.95rem;
+    caret-color: var(--green);
+  }
+  #cmd-input::placeholder { color: #3d5c3d; }
+
+  /* Scrollbar */
+  #console-output::-webkit-scrollbar { width: 8px; }
+  #console-output::-webkit-scrollbar-track { background: #111; }
+  #console-output::-webkit-scrollbar-thumb { background: #2e5c2e; border-radius: 4px; }
+
+  /* Sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #2e2e2e;
+    font-size: 0.88rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-value {
+    font-family: "Courier New", monospace;
+    color: var(--amber);
+    font-weight: bold;
+    font-size: 1.05rem;
+  }
+  #inventory-list { list-style: none; }
+  #inventory-list li {
+    background: #1d2a1d;
+    border: 1px solid #2e5c2e;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: pop 0.25s ease;
+  }
+  @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #inventory-list .empty-msg {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--dim);
+    animation: none;
+  }
+  .location-panel .loc-name { color: var(--amber); font-weight: 600; font-size: 1rem; }
+  footer { text-align: center; color: #555; font-size: 0.75rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <h1>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00ff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V10l9-7 9 7v11"/><path d="M9 21v-6h6v6"/></svg>
+      The Local Dungeon
+    </h1>
+    <p>A cozy text adventure, five minutes from your home.</p>
+  </div>
+  <button id="reset-btn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    Reset Game
+  </button>
+</header>
+
+<main>
+  <section class="hero">
+    <h2>Beneath the Old Post Office</h2>
+    <p>When the townsfolk renovating the abandoned post office broke through a cellar wall, they found stairs descending far deeper than any cellar had a right to go. Somebody had been down here — recently — and had left in a hurry. You volunteered to explore it, because nobody else would.</p>
+  </section>
+
+  <section class="accordion" id="help-accordion">
+    <button class="accordion-toggle" id="accordion-btn" aria-expanded="false">
+      <span>📜 How to Play — Available Commands</span>
+      <span class="chevron">▶</span>
+    </button>
+    <div class="accordion-body">
+      <div class="cmd-grid">
+        <div class="cmd-item"><code>look / l / look at [thing]</code><span>Describe the room, or examine an object. "examine" and "x" work too.</span></div>
+        <div class="cmd-item"><code>go north / n / s / e / w</code><span>Move through an exit. Single letters are fine.</span></div>
+        <div class="cmd-item"><code>take [item] / get / grab</code><span>Pick up a nearby object and add it to your inventory.</span></div>
+        <div class="cmd-item"><code>drop [item]</code><span>Put an item back down in the current room.</span></div>
+        <div class="cmd-item"><code>use [thing]</code><span>Operate mechanisms like levers and doors.</span></div>
+        <div class="cmd-item"><code>unlock north (with key)</code><span>Open a locked door, if you carry what it needs.</span></div>
+        <div class="cmd-item"><code>inventory / inv / i</code><span>List everything you're carrying.</span></div>
+        <div class="cmd-item"><code>help</code><span>Show the command list in the console.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dashboard">
+    <div class="console-wrap" id="console-wrap">
+      <div class="console-titlebar">
+        <span class="dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></span>
+        <span>dungeon-terminal — session 001</span>
+        <button id="skip-btn">SKIP ⏩</button>
+      </div>
+      <div id="console-output" aria-live="polite"></div>
+      <div class="input-line">
+        <span class="prompt-symbol">&gt;</span>
+        <input id="cmd-input" type="text" autocomplete="off" spellcheck="false"
+               placeholder="type a command… (try 'look' or 'help')" />
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffb000" stroke-width="2" stroke-linecap="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+          Stats
+        </h3>
+        <div class="stat-row"><span>Moves Made</span><span class="stat-value" id="stat-moves">0</span></div>
+        <div class="stat-row"><span>Items Found</span><span class="stat-value" id="stat-items">0</span></div>
+      </div>
+      <div class="panel">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00ff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3V5a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
+          Inventory
+        </h3>
+        <ul id="inventory-list"><li class="empty-msg">Inventory is empty.</li></ul>
+      </div>
+      <div class="panel location-panel">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4dd0e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Current Location
+        </h3>
+        <span class="loc-name" id="loc-name">Entrance Hall</span>
+      </div>
+    </aside>
+  </section>
+
+  <footer>Built with zero dependencies. Somewhere below town, a drip echoes. <span style="color:#00ff00">▮</span></footer>
+</main>
+
+<script>
+'use strict';
+
+/* ============================= Data Model ============================= */
+
+class Item {
+  constructor(id, name, description) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+  }
+}
+
+class Room {
+  constructor(id, name, description, examineText) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.examineText = examineText;
+    this.exits = {};          // direction -> { roomId, locked, requires, lockText }
+    this.items = [];          // Items present in the room
+    this.features = {};       // id -> { name, description, onUse }
+  }
+  addExit(dir, roomId, opts = {}) { this.exits[dir] = Object.assign({ roomId }, opts); }
+  addItem(item) { this.items.push(item); }
+  findItem(query) { return this.items.find(i => i.id === query || matchFuzzy(i.id, query)); }
+}
+
+function matchFuzzy(target, query) {
+  if (!query) return false;
+  if (target === query) return true;
+  if (target.startsWith(query) && query.length >= 2) return true;
+  // allow "key" to match "rusted_key", word-wise
+  const parts = target.split(/[_\s]+/);
+  return parts.some(p => p === query || (p.startsWith(query) && query.length >= 3));
+}
+
+/* ============================= Game Engine ============================= */
+
+class GameEngine {
+  constructor(outputEl, inputEl, ui) {
+    this.outputEl = outputEl;
+    this.inputEl = inputEl;
+    this.ui = ui;
+    this.history = [];
+    this.historyIndex = -1;
+    this.typing = false;
+    this.skipRequested = false;
+    this.buildWorld();
+    this.bindEvents();
+    this.reset();
+  }
+
+  buildWorld() {
+    const items = {
+      rustedKey: new Item('rusted_key', 'rusted key',
+        'A heavy iron key, orange with rust. Its bow is shaped like a tiny gauntleted fist. It might still turn a willing lock.'),
+      torch: new Item('torch', 'torch',
+        'A pitch-soaked torch, mercifully unburnt. Someone left it ready for the next nervous explorer. That explorer is you.'),
+      goldenCoin: new Item('golden_coin', 'golden coin',
+        'A single gold coin, stamped with the seal of the Old Post Office. Worth a fortune to a collector; worth a sandwich to you.'),
+      ancientScroll: new Item('ancient_scroll', 'ancient scroll',
+        'A rolled parchment tied with green ribbon. Unrolled, it reads: "To whoever finds this — the garden was mine. Mind the gnome. — E."')
+    };
+    this.itemCatalog = items;
+
+    const entrance = new Room('entrance', 'Entrance Hall',
+      'You stand in a vaulted entrance hall beneath the old post office. Christmas lights from last December are still stapled above the door — someone really committed to the theme. Dusty flagstones stretch in three directions, and a maintenance cart sits abandoned mid-task.',
+      'Maintenance notices on the wall advertise "Sub-Level Inspection: Tuesday." Every Tuesday since March has been crossed out with the same red pen.');
+
+    const library = new Room('library', 'Musty Library',
+      'A low-ceilinged library. Mildewed encyclopedias line the shelves,Volume M through Q only, as if someone only ever needed to look up middling words. A heavy iron LEVER protrudes from the east wall, next to a faded sign reading "DO NOT OPERATE WHILE HOLDING GRAPES."',
+      'The lever is cold and greasy. A brass plate beneath it reads: "Chamber Access."');
+
+    const armory = new Room('armory', 'Armory',
+      'A stone armory with empty weapon racks — every hook bare except for a single TORCH resting in a bracket. A reinforced oak door stands to the north, fitted with a rusted iron lock.',
+      'The lock is old but solid. The keyhole is shaped to accept a fist-shaped key bow.');
+
+    const treasure = new Room('treasure', 'Treasure Room',
+      'A small circular chamber. Most of the treasure chest\'s contents were clearly carted off decades ago, but rolling beneath a floor crack near the pedestal, something glints: a GOLDEN COIN, missed by every thief who came before you.',
+      'The chest\'s velvet lining is impressed with the shapes of a hundred missing treasures. One coin escaped the heist.');
+
+    const secret = new Room('secret', 'Secret Chamber',
+      'A hidden paneled chamber, sealed and dry. A reading chair, a cold pipe on the side table, and an ANCIENT SCROLL resting on a lectern — this was somebody\'s private retreat, not a vault.',
+      'The lectern is polished smooth from use. Whoever kept this place visited it often, and loved it.');
+
+    const garden = new Room('garden', 'Underground Garden',
+      'You emerge into an impossible sight: a cavern garden under a ceiling of glowing crystals. A stream babbles through mossy stones, ferns unfurl in the amber light, and a ceramic gnome guards a bench beside a fig tree. You sit down. You have earned this. (The end — but you may keep wandering.)',
+      'The gnome\'s painted eyes seem kind. A small plaque on its base reads: "Gerald."');
+
+    entrance.exits = {};
+    entrance.addExit('north', 'library');
+    entrance.addExit('east', 'armory');
+    entrance.addExit('south', 'garden');
+    entrance.addItem(items.rustedKey);
+
+    library.exits = {};
+    library.addExit('south', 'entrance');
+    library.addExit('west', 'secret', { locked: true, requiresFlag: 'lever_pulled',
+      lockText: 'The west wall here is solid stone. Faint seams of a hidden door are visible — perhaps a mechanism elsewhere opens it.' });
+    library.features.lever = {
+      id: 'lever', name: 'lever',
+      description: 'A heavy iron lever bolted to the wall. The sign about grapes remains deeply concerning.',
+      onUse: () => {
+        if (this.flags.lever_pulled) { print('You jiggle the lever. It\'s already thrown, and the hidden door stands open. The grapes remain unharmed.', 'dim'); return false; }
+        this.flags.lever_pulled = true;
+        print('You grip the cold iron and heave. The lever resists, then slams down. Somewhere behind the shelves, counterweights grind and a section of the west wall slides open with a satisfied click. A SECRET CHAMBER lies to the WEST.', 'sys');
+        this.ui.updateAll();
+        return true;
+      }
+    };
+
+    armory.exits = {};
+    armory.addExit('west', 'entrance');
+    armory.addExit('north', 'treasure', { locked: true, requiresItem: 'rusted_key',
+      lockText: 'The reinforced oak door to the north is LOCKED. A fist-shaped keyhole stares at you.',
+      unlockText: 'The rusted key grinds in twice, curses the darkness, and finally turns. The oak door swings open onto a spiral of stairs going up — no, north. The TREASURE ROOM lies beyond.' });
+    armory.addItem(items.torch);
+
+    treasure.exits = {};
+    treasure.addExit('south', 'armory');
+    treasure.addItem(items.goldenCoin);
+
+    secret.exits = {};
+    secret.addExit('east', 'library');
+    secret.addItem(items.ancientScroll);
+
+    garden.exits = {};
+    garden.addExit('north', 'entrance');
+    garden.features.gnome = {
+      id: 'gnome', name: 'gnome',
+      description: 'A ceramic garden gnome named Gerald. He has survived a century of darkness with his hat intact and his temper apparently spent. You shake his tiny painted hand, spiritually.'
+    };
+
+    this.rooms = { entrance, library, armory, treasure, secret, garden };
+  }
+
+  reset() {
+    this.state = {
+      currentRoom: 'entrance',
+      inventory: [],
+      visited: new Set(),
+      flags: { lever_pulled: false },
+      moves: 0,
+      itemsFound: 0,
+      unlocked: {}
+    };
+    // restore items to their original rooms
+    this.buildWorld();
+    this.outputEl.innerHTML = '';
+    this.history = [];
+    this.historyIndex = -1;
+    this.ui.updateAll();
+    this.print('THE LOCAL DUNGEON — v1.0', 'room-title');
+    this.print('A text adventure in six rooms. Type "help" for commands.', 'dim');
+    this.print('');
+    this.enterRoom(true);
+  }
+
+  get room() { return this.rooms[this.state.currentRoom]; }
+
+  /* ---------------- Output helpers ---------------- */
+
+  print(text, cls) {
+    // Instant print used for echoes/system during typing queue handled in typeLines
+    const div = document.createElement('div');
+    if (cls) div.className = cls;
+    div.textContent = text === '' ? '\u00A0' : text;
+    this.outputEl.appendChild(div);
+    this.outputEl.scrollTop = this.outputEl.scrollHeight;
+  }
+
+  async typeLine(text, cls) {
+    const div = document.createElement('div');
+    if (cls) div.className = cls;
+    this.outputEl.appendChild(div);
+    if (this.skipRequested || !text) {
+      div.textContent = text || '\u00A0';
+    } else {
+      this.typing = true;
+      this.ui.setSkipVisible(true);
+      for (let i = 0; i < text.length; i++) {
+        if (this.skipRequested) { div.textContent = text; break; }
+        div.textContent += text[i];
+        this.outputEl.scrollTop = this.outputEl.scrollHeight;
+        await new Promise(r => setTimeout(r, text[i] === '.' || text[i] === ',' ? 14 : 8));
+      }
+      this.typing = false;
+      this.ui.setSkipVisible(false);
+    }
+    this.outputEl.scrollTop = this.outputEl.scrollHeight;
+  }
+
+  async typeLines(lines) {
+    this.skipRequested = false;
+    for (const [text, cls] of lines) {
+      await this.typeLine(text, cls);
+    }
+  }
+
+  printLines(lines) { // non-typewriter batch (used after skip-heavy ops if needed)
+    lines.forEach(([t, c]) => this.print(t, c));
+  }
+
+  enterRoom(initial) {
+    const r = this.room;
+    const firstVisit = !this.state.visited.has(r.id);
+    this.state.visited.add(r.id);
+    const lines = [['> ' + (initial ? 'arrive' : 'you move'), 'echo'].slice(0, 0)]; // placeholder no-op
+    const out = [];
+    out.push(['── ' + r.name.toUpperCase() + ' ──', 'room-title']);
+    out.push([r.description, null]);
+    const visibleItems = r.items.map(i => i.name);
+    if (visibleItems.length) out.push(['You notice: ' + visibleItems.join(', ') + '.', 'item-line']);
+    const exitList = Object.keys(r.exits).map(d => {
+      const e = r.exits[d];
+      if (e.locked && !this.state.unlocked[e.roomId] && !this.isExitOpen(e)) return d + ' (locked)';
+      return d;
+    });
+    out.push(['Exits: ' + exitList.join(', ') + '.', 'dim']);
+    if (firstVisit && !initial) out.push(['(First time here — take a good look around.)', 'dim']);
+    this.typeLines(out);
+    this.ui.updateAll();
+  }
+
+  isExitOpen(exit) {
+    if (exit.requiresFlag) return !!this.state.flags[exit.requiresFlag];
+    return false;
+  }
+
+  /* ---------------- Command parser ---------------- */
+
+  normalize(str) { return str.toLowerCase().trim().replace(/\s+/g, ' '); }
+
+  parseDirection(token) {
+    const map = {
+      n: 'north', s: 'south', e: 'east', w: 'west',
+      north: 'north', south: 'south', east: 'east', west: 'west',
+      ne: 'northeast', nw: 'northwest', se: 'southeast', sw: 'southwest',
+      up: 'north', down: 'north', u: 'north' // dungeon is flat; be forgiving
+    };
+    return map[token] || null;
+  }
+
+  async handleCommand(raw) {
+    const input = this.normalize(raw);
+    if (!input) return;
+    this.history.push(raw);
+    this.historyIndex = this.history.length;
+    this.print('> ' + raw, 'echo');
+
+    const tokens = input.split(' ');
+    let verb = tokens[0];
+    let restTokens = tokens.slice(1);
+
+    // Synonym mapping
+    const synonyms = {
+      'l': 'look', 'x': 'examine', 'inspect': 'examine', 'study': 'examine', 'read': 'examine',
+      'grab': 'take', 'get': 'take', 'pick': 'take', 'acquire': 'take',
+      'inv': 'inventory', 'i': 'inventory', 'bag': 'inventory', 'items': 'inventory',
+      'walk': 'go', 'move': 'go', 'head': 'go', 'travel': 'go', 'run': 'go',
+      'drop': 'drop', 'put': 'drop', 'discard': 'drop', 'leave': 'drop',
+      'use': 'use', 'pull': 'use', 'activate': 'use', 'operate': 'use', 'throw': 'use',
+      'unlock': 'unlock', 'open': 'unlock', 'pick': 'unlock',
+      'h': 'help', '?': 'help', 'commands': 'help',
+      'quit': 'quit', 'exit': 'quit'
+    };
+    verb = synonyms[verb] || verb;
+
+    // "look at X" / "take up X" cleanup
+    if (verb === 'look' && restTokens[0] === 'at') restTokens = restTokens.slice(1);
+    if (restTokens[0] === 'the' || restTokens[0] === 'a' || restTokens[0] === 'an' || restTokens[0] === 'it') restTokens = restTokens.slice(1);
+    if (verb === 'take' && restTokens[0] === 'up') restTokens = restTokens.slice(1);
+    if (verb === 'look' && restTokens.length === 0) verb = 'look';
+    const rest = restTokens.join(' ');
+
+    // Bare direction words: "n", "north"
+    const bareDir = this.parseDirection(input);
+    if (bareDir) { await this.doGo(bareDir); return; }
+
+    switch (verb) {
+      case 'look': {
+        if (!rest) { this.enterRoom(false); this.state.moves += 0; break; }
+        await this.doExamine(rest);
+        break;
+      }
+      case 'examine': {
+        if (!rest) { this.print('Examine what? Try "examine lever".', 'err'); break; }
+        await this.doExamine(rest);
+        break;
+      }
+      case 'go': {
+        const dir = this.parseDirection(restTokens[0] || '');
+        if (!dir) { this.print('Go where? Try "go north" or just "n". Directions: north, south, east, west.', 'err'); break; }
+        await this.doGo(dir);
+        break;
+      }
+      case 'take': {
+        if (!rest) { this.print('Take what? Look around first — try "look".', 'err'); break; }
+        await this.doTake(rest);
+        break;
+      }
+      case 'drop': {
+        if (!rest) { this.print('Drop what? Try "drop torch".', 'err'); break; }
+        await this.doDrop(rest);
+        break;
+      }
+      case 'use': {
+        if (!rest) { this.print('Use what? The only famous mechanism here is the lever in the library.', 'err'); break; }
+        await this.doUse(rest);
+        break;
+      }
+      case 'unlock': {
+        await this.doUnlock(restTokens);
+        break;
+      }
+      case 'inventory': {
+        if (this.state.inventory.length === 0) this.print('You pat your pockets. Nothing but lint and courage.', null);
+        else this.print('You are carrying: ' + this.state.inventory.map(i => i.name).join(', ') + '.', 'item-line');
+        break;
+      }
+      case 'help': {
+        this.print('COMMANDS: look · look at X · go north (n/s/e/w) · take X · drop X · use X · unlock north · inventory · reset', 'sys');
+        this.print('Goal: explore the dungeon, find all 4 treasures, and discover what lies to the south…', 'dim');
+        break;
+      }
+      case 'reset': {
+        this.print('Resetting…', 'sys');
+        setTimeout(() => this.reset(), 300);
+        break;
+      }
+      case 'quit': {
+        this.print('Quit? There is a whole dungeon down here. Have a TORCH at least. (Use the Reset Game button, or keep playing.)', 'sys');
+        break;
+      }
+      default: {
+        // Single-word partial matches on verbs
+        const known = ['look','go','take','drop','use','unlock','inventory','help','examine'];
+        const guess = known.find(k => k.startsWith(verb) && verb.length >= 2);
+        if (guess) {
+          this.print(`I assume you mean "${guess}".`, 'dim');
+          await this.handleCommand([guess, ...restTokens].join(' '));
+        } else {
+          this.print(`Unknown command: "${tokens[0]}". Type "help" to see what the dungeon understands.`, 'err');
+        }
+      }
+    }
+    this.ui.updateAll();
+  }
+
+  /* ---------------- Actions ---------------- */
+
+  async doGo(dir) {
+    const exit = this.room.exits[dir];
+    if (!exit) {
+      this.print(`You try the ${dir}. It is a wall. A very committed wall. There is no exit to the ${dir}.`, 'err');
+      return;
+    }
+    const unlockedAlready = this.state.unlocked[exit.roomId];
+    if (exit.locked && !unlockedAlready && !this.isExitOpen(exit)) {
+      this.print(exit.lockText, 'err');
+      return;
+    }
+    this.state.currentRoom = exit.roomId;
+    this.state.moves++;
+    if (exit.locked && unlockedAlready && exit.unlockText && !this.state.flags['announced_' + exit.roomId]) {
+      this.state.flags['announced_' + exit.roomId] = true;
+    }
+    this.enterRoom(false);
+  }
+
+  async doExamine(target) {
+    const r = this.room;
+    // feature?
+    const feature = Object.values(r.features || {}).find(f => f.id === target.replace(/\s+/g,'_') || matchFuzzy(f.id, target.replace(/\s+/g,'_')));
+    if (feature) { this.print(feature.description, 'item-line'); return; }
+    // item in room or inventory
+    const item = r.findItem(target.replace(/\s+/g,'_')) ||
+                 this.state.inventory.find(i => i.id === target.replace(/\s+/g,'_') || matchFuzzy(i.id, target.replace(/\s+/g,'_')));
+    if (item) { this.print(item.description, 'item-line'); return; }
+    // examining the room itself
+    if (matchFuzzy('room', target.replace(/\s+/g,'_')) || matchFuzzy('surroundings', target.replace(/\s+/g,'_')) ||
+        matchFuzzy('around', target.replace(/\s+/g,'_')) || matchFuzzy('wall', target.replace(/\s+/g,'_')) ||
+        matchFuzzy('floor', target.replace(/\s+/g,'_'))) {
+      this.print(r.examineText, null);
+      return;
+    }
+    // is it somewhere else?
+    this.print(`You don't see "${target}" in the ${r.name}.`, 'err');
+  }
+
+  async doTake(target) {
+    const key = target.replace(/\s+/g,'_');
+    const item = this.room.findItem(key);
+    if (!item) {
+      const inBag = this.state.inventory.find(i => i.id === key || matchFuzzy(i.id, key));
+      this.print(inBag ? `You already have the ${item ? item.name : target}. It jingles with purpose.`
+                       : `There is no "${target}" here to take. Try "look" to see what's in the room.`, 'err');
+      return;
+    }
+    this.room.items = this.room.items.filter(i => i.id !== item.id);
+    this.state.inventory.push(item);
+    this.state.itemsFound++;
+    this.print(`You take the ${item.name}. ${item.description.split('.')[0]}.`, 'sys');
+    this.ui.updateAll();
+  }
+
+  async doDrop(target) {
+    const key = target.replace(/\s+/g,'_');
+    const item = this.state.inventory.find(i => i.id === key || matchFuzzy(i.id, key));
+    if (!item) { this.print(`You aren't carrying "${target}". Your inventory has opinions about this.`, 'err'); return; }
+    this.state.inventory = this.state.inventory.filter(i => i.id !== item.id);
+    this.room.items.push(item);
+    this.print(`You set the ${item.name} down in the ${this.room.name}. It joins the dust.`, null);
+    this.ui.updateAll();
+  }
+
+  async doUse(target) {
+    const key = target.replace(/\s+/g,'_');
+    const feature = Object.values(this.room.features || {}).find(f => f.id === key || matchFuzzy(f.id, key));
+    if (!feature) { this.print(`You can't use "${target}" here. The lever in the library is very insistent on being used, though.`, 'err'); return; }
+    if (feature.onUse) { await feature.onUse(); }
+    else { this.print(feature.description, 'item-line'); }
+  }
+
+  async doUnlock(restTokens) {
+    // "unlock north", "unlock north door", "unlock door with rusted key"
+    const withIdx = restTokens.indexOf('with');
+    const targetWords = withIdx >= 0 ? restTokens.slice(0, withIdx) : restTokens.filter(w => w !== 'door' && w !== 'the');
+    const dirToken = targetWords.map(w => this.parseDirection(w)).find(Boolean)
+                  || this.parseDirection(restTokens.find(w => this.parseDirection(w)) || '');
+    if (!dirToken) { this.print('Unlock what? Try "unlock north" (the armory door) — the game will use keys automatically.', 'err'); return; }
+    const exit = this.room.exits[dirToken];
+    if (!exit) { this.print(`There's no door to the ${dirToken} here.`, 'err'); return; }
+    if (!exit.locked || this.state.unlocked[exit.roomId]) { this.print(`The ${dirToken} way is not locked. It's just… open. Being open.`, 'dim'); return; }
+    if (exit.requiresFlag) {
+      this.print(exit.lockText, 'err');
+      return;
+    }
+    if (exit.requiresItem) {
+      const wanted = exit.requiresItem;
+      const item = this.state.inventory.find(i => i.id === wanted || matchFuzzy(i.id, wanted));
+      if (item) {
+        this.state.unlocked[exit.roomId] = true;
+        this.print(exit.unlockText, 'sys');
+        this.print(`(You keep the ${item.name} — dungeon real estate is expensive.)`, 'dim');
+      } else {
+        this.print(`The ${dirToken} door needs a specific key, and your pockets are coming up short. There was talk of a rusted key near the entrance…`, 'err');
+      }
+    }
+  }
+
+  /* ---------------- Events ---------------- */
+
+  bindEvents() {
+    this.inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = this.inputEl.value;
+        this.inputEl.value = '';
+        if (this.typing) { this.skipRequested = true; }
+        this.handleCommand(val);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (this.history.length === 0) return;
+        this.historyIndex = Math.max(0, this.historyIndex - 1);
+        this.inputEl.value = this.history[this.historyIndex] || '';
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (this.history.length === 0) return;
+        this.historyIndex = Math.min(this.history.length, this.historyIndex + 1);
+        this.inputEl.value = this.history[this.historyIndex] || '';
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        this.inputEl.value = this.inputEl.value.trim() + ' ';
+      }
+    });
+  }
+}
+
+/* ============================= UI Wiring ============================= */
+
+const outputEl = document.getElementById('console-output');
+const inputEl = document.getElementById('cmd-input');
+const statMoves = document.getElementById('stat-moves');
+const statItems = document.getElementById('stat-items');
+const invList = document.getElementById('inventory-list');
+const locName = document.getElementById('loc-name');
+const skipBtn = document.getElementById('skip-btn');
+
+const ui = {
+  updateAll() {
+    statMoves.textContent = engine.state.moves;
+    statItems.textContent = engine.state.itemsFound;
+    locName.textContent = engine.room.name;
+    invList.innerHTML = '';
+    if (engine.state.inventory.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty-msg';
+      li.textContent = 'Inventory is empty.';
+      invList.appendChild(li);
+    } else {
+      engine.state.inventory.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00ff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7 7 5 5 0 0 1 7-7zm0 0L15 8m0 0l3 3 3-3-3-3"/></svg>';
+        li.appendChild(document.createTextNode(item.name));
+        invList.appendChild(li);
+      });
+    }
+  },
+  setSkipVisible(v) { skipBtn.style.display = v ? 'inline-block' : 'none'; }
+};
+
+const engine = new GameEngine(outputEl, inputEl, ui);
+
+skipBtn.addEventListener('click', () => { engine.skipRequested = true; });
+outputEl.addEventListener('click', () => {
+  if (engine.typing) engine.skipRequested = true;
+  inputEl.focus();
+});
+document.getElementById('console-wrap').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') inputEl.focus();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  engine.reset();
+  inputEl.focus();
+});
+
+// Accordion
+const acc = document.getElementById('help-accordion');
+const accBtn = document.getElementById('accordion-btn');
+accBtn.addEventListener('click', () => {
+  const open = acc.classList.toggle('open');
+  accBtn.setAttribute('aria-expanded', open);
+});
+
+// Focus input on load
+window.addEventListener('load', () => inputEl.focus());
+</script>
+</body>
+</html>

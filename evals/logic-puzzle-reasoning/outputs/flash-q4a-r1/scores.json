@@ -1,0 +1,8 @@
+{
+  "correctness": 4,
+  "rigor": 4,
+  "contradiction_handling": 4,
+  "clarity": 4,
+  "verification": 5,
+  "notes": "Flags the Ben/ICLR-Robotics clash and (correctly) a 2nd clash (Dana forced into March vs C4); gives best-effort 11/12 table by relaxing C12, with full clue check. Slightly muddled in Step 3-4 (proceeds before settling) and table presented before the verdict. Scored by Copilot (Opus/Sonnet pass), not the owner."
+}

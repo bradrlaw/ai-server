@@ -1,0 +1,3 @@
+{"ts": "2026-10-24T16:41:24Z", "label": "big-h2h", "test": "prompt", "target_tokens": 8192, "prompt_tokens": 7968, "ttft_s": 9.166, "prefill_tps": 869.3, "decode_tps": 35.18}
+{"ts": "2026-10-24T16:42:09Z", "label": "big-h2h", "test": "prompt", "target_tokens": 32768, "prompt_tokens": 31833, "ttft_s": 42.815, "prefill_tps": 743.5, "decode_tps": 34.91}
+{"ts": "2026-10-24T16:47:07Z", "label": "big-h2h", "test": "prompt", "target_tokens": 131072, "prompt_tokens": 127208, "ttft_s": 285.557, "prefill_tps": 445.5, "decode_tps": 22.25}

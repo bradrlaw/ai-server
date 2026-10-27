@@ -1,0 +1,82 @@
+[
+ {
+  "prompt": "Explain what a hash map is in two sentences.",
+  "text": "A hash map is a data structure that stores key-value pairs by using a hash function to compute an index into an array of buckets. This allows for highly efficient data retrieval, insertion, and deletion operations, typically in constant time."
+ },
+ {
+  "prompt": "Write a Python function that returns the nth Fibonacci number.",
+  "text": "```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2) for n > 1.\n    \n    Args:\n        n: A non-negative integer representing the position in the Fibonacci sequence.\n        \n    Returns:\n        The nth Fibonacci number.\n        \n    Raises:\n        ValueError: If n is negative.\n    \"\"\"\n    if n < "
+ },
+ {
+  "prompt": "List the planets of the solar system in order from the sun.",
+  "text": "Here are the eight planets of the solar system listed in order of their distance from the Sun:\n\n1. **Mercury**\n2. **Venus**\n3. **Earth**\n4. **Mars**\n5. **Jupiter**\n6. **Saturn**\n7. **Uranus**\n8. **Neptune**\n\n*Note: Pluto was reclassified as a \"dwarf planet\" by the International Astronomical Union (IAU) in 2006 and is no longer considered one of the major planets.*"
+ },
+ {
+  "prompt": "What is the capital of Australia, and why is it not Sydney?",
+  "text": "The capital of Australia is **Canberra**.\n\n### Why is it not Sydney?\n\nThe choice of Canberra as the capital was the result of a long-standing rivalry between Australia's two largest cities, **Sydney** and **Melbourne**, during the process of Federation in the late 19th and early 20th centuries.\n\n#### 1. The Rivalry Between Sydney and Melbourne\n- **Sydney** (New South Wales) and **Melbourne** (Victoria) were the two most powerful and populous cities in Australia at the time.\n- Both cities wanted to be the national capital.\n-"
+ },
+ {
+  "prompt": "Translate 'Good morning, how are you?' into French, Spanish and German.",
+  "text": "Here is the translation of \"Good morning, how are you?\" into French, Spanish, and German:\n\n- **French**: Bonjour, comment allez-vous ?  \n  *(Formal/standard)*  \n  *Note: In informal settings, you might say \"Salut, comment \u00e7a va ?\"*\n\n- **Spanish**: Buenos d\u00edas, \u00bfc\u00f3mo est\u00e1s?  \n  *(Informal)*  \n  *Note: For formal situations, use \"Buenos d\u00edas, \u00bfc\u00f3mo est\u00e1 usted?\"*\n\n- **German**: Guten Morgen, wie geht es Ihnen?  \n  *(Formal)*  \n  *Note: In informal settings"
+ },
+ {
+  "prompt": "Write a haiku about winter.",
+  "text": "White snow falls softly,\nSilence wraps the frozen world,\nBreath turns into mist."
+ },
+ {
+  "prompt": "Solve: 17 * 23 + 49. Show the steps.",
+  "text": "To solve the expression $17 \\times 23 + 49$, we follow the order of operations (PEMDAS/BODMAS), which requires performing multiplication before addition.\n\n**Step 1: Perform the multiplication**\nCalculate $17 \\times 23$.\n\n$$\n\\begin{array}{r@{\\quad}l}\n  17 & \\\\\n\\times 23 & \\\\\n\\hline\n  51 & (17 \\times 3) \\\\\n+ 340 & (17 \\times 20) \\\\\n\\h"
+ },
+ {
+  "prompt": "Explain the difference between TCP and UDP briefly.",
+  "text": "The primary difference between **TCP** (Transmission Control Protocol) and **UDP** (User Datagram Protocol) lies in how they handle data transmission, specifically regarding reliability, speed, and connection management.\n\n### Key Differences\n\n| Feature | TCP | UDP |\n| :--- | :--- | :--- |\n| **Connection** | **Connection-oriented**: Establishes a connection (via a 3-way handshake) before data transfer. | **Connectionless**: Sends data without establishing a connection first. |\n| **Reliability** | **Reliable**: Guarantees delivery, order, and error-checking. Retransmits"
+ },
+ {
+  "prompt": "Write a SQL query selecting the top 5 customers by total order value.",
+  "text": "```sql\nSELECT \n    c.customer_id,\n    c.customer_name,\n    SUM(o.order_value) AS total_order_value\nFROM \n    customers c\nJOIN \n    orders o ON c.customer_id = o.customer_id\nGROUP BY \n    c.customer_id, c.customer_name\nORDER BY \n    total_order_value DESC\nLIMIT 5;\n```"
+ },
+ {
+  "prompt": "Summarize the plot of Romeo and Juliet in three sentences.",
+  "text": "Two young lovers from feuding families, the Montagues and Capulets, secretly marry in hopes of ending their households' ancient grudge. A series of tragic misunderstandings and violent confrontations leads to the apparent death of Juliet and the subsequent suicide of Romeo. The discovery of their bodies finally reconciles the two families, but only after the loss of their children."
+ },
+ {
+  "prompt": "What does the Linux command 'chmod 755 file' do?",
+  "text": "The Linux command `chmod 755 file` changes the permissions of the file named `file` to allow specific access rights for the owner, group, and others.\n\n### Breakdown of `755`\n\nThe number `755` is an octal (base-8) representation of file permissions. Each digit corresponds to a specific user category:\n\n1.  **First digit (`7`)**: Permissions for the **Owner** (user who owns the file).\n2.  **Second digit (`5`)**: Permissions for the **Group** (users in the file's group).\n"
+ },
+ {
+  "prompt": "Give three tips for writing readable code.",
+  "text": "Here are three essential tips for writing readable code:\n\n### 1. Use Descriptive and Consistent Naming\nNames are the most powerful tool for clarity. Avoid vague names like `x`, `data`, or `temp`. Instead, use names that clearly describe the variable\u2019s purpose, type, or content.\n- **Bad:** `d = 10`\n- **Good:** `days_until_deadline = 10`\n- **Consistency:** Stick to a naming convention (e.g., `camelCase` for variables, `PascalCase` for classes) throughout your project.\n\n### 2"
+ },
+ {
+  "prompt": "Write a JavaScript function that debounces another function.",
+  "text": "```javascript\nfunction debounce(func, wait, immediate = false) {\n  let timeoutId;\n\n  return function (...args) {\n    const context = this;\n\n    const later = () => {\n      timeoutId = null;\n      if (!immediate) {\n        func.apply(context, args);\n      }\n    };\n\n    const callNow = immediate && !timeoutId;\n\n    clearTimeout(timeoutId);\n    timeoutId = setTimeout(later, wait);\n\n    if (callNow) {\n      func.apply(context, args);\n    }\n  };\n}\n```"
+ },
+ {
+  "prompt": "Why is the sky blue?",
+  "text": "The sky appears blue due to a phenomenon called **Rayleigh scattering**. Here is a step-by-step explanation of how this works:\n\n### 1. Sunlight is Composed of All Colors\nSunlight looks white to our eyes, but it is actually made up of all the colors of the visible spectrum (red, orange, yellow, green, blue, indigo, and violet). Each color travels as a wave with a different wavelength:\n- **Red light** has long wavelengths.\n- **Blue and violet light** have short wavelengths.\n\n### 2. Interaction with Earth\u2019s Atmosphere\nWhen sunlight enters Earth"
+ },
+ {
+  "prompt": "Describe the water cycle.",
+  "text": "The **water cycle**, also known as the **hydrologic cycle**, is the continuous movement of water on, above, and below the surface of the Earth. It is a closed system, meaning the total amount of water on Earth remains relatively constant, but its state (solid, liquid, gas) and location change constantly.\n\nHere is a step-by-step description of the key processes involved:\n\n### 1. Evaporation\n- **Process**: Solar energy heats water in oceans, lakes, rivers, and other bodies of water, turning liquid water into water vapor (gas).\n- **Transpiration**: Plants also release water vapor"
+ },
+ {
+  "prompt": "Write a bash one-liner that counts lines in all .py files in a directory tree.",
+  "text": "```bash\nfind . -name \"*.py\" -exec cat {} + | wc -l\n```"
+ },
+ {
+  "prompt": "What is the time complexity of binary search and why?",
+  "text": "### Logical Deduction\n\nTo determine the time complexity of binary search, we must analyze how the algorithm processes the input data and how the size of the problem changes with each step.\n\n#### 1. The Mechanism of Binary Search\nBinary search operates on a **sorted** array (or list). The algorithm follows a \"Divide and Conquer\" strategy:\n1.  It identifies the middle element of the current search range.\n2.  It compares the target value with the middle element.\n3.  If the target matches the middle element, the search is complete.\n4.  If the target is"
+ },
+ {
+  "prompt": "Explain recursion to a ten year old.",
+  "text": "Imagine you are standing in a long line at a movie theater, and you really want to know what row number you are in. But you can\u2019t see the row numbers on the floor, and you don\u2019t want to walk all the way to the front to count them.\n\nSo, you ask the person directly in front of you: **\"Hey, what row are you in?\"**\n\nThey don\u2019t know either! So, they turn around and ask the person in front of *them*: **\"Hey, what row are you in?\"**\n\nThis keeps happening. Person A asks Person B, Person B asks Person C, Person"
+ },
+ {
+  "prompt": "Name five common HTTP status codes and their meanings.",
+  "text": "Here are five of the most common HTTP status codes and their meanings:\n\n1. **200 OK**  \n   - **Category**: Success  \n   - **Meaning**: The request has succeeded. The server has processed the request and is returning the requested data (e.g., an HTML page, JSON data, etc.).\n\n2. **301 Moved Permanently**  \n   - **Category**: Redirection  \n   - **Meaning**: The requested resource has been permanently moved to a new URL. The server provides the new URL in the `Location` header. Browsers and search engines will update their links to"
+ },
+ {
+  "prompt": "Write a regex that matches a US ZIP code.",
+  "text": "# Regex for US ZIP Codes\n\nUS ZIP codes come in two formats:\n- **5-digit**: `12345`\n- **ZIP+4**: `12345-6789`\n\n## Regex Pattern\n\n```regex\n^\\d{5}(-\\d{4})?$\n```\n\n## Breakdown\n\n| Component | Meaning |\n|-----------|---------|\n| `^` | Start of string |\n| `\\d{5}` | Exactly 5 digits |\n| `(-\\d{4})?` | Optionally followed by a hyphen and "
+ }
+]

@@ -1,0 +1,2 @@
+{"ts": "2026-10-24T16:40:46Z", "label": "big-h2h", "test": "speed", "kind": "short", "decode_tps_median": 39.67, "decode_tps_all": [43.76, 39.67, 37.89], "ttft_median": 0.463}
+{"ts": "2026-10-24T16:41:13Z", "label": "big-h2h", "test": "speed", "kind": "code", "decode_tps_median": 44.68, "decode_tps_all": [44.68, 44.75, 44.63], "ttft_median": 0.371}

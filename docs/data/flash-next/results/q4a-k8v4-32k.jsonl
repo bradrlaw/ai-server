@@ -1,0 +1,7 @@
+{"ts": "2026-10-23T04:33:38Z", "label": "q4a-k8v4-32k", "test": "speed", "kind": "short", "decode_tps_median": 73.29, "decode_tps_all": [86.26, 73.29, 64.4], "ttft_median": 0.318}
+{"ts": "2026-10-23T04:33:50Z", "label": "q4a-k8v4-32k", "test": "speed", "kind": "code", "decode_tps_median": 95.55, "decode_tps_all": [90.74, 95.69, 95.55], "ttft_median": 0.08}
+{"ts": "2026-10-23T04:34:03Z", "label": "q4a-k8v4-32k", "test": "prompt", "target_tokens": 16384, "prompt_tokens": 15930, "ttft_s": 11.856, "prefill_tps": 1343.6, "decode_tps": 65.35}
+{"ts": "2026-10-23T04:34:23Z", "label": "q4a-k8v4-32k", "test": "prompt", "target_tokens": 28000, "prompt_tokens": 27191, "ttft_s": 18.839, "prefill_tps": 1443.3, "decode_tps": 72.77}
+{"ts": "2026-10-23T04:34:44Z", "label": "q4a-k8v4-32k", "test": "needle", "target_tokens": 28000, "depth": 0.1, "expected": "337652", "ok": true, "filler": "real", "prompt_tokens": 29424, "ttft_s": 20.883, "answer": "337652"}
+{"ts": "2026-10-23T04:35:03Z", "label": "q4a-k8v4-32k", "test": "needle", "target_tokens": 28000, "depth": 0.5, "expected": "538346", "ok": true, "filler": "real", "prompt_tokens": 24707, "ttft_s": 18.717, "answer": "538346"}
+{"ts": "2026-10-23T04:35:24Z", "label": "q4a-k8v4-32k", "test": "needle", "target_tokens": 28000, "depth": 0.9, "expected": "338790", "ok": true, "filler": "real", "prompt_tokens": 27145, "ttft_s": 20.363, "answer": "338790"}

@@ -1,0 +1,65 @@
+{
+  "test": "dungeon-adventure-engine",
+  "model_slot": "flash",
+  "label": "flash-ctl-r1",
+  "model_name": "Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "endpoint": "http://127.0.0.1:8081/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "llama.cpp b11819 UD-Q4_K_XL MTP reasoning medium",
+  "usage": {
+    "completion_tokens": 8372,
+    "prompt_tokens": 832,
+    "total_tokens": 9204,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 376.2,
+    "ttft_ms": 14728.978,
+    "prefill_tps": 56.48728649061735,
+    "decode_tps": 23.204864438143854,
+    "prompt_tokens": 832,
+    "predicted_tokens": 8372,
+    "prefill_ms": 14728.978,
+    "decode_ms": 360743.327
+  },
+  "mtp": {
+    "draft_n": 7431,
+    "draft_n_accepted": 5894,
+    "accept_rate": 0.793,
+    "enabled": true
+  },
+  "server_timings": {
+    "cache_n": 0,
+    "prompt_n": 832,
+    "prompt_ms": 14728.978,
+    "prompt_per_token_ms": 17.703098557692307,
+    "prompt_per_second": 56.48728649061735,
+    "predicted_n": 8372,
+    "predicted_ms": 360743.327,
+    "predicted_per_token_ms": 43.094412495520245,
+    "predicted_per_second": 23.204864438143854,
+    "draft_n": 7431,
+    "draft_n_accepted": 5894
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "output.py",
+  "output_bytes": 34384,
+  "reasoning_bytes": 1409,
+  "wall_secs": 376.2,
+  "created_utc": "2026-10-24T08:06:59+00:00"
+}

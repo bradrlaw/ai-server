@@ -1,0 +1,65 @@
+{
+  "test": "local-dungeon-web",
+  "model_slot": "flash",
+  "label": "flash-q4a-r2",
+  "model_name": "Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "model_path": "/srv/ai/models/qwen3.8-flash-next/unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "proxy": null,
+  "sampler": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null
+  },
+  "load_command": "strata v0.2.2 UD-Q4_K_XL 2xV100 layer-split24 spec4 tail_skip0 effort=medium",
+  "usage": {
+    "prompt_tokens": 801,
+    "completion_tokens": 11003,
+    "total_tokens": 11804,
+    "prompt_tokens_details": {
+      "cached_tokens": 796
+    }
+  },
+  "finish_reason": "stop",
+  "performance": {
+    "wall_secs": 398.2,
+    "ttft_ms": 55.2,
+    "prefill_tps": 90.6,
+    "decode_tps": 28.0,
+    "prompt_tokens": 5,
+    "predicted_tokens": 11003,
+    "prefill_ms": 55.2,
+    "decode_ms": 393235.8
+  },
+  "mtp": {
+    "draft_n": 0,
+    "draft_n_accepted": 0,
+    "accept_rate": null,
+    "enabled": false
+  },
+  "server_timings": {
+    "cache_n": 796,
+    "prompt_n": 5,
+    "prompt_ms": 55.2,
+    "prompt_per_token_ms": 11.04,
+    "prompt_per_second": 90.6,
+    "predicted_n": 11003,
+    "predicted_ms": 393235.8,
+    "predicted_per_token_ms": 35.739,
+    "predicted_per_second": 28.0,
+    "draft_n": 0,
+    "draft_n_accepted": 0
+  },
+  "extraction": {
+    "extracted": true,
+    "kind": "fenced"
+  },
+  "output_file": "index.html",
+  "output_bytes": 35922,
+  "reasoning_bytes": 260,
+  "wall_secs": 398.2,
+  "created_utc": "2026-10-23T02:39:20+00:00"
+}
