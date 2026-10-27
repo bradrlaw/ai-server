@@ -64,6 +64,12 @@ builds, configures or restarts anything.
 1. Search the web (release pages, Hugging Face trending and model cards, r/LocalLLaMA, Hacker News,
    unsloth/bartowski posts, GitHub release notes for ggml-org/llama.cpp and Niko1221/Strata) for items
    from the last ~2-4 weeks, or since the last card on the board.
+
+   **Reddit and other sites that block plain fetches:** the normal web/fetch tools get a 403 from
+   Reddit. Use the `browser-fetch` MCP tools instead: `reddit_search(query, subreddit="LocalLLaMA",
+   sort="new", time="month")` to find posts, then `browser_fetch(url)` on a post URL to read the thread
+   and its comments (about 5-15 s each, so fetch only the few most relevant posts). If the tools are
+   unavailable, say so in the card and fall back to search snippets; do not invent thread content.
 2. For each candidate, write down: parameter count and active parameters, the Q4_K_XL/Q8 file size,
    whether it fits VRAM and RAM (show the arithmetic), whether llama.cpp/Strata support it today,
    and whether sm_70 can run it. If you cannot verify a number, label it "unverified".
