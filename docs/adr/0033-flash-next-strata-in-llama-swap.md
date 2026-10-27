@@ -23,6 +23,11 @@ LiteLLM `:4000` -> llama-swap `:9090`, as model `flash`:
 - Text and image requests work through LiteLLM `:4000` (`flash` is listed in `/v1/models`).
 
 ## Consequences / watch
+- **PCIe lanes (TODO):** both V100s currently run at PCIe 3.0 **x8** (V100 in E1+E3, Titan X in E6). Flash-Next streams experts over PCIe and a 32K prompt
+  saturated an x8 link (~6.2 GB/s), so x16 is expected to help prefill/long-prompt TTFT by roughly 30-80% (an estimate; decode ~0-5%). Per the MSI X99A XPOWER
+  manual (p.33) the starred 3-way layout V100 in E1 + E4 (x16/x16) and Titan X in E6 (x8) fits the 40-lane CPU, but a double-slot card in E4 covers E5 where the
+  PCIe SSD sits. Plan: move the SSD to the board's M.2 slot (PCIe 2.0 x2, ~1 GB/s, no CPU lanes) or SATA, then re-run `flash-bench.py` with PCIe sampling to
+  measure the gain. Tracked as todo `v100-pcie-x16`.
 - **Any request to coding/chat/big evicts `flash`**, and vice versa (a 1.5-2 min swap). Pollers or agents that hit `coding`
   while `flash` is in use will bump it; use the `flash` mode and avoid mixing the two.
 - `ttl: 1800` frees the V100s after 30 idle minutes but does not reload the trio; the next request for one does.
