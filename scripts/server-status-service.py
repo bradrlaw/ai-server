@@ -300,6 +300,11 @@ V100_SCOUT_BOARD_DB = os.environ.get(
     "V100_SCOUT_BOARD_DB",
     "/srv/ai/hermes/kanban/boards/v100-perf-scout/kanban.db",
 )
+# Same for the "model-engine-scout" cron job/skill (models, quants, Strata, llama.cpp).
+MODEL_SCOUT_BOARD_DB = os.environ.get(
+    "MODEL_SCOUT_BOARD_DB",
+    "/srv/ai/hermes/kanban/boards/model-engine-scout/kanban.db",
+)
 # Allow the dashboard to adjust per-GPU sustained power caps. The chosen watts are
 # written into the gpu-fan-control config, which the daemon treats as the live
 # source of truth: it re-reads power_limits every power_recheck_sec and applies any
@@ -611,6 +616,55 @@ def _http_status(url: str):
         return None, None
 
 
+MODES_DIR = os.environ.get("LLAMASWAP_MODES_DIR", "/srv/ai/config/modes")
+MODE_SCRIPT = os.environ.get("LLAMASWAP_MODE_SCRIPT", "/srv/ai/scripts/llama-swap-mode.py")
+_MODE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_mode_switch = {"name": None, "since": 0.0, "error": ""}
+_mode_lock = threading.Lock()
+
+
+def list_modes() -> list:
+    """Serving modes the switcher knows: [{name, label}] from config/modes/*.yaml."""
+    out = []
+    try:
+        for f in sorted(Path(MODES_DIR).glob("*.yaml")):
+            text = f.read_text()
+            nm = re.search(r"^name:\s*(\S+)", text, re.M)
+            lb = re.search(r'^label:\s*"?([^"\n]+?)"?\s*$', text, re.M)
+            if nm and _MODE_NAME_RE.match(nm.group(1)):
+                out.append({"name": nm.group(1), "label": lb.group(1) if lb else nm.group(1)})
+    except OSError:
+        pass
+    return out
+
+
+def _run_mode_switch(name: str) -> None:
+    """`llama-swap-mode.py set <name>` in the background: it renders the config and then warms
+    the mode's models, which can take minutes (a Strata cold load is about 90 s)."""
+    err = ""
+    try:
+        r = subprocess.run([sys.executable, MODE_SCRIPT, "set", name], capture_output=True,
+                           text=True, timeout=1800)
+        if r.returncode != 0:
+            err = (r.stderr or r.stdout or f"exit {r.returncode}").strip()[-300:]
+    except Exception as exc:  # noqa: BLE001
+        err = str(exc)[:300]
+    with _mode_lock:
+        _mode_switch.update(name=None, error=err)
+    _cache["at"] = 0.0
+
+
+def start_mode_switch(name: str) -> tuple[int, str]:
+    if name not in {m["name"] for m in list_modes()}:
+        return 400, f"unknown mode {name!r}"
+    with _mode_lock:
+        if _mode_switch["name"]:
+            return 409, f"already switching to {_mode_switch['name']}"
+        _mode_switch.update(name=name, since=time.time(), error="")
+    threading.Thread(target=_run_mode_switch, args=(name,), daemon=True).start()
+    return 202, f"switching to {name}"
+
+
 def collect_mode() -> dict:
     """Read the active llama-swap mode marker + per-model --parallel / --ctx-size.
 
@@ -668,7 +722,9 @@ def collect_models() -> dict:
     }
     if running is None:
         return {"reachable": False, "loaded": [], "available": [],
-                "mode": cfg["mode"], "config": cfg["models"]}
+                "mode": cfg["mode"], "config": cfg["models"],
+            "modes": list_modes(), "switching": _mode_switch["name"],
+            "switch_error": _mode_switch["error"]}
     rows = running.get("running") or []
     loaded = []
     loaded_ids = set()
@@ -699,7 +755,9 @@ def collect_models() -> dict:
         if isinstance(c, dict) and c.get("id") and c["id"] not in loaded_ids
     ]
     return {"reachable": True, "loaded": loaded, "available": available,
-            "mode": cfg["mode"], "config": cfg["models"]}
+            "mode": cfg["mode"], "config": cfg["models"],
+            "modes": list_modes(), "switching": _mode_switch["name"],
+            "switch_error": _mode_switch["error"]}
 
 
 def collect_workflows() -> list:
@@ -756,17 +814,14 @@ def _v100_scout_excerpt(body: str) -> str:
     return text.strip()
 
 
-def collect_v100_scout() -> dict | None:
-    """Latest card filed by the Hermes 'v100-performance-scout' cron skill.
+def _collect_scout(db_path: Path, excerpt_fn) -> dict | None:
+    """Latest card filed by a Hermes scout cron skill, read from its kanban board.
 
-    Reads the kanban board's SQLite file directly (read-only URI, no docker exec,
+    Reads the board's SQLite file directly (read-only URI, no docker exec,
     no write lock contention with the dispatcher) — same trust level as any other
-    read-only collector here. Returns None if the feature is disabled or the board
-    doesn't exist yet (e.g. before the first run).
+    read-only collector here. Returns None if the board doesn't exist yet
+    (e.g. before the first run).
     """
-    if not V100_SCOUT_ENABLED:
-        return None
-    db_path = Path(V100_SCOUT_BOARD_DB)
     if not db_path.exists():
         return None
     try:
@@ -794,10 +849,24 @@ def collect_v100_scout() -> dict | None:
             "title": title,
             "status": status,
             "created_at": created_at,
-            "excerpt": _v100_scout_excerpt(body or ""),
+            "excerpt": excerpt_fn(body or ""),
         },
         "open_count": open_count,
     }
+
+
+def collect_v100_scout() -> dict | None:
+    """Latest card from the 'v100-performance-scout' skill (its '## HIGH VALUE' section)."""
+    if not V100_SCOUT_ENABLED:
+        return None
+    return _collect_scout(Path(V100_SCOUT_BOARD_DB), _v100_scout_excerpt)
+
+
+def collect_model_scout() -> dict | None:
+    """Latest card from the 'model-engine-scout' skill (the whole report, three short sections)."""
+    if not V100_SCOUT_ENABLED:
+        return None
+    return _collect_scout(Path(MODEL_SCOUT_BOARD_DB), lambda body: body.strip())
 
 
 def _sync_workflow(name: str, source: str = "", dry_run: bool = False) -> tuple[bool, dict]:
@@ -1240,6 +1309,7 @@ def build_status() -> dict:
         "power_mode": _power_state["mode"],
         "workflows": collect_workflows() if WORKFLOW_SYNC_ENABLED else [],
         "v100_scout": collect_v100_scout(),
+        "model_scout": collect_model_scout(),
         "quiet": {
             "enabled": QUIET_HOURS_ENABLED,
             "paused": _QUIET_PAUSED.is_set(),
@@ -1260,6 +1330,7 @@ def build_status() -> dict:
             "comfyui": STATUS_ACTIONS_ENABLED and bool(QUIET_COMFYUI_UNITS),
             "services": STATUS_ACTIONS_ENABLED and bool(MANAGED_SERVICES),
             "quiet": STATUS_ACTIONS_ENABLED and QUIET_HOURS_ENABLED,
+            "mode": STATUS_ACTIONS_ENABLED,
             "gpu_power": GPU_POWER_ACTIONS_ENABLED,
             "gpu_power_range": [GPU_POWER_MIN_W, GPU_POWER_MAX_W, GPU_POWER_STEP_W],
             "workflow_sync": STATUS_ACTIONS_ENABLED and WORKFLOW_SYNC_ENABLED,
@@ -1913,6 +1984,8 @@ _HTML = """<!doctype html>
   body { font-family: system-ui, sans-serif; margin: 0; background:#0f1115; color:#e6e6e6; }
   header { padding: 16px 20px; background:#151922; border-bottom:1px solid #232a36; }
   h1 { font-size: 18px; margin:0; }
+  .modebar { margin-top:6px; font-size:13px; color:#c9d1e0; }
+  .modebar select { background:#1b2230; color:#e6edf3; border:1px solid #2f3a4f; border-radius:6px; padding:3px 6px; }
   .sub { color:#8b95a7; font-size: 12px; margin-top:4px; }
   main { padding: 20px; display:grid; gap:16px; max-width: 1800px; margin:0 auto;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); grid-auto-flow: dense; }
@@ -2001,13 +2074,13 @@ _HTML = """<!doctype html>
      report); flex-grow then fills whatever extra height the stretch gives it,
      uncapped — the outer grid row already bounds the total height, so this
      can't grow unboundedly. Scrolls only if the actual text overflows that. */
-  #v100scoutsec { display:flex; flex-direction:column; }
-  #v100scout { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
-  #v100scout .excerpt { flex:1 1 180px; min-height:0; overflow-y:auto; }
+  #v100scoutsec, #modelscoutsec { display:flex; flex-direction:column; }
+  #v100scout, #modelscout { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+  #v100scout .excerpt, #modelscout .excerpt { flex:1 1 180px; min-height:0; overflow-y:auto; }
 </style></head>
 <body>
 <div id="toasts"></div>
-<header><button class="act" style="float:right" onclick="logout()">Sign out</button><button class="act" style="float:right;margin-right:8px" onclick="resetLayout()" title="Restore default section order/widths">Reset layout</button><h1>AI Server Status</h1><div class="sub" id="sub">loading…</div></header>
+<header><button class="act" style="float:right" onclick="logout()">Sign out</button><button class="act" style="float:right;margin-right:8px" onclick="resetLayout()" title="Restore default section order/widths">Reset layout</button><h1>AI Server Status</h1><div class="modebar" id="modebar" style="display:none">Mode <select id="modesel" onchange="switchMode(this)" title="Switch the llama-swap serving mode"></select> <span class="sub" id="modemsg"></span></div><div class="sub" id="sub">loading…</div></header>
 <main>
   <section id="modelssec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Models (llama-swap) <span class="hsub" id="modebadge"></span></span><button class="wbtn" onclick="cycleWidth('modelssec')" title="Resize">⤢</button></h2><div id="models">…</div></section>
   <section id="gpussec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">GPUs</span><button class="wbtn" onclick="cycleWidth('gpussec')" title="Resize">⤢</button></h2><div id="gpus">…</div></section>
@@ -2021,6 +2094,10 @@ _HTML = """<!doctype html>
   <section id="v100scoutsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Latest V100 findings <span class="hsub" id="v100scoutmsg"></span></span><button class="wbtn" onclick="cycleWidth('v100scoutsec')" title="Resize">⤢</button></h2>
     <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>v100-perf-scout</code> research skill.</div>
     <div id="v100scout">…</div>
+  </section>
+  <section id="modelscoutsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Latest model &amp; engine findings <span class="hsub" id="modelscoutmsg"></span></span><button class="wbtn" onclick="cycleWidth('modelscoutsec')" title="Resize">⤢</button></h2>
+    <div class="sub" style="margin-bottom:8px">Most recent report from the Hermes <code>model-engine-scout</code> research skill (models, quants, Strata, llama.cpp).</div>
+    <div id="modelscout">…</div>
   </section>
   <section id="quietsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Quiet hours <span class="hsub" id="quietstate"></span></span><button class="wbtn" onclick="cycleWidth('quietsec')" title="Resize">⤢</button></h2>
     <div id="quietctl">…</div>
@@ -2228,6 +2305,28 @@ async function refreshHistory(){
     document.getElementById('history').innerHTML = html;
   }catch(e){ document.getElementById('history').innerHTML = '<span class="sub">history error: '+esc(String(e))+'</span>'; }
 }
+function renderModeBar(m, actions){
+  const bar=document.getElementById('modebar'), sel=document.getElementById('modesel'), msg=document.getElementById('modemsg');
+  if(!bar||!sel||!m||!m.modes||!m.modes.length||!(actions&&actions.mode)){ if(bar) bar.style.display='none'; return; }
+  bar.style.display='';
+  if(document.activeElement!==sel){
+    sel.innerHTML=m.modes.map(x=>'<option value="'+esc(x.name)+'">'+esc(x.label)+'</option>').join('');
+    sel.value=m.mode;
+  }
+  sel.disabled=!!m.switching;
+  msg.textContent=m.switching? 'switching to '+m.switching+'… (models reload, can take a few minutes)' : (m.switch_error? 'last switch failed: '+m.switch_error : '');
+}
+async function switchMode(el){
+  const name=el.value;
+  if(!confirm('Switch serving mode to "'+name+'"?\\nThis unloads and reloads models; in-flight requests may fail.')){ setTimeout(refresh,0); return; }
+  el.disabled=true;
+  try{
+    const r=await api('actions/mode?name='+encodeURIComponent(name),{method:'POST'});
+    const dd=await r.json();
+    toast(dd.ok? 'Switching to '+name+'…' : 'Mode switch failed: '+esc(dd.detail||dd.error||String(r.status)), !dd.ok);
+  }catch(e){ toast('Mode switch error: '+esc(String(e)), true); }
+  finally{ setTimeout(refresh, 800); }
+}
 async function refresh(){  try{
     const r = await api('status.json'); const d = await r.json();
     document.getElementById('sub').textContent = d.summary + '  ·  updated ' + new Date(d.timestamp*1000).toLocaleTimeString();
@@ -2235,6 +2334,7 @@ async function refresh(){  try{
     let m = d.models;
     const mode = m.mode && m.mode!=='unknown' ? m.mode : null;
     document.getElementById('modebadge').textContent = mode ? '· mode: '+mode : '';
+    renderModeBar(m, d.actions);
     function cfgCols(x){
       const p = x.parallel!=null ? x.parallel : (m.config&&m.config[x.model]? m.config[x.model].parallel : null);
       const cps = x.ctx_per_slot!=null ? x.ctx_per_slot : (m.config&&m.config[x.model]? m.config[x.model].ctx_per_slot : null);
@@ -2362,6 +2462,7 @@ async function refresh(){  try{
     renderQuiet(d);
     renderWorkflows(d);
     renderV100Scout(d);
+    renderModelScout(d);
   }catch(e){ document.getElementById('sub').textContent = 'status service error: ' + e; }
 }
 function renderQuiet(d){
@@ -2453,20 +2554,22 @@ function renderWorkflows(d){
     '<table><tr><th>Workflow</th><th>Exposed knobs</th><th>Source / Action</th></tr>'+rows.join('')+'</table>'
     +'<div id="wfsyncout" class="sub" style="margin-top:8px;white-space:pre-wrap;font-family:monospace"></div>';
 }
-function renderV100Scout(d){
-  const sec=document.getElementById('v100scoutsec');
-  const sc=d.v100_scout;
+function renderScout(secId, msgId, bodyId, sc, board){
+  const sec=document.getElementById(secId);
+  if(!sec) return;
   if(!sc || sc.error || !sc.latest){ sec.style.display='none'; return; }
   sec.style.display='';
   const l=sc.latest;
   const when=l.created_at ? new Date(l.created_at*1000).toLocaleString() : 'unknown';
-  document.getElementById('v100scoutmsg').textContent =
+  document.getElementById(msgId).textContent =
     sc.open_count>1 ? (sc.open_count+' cards awaiting review') : '';
-  document.getElementById('v100scout').innerHTML =
+  document.getElementById(bodyId).innerHTML =
     '<div><b>'+esc(l.title||l.id)+'</b> <span class="hsub">'+esc(String(l.status||'?'))+' · '+esc(when)+'</span></div>'
     +'<div class="sub excerpt" style="margin-top:6px;padding-right:4px">'+(l.excerpt?mdToHtml(l.excerpt):'(no excerpt)')+'</div>'
-    +'<div class="hsub" style="margin-top:6px"><a href="http://'+location.hostname+':9119/kanban" target="_blank" style="color:#4b8ce0">View on the Hermes kanban board</a></div>';
+    +'<div class="hsub" style="margin-top:6px"><a href="http://'+location.hostname+':9119/kanban" target="_blank" style="color:#4b8ce0">View on the Hermes kanban board</a> ('+esc(board)+')</div>';
 }
+function renderV100Scout(d){ renderScout('v100scoutsec','v100scoutmsg','v100scout',d.v100_scout,'v100-perf-scout'); }
+function renderModelScout(d){ renderScout('modelscoutsec','modelscoutmsg','modelscout',d.model_scout,'model-engine-scout'); }
 async function syncWorkflow(name, dryRun){
   const msg=document.getElementById('wfsyncmsg');
   const out=document.getElementById('wfsyncout');
@@ -3109,6 +3212,17 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": ok, "paused": _QUIET_PAUSED.is_set(), "detail": detail[:500],
             }).encode("utf-8")
             self._send(200 if ok else 500, body, "application/json")
+        elif path == "/actions/mode":
+            if not STATUS_ACTIONS_ENABLED:
+                self._send(403, json.dumps(
+                    {"ok": False, "error": "actions disabled"}).encode("utf-8"), "application/json")
+                return
+            qs = urllib.parse.parse_qs(
+                self.path.split("?", 1)[1] if "?" in self.path else "")
+            code, detail = start_mode_switch(qs.get("name", [""])[0])
+            _cache["at"] = 0.0
+            self._send(code, json.dumps(
+                {"ok": code == 202, "detail": detail}).encode("utf-8"), "application/json")
         elif path == "/actions/gpu-power":
             if not GPU_POWER_ACTIONS_ENABLED:
                 self._send(403, json.dumps(

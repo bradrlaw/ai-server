@@ -24,7 +24,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
 </style></head>
 <body>
 <h1>localmind-landing-page</h1>
-<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 23 run(s) &middot; sorted by objective score, then design, then decode speed</p>
+<p class="sub"><span class="navcur">scoreboard</span> &middot; <a href="RESULTS.html">results</a><br>Model-eval comparison &middot; 24 run(s) &middot; sorted by objective score, then design, then decode speed</p>
 <div class="wrap"><table>
   <thead><tr>
     <th class="l">Model / weights</th><th>Objective</th><th>Design</th><th>MTP</th>
@@ -79,6 +79,22 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
       <td>stop</td>
       <td class="name">2026-07-27</td>
       <td class="l"><a href="outputs/fast/index.html">output</a></td>
+    </tr>
+    <tr>
+      <td class="l"><a href="outputs/flash-1m-r1/run.html"><span class="model">flash</span></a>
+        <div class="name">Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf</div></td>
+      <td><span class="score">27/27</span> <span class="name">100%</span></td>
+      <td><span class="name">—</span></td>
+      <td><span class="pill mtp-on">on</span> <span class="name">87%</span></td>
+      <td>38282 B</td>
+      <td>13642</td>
+      <td>5925.9 ms</td>
+      <td>141.4</td>
+      <td>78.9</td>
+      <td>178.9 s</td>
+      <td>stop</td>
+      <td class="name">2026-10-27</td>
+      <td class="l"><a href="outputs/flash-1m-r1/index.html">output</a></td>
     </tr>
     <tr>
       <td class="l"><a href="outputs/thinkingcap-27b/run.html"><span class="model">thinkingcap</span></a>
@@ -402,7 +418,7 @@ border:1px solid var(--border)}.mtp-on{color:var(--teal);border-color:rgba(0,212
     </tr>
   </tbody>
 </table></div>
-<p class="foot">Generated 2026-10-24T19:14:03+00:00 by scripts/eval-summary.py.
+<p class="foot">Generated 2026-10-27T07:48:16+00:00 by scripts/eval-summary.py.
 Objective = automated check.py. Design = manual 0–5 axes from each run's scores.json (subtotal /25; “—” = unscored) — see RESULTS.md for the breakdown.
 TTFT / throughput are server-side llama.cpp timings (prefill = prompt_ms; decode = predicted_per_second).</p>
 </body></html>

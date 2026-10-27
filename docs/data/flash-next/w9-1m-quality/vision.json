@@ -1,0 +1,44 @@
+[
+ {
+  "case": "color",
+  "pass": true,
+  "sec": 2.6,
+  "answer": "Red",
+  "ptok": 88
+ },
+ {
+  "case": "ocr",
+  "pass": true,
+  "sec": 3.5,
+  "answer": "INVOICE 4417\nTOTAL $82.50",
+  "ptok": 142
+ },
+ {
+  "case": "count",
+  "pass": true,
+  "sec": 4.4,
+  "answer": "Looking at the image:\n\n- There are **two blue circles** on the left.\n- There is **one green square** on the right.\n\n\u2705 So, to answer your question directly:\n\n> **There are 2 circles, and they are both blue.**\n\nThe green shape is a square, not a circle, so it doesn\u2019t count toward the total number of c",
+  "ptok": 154
+ },
+ {
+  "case": "chart",
+  "pass": true,
+  "sec": 3.8,
+  "answer": "B",
+  "ptok": 178
+ },
+ {
+  "case": "two-images",
+  "pass": true,
+  "sec": 5.0,
+  "answer": "Based on a visual analysis of the two images provided, we can determine their dominant colors.\n\n- **First Image:** This image is a solid, uniform field of color. The hue is a vibrant and saturated shade of red. There are no other colors, gradients, or patterns present. Therefore, the dominant color ",
+  "ptok": 157
+ },
+ {
+  "case": "long-ctx",
+  "pass": true,
+  "sec": 35.3,
+  "answer": "Based on the documents provided:\n\n**Question 1:** The passphrase for the blue door is **TANGERINE-4471**. (Found in `ADR-0010-overall-serving-architecture.md`)\n\n**Question 2:** The attached image is **red**.",
+  "ptok": 46997
+ }
+]

@@ -1,0 +1,15 @@
+# Mode overlay: flash
+# Qwen3.8-Flash-Next (Strata) holds both V100s; `small` stays on the Titan X (idx0).
+# No overrides. Use `daily` to hand the V100s back to coding/chat. Requesting `flash`
+# in any mode also swaps it in via the matrix; this mode just keeps it warm.
+name: flash
+label: "Flash-Next (Strata, 512K, vision)"
+description: >
+  Qwen3.8-Flash-Next 125B MoE on both V100s (about 2x the decode and 12x the prefill of
+  `big`), 512K context with image input. coding/chat/big are unloaded until `daily` is set.
+overrides: {}
+preload:
+  - small
+warm:
+  - flash
+  - small

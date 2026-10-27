@@ -2271,3 +2271,8 @@ Build the CPU encoder from the llama.cpp commit pinned in Strata's `setup.py` (`
 `build/bin/strata-vision`. Add to the Strata config a `vision` block (`exe`, `mmproj` = `unsloth/mmproj-BF16.gguf`,
 `model` = Q4 shard 1, `threads` 8, `max_tokens` 1024) and pass `--vision`. The CPU encoder is the default; a GPU encoder
 (`-DSTRATA_VISION_CUDA=ON`, `"gpu": true`, `--vram-reserve-mib 700`, `strata-w7.json`) also fits at 512K (tested) by shrinking the expert cache. Reference: `models/qwen3.8-flash-next/strata/strata-w6.json`.
+
+### Production `flash` model (ADR-0033, 2026-10-25)
+`flash` is a llama-swap model (Strata, `config/strata/flash.json`) behind LiteLLM `:4000`. Matrix set `fn` makes it exclusive with
+`coding`/`chat`/`big`/`coder-next`/gemmas on idx1+idx2 (`small` on idx0 coexists). Select it by requesting `flash` or
+`scripts/llama-swap-mode.py set flash`; `set daily` returns the trio. Cold load about 90 s. Log: `var/strata/flash.log`.

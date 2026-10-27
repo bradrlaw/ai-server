@@ -1,0 +1,15 @@
+diff --git a/serve/server.py b/serve/server.py
+index 632d3c0..afa4d42 100644
+--- a/serve/server.py
++++ b/serve/server.py
+@@ -6964,6 +6964,10 @@ def make_handler(svc: Service):
+                     if c is None:
+                         self.wfile.write(b": keep-alive\n\n")      # an SSE comment: clients ignore it
+                     else:
++                        if c.get("timings"):
++                            # local patch (ADR-0033): LiteLLM's proxy fast path drops extra fields such as `timings`
++                            # unless the chunk has a system_fingerprint (llama.cpp always sends one)
++                            c.setdefault("system_fingerprint", "strata")
+                         self.wfile.write(b"data: " + json.dumps(c, ensure_ascii=False).encode() + b"\n\n")
+                     self.wfile.flush()
+                 self.wfile.write(b"data: [DONE]\n\n")

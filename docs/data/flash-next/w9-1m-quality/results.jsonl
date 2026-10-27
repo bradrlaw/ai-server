@@ -1,0 +1,8 @@
+{"ts": "2026-10-27T06:57:13Z", "label": "q4w9-1m", "test": "speed", "kind": "short", "decode_tps_median": 65.37, "decode_tps_all": [65.37, 67.21, 54.98], "ttft_median": 0.5}
+{"ts": "2026-10-27T06:57:28Z", "label": "q4w9-1m", "test": "speed", "kind": "code", "decode_tps_median": 87.66, "decode_tps_all": [69.81, 87.66, 90.77], "ttft_median": 0.095}
+{"ts": "2026-10-27T07:03:09Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 32000, "depth": 0.1, "expected": "232646", "ok": true, "filler": "real", "prompt_tokens": 37339, "ttft_s": 29.912, "answer": "232646"}
+{"ts": "2026-10-27T07:03:34Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 32000, "depth": 0.5, "expected": "143636", "ok": true, "filler": "real", "prompt_tokens": 27315, "ttft_s": 24.572, "answer": "143636"}
+{"ts": "2026-10-27T07:03:59Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 32000, "depth": 0.9, "expected": "552087", "ok": true, "filler": "real", "prompt_tokens": 31162, "ttft_s": 24.751, "answer": "552087"}
+{"ts": "2026-10-27T07:05:18Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 128000, "depth": 0.1, "expected": "881187", "ok": true, "filler": "real", "prompt_tokens": 123255, "ttft_s": 78.712, "answer": "881187"}
+{"ts": "2026-10-27T07:06:33Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 128000, "depth": 0.5, "expected": "355995", "ok": true, "filler": "real", "prompt_tokens": 121181, "ttft_s": 75.323, "answer": "355995"}
+{"ts": "2026-10-27T07:08:09Z", "label": "q4w9-1m", "test": "needle", "target_tokens": 128000, "depth": 0.9, "expected": "609914", "ok": false, "filler": "real", "prompt_tokens": 149013, "ttft_s": 95.547, "answer": "I cannot provide that information."}

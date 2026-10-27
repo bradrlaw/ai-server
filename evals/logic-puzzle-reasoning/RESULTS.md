@@ -12,6 +12,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 30.8 | 80 ms | 9944 | 4902 B | off | stop |
 | `chat-uncensored-q6` | Qwen3.6-35B-A3B-uncensored-heretic-Native-MTP-Preserved-Q6_K.gguf | 12/12 | 114.8 | 802 ms | 16603 | 6013 B | on 79% | stop |
 | `fast` | gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf | 12/12 | 81.1 | 1274 ms | 2227 | 6576 B | on 82% | stop |
+| `flash` | Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf | 12/12 | 77.8 | 4434 ms | 16841 | 5032 B | on 69% | stop |
 | `big` | Qwen3.8-27B-UD-Q6_K_XL.gguf | 12/12 | 42.7 | 771 ms | 3732 | 4080 B | on 80% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 42.1 | 764 ms | 8389 | 5155 B | on 83% | stop |
 | `big` | Qwen3.8-27B-UD-Q8_K_XL.gguf | 12/12 | 41.0 | 770 ms | 16182 | 6571 B | on 81% | stop |
@@ -40,6 +41,7 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 | `flash` | 3 | 4 | 4 | 4 | 5 | 20/25 | Finds both contradictions but its 'max-satisfying' table is only 10/12 (r1 reaches 11/12), so the 'maximum number of clues' claim is wrong; clue-by-clue table is honest about the 2 violations. Scored by Copilot, not the owner. |
 | `chat-uncensored-q6` | · | · | · | · | · | — |  |
 | `fast` | · | · | · | · | · | — |  |
+| `flash` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
 | `big` | · | · | · | · | · | — |  |
@@ -63,4 +65,4 @@ To record design scores, edit each run's `outputs/<label>/scores.json`
 Axes (see this test's `README.md` for what each measures): Correctness, Rigor / stepwise, Contradiction handling, Clarity, Verification.
 `·` = not yet scored.
 
-_Last generated 2026-10-24T19:14:04+00:00._
+_Last generated 2026-10-27T07:48:20+00:00._

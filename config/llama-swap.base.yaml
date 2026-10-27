@@ -367,6 +367,20 @@ models:
       --spec-type draft-mtp --spec-draft-n-max 2
       ${common}
 
+  # --- flash: Qwen3.8-Flash-Next 125B MoE (UD-Q4_K_XL) on the Strata engine (ADR-0033) ---
+  # Needs BOTH V100s and ~72 GiB of pinned host RAM, so the matrix makes it exclusive with
+  # everything on idx1/idx2 (set `fn`); `small` on idx0 coexists. 512K ctx, vision via the GPU
+  # encoder (config/strata/flash.json). Cold load ~90 s. Strata is not llama.cpp: no /props or
+  # /slots, readiness is /health. ttl 1800 so the V100s are not held while nobody is using it.
+  "flash":
+    name: "Qwen3.8-Flash-Next 125B MoE (Strata, 512K, vision)"
+    description: "125B MoE / ~6B active on Strata: ~2.3x faster decode, ~12x faster prefill than llama.cpp. Uses both V100s; evicts coding/chat/big."
+    ttl: 1800
+    proxy: "http://127.0.0.1:${PORT}"
+    checkEndpoint: /health
+    healthCheckTimeout: 600
+    cmd: /srv/ai/scripts/strata-serve-port.sh /srv/ai/config/strata/flash.json ${PORT}
+
 routing:
   router:
     use: matrix
@@ -386,8 +400,10 @@ routing:
           x: gemma-31b
           y: gemma-26b
           w: chat-uncensored-q6
+          fl: flash
         evict_costs:
           b: 50   # BF16 is very slow to load; prefer keeping it if already up
+          fl: 30  # ~90 s cold load, ~72 GiB pinned RAM
           n: 30   # 50GB Q4 across both V100s is slow to load; prefer keeping it
         sets:
           # Each set = models that CAN be co-resident (subset semantics allow
@@ -402,6 +418,7 @@ routing:
           qw: "w & h & (f | fu)"    # uncensored-Q6(idx1) + chat(idx2) + idx0 small
           max: "b & (f | fu)"       # big(idx1+idx2) + idx0 small
           cn: "n & (f | fu)"        # coder-next(idx1+idx2) + idx0 small
+          fn: "fl & (f | fu)"       # flash/Strata(idx1+idx2) + idx0 small
 
 # hooks: run actions on lifecycle events. Preload `small` on startup so idx0
 # is never left empty after a llama-swap (re)start — the idx0 slot is
