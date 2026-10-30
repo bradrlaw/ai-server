@@ -2160,3 +2160,64 @@ bottlenecks the AI workloads — inference runs on the V100s (~900 GB/s VRAM) an
 GGUF loading is NVMe/mmap-bound. The safe, worthwhile change is enabling the
 official **2400** in BIOS; chasing higher (2DPC-limited) speeds isn't worth the
 stability risk on a headless always-on box.
+
+## DFlash2 vs MTP, and unified KV, on one V100 (2026-10-28)
+
+Prompted by the r/v100 BWE-fork post (`inscora/llama-superfast-v100-BWE-q8-dflash2`). Tested on our
+**b11819 production binary**, not the fork: one V100 (idx1, 175 W cap), standalone `llama-server` per
+config, llama-swap unloaded for the window (about 55 minutes), daily trio restored and
+`verify-gpu-state.sh` ALL GOOD afterwards. Harness and raw rows: `docs/data/dflash-unified-20261028/`
+(`bench.py`, `results.jsonl`, `summary.txt`). Raw `/completion` with thinking off, 256 tokens, 3 reps (median).
+`echo4k` = echo-heavy code prompt (temp 0), `gen` = generative code (temp 0.6), `gen-t1` = same at temp 1.0,
+`pp16k` = decode rate right after a 16k prefill.
+
+### DFlash2 vs MTP (decode tok/s)
+
+| Config | ctx | echo4k | gen | gen-t1 | pp16k decode | prefill tok/s | VRAM idle / peak MiB |
+|---|---|---|---|---|---|---|---|
+| **production**: Q6_K + MTP n3 | 163840 | 60.4 | 53.4 | 46.6 | 36.4 | 782 | 31768 / 32302 |
+| Q6_K + DFlash2 n7 | 131072 | 86.5 | 48.5 | 54.1 | 38.3 | 739 | 30804 / 31548 |
+| UD-Q4_K_XL + MTP n3 | 163840 | 65.3 | 55.9 | 53.0 | 37.1 | 775 | 27002 / 27538 |
+| UD-Q4_K_XL + DFlash2 n7 | 163840 | 94.3 | 62.4 | 60.2 | 49.7 | 730 | 27392 / 28136 |
+| UD-Q4_K_XL + DFlash2 n7 | **262144** | 94.2 | 62.4 | 60.1 | 48.7 | 732 | 31424 / 32168 |
+
+- DFlash2 beats MTP on Q4_K_XL in all four decode cases: +44% echo, +12% gen, +14% gen-t1, +34% after a long
+  prefix. On Q6_K it is mixed (gen −9%). Against production (Q6_K + MTP n3), Q4_K_XL + DFlash2 is +56% / +17% / +29%.
+- This reverses ADR-0021's premise that MTP wins at ≤180 W; that was from the field guide, not measured here.
+- `--spec-draft-n-max` 5 is slower (echo 81), 7 and 10 are identical (the draft block caps at 7).
+- DFlash2 needs `--spec-draft-n-ubatch 512`; without it the draft compute buffer OOMs at Q6_K / 163840.
+- Q4_K_XL + DFlash2 with vision loaded fits **262144** ctx: 32168 of 32768 MiB peak after a 120k-token fill
+  (409 tok/s prefill, 20 tok/s decode at that depth). Headroom is about 600 MiB; a fill to 262k was **not** tested.
+- Prefill is about 7% slower with DFlash2 (730 vs 782).
+- Speculative decoding is lossless (the target verifies every token), so DFlash2 does not change output quality.
+  Only the Q6_K to Q4_K_XL switch would. Owner wants no quality loss, so the Q6_K rows below are the relevant ones.
+- Not yet checked: output quality of Q4_K_XL vs Q6_K, thinking-on real traffic, tool calls, multi-turn.
+
+### Keeping Q6_K: DFlash2 on the production model (same window, 5 reps)
+
+| Config | ctx | echo4k | gen | gen-t1 | pp16k decode | VRAM idle / peak MiB |
+|---|---|---|---|---|---|---|
+| Q6_K + MTP n3 (production) | 163840 | 60.4 | 53.4 | 46.6 | 36.4 | 31768 / 32302 |
+| Q6_K + DFlash2 n7 | 144k | 86.2 | 48.3 | 54.0 | 38.4 | 31476 / 32220 (after a 120k fill) |
+| Q6_K + DFlash2 n7 | 128k | 86.5 | 48.5 | 54.1 | 38.3 | 30804 / 31548 |
+| Q6_K + DFlash2 n7, Q8_0 drafter | 128k | 86.5 | 49.5 | 53.2 | 33.7 | not recorded |
+
+- 160k with DFlash2 does **not** fit (server crashes on the first request, 32.1 GB idle). The Q8_0 drafter at
+  144k also OOMs and gives no gain at 128k.
+- With Q6_K, DFlash2 is +43% on echo code and +16% at temp 1.0 but **-9% on generative code at temp 0.6**
+  (acceptance 0.46 vs MTP 0.81), and costs 16k to 32k of context. Not a clear win: keep MTP on Q6_K.
+- Q4_K_XL accepts more draft tokens (0.56 vs 0.46 on `gen`), which is why it wins everywhere.
+
+### Unified KV pool (`coding`, Q6_K, `--parallel 2`, ctx 204800, no draft)
+
+| | fixed slots (today's agentic) | `--kv-unified` |
+|---|---|---|
+| 1 request / 2 requests decode | 25.4 / 44.3 tok/s | 25.4 / 44.2 tok/s |
+| one 130k-token prompt | **HTTP 400** (slot is about 100k) | **works**, 419 tok/s prefill, 313 s |
+| idle VRAM | 29854 MiB | 30256 MiB (+400) |
+| decode while the other slot prefills 30k | 8.4 tok/s | 8.0 tok/s |
+
+- Same throughput; unified only lifts the per-slot ceiling. Cost is about 400 MiB.
+- Decode drops to about 8 tok/s during another slot's long prefill on either layout (no prefill/decode scheduler in b11819).
+- b11819 already defaults to `--cache-ram 8192` and `--cache-idle-slots`, so the host prompt cache is already on;
+  we did not test a larger `--cache-ram`.
