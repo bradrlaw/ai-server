@@ -1,0 +1,47 @@
+q6-mtp3            echo4k     tg   60.4 pp   836.8 acc 1.0
+q6-mtp3            gen        tg   53.4 pp   163.1 acc 0.81
+q6-mtp3            gen-t1     tg   46.6 pp   161.4 acc 0.66
+q6-mtp3            pp16k      tg   36.4 pp  782.05 acc 0.6
+q6-dfl7            echo4k     tg   86.5 pp   783.0 acc 0.98
+q6-dfl7            gen        tg   48.5 pp   158.4 acc 0.46
+q6-dfl7            gen-t1     tg   54.1 pp   159.1 acc 0.53
+q6-dfl7            pp16k      tg  38.25 pp  739.15 acc 0.41
+q4-mtp3            echo4k     tg   65.3 pp   822.0 acc 1.0
+q4-mtp3            gen        tg   55.9 pp   163.7 acc 0.77
+q4-mtp3            gen-t1     tg   53.0 pp   165.5 acc 0.7
+q4-mtp3            pp16k      tg  37.05 pp  775.25 acc 0.54
+q4-dfl7            echo4k     tg   94.3 pp   765.1 acc 0.98
+q4-dfl7            gen        tg   62.4 pp   165.8 acc 0.56
+q4-dfl7            gen-t1     tg   60.2 pp   163.2 acc 0.54
+q4-dfl7            pp16k      tg   49.7 pp   730.2 acc 0.57
+q4-dfl7-262k       echo4k     tg   94.2 pp   766.8 acc 0.98
+q4-dfl7-262k       gen        tg   62.4 pp   162.1 acc 0.56
+q4-dfl7-262k       gen-t1     tg   60.1 pp   163.0 acc 0.54
+q4-dfl7-262k       pp16k      tg 48.650000000000006 pp 732.4000000000001 acc 0.57
+q4-dfl7-262k       fill-120k  tg   20.1 pp   409.0 acc 0.28
+q4-dfl5            echo4k     tg   80.8 pp   763.8 acc 0.99
+q4-dfl5            gen        tg   55.2 pp   165.7 acc 0.58
+q4-dfl5            gen-t1     tg   57.9 pp   166.3 acc 0.62
+q4-dfl5            pp16k      tg 46.099999999999994 pp  729.85 acc 0.62
+q4-dfl10           echo4k     tg   93.7 pp   763.4 acc 0.98
+q4-dfl10           gen        tg   62.1 pp   165.0 acc 0.56
+q4-dfl10           gen-t1     tg   59.9 pp   163.1 acc 0.54
+q4-dfl10           pp16k      tg 49.099999999999994 pp   725.8 acc 0.57
+('p2-fixed', 'conc1') [{'agg_tg_s': 25.4, 'per_req': [26.1]}]
+('p2-fixed', 'conc2') [{'agg_tg_s': 44.3, 'per_req': [23.6, 23.6]}]
+('p2-fixed', 'big-130k') [{'error': 'HTTP Error 400: Bad Request', 'wall': 0.6398682594299316}]
+('p2-fixed', 'decode-during-prefill') [{'dec_tg_s': 8.4, 'dec_wall': 61.0, 'pre_wall': 42.4, 'pre_err': None}]
+('p2-unified', 'conc1') [{'agg_tg_s': 25.4, 'per_req': [26.0]}]
+('p2-unified', 'conc2') [{'agg_tg_s': 44.2, 'per_req': [23.6, 23.5]}]
+p2-unified         big-130k   tg   13.6 pp   419.5 acc -
+('p2-unified', 'decode-during-prefill') [{'dec_tg_s': 8.0, 'dec_wall': 66.6, 'pre_wall': 42.3, 'pre_err': None}]
+q6-dfl7-144k       echo4k     tg   86.2 pp   777.5 acc 0.98
+q6-dfl7-144k       gen        tg   48.3 pp   159.6 acc 0.46
+q6-dfl7-144k       gen-t1     tg   54.0 pp   157.3 acc 0.53
+q6-dfl7-144k       pp16k      tg  38.35 pp  737.55 acc 0.41
+q6-dfl7-144k       fill-120k  tg   20.5 pp   411.6 acc 0.31
+q6-dfl7-128k-d8    echo4k     tg   86.5 pp   780.4 acc 0.98
+q6-dfl7-128k-d8    gen        tg   49.5 pp   156.9 acc 0.47
+q6-dfl7-128k-d8    gen-t1     tg   53.2 pp   158.6 acc 0.52
+q6-dfl7-128k-d8    pp16k      tg   33.7 pp   738.4 acc 0.35
+{'q6-mtp3': (31768, 32302), 'q6-dfl7': (30804, 31548), 'q4-mtp3': (27002, 27538), 'q4-dfl7': (27392, 28136), 'q4-dfl7-262k': (31424, 32168), 'q4-dfl5': (27092, 27832), 'q4-dfl10': (27840, 28584), 'p2-fixed': (29854, 30104), 'p2-unified': (30256, 30508), 'q6-dfl7-144k': (31476, 32220), 'q6-dfl7-128k-d8': (31676, 32418)}
