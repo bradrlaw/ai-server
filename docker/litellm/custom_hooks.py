@@ -77,9 +77,21 @@ llama.cpp; gate this by deployment if a hosted model is ever added. Not
 handled (never seen in tool schemas): a large ``{m,n}`` quantifier inside an
 anchored pattern, or nested repetitions inside one pattern whose product
 reaches 2000.
+
+v100_auto
+---------
+Virtual model ``v100-auto`` for background jobs (Hermes scouts). ``flash`` and
+``big`` both need the two V100s, so asking for ``big`` while ``flash`` is
+loaded evicts it, and the next ``flash`` request evicts ``big`` again (the
+2026-11-03 swap thrash that preceded a kernel hang, ADR-0035). The hook asks
+llama-swap what is loaded and routes to ``flash`` if it is, otherwise ``big``
+(loading it if neither is). Any lookup failure falls back to ``big``.
 """
 
+import asyncio
+import json
 import logging
+import urllib.request
 
 from litellm.integrations.custom_logger import CustomLogger
 
@@ -183,6 +195,23 @@ def _sanitize_schemas_for_llama_grammar(data):
                 )
 
 
+_LLAMA_SWAP_RUNNING = "http://127.0.0.1:9090/running"
+_V100_AUTO_PREFERENCE = ("flash", "big")  # first one already loaded wins; "big" is the default
+
+
+def _pick_v100_model():
+    try:
+        with urllib.request.urlopen(_LLAMA_SWAP_RUNNING, timeout=2) as r:
+            running = json.load(r).get("running", [])
+        loaded = {m.get("model") for m in running if m.get("state") in ("ready", "starting")}
+    except Exception:
+        return "big"
+    for name in _V100_AUTO_PREFERENCE:
+        if name in loaded:
+            return name
+    return "big"
+
+
 def _is_owui_task(messages):
     """True if any message looks like an Open WebUI background task prompt."""
     if not isinstance(messages, list):
@@ -208,6 +237,11 @@ def _is_owui_task(messages):
 
 class AIServerHooks(CustomLogger):
     async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+        try:
+            if data.get("model") == "v100-auto":
+                data["model"] = await asyncio.to_thread(_pick_v100_model)
+        except Exception:
+            data["model"] = "big"
         try:
             messages = data.get("messages")
             if isinstance(messages, list):

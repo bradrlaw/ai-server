@@ -20,6 +20,13 @@ model_list:
       model: openai/big
       api_base: http://127.0.0.1:9090/v1
       api_key: "sk-llama-swap-local"
+  # Virtual model: custom_hooks.py reroutes to whichever of flash/big is loaded
+  # (default big) so background jobs never evict the other. Fallback if the hook fails: big.
+  - model_name: v100-auto
+    litellm_params:
+      model: openai/big
+      api_base: http://127.0.0.1:9090/v1
+      api_key: "sk-llama-swap-local"
   - model_name: coder-next
     litellm_params:
       model: openai/coder-next
