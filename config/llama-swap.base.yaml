@@ -371,11 +371,11 @@ models:
   # Needs BOTH V100s and ~72 GiB of pinned host RAM, so the matrix makes it exclusive with
   # everything on idx1/idx2 (set `fn`); `small` on idx0 coexists. 512K ctx, vision via the GPU
   # encoder (config/strata/flash.json). Cold load ~90 s. Strata is not llama.cpp: no /props or
-  # /slots, readiness is /health. ttl 1800 so the V100s are not held while nobody is using it.
+  # /slots, readiness is /health. ttl 7200 so the V100s are not held while nobody is using it.
   "flash":
     name: "Qwen3.8-Flash-Next 125B MoE (Strata, 512K, vision)"
     description: "125B MoE / ~6B active on Strata: ~2.3x faster decode, ~12x faster prefill than llama.cpp. Uses both V100s; evicts coding/chat/big."
-    ttl: 1800
+    ttl: 7200
     proxy: "http://127.0.0.1:${PORT}"
     checkEndpoint: /health
     healthCheckTimeout: 600
