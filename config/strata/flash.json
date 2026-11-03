@@ -26,6 +26,12 @@
     "--rope-scale",
     "2",
     "--vision",
+    "--conversation-cache-mib",
+    "16384",
+    "--conversation-cache-slots",
+    "4",
+    "--conversation-cache-min-tokens",
+    "16384",
     "--vram-reserve-mib",
     "700"
   ],

@@ -49,3 +49,14 @@ Window 8 ran the same Q4 config at `--max-context 1048576 --rope-scale 4` (eval 
 needles found at 589K-619K (3/3), 913K (2/2) and 1,032,643 tokens (1/1). Cost: ~19 min to first token at 1M (907 tok/s prefill), decode ~37 tok/s at 970K
 (66 tok/s short). Details in `docs/benchmarking.md` ("1M context"). Switching production to 1M would only change `--max-context`/`--rope-scale` in `config/strata/flash.json`, but
 Window 9 then checked short-prompt quality at YaRN x4: GSM8K 0.99 (same as 512K), vision 6/6, tool calls 29/30 (30/30 at 512K), code evals 5/5 at 100%, decode 65/88 vs 69/96 tok/s (short/code). No measurable loss. Production stays at 512K by choice (a 1M prompt costs ~19 min to first token); 1M is available by editing `--max-context`/`--rope-scale` in `config/strata/flash.json`.
+
+## Addendum 2026-11-03: conversation cache on (Copilot + Hermes sharing `flash`)
+With one overnight Copilot session (~125k-token prompts) and a Hermes scout (27-35k) alternating on `flash`, Strata's single
+resumable conversation was overwritten on every switch: Copilot's 125k prompt was re-read in full (76-80 s) five times in
+8 minutes, Hermes's in 24-28 s, and `flash` spent 83% of the window reading prompts (queue avg 1.8, max 4).
+`config/strata/flash.json` now sets `--conversation-cache-mib 16384 --conversation-cache-slots 4
+--conversation-cache-min-tokens 16384` (parked conversations live in host RAM, not VRAM; short side requests do not take a slot).
+Measured with two interleaved 82k-token conversations: cold 47 s each, then every later turn read 22 tokens and prefilled in
+0.9-1.6 s (82k reused, 3 restores, 4 parks). A parked 82k conversation is ~3.66 GB (~44 KB/token), so a 125k one is ~5.5 GB and a
+200k one ~8.8 GB: 16 GiB holds Copilot at full context plus a scout. Host RAM stayed ~38 GB available after the test; the engine
+keeps a 2.5 GiB floor (`--conversation-cache-min-free-mib`). Reload cost: `flash` restarts in ~75 s.
