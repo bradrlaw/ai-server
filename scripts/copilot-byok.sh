@@ -7,6 +7,10 @@
 # Per-model prompt/output token budgets are set automatically (see the case block below);
 # override with COPILOT_PROVIDER_MAX_PROMPT_TOKENS / COPILOT_PROVIDER_MAX_OUTPUT_TOKENS.
 #
+# Models: coding (default), chat, big, flash, coder-next, small, small-uncensored, gemma-31b,
+# gemma-26b, chat-uncensored-q6. Flash-Next:  COPILOT_MODEL=flash copilot-byok.sh
+#   (first request cold-loads ~90 s and evicts coding/chat/big; any later request for those evicts flash)
+#
 # Usage (on the server):        /srv/ai/scripts/copilot-byok.sh
 # Usage (remote via Tailscale): COPILOT_PROVIDER_BASE_URL=http://<tailscale-ip>:4000/v1 \
 #                                 COPILOT_PROVIDER_API_KEY=sk-... copilot-byok.sh
@@ -28,9 +32,11 @@ export COPILOT_MODEL="${COPILOT_MODEL:-coding}"
 #   ctx-size / reasoning (see config/llama-swap.yaml):
 #     coding     163840  reasoning  (Qwen3.8-27B Q6_K + MTP self-spec decode; reasoning_effort=medium)
 #     chat        98304  reasoning  (UD-Q6_K + MTP self-spec decode; 128k OOMs with MTP)
-#     big        262144  reasoning
+#     big        262144  reasoning  (Qwen3.8-27B UD-Q8_K_XL + MTP, dual-V100, q8 KV)
+#     flash      524288  reasoning  (Qwen3.8-Flash-Next 125B MoE on Strata, 512K, vision; ADR-0033)
 #     coder-next 262144 total / 131072 per slot  (--parallel 2, NON-thinking, agentic, ~77 t/s)
-#     small      32768   NON-thinking (Gemma-4-12B dense on the idx0 Titan X stopgap)
+#     small      32768   NON-thinking (Gemma-4-12B dense on the idx0 Titan X stopgap; small-uncensored same)
+#     gemma-31b / gemma-26b / chat-uncensored-q6   131072  (comparison / uncensored chat)
 case "$COPILOT_MODEL" in
   coding)     def_prompt=114688; def_output=32768 ;;   # 147456 <= 163840 (~16k spare); 3.8 ctx dropped 184320->163840
   chat)       def_prompt=57344;  def_output=24576 ;;   # 81920 <= 98304 (~16k spare); MTP capped ctx to 96k
@@ -40,7 +46,13 @@ case "$COPILOT_MODEL" in
   # NOTE: coder-next weights live on the bulk cold tier (2026-08-18), so the FIRST
   # request after idle eviction (ttl 300) blocks ~5min on the 49.6GB HDD read.
   coder-next) def_prompt=98304;  def_output=32768 ;;
-  small)      def_prompt=20480;  def_output=8192  ;;   # dense 12B on Titan X, ctx 32768 (20480+8192, ~4k spare)
+  # flash uses BOTH V100s and evicts coding/chat/big (a 1.5-2 min swap each way); small on
+  # idx0 coexists. Prefill is ~900 tok/s at depth, so a full 512K prompt takes ~10 min to first
+  # token: the prompt budget is capped well below ctx so Copilot compacts earlier. Raise
+  # COPILOT_PROVIDER_MAX_PROMPT_TOKENS (up to ~450000) for deliberate long-context work.
+  flash)      def_prompt=262144; def_output=32768 ;;
+  gemma-31b|gemma-26b|chat-uncensored-q6) def_prompt=81920; def_output=16384 ;;   # ctx 131072, non-reasoning/light thinking
+  small|small-uncensored) def_prompt=20480;  def_output=8192  ;;   # dense 12B on Titan X, ctx 32768 (20480+8192, ~4k spare)
   *)          def_prompt=32768;  def_output=8192  ;;  # conservative fallback for unlisted models
 esac
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS="${COPILOT_PROVIDER_MAX_PROMPT_TOKENS:-$def_prompt}"
@@ -49,7 +61,8 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 # --- Subagent model routing (GPU-tiered) -----------------------------------
 # Run the token-heavy explore/search subagent on a DIFFERENT local model than the
 # driver so it executes on a SEPARATE GPU in parallel (no contention/eviction):
-#     driver (COPILOT_MODEL, default 'coding') -> V100 idx1
+#     driver (COPILOT_MODEL, default 'coding') -> V100 idx1   (with COPILOT_MODEL=flash the driver
+#     occupies both V100s; 'small' on idx0 still coexists, so the search subagent setting is unchanged)
 #     explore/search subagent  -> 'small' (Gemma-4-12B dense) on the Titan X (idx0), always warm
 # The P100 is on a different card from every V100 driver, so the driver keeps
 # reasoning while explores run in parallel with zero cold-start (small keeper thread).
@@ -75,6 +88,8 @@ export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS="${COPILOT_PROVIDER_MAX_OUTPUT_TOKENS:
 #          serial and swaps big/coder-next onto both V100s, evicting the reviewers' models.
 export SEARCH_SUBAGENT_MODEL="${SEARCH_SUBAGENT_MODEL-small}"
 
+# NOTE: the plan-build MCP is serial and swaps big/coder-next onto both V100s, which evicts
+# `flash`. With COPILOT_MODEL=flash, consider COPILOT_PLAN_BUILD_MCP=0.
 # Register the plan-build MCP server (planner->coder pipeline) with the Copilot CLI.
 # It runs as a native HTTP service on the AI server (scripts/plan-build-mcp.service,
 # 0.0.0.0:9100), so the client needs no Python/uv — just `copilot mcp add`. The URL
