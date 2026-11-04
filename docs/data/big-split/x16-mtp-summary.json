@@ -1,0 +1,262 @@
+[
+ {
+  "config": "layer+mtp",
+  "kind": "code",
+  "decode_tps": 44.45,
+  "accept": 0.863,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "code",
+  "decode_tps": 44.47,
+  "accept": 0.863,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "prose",
+  "decode_tps": 38.71,
+  "accept": 0.682,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "prose",
+  "decode_tps": 38.7,
+  "accept": 0.682,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "json",
+  "decode_tps": 48.22,
+  "accept": 0.978,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "json",
+  "decode_tps": 48.22,
+  "accept": 0.978,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "prefill",
+  "prompt_n": 5732,
+  "prefill_tps": 902.8
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "meta",
+  "load_s": 6.6,
+  "vram_mib": 33812
+ },
+ {
+  "config": "layer+mtp",
+  "kind": "sample",
+  "text": "[\n  {\n    \"id\": 1,\n    \"name\": \"Alice Johnson\",\n    \"email\": \"alice.johnson@example.com\",\n    \"active\": true,\n    \"tags\": [\"admin\", \"user\"]\n  },\n  {\n   "
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "code",
+  "decode_tps": 63.6,
+  "accept": 0.781,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "code",
+  "decode_tps": 63.73,
+  "accept": 0.781,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "prose",
+  "decode_tps": 59.33,
+  "accept": 0.69,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "prose",
+  "decode_tps": 59.31,
+  "accept": 0.69,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "json",
+  "decode_tps": 73.55,
+  "accept": 0.978,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "json",
+  "decode_tps": 73.4,
+  "accept": 0.978,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "prefill",
+  "prompt_n": 5732,
+  "prefill_tps": 905.6
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "meta",
+  "load_s": 6.0,
+  "vram_mib": 33628
+ },
+ {
+  "config": "tensor+mtp",
+  "kind": "sample",
+  "text": "[\n  {\n    \"id\": 1,\n    \"name\": \"Alice Johnson\",\n    \"email\": \"alice.johnson@example.com\",\n    \"active\": true,\n    \"tags\": [\"admin\", \"user\"]\n  },\n  {\n   "
+ },
+ {
+  "config": "layer",
+  "kind": "code",
+  "decode_tps": 22.41,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "code",
+  "decode_tps": 22.4,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "prose",
+  "decode_tps": 22.4,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "prose",
+  "decode_tps": 22.37,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "json",
+  "decode_tps": 22.4,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "json",
+  "decode_tps": 22.4,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "layer",
+  "kind": "prefill",
+  "prompt_n": 5732,
+  "prefill_tps": 1050.3
+ },
+ {
+  "config": "layer",
+  "kind": "meta",
+  "load_s": 6.1,
+  "vram_mib": 32252
+ },
+ {
+  "config": "layer",
+  "kind": "sample",
+  "text": "[\n  {\n    \"id\": 1,\n    \"name\": \"Alice Johnson\",\n    \"email\": \"alice.johnson@example.com\",\n    \"active\": true,\n    \"tags\": [\"admin\", \"user\"]\n  },\n  {\n   "
+ },
+ {
+  "config": "tensor",
+  "kind": "code",
+  "decode_tps": 35.8,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "code",
+  "decode_tps": 35.84,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "prose",
+  "decode_tps": 35.85,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "prose",
+  "decode_tps": 35.84,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "json",
+  "decode_tps": 35.83,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "json",
+  "decode_tps": 35.85,
+  "accept": null,
+  "n": 400,
+  "text_ok": true
+ },
+ {
+  "config": "tensor",
+  "kind": "prefill",
+  "prompt_n": 5732,
+  "prefill_tps": 972.7
+ },
+ {
+  "config": "tensor",
+  "kind": "meta",
+  "load_s": 6.0,
+  "vram_mib": 31796
+ },
+ {
+  "config": "tensor",
+  "kind": "sample",
+  "text": "[\n  {\n    \"id\": 1,\n    \"name\": \"Alice Johnson\",\n    \"email\": \"alice.johnson@example.com\",\n    \"active\": true,\n    \"tags\": [\"admin\", \"user\"]\n  },\n  {\n   "
+ }
+]
