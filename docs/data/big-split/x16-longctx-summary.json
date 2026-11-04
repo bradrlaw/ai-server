@@ -1,0 +1,102 @@
+[
+ {
+  "mode": "layer",
+  "kind": "depth",
+  "target": 16000,
+  "prompt_n": 15730,
+  "cache_n": 0,
+  "prefill_tps": 867.1,
+  "prefill_s": 18.1,
+  "decode_tps": 32.1,
+  "predicted_n": 220,
+  "accept": 0.561,
+  "needle_ok": true,
+  "wall_s": 25.0,
+  "vram_mib": 51740
+ },
+ {
+  "mode": "layer",
+  "kind": "depth",
+  "target": 64000,
+  "prompt_n": 48655,
+  "cache_n": 15214,
+  "prefill_tps": 599.5,
+  "prefill_s": 81.2,
+  "decode_tps": 27.82,
+  "predicted_n": 205,
+  "accept": 0.585,
+  "needle_ok": true,
+  "wall_s": 88.5,
+  "vram_mib": 51740
+ },
+ {
+  "mode": "layer",
+  "kind": "depth",
+  "target": 128000,
+  "prompt_n": 65478,
+  "cache_n": 63353,
+  "prefill_tps": 370.6,
+  "prefill_s": 176.7,
+  "decode_tps": 22.91,
+  "predicted_n": 220,
+  "accept": 0.598,
+  "needle_ok": true,
+  "wall_s": 186.4,
+  "vram_mib": 51760
+ },
+ {
+  "mode": "layer",
+  "kind": "meta",
+  "load_s": 8.5
+ },
+ {
+  "mode": "tensor",
+  "kind": "depth",
+  "target": 16000,
+  "prompt_n": 15730,
+  "cache_n": 0,
+  "prefill_tps": 882.9,
+  "prefill_s": 17.8,
+  "decode_tps": 48.52,
+  "predicted_n": 220,
+  "accept": 0.574,
+  "needle_ok": true,
+  "wall_s": 22.4,
+  "vram_mib": 49804
+ },
+ {
+  "mode": "tensor",
+  "kind": "depth",
+  "target": 64000,
+  "prompt_n": 48655,
+  "cache_n": 15214,
+  "prefill_tps": 654.0,
+  "prefill_s": 74.4,
+  "decode_tps": 29.07,
+  "predicted_n": 182,
+  "accept": 0.61,
+  "needle_ok": true,
+  "wall_s": 80.7,
+  "vram_mib": 49812
+ },
+ {
+  "mode": "tensor",
+  "kind": "depth",
+  "target": 128000,
+  "prompt_n": 65478,
+  "cache_n": 63353,
+  "prefill_tps": 428.9,
+  "prefill_s": 152.7,
+  "decode_tps": 18.92,
+  "predicted_n": 220,
+  "accept": 0.632,
+  "needle_ok": true,
+  "wall_s": 164.4,
+  "vram_mib": 49812
+ },
+ {
+  "mode": "tensor",
+  "kind": "meta",
+  "load_s": 6.0
+ }
+]
