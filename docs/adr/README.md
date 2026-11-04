@@ -53,6 +53,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0034](0034-browser-fetch-mcp.md) | Headless-browser fetch MCP (`browser-fetch`) for Reddit and other fetch-hostile sites | Accepted |
 | [0035](0035-kernel-crash-hardening.md) | Kernel crash hardening: MGLRU off, panic-on-oops reboot | Accepted |
 | [0036](0036-v100-pcie-x16-and-tensor-split.md) | V100 PCIe x16 and `-sm tensor` for `big`: measurements | Accepted |
+| [0037](0037-fan-failure-protection-and-alerts.md) | Fan-failure protection (power cap, thermal shutdown) and ntfy alerts | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

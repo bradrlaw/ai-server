@@ -102,6 +102,26 @@ mountpoint -q /srv/ai/storage && ok "encrypted storage unlocked" || wr "encrypte
 echo "      Time sync: $(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
 fi
 
+hdr "Fans (gpu-fan-control state)"
+python3 - <<'PY' | tee /tmp/.vbm-fan.$$
+import json, time, sys
+try:
+    s = json.load(open("/run/gpu-fan-control/state.json"))
+except Exception as e:
+    print(f"FAIL  fan daemon state unreadable ({e}): is gpu-fan-control running?"); sys.exit(0)
+age = time.time() - s.get("ts", 0)
+print(("PASS" if age < 30 else "FAIL") + f"  fan state age {age:.0f}s")
+if s.get("fault"): print(f"FAIL  daemon fault: {s['fault']}")
+for z in s.get("zones", []):
+    if z.get("monitor_only"):
+        print(f"PASS  {z['name']}: self-cooled (monitor only)"); continue
+    rpm = z.get("rpm")
+    if z.get("stalled") or rpm == 0:
+        print(f"FAIL  {z['name']}: fan STALLED / 0 rpm (check the connector)")
+    else:
+        print(f"PASS  {z['name']}: {rpm} rpm at {z.get('duty')}%")
+PY
+while read -r l; do case $l in PASS*) pass=$((pass+1));; FAIL*) fail=$((fail+1));; esac; done < /tmp/.vbm-fan.$$; rm -f /tmp/.vbm-fan.$$
 echo; echo "Summary: $pass PASS, $warn WARN, $fail FAIL"
 echo "Manual: boot into Windows once from the new disk; confirm UEFI boot order; re-run this with GPUs under load."
 [ $fail -eq 0 ]

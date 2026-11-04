@@ -99,10 +99,34 @@ else:
             print(f"  ERROR: power_limits GPU{i}={w}W out of sane range 50-400W."); bad = True
     if pl:
         print(f"  power_limits validated OK: {pl}")
+pr = cfg.get("protect") or {}
+def _int(v, lo, hi):
+    return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+if not isinstance(pr, dict):
+    print("  ERROR: protect must be an object."); bad = True
+else:
+    for k, lo, hi in (("stall_cap_watts", 50, 400), ("thermal_warn_c", 0, 100),
+                      ("thermal_shutdown_c", 0, 100), ("thermal_shutdown_ticks", 1, 100)):
+        if k in pr and not _int(pr[k], lo, hi):
+            print(f"  ERROR: protect.{k}={pr[k]!r}: want an integer {lo}-{hi}."); bad = True
+    sd, wn = pr.get("thermal_shutdown_c", 88), pr.get("thermal_warn_c", 85)
+    if _int(sd, 0, 100) and _int(wn, 0, 100) and 0 < sd < 75:
+        print(f"  ERROR: protect.thermal_shutdown_c={sd} is below normal V100 load temps (use 0 or >= 75)."); bad = True
+    nf = pr.get("notify") or {}
+    tf = nf.get("topic_file") if isinstance(nf, dict) else None
+    if not tf:
+        print("  NOTE: protect.notify.topic_file unset -> no phone alerts (local protection still on)")
+    elif not os.path.exists(tf):
+        print(f"  WARNING: ntfy topic file {tf} not found -> no phone alerts until it exists")
+    else:
+        print(f"  protect: push alerts via {nf.get('url', 'https://ntfy.sh')} (topic file OK)")
 if bad:
     sys.exit(1)
 print("  config zones validated OK")
 PY
+
+echo "Installing login banner -> /etc/profile.d/gpu-fan-alert.sh"
+install -m644 "$SRC/gpu-fan-alert.sh" /etc/profile.d/gpu-fan-alert.sh
 
 echo "Installing unit -> $UNIT"
 cp "$SRC/gpu-fan-control.service" "$UNIT"
