@@ -85,3 +85,21 @@ all four configs (one small check, not a quality eval).
 - **Estimate only (ADR-0033):** replaced by these measurements.
 - **`-sm row`:** ~4x slower prefill in July; not retested.
 - **Keep layer split:** safest, but gives up ~+50% `big` decode.
+
+## Addendum 2026-11-04: long-context check (`scripts/bench-big-long-ctx.py`)
+
+`big` Q8, MTP n=2, ctx 262144, f16 KV, V100s at x16, one request per depth (prefix reused between depths,
+needle at the top, 220-token answer). Data: `docs/data/big-split/x16-longctx-summary.json`.
+
+| depth (prompt) | layer+MTP prefill / decode | tensor+MTP prefill / decode |
+|---|---|---|
+| 16k | 867 tok/s / 32.1 | 883 tok/s / **48.5** |
+| 64k | 600 / 27.8 | 654 / 29.1 |
+| 128k | 371 / **22.9** | 429 / 18.9 |
+
+Needle retrieved in 6/6. VRAM at 256k ctx: layer 51.7 GB, tensor 49.8 GB (both fit). MTP acceptance 56-63% on this
+repetitive filler (vs 82-84% on the short natural prompts).
+
+**Conclusion:** the tensor decode gain (+50% at short context) is gone by ~64k and reverses (-17%) at 128k.
+Tensor prefill is 2-16% faster at depth. Switching `big` to `-sm tensor` helps short chats only; for long-context
+agent/Copilot work it is a wash or worse, so production stays on `layer`. No config change.
