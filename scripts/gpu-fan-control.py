@@ -505,7 +505,7 @@ class Zone:
 _state_err = {"last": None}
 
 
-def write_state(zones, interval, fault=None):
+def write_state(zones, interval, fault=None, guard=None):
     """Publish the per-tick snapshot atomically (0644) for the status page.
     Best-effort: a failure here never touches fan control (logged once per
     distinct error)."""
@@ -513,6 +513,8 @@ def write_state(zones, interval, fault=None):
     try:
         state = {"ts": round(time.time(), 1), "pid": os.getpid(), "interval": interval,
                  "fault": fault, "zones": [z.snapshot() for z in zones]}
+        if guard is not None:
+            state["protect"] = guard.snapshot()
         os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
         with open(tmp, "w") as f:
             json.dump(state, f)
@@ -533,6 +535,169 @@ def remove_state():
             pass
 
 
+# --- Protection: stall -> power cap, over-temperature -> shutdown, push alerts ----
+# A stalled fan is already held at 100%, which does nothing for a fan that isn't
+# turning. So the daemon also (1) caps the affected GPU's power, (2) pushes an alert
+# (ntfy) and `wall`s logged-in users, and (3) powers the machine off if a GPU stays
+# above `thermal_shutdown_c`. All config under "protect"; see Guard.
+DEFAULT_PROTECT = {
+    "stall_cap_watts": 100,        # cap for a GPU whose chassis fan is stalled
+    "thermal_warn_c": 85,          # urgent alert at/above this (max of core, memory)
+    "thermal_shutdown_c": 88,      # poweroff after thermal_shutdown_ticks ticks here; 0 = off
+    "thermal_shutdown_ticks": 3,
+    "notify": {"url": "https://ntfy.sh", "topic_file": "", "repeat_sec": 900},
+}
+
+
+def merge_protect(cfg_protect):
+    p = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_PROTECT.items()}
+    for k, v in (cfg_protect or {}).items():
+        if isinstance(v, dict) and isinstance(p.get(k), dict):
+            p[k].update(v)
+        else:
+            p[k] = v
+    return p
+
+
+class Notifier:
+    """Fire-and-forget ntfy pushes. Never blocks or breaks the fan loop: the HTTP
+    call runs in a daemon thread with a timeout, and failures are only logged. The
+    topic (the secret) is read from a root-readable file on every send, so it can be
+    rotated without restarting. Each key is rate-limited to one send per repeat_sec."""
+
+    def __init__(self, cfg):
+        self.url = (cfg.get("url") or "https://ntfy.sh").rstrip("/")
+        self.topic_file = cfg.get("topic_file") or ""
+        self.repeat = float(cfg.get("repeat_sec", 900))
+        self._last = {}
+        self._warned = False
+
+    def topic(self):
+        try:
+            t = open(self.topic_file).read().strip()
+            if t:
+                return t
+        except OSError:
+            pass
+        if not self._warned:
+            log(f"notify: no topic in {self.topic_file!r} -> push alerts disabled "
+                f"(local protection still active)")
+            self._warned = True
+        return None
+
+    def send(self, key, title, message, priority="urgent", tags="warning", wait=False):
+        now = time.time()
+        if now - self._last.get(key, 0) < self.repeat:
+            return False
+        topic = self.topic()
+        if not topic:
+            return False
+        self._last[key] = now
+
+        def post():
+            import urllib.request
+            req = urllib.request.Request(
+                f"{self.url}/{topic}", data=message.encode(), method="POST",
+                headers={"Title": title, "Priority": priority, "Tags": tags})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    log(f"notify: sent '{title}' (HTTP {r.status})")
+            except Exception as e:  # noqa: BLE001 - alerts are best-effort
+                log(f"notify: send failed (non-fatal): {e}")
+        import threading
+        t = threading.Thread(target=post, daemon=True)
+        t.start()
+        if wait:
+            t.join(12)
+        return True
+
+
+def wall(message):
+    try:
+        subprocess.run(["wall"], input=message.encode(), timeout=5,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class Guard:
+    def __init__(self, protect):
+        self.p = protect
+        self.notifier = Notifier(protect["notify"])
+        self.stalled = {}          # zone name -> set(gpu idx) currently stalled
+        self.hot = {}              # gpu idx -> consecutive ticks >= thermal_shutdown_c
+        self.shutdown_started = False
+        self.cap_changed = False
+
+    def capped_gpus(self):
+        out = set()
+        for gpus in self.stalled.values():
+            out |= gpus
+        return out
+
+    def effective_limits(self, power_limits):
+        """Configured caps, lowered for any GPU whose fan is stalled."""
+        eff = dict(power_limits or {})
+        for g in self.capped_gpus():
+            cur = eff.get(str(g), eff.get(g))
+            cap = self.p["stall_cap_watts"]
+            eff[str(g)] = min(cap, cur) if cur else cap
+        return eff
+
+    def tick(self, zones, temps):
+        before = self.capped_gpus()
+        now_stalled = {z.name: set(z.gpus) for z in zones if z.stalled and not z.monitor_only}
+        for name, gpus in now_stalled.items():
+            if name not in self.stalled:
+                msg = (f"FAN STALLED: {name} reads 0 rpm. GPU {sorted(gpus)} power capped to "
+                       f"{self.p['stall_cap_watts']} W. Check the fan connector now.")
+                log(f"PROTECT {msg}")
+                wall(f"\n*** aipcub: {msg} ***\n")
+            self.notifier.send(f"stall:{name}", "aipcub: FAN STALLED",
+                               f"{name} is not spinning (GPU {sorted(gpus)} capped to "
+                               f"{self.p['stall_cap_watts']} W).", "urgent", "rotating_light,fan")
+        for name in list(self.stalled):
+            if name not in now_stalled:
+                log(f"PROTECT fan recovered: {name}")
+                self.notifier._last.pop(f"stall:{name}", None)
+                self.notifier.send(f"recover:{name}", "aipcub: fan recovered",
+                                   f"{name} is spinning again; power cap restored.",
+                                   "default", "white_check_mark")
+        self.stalled = now_stalled
+        self.cap_changed = self.capped_gpus() != before
+
+        warn = self.p["thermal_warn_c"]
+        limit = self.p["thermal_shutdown_c"]
+        for idx, t in sorted(temps.items()):
+            eff = t["eff"]
+            if warn and eff >= warn:
+                self.notifier.send(f"hot:{idx}", "aipcub: GPU HOT",
+                                   f"GPU {idx} at {eff} C (core {t['core']}, mem {t['mem']}).",
+                                   "urgent", "fire")
+            self.hot[idx] = self.hot.get(idx, 0) + 1 if (limit and eff >= limit) else 0
+            if limit and self.hot[idx] >= self.p["thermal_shutdown_ticks"] \
+                    and not self.shutdown_started:
+                self.shutdown_started = True
+                msg = (f"GPU {idx} at {eff} C for {self.hot[idx]} ticks (limit {limit} C): "
+                       f"powering off to protect the hardware.")
+                log(f"PROTECT SHUTDOWN {msg}")
+                wall(f"\n*** aipcub: {msg} ***\n")
+                self.notifier.send("shutdown", "aipcub: THERMAL SHUTDOWN", msg,
+                                   "urgent", "skull", wait=True)
+                try:
+                    subprocess.Popen(["systemctl", "poweroff", "--no-block"])
+                except Exception as e:  # noqa: BLE001
+                    log(f"PROTECT poweroff failed: {e}")
+
+    def snapshot(self):
+        return {"capped_gpus": sorted(self.capped_gpus()),
+                "stall_cap_watts": self.p["stall_cap_watts"],
+                "thermal_shutdown_c": self.p["thermal_shutdown_c"],
+                "push_alerts": bool(self.notifier.topic_file and
+                                    os.path.exists(self.notifier.topic_file)),
+                "shutdown_started": self.shutdown_started}
+
+
 def main():
     with open(CONFIG) as f:
         cfg = json.load(f)
@@ -541,6 +706,7 @@ def main():
     startup_wait = cfg.get("gpu_wait_timeout_sec", 90)
     power_recheck = cfg.get("power_recheck_sec", 30)
     power_limits = cfg.get("power_limits")
+    guard = Guard(merge_protect(cfg.get("protect")))
 
     # Guard the boot race: wait (bounded) for the driver to enumerate every card
     # before capping, so no GPU is silently left at its default limit.
@@ -585,7 +751,7 @@ def main():
             # nvidia-smi -pl adjusts the cap without interrupting running jobs.
             if time.time() - last_power_check >= power_recheck:
                 power_limits = read_power_limits(fallback=power_limits)
-                reconcile_power_limits(power_limits)
+                reconcile_power_limits(guard.effective_limits(power_limits))
                 last_power_check = time.time()
             try:
                 temps = gpu_temps()
@@ -620,7 +786,14 @@ def main():
                     log(f"{z.name} update error ({e}) -> {held}")
                     z.error = f"update error ({e}); {held}"
             log(" ".join(status))
-            write_state(zones, interval)
+            try:
+                guard.tick(zones, temps)
+                if guard.cap_changed:
+                    reconcile_power_limits(guard.effective_limits(power_limits))
+                    last_power_check = time.time()
+            except Exception as e:  # noqa: BLE001 - protection must never stop fan control
+                log(f"guard error (non-fatal): {e}")
+            write_state(zones, interval, guard=guard)
             time.sleep(interval)
     except Exception as e:
         log(f"FATAL {e} -> fans to 100%")
