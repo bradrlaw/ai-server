@@ -2,7 +2,11 @@
 # an active power cap. Installed to /etc/profile.d by install-fan-service.sh.
 case $- in *i*) ;; *) return 0 2>/dev/null || exit 0 ;; esac
 _f=/run/gpu-fan-control/state.json
-if [ ! -r "$_f" ]; then
+_up=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 9999)
+if [ ! -r "$_f" ] && [ "$_up" -lt 120 ]; then
+  # daemon starts ~15 s after boot (waits for the NVIDIA driver); don't cry wolf
+  printf '\n gpu-fan-control is still starting (up %ss); re-login in a minute to check fans.\n\n' "$_up"
+elif [ ! -r "$_f" ]; then
   printf '\n\033[1;37;41m !!! gpu-fan-control is NOT running (no %s) - GPUs may be uncooled !!! \033[0m\n\n' "$_f"
 elif command -v python3 >/dev/null 2>&1; then
   python3 - "$_f" <<'PY'
@@ -28,4 +32,4 @@ if msgs:
     print()
 PY
 fi
-unset _f
+unset _f _up
