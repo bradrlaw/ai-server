@@ -581,6 +581,7 @@ DEFAULT_PROTECT = {
     "thermal_warn_c": 85,          # urgent alert at/above this (max of core, memory)
     "thermal_shutdown_c": 88,      # poweroff after thermal_shutdown_ticks ticks here; 0 = off
     "thermal_shutdown_ticks": 3,
+    "nvme_warn_c": 70,             # urgent alert for any NVMe at/above this; 0 = off (alert only)
     "notify": {"url": "https://ntfy.sh", "topic_file": "", "repeat_sec": 900},
 }
 
@@ -725,6 +726,17 @@ class Guard:
                 except Exception as e:  # noqa: BLE001
                     log(f"PROTECT poweroff failed: {e}")
 
+    def check_nvme(self):
+        warn = self.p.get("nvme_warn_c", 0)
+        if not warn:
+            return
+        for d in read_nvme_temps():
+            if d["temp_c"] >= warn:
+                name = d["model"] or d["dev"]
+                self.notifier.send(f"nvme:{d['dev']}", "aipcub: NVMe HOT",
+                                   f"{name} ({d['dev']}) at {d['temp_c']} C "
+                                   f"(alert at {warn} C).", "urgent", "fire")
+
     def snapshot(self):
         return {"capped_gpus": sorted(self.capped_gpus()),
                 "stall_cap_watts": self.p["stall_cap_watts"],
@@ -824,6 +836,7 @@ def main():
             log(" ".join(status))
             try:
                 guard.tick(zones, temps)
+                guard.check_nvme()
                 if guard.cap_changed:
                     reconcile_power_limits(guard.effective_limits(power_limits))
                     last_power_check = time.time()

@@ -106,7 +106,8 @@ if not isinstance(pr, dict):
     print("  ERROR: protect must be an object."); bad = True
 else:
     for k, lo, hi in (("stall_cap_watts", 50, 400), ("thermal_warn_c", 0, 100),
-                      ("thermal_shutdown_c", 0, 100), ("thermal_shutdown_ticks", 1, 100)):
+                      ("thermal_shutdown_c", 0, 100), ("thermal_shutdown_ticks", 1, 100),
+                      ("nvme_warn_c", 0, 100)):
         if k in pr and not _int(pr[k], lo, hi):
             print(f"  ERROR: protect.{k}={pr[k]!r}: want an integer {lo}-{hi}."); bad = True
     sd, wn = pr.get("thermal_shutdown_c", 88), pr.get("thermal_warn_c", 85)
