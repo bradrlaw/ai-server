@@ -2254,6 +2254,23 @@ incremental, scriptable, and restorable without booting into Windows. Whole-disk
 imaging from Windows is a reasonable stopgap but is manual, all-or-nothing, and
 decoupled from this repo's tooling.
 
+### Boot-disk clone on the WD Green 2TB (ADR-0038)
+
+A bootable copy of the Intel boot NVMe (all partitions, incl. Windows) lives on
+the WD Green SN350 2TB, so a dead Intel SSD means "pick the WD in the boot menu".
+
+- **First time (destructive, wipes the WD, ~1-3 h):** `sudo /srv/ai/scripts/backup-clone.sh clone`
+  (type `ERASE`). Then `sudo /srv/ai/scripts/install-backup-clone.sh` for the weekly timer
+  (Sun 04:00 America/New_York, `backup-clone.timer`).
+- **Refresh by hand:** `sudo scripts/backup-clone.sh sync` (add `-n` for a dry run);
+  `scripts/backup-clone.sh status` shows the last sync.
+- **Failover:** reboot, open the firmware boot menu, choose the WD Green. Linux boots from
+  the clone (own UUIDs in its fstab/grub). Windows may need a one-time `bcdboot` repair
+  because partition GUIDs differ.
+- **Not covered:** `/srv/ai/storage` (LUKS) and `storage-bulk` (HDD) are separate disks;
+  see "Backups" above. The sync is a live-root rsync (crash-consistent), not a snapshot.
+- **Wear:** the WD is DRAM-less QLC; weekly incrementals are light, the first copy is slow.
+
 ## Strata engine (Qwen3.8-Flash-Next) — evaluation notes (ADR-0032)
 
 Not in production. Everything lives under gitignored paths: `src/strata` (source), `build-v100/strata`
