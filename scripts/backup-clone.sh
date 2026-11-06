@@ -5,6 +5,7 @@
 #
 #   sudo scripts/backup-clone.sh clone   # ONE-TIME, DESTRUCTIVE: wipe the WD, copy everything
 #   sudo scripts/backup-clone.sh sync    # incremental refresh of the root fs (weekly timer)
+#   sudo scripts/backup-clone.sh finish  # resume the post-rsync steps (fstab, grub) if clone died
 #   sudo scripts/backup-clone.sh status  # last sync + target layout
 #
 # clone: replicates the partition table (fresh GUIDs, so both disks can be
@@ -78,6 +79,22 @@ do_rsync() {
     "${EXCLUDES[@]}" "$@" / "${MNT}/"
 }
 
+# Clone-specific files the rsync excludes (so sync never overwrites them) must be
+# seeded once from the source: fstab, grub.cfg, swap file.
+post_rsync() {
+  local old_root=$1 old_esp=$2 new_root=$3 new_esp=$4
+  cp -a /etc/fstab "${MNT}/etc/fstab"
+  mkdir -p "${MNT}/boot/grub"; cp -a /boot/grub/grub.cfg "${MNT}/boot/grub/grub.cfg"
+  sed -i "s/${old_root}/${new_root}/g; s/${old_esp}/${new_esp}/g" \
+    "${MNT}/etc/fstab" "${MNT}/boot/grub/grub.cfg"
+  grep -rlE "${old_root}|${old_esp}" "${MNT}/boot/efi" --include='*.cfg' 2>/dev/null \
+    | xargs -r sed -i "s/${old_root}/${new_root}/g; s/${old_esp}/${new_esp}/g"
+  fallocate -l "$(stat -c %s /swap.img)" "${MNT}/swap.img"; chmod 600 "${MNT}/swap.img"
+  mkswap "${MNT}/swap.img" >/dev/null
+  echo ">> bootloader"
+  chroot_grub install
+}
+
 cmd_clone() {
   check_disks
   local s d old_root old_esp new_root new_esp
@@ -110,17 +127,22 @@ cmd_clone() {
 
   echo ">> root rsync (~1 TB; slow on this drive)"
   do_rsync
-  sed -i "s/${old_root}/${new_root}/g; s/${old_esp}/${new_esp}/g" "${MNT}/etc/fstab"
-  grep -rlE "${old_root}|${old_esp}" "${MNT}/boot/efi" --include='*.cfg' 2>/dev/null \
-    | xargs -r sed -i "s/${old_root}/${new_root}/g; s/${old_esp}/${new_esp}/g"
-  fallocate -l "$(stat -c %s /swap.img)" "${MNT}/swap.img"; chmod 600 "${MNT}/swap.img"
-  mkswap "${MNT}/swap.img" >/dev/null
-
-  echo ">> bootloader"
-  chroot_grub install
+  post_rsync "${old_root}" "${old_esp}" "${new_root}" "${new_esp}"
   mounts_down; trap - EXIT
   stamp
   echo "Done. Clone root UUID ${new_root}. Test: reboot, pick the WD in the boot menu."
+}
+
+cmd_finish() { # resume after a clone that died after the rsync step
+  check_disks
+  local s d; s=$(readlink -f "${SRC_DISK}"); d=$(readlink -f "${DST_DISK}")
+  trap mounts_down EXIT
+  mounts_up
+  post_rsync "$(blkid -s UUID -o value "${s}p4")" "$(blkid -s UUID -o value "${s}p1")" \
+    "$(blkid -s UUID -o value "${d}p4")" "$(blkid -s UUID -o value "${d}p1")"
+  mounts_down; trap - EXIT
+  stamp
+  echo "finish complete"
 }
 
 cmd_sync() {
@@ -146,7 +168,8 @@ cmd_status() {
 
 case "${1:-}" in
   clone) cmd_clone ;;
+  finish) cmd_finish ;;
   sync) shift; cmd_sync "$@" ;;
   status) cmd_status ;;
-  *) sed -n 3,9p "$0"; exit 2 ;;
+  *) sed -n 3,10p "$0"; exit 2 ;;
 esac
