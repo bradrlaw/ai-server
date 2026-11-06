@@ -2229,6 +2229,15 @@ scripts.
   password manager, not a file next to the backup) — see the 2026-10-17 LUKS
   reformat: a forgotten passphrase with no recovery material meant the volume
   had to be wiped and recreated from scratch.
+- **LUKS header (2026-11-06 incident):** booting Windows with the ADATA disk attached
+  let it "initialize" the disk (GPT + 16 MB MSR), zeroing both 4 KiB LUKS2 binary headers.
+  The JSON metadata and keyslots (16 MiB onwards) survived, so the header was rebuilt
+  from the secondary JSON (copy first 32 MiB, rebuild the two binary headers with a new
+  salt/checksum, test with `cryptsetup open --test-passphrase`, then write 20 KiB and zero
+  the backup GPT in the last 33 sectors; `e2fsck` clean). Keep `sudo
+  scripts/storage-crypt.sh backup-header` output (`~/backups/aidata-luks-header-*.img`,
+  mode 600, copy it off the machine) and **disconnect the encrypted disk (or never boot
+  Windows) when Windows is booted**; never answer "initialize" for it.
 - **Running services:** Docker containers and the two ComfyUI instances write
   to disk continuously. An image taken while they're running captures a
   crash-consistent (not necessarily application-consistent) state — fine for
