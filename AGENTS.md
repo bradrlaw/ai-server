@@ -38,7 +38,7 @@ Read this first, then the detailed docs:
 - **CUDA 12.x only** — 13.x dropped Maxwell/Pascal/Volta (sm_52/sm_60/sm_70). sm_70 also means **no fp8 /
   FlashAttention-2 / SageAttention**; use `sdpa` attention and avoid `*_fast` fp8 paths in ComfyUI.
 - **Keep GPUs under thermal limits** via power caps applied at boot by the `gpu-fan-control`
-  service (Titan X idx0 200W, V100 idx1 175W, V100 idx2 225W — idx2 was raised 2026-10-19 after its
+  service (Titan X idx0 200W, V100 idx1 200W, V100 idx2 225W — idx2 was raised 2026-10-19 after its
   dual-fan shroud, ADR-0009; `power_limits` in
   `scripts/gpu-fan-control.config.json`, re-read live every 30 s, so a raw `nvidia-smi -pl`
   gets reverted: change caps via that file or the status dashboard); V100 HBM throttles ~85 °C. Maxwell GPU

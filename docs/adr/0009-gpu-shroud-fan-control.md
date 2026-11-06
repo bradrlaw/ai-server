@@ -622,3 +622,49 @@ dual-fan shroud), so none of this session's headroom findings apply to it. Raise
 after its cooler is upgraded to match idx2's dual-40mm shroud, then re-run the same
 soak/perf test sequence (175/225/250W soak -> llama.cpp bench -> real-workload sweep)
 before changing its cap, per the same evidence bar used for idx2.
+
+## Addendum (2026-11-06) — idx1 curved blower shroud, drive cages removed, idx1 cap raised to 200W
+
+Hardware changes: idx1's blower got a new, tighter curved shroud; the 5.25" drive cages were
+removed (front fans on printed brackets; SSD/HDD on printed 5.25"-bay brackets). Test: the
+`power-cap-sweep.py` soak (Qwen3.8-27B Q6_K, pp2048/tg512, 600 s soak), idx1, data in
+`docs/data/thermal/*20261105-*` / `*20261106-*`.
+
+**Blower RPM is not a cooling metric.** It is a centrifugal blower: restricting the outlet or
+intake *raises* RPM (over 5k when covered), a free-flowing shroud lowers it. The new shroud
+reads ~4,400 RPM at 100% duty vs ~4,900 for the old one and cools better. Never read lower RPM
+as a fault without checking temperatures.
+
+**New shroud vs old, same day, 175 W, full soak (ambient SYSTIN ~43-44 C):**
+
+| | old shroud | new shroud |
+|---|---|---|
+| HBM mean / max | 81.7 / 85 C | 76.1 / 81 C |
+| core mean | 61.4 C | 54.3 C |
+| thermal slowdown | 50-60% | 0% |
+
+**Why Oct 17's 74 C looked better:** every run since the rebuild is hotter, including idx2 on
+its untouched shroud (225 W soak 78.7 C on Oct 31 vs 80.8 C now), because case ambient
+(SYSTIN) rose from ~40 to ~44-46 C. Not caused by the front fans (old shroud, fans on vs off:
+84.1 vs 84.1 C bench), the cage removal, or case orientation (side-on bench = same).
+
+**Noise:** with the new shroud's free intake the blower clicks from ~3,600 RPM, worst near
+max (the old shroud's intake sat close to the Titan X backplate, which restricted it and hid
+this). A temporary screen/baffle over the intake removes it for ~+0.3 C HBM / +1.1 C core
+(76.4 / 55.4 C vs 76.1 / 54.3 C), no throttling, same throughput.
+
+**Power cap sweep, new shroud + baffle, idx1 (600 s soak):**
+
+| cap | HBM mean / max | core | thermal slowdown | prefill / decode |
+|---|---|---|---|---|
+| 175 W | 76.4 / 81 C | 55.4 C | 0% | 785 / 26.8 |
+| 200 W | 78.8 / 84 C | 58.7 C | 0% | 835 / 27.6 |
+| 225 W (no baffle) | 81.1 / 85 C | 61.3 C | 10% | 872 / 28.1 |
+
+Decision: **idx1 cap raised 175 -> 200 W** (never throttles; ~+6% prefill, +3% decode; peak
+84 C leaves little margin on a warm day, so drop back to 175 W if HBM ~85 C shows up in
+long unattended runs). 225 W is not recommended (thermal slowdown, 85 C).
+
+Also found: the sweep refused to start after `--free` because ComfyUI's startup left a brief
+util spike; `power-cap-sweep.py` now waits for utilization (<=10%) as well as VRAM after unloading.
+Near-miss that prompted ADR-0037: the blower connector was left unplugged after a reshuffle.

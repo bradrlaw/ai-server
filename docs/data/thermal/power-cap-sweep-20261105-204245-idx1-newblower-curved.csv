@@ -1,0 +1,2 @@
+utc_start,label,mode,phase,gpu,cap_w,model,pp,ng,reps,pp_ts,tg_ts,iterations,duration_s,peak_hbm_c,peak_core_c,steady_hbm_c,steady_core_c,mean_power_w,min_sm_mhz,median_sm_mhz,fan_rpm_max,fan_rpm_mean,duty_max_pct,pct_sw_power_cap,pct_thermal_slowdown,pct_hw_slowdown,systin_mean_c,cool_s,status
+2026-11-05T20:42:48+00:00,idx1-newblower-curved,lockstep,bench,1,175,Qwen3.8-27B-Q6_K.gguf,2048,512,3,788.76,26.88,1,73,85.0,55.0,83.5,54.2,170.3,1072.0,1162.0,4470,4125,100,56,0,0,43.7,1.9,ok

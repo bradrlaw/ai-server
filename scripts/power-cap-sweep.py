@@ -596,7 +596,8 @@ def main() -> int:
             freed.append(m)
         for _ in range(60):
             state = gpu_state(gpus)
-            if all((state[g]["mem_mb"] or 0) <= a.max_used_mb for g in gpus):
+            if all((state[g]["mem_mb"] or 0) <= a.max_used_mb and (state[g]["util"] or 0) <= 10
+                   for g in gpus):
                 break
             time.sleep(1)
     state = gpu_state(gpus)
