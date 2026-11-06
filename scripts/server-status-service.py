@@ -1241,6 +1241,41 @@ def _disk_info(specs):
     return out
 
 
+def read_nvme_temps(root="/sys/class/hwmon"):
+    """NVMe drive temperatures from the kernel hwmon tree (world-readable).
+    Returns [{"dev","model","temp_c","warn_c","crit_c"}]; [] if none."""
+    out = []
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return out
+
+    def rd(p):
+        try:
+            with open(p) as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    for h in names:
+        base = os.path.join(root, h)
+        if rd(base + "/name") != "nvme":
+            continue
+        t = rd(base + "/temp1_input")
+        if t is None:
+            continue
+        dev = os.path.basename(os.path.realpath(base + "/device"))
+        mx, cr = rd(base + "/temp1_max"), rd(base + "/temp1_crit")
+        out.append({
+            "dev": dev,
+            "model": rd(base + "/device/model"),
+            "temp_c": round(int(t) / 1000.0, 1),
+            "warn_c": round(int(mx) / 1000.0, 1) if mx else None,
+            "crit_c": round(int(cr) / 1000.0, 1) if cr else None,
+        })
+    return out
+
+
 def collect_host() -> dict:
     try:
         load = [round(x, 2) for x in os.getloadavg()]
@@ -1252,6 +1287,7 @@ def collect_host() -> dict:
         "load": load,
         "mem": _mem_info(),
         "disk": _disk_info(STATUS_DISK_PATHS),
+        "nvme": read_nvme_temps(),
     }
 
 
@@ -2254,11 +2290,11 @@ function fanCell(g){
     return `<span title="${tip}">${t}</span>`;
   }).join('<br>') + '</td>';
 }
-function bar(label, pct, txt){
+function bar(label, pct, txt, shown){
   const p = (pct!=null)? Math.max(0, Math.min(100, pct)) : 0;
   const cls = p>=90? 'bad' : (p>=70? 'busy' : '');
   return `<tr><td>${label}</td>`+
-    `<td><span class="bar"><i class="${cls}" style="width:${p}%"></i></span> ${pct!=null?pct+'%':'–'}</td>`+
+    `<td><span class="bar"><i class="${cls}" style="width:${p}%"></i></span> ${pct!=null?(shown!=null?shown:pct+'%'):'–'}</td>`+
     `<td class="sub">${txt||''}</td></tr>`;
 }
 function lastVal(a){ for(let i=a.length-1;i>=0;i--){ if(a[i]!=null) return a[i]; } return null; }
@@ -2395,6 +2431,11 @@ async function refresh(){  try{
           rows.push(bar(nm, dk.used_pct,
             `${dk.used_gb.toFixed(0)} / ${dk.total_gb.toFixed(0)} GB`));
         }
+      });
+      (h.nvme||[]).forEach(nv=>{
+        const lim = nv.crit_c || nv.warn_c || 85;
+        rows.push(bar('NVMe '+esc((nv.model||nv.dev)), 100*nv.temp_c/lim,
+          nv.warn_c? `warn ${nv.warn_c.toFixed(0)} °C`:'', nv.temp_c.toFixed(0)+' °C'));
       });
       document.getElementById('host').innerHTML =
         '<table><tr><th>Resource</th><th>Usage</th><th></th></tr>'+rows.join('')+'</table>';

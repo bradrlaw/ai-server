@@ -505,6 +505,41 @@ class Zone:
 _state_err = {"last": None}
 
 
+def read_nvme_temps(root="/sys/class/hwmon"):
+    """NVMe drive temperatures from the kernel hwmon tree (world-readable).
+    Returns [{"dev","model","temp_c","warn_c","crit_c"}]; [] if none."""
+    out = []
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return out
+
+    def rd(p):
+        try:
+            with open(p) as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    for h in names:
+        base = os.path.join(root, h)
+        if rd(base + "/name") != "nvme":
+            continue
+        t = rd(base + "/temp1_input")
+        if t is None:
+            continue
+        dev = os.path.basename(os.path.realpath(base + "/device"))
+        mx, cr = rd(base + "/temp1_max"), rd(base + "/temp1_crit")
+        out.append({
+            "dev": dev,
+            "model": rd(base + "/device/model"),
+            "temp_c": round(int(t) / 1000.0, 1),
+            "warn_c": round(int(mx) / 1000.0, 1) if mx else None,
+            "crit_c": round(int(cr) / 1000.0, 1) if cr else None,
+        })
+    return out
+
+
 def write_state(zones, interval, fault=None, guard=None):
     """Publish the per-tick snapshot atomically (0644) for the status page.
     Best-effort: a failure here never touches fan control (logged once per
@@ -512,7 +547,8 @@ def write_state(zones, interval, fault=None, guard=None):
     tmp = STATE_FILE + ".tmp"
     try:
         state = {"ts": round(time.time(), 1), "pid": os.getpid(), "interval": interval,
-                 "fault": fault, "zones": [z.snapshot() for z in zones]}
+                 "fault": fault, "zones": [z.snapshot() for z in zones],
+                 "nvme": read_nvme_temps()}
         if guard is not None:
             state["protect"] = guard.snapshot()
         os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
@@ -545,6 +581,7 @@ DEFAULT_PROTECT = {
     "thermal_warn_c": 85,          # urgent alert at/above this (max of core, memory)
     "thermal_shutdown_c": 88,      # poweroff after thermal_shutdown_ticks ticks here; 0 = off
     "thermal_shutdown_ticks": 3,
+    "nvme_warn_c": 70,             # urgent alert for any NVMe at/above this; 0 = off (alert only)
     "notify": {"url": "https://ntfy.sh", "topic_file": "", "repeat_sec": 900},
 }
 
@@ -689,6 +726,17 @@ class Guard:
                 except Exception as e:  # noqa: BLE001
                     log(f"PROTECT poweroff failed: {e}")
 
+    def check_nvme(self):
+        warn = self.p.get("nvme_warn_c", 0)
+        if not warn:
+            return
+        for d in read_nvme_temps():
+            if d["temp_c"] >= warn:
+                name = d["model"] or d["dev"]
+                self.notifier.send(f"nvme:{d['dev']}", "aipcub: NVMe HOT",
+                                   f"{name} ({d['dev']}) at {d['temp_c']} C "
+                                   f"(alert at {warn} C).", "urgent", "fire")
+
     def snapshot(self):
         return {"capped_gpus": sorted(self.capped_gpus()),
                 "stall_cap_watts": self.p["stall_cap_watts"],
@@ -788,6 +836,7 @@ def main():
             log(" ".join(status))
             try:
                 guard.tick(zones, temps)
+                guard.check_nvme()
                 if guard.cap_changed:
                     reconcile_power_limits(guard.effective_limits(power_limits))
                     last_power_check = time.time()
