@@ -623,9 +623,9 @@ after its cooler is upgraded to match idx2's dual-40mm shroud, then re-run the s
 soak/perf test sequence (175/225/250W soak -> llama.cpp bench -> real-workload sweep)
 before changing its cap, per the same evidence bar used for idx2.
 
-## Addendum (2026-11-06) — idx1 curved blower shroud, drive cages removed, idx1 cap raised to 200W
+## Addendum (2026-11-06) — idx1 straight blower shroud, drive cages removed, idx1 cap raised to 200W
 
-Hardware changes: idx1's blower got a new, tighter curved shroud; the 5.25" drive cages were
+Hardware changes: idx1's blower got a new **straight** (not curved), less restrictive shroud replacing the old curved one (this one fits, unlike the 2026-10-19 candidate); the 5.25" drive cages were
 removed (front fans on printed brackets; SSD/HDD on printed 5.25"-bay brackets). Test: the
 `power-cap-sweep.py` soak (Qwen3.8-27B Q6_K, pp2048/tg512, 600 s soak), idx1, data in
 `docs/data/thermal/*20261105-*` / `*20261106-*`.
