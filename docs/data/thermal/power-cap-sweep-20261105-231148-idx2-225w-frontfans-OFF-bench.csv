@@ -1,0 +1,3 @@
+utc_start,label,mode,phase,gpu,cap_w,model,pp,ng,reps,pp_ts,tg_ts,iterations,duration_s,peak_hbm_c,peak_core_c,steady_hbm_c,steady_core_c,mean_power_w,min_sm_mhz,median_sm_mhz,fan_rpm_max,fan_rpm_mean,duty_max_pct,pct_sw_power_cap,pct_thermal_slowdown,pct_hw_slowdown,systin_mean_c,cool_s,status
+2026-11-05T23:11:51+00:00,idx2-225w-frontfans-OFF-bench,lockstep,bench,2,225,Qwen3.8-27B-Q6_K.gguf,2048,512,3,884.0,28.14,1,69,83.0,67.0,80.9,65.6,216.6,1260.0,1380.0,15340,13757,100,9,0,0,45.0,7.3,ok
+2026-11-05T23:13:11+00:00,idx2-225w-frontfans-OFF-bench,lockstep,soak,2,225,Qwen3.8-27B-Q6_K.gguf,2048,512,5,873.23,28.12,6,666,86.0,69.0,80.8,66.6,213.6,1230.0,1372.0,15517,14924,100,14,15,0,46.1,5.7,ok
