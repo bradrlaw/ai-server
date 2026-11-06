@@ -14,6 +14,7 @@
 #   sudo scripts/storage-crypt.sh unlock   # open LUKS + mount (prompts passphrase)
 #   sudo scripts/storage-crypt.sh lock      # stop comfyui-secure + filebrowser, umount, close LUKS
 #   sudo scripts/storage-crypt.sh status    # show current state
+#   sudo scripts/storage-crypt.sh backup-header   # save the LUKS header to ~/backups (setup does this too)
 #
 set -euo pipefail
 
@@ -85,6 +86,7 @@ cmd_setup() {
   mkdir -p "${MOUNT}"
   mount "${MAPPER_DEV}" "${MOUNT}"
 
+  backup_header
   LUKS_UUID="$(cryptsetup luksUUID "${DISK}")"
   echo
   echo "SETUP COMPLETE."
@@ -96,6 +98,18 @@ cmd_setup() {
   echo
   echo "From now on, after each reboot unlock with:"
   echo "  sudo $(realpath "$0") unlock"
+}
+
+# A LUKS header is a single point of failure: Windows "initializing" the disk (GPT +
+# MSR) zeroed it on 2026-11-06. Keep a copy off this disk and outside /srv/ai (SMB).
+backup_header() {
+  local dir="${HEADER_BACKUP_DIR:-/home/brad/backups}" f
+  f="${dir}/aidata-luks-header-$(date +%Y%m%d).img"
+  mkdir -p "${dir}"
+  cryptsetup luksHeaderBackup "${DISK}" --header-backup-file "${f}"
+  chown brad:brad "${f}" 2>/dev/null || true
+  chmod 600 "${f}"
+  echo ">> LUKS header backup: ${f}  (also copy it OFF this machine; it is useless without the passphrase)"
 }
 
 cmd_unlock() {
@@ -214,5 +228,6 @@ case "${1:-}" in
   unlock) cmd_unlock ;;
   lock)   cmd_lock ;;
   status) cmd_status ;;
+  backup-header) require_root; require_disk; backup_header ;;
   *) echo "usage: sudo $0 {setup|unlock|lock|status}" >&2; exit 1 ;;
 esac
