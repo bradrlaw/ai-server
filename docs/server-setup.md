@@ -2302,3 +2302,32 @@ Build the CPU encoder from the llama.cpp commit pinned in Strata's `setup.py` (`
 `flash` is a llama-swap model (Strata, `config/strata/flash.json`) behind LiteLLM `:4000`. Matrix set `fn` makes it exclusive with
 `coding`/`chat`/`big`/`coder-next`/gemmas on idx1+idx2 (`small` on idx0 coexists). Select it by requesting `flash` or
 `scripts/llama-swap-mode.py set flash`; `set daily` returns the trio. Cold load about 90 s. Log: `var/strata/flash.log`.
+
+## Self-hosted GitHub Actions runner (ADR-0039)
+An ephemeral, containerised runner for `bradrlaw/binit` (private repo). It runs only the
+E2E smoke and a11y workflows; CI and Deploy stay on GitHub-hosted runners.
+
+**One-time setup (you):**
+1. Create a fine-grained PAT at github.com → Settings → Developer settings: resource owner
+   `bradrlaw`, **only** repo `binit`, permission *Administration: Read and write*, short expiry.
+2. `echo 'GH_RUNNER_PAT=<token>' >> /srv/ai/docker/.env` (file is gitignored; never paste the token in chat).
+3. Start it: `cd /srv/ai/docker && docker compose --profile runner up -d --build gh-runner`
+   (a plain `docker compose up -d` does not start it).
+
+**Operate:**
+- Status: `gh api repos/bradrlaw/binit/actions/runners --jq '.runners[] | [.name,.status,.labels[].name] | @tsv'`
+  (an idle runner is `online`; it re-registers after each job).
+- Logs: `docker logs -f gh-runner`. Stop: `docker compose --profile runner stop gh-runner`.
+- Remove: `docker compose --profile runner rm -sf gh-runner`; stale entries vanish after GitHub's
+  idle timeout, or delete them in repo Settings → Actions → Runners.
+- Rotate PAT: edit `.env`, then `up -d --force-recreate gh-runner`.
+- Limits (compose): 4 CPUs, 8 GiB, 1024 pids. `flash` pins about 72 GiB RAM, so keep them.
+
+**In the `binit` repo (not here):** set `runs-on: binit-runner` in `e2e.yml` and `a11y.yml` only.
+The job runs in the container, so the Playwright browsers install per job
+(`npx playwright install chromium`; OS deps are in the image). Use Azure OIDC in the hosted
+Deploy job. Never attach this runner to a public repo, and keep fork-PR workflows off.
+If the iMac also hosts a runner, give it a different label. A job queued with no online
+runner waits and then fails. Check current GitHub billing for self-hosted minutes.
+
+**Firewall:** egress only; `DOCKER_HOST_PORTS` is unchanged (`scripts/verify-firewall.sh`).
