@@ -999,6 +999,63 @@ def collect_services() -> list:
     return out
 
 
+_RUNNER_EVENT = re.compile(
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})Z: "
+    r"(Running job: (?P<run>.+)|Job (?P<done>.+) completed with result: (?P<res>\w+)|"
+    r"(?P<listen>Listening for Jobs))\s*$"
+)
+
+
+def parse_runner_log(text: str) -> dict:
+    """Reduce a gh-runner container log to its latest state: busy (job name + start
+    epoch), idle (listening), or starting; plus the last finished job and result."""
+    state, job, since, last = "starting", None, None, None
+    for line in text.splitlines():
+        m = _RUNNER_EVENT.match(line.strip())
+        if not m:
+            continue
+        ts = int(dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+                 .replace(tzinfo=dt.timezone.utc).timestamp())
+        if m.group("run"):
+            state, job, since = "busy", m.group("run").strip(), ts
+        elif m.group("done"):
+            last = {"job": m.group("done").strip(), "result": m.group("res"), "at": ts}
+            state, job, since = "starting", None, None
+        else:
+            state, job, since = "idle", None, ts
+    return {"state": state, "job": job, "since": since, "last": last}
+
+
+def collect_runners() -> list:
+    """Self-hosted GitHub Actions runner containers (compose service gh-runner,
+    ADR-0039): per-container state and current job, read from `docker ps`/`logs`
+    (no GitHub token needed). Empty list when the service isn't deployed."""
+    try:
+        ps = subprocess.run(
+            ["docker", "ps", "-a", "--filter", "label=com.docker.compose.service=gh-runner",
+             "--format", "{{.Names}}\t{{.State}}\t{{.Status}}"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in sorted(ps.stdout.splitlines()):
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        name, cstate, cstatus = parts[:3]
+        info = {"state": "down", "job": None, "since": None, "last": None}
+        if cstate == "running":
+            try:
+                lg = subprocess.run(["docker", "logs", "--tail", "200", name],
+                                    capture_output=True, text=True, timeout=5)
+                info = parse_runner_log(lg.stdout + lg.stderr)
+            except (OSError, subprocess.SubprocessError):
+                pass
+        out.append({"name": name, "container": cstate, "uptime": cstatus, **info})
+    return out
+
+
 _GPU_FIELDS = [
     "index",
     "name",
@@ -1339,6 +1396,7 @@ def build_status() -> dict:
         "models": models,
         "comfyui": comfyui,
         "services": collect_services(),
+        "runners": collect_runners(),
         "gpus": gpus,
         "fans": {k: fans[k] for k in ("state", "msg", "age")},
         "host": host,
@@ -2123,6 +2181,7 @@ _HTML = """<!doctype html>
   <section id="historysec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">History <span class="hsub" id="histspan"></span></span><button class="wbtn" onclick="cycleWidth('historysec')" title="Resize">⤢</button></h2><div id="history">…</div></section>
   <section id="hostsec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Host (CPU / RAM / Disk)</span><button class="wbtn" onclick="cycleWidth('hostsec')" title="Resize">⤢</button></h2><div id="host">…</div></section>
   <section id="servicessec"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">Services <span class="hsub" id="svcactions"></span></span><button class="wbtn" onclick="cycleWidth('servicessec')" title="Resize">⤢</button></h2><div id="services">…</div></section>
+  <section id="runnerssec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">GitHub Actions runners <span class="hsub" id="runnersmsg"></span></span><button class="wbtn" onclick="cycleWidth('runnerssec')" title="Resize">⤢</button></h2><div id="runners">…</div></section>
   <section id="wfsyncsec" style="display:none"><h2><span class="drag-handle" title="Drag to reorder">⠿</span><span class="hgrow">ComfyUI workflow sync <span class="hsub" id="wfsyncmsg"></span></span><button class="wbtn" onclick="cycleWidth('wfsyncsec')" title="Resize">⤢</button></h2>
     <div class="sub" style="margin-bottom:8px">Re-import a workflow's defaults from its latest ComfyUI render. Tune the workflow in the ComfyUI UI, generate one image/video, then <b>Sync</b> — chat then uses your UI values (steps, LoRA, size…) and can override any exposed knob. <b>Preview</b> shows what would change without writing.</div>
     <div id="wfsync">…</div>
@@ -2501,6 +2560,7 @@ async function refresh(){  try{
     // Quiet-hours toggle: pause/resume the nightly deep-idle window at runtime so a
     // long ComfyUI/LLM job can run through it without editing the unit.
     renderQuiet(d);
+    renderRunners(d);
     renderWorkflows(d);
     renderV100Scout(d);
     renderModelScout(d);
@@ -2575,6 +2635,23 @@ async function comfyFp16(unit, enabled){
       : ('failed: '+(d.detail||d.error||r.status));
   }catch(e){ if(msg) msg.textContent='error: '+e; }
   finally{ setTimeout(refresh, 900); }
+}
+function renderRunners(d){
+  const sec=document.getElementById('runnerssec');
+  const rs=d.runners||[];
+  if(!rs.length){ sec.style.display='none'; return; }
+  sec.style.display='';
+  const busy=rs.filter(r=>r.state==='busy').length;
+  document.getElementById('runnersmsg').textContent=busy+' busy / '+rs.length;
+  const now=Math.floor(Date.now()/1000);
+  const dur=s=>s>=60?Math.floor(s/60)+'m '+(s%60)+'s':s+'s';
+  const rows=rs.map(r=>{
+    const cls=r.state==='busy'?'busy':(r.state==='idle'?'ok':'bad');
+    const job=r.state==='busy'?('<b>'+esc(r.job)+'</b> <span class="sub">'+dur(Math.max(0,now-r.since))+'</span>'):'<span class="sub">—</span>';
+    const l=r.last?(esc(r.last.job)+' · '+esc(r.last.result)+' <span class="sub">'+dur(Math.max(0,now-r.last.at))+' ago</span>'):'<span class="sub">—</span>';
+    return `<tr><td>${esc(r.name)}</td><td><span class="pill ${cls}">${esc(r.state)}</span></td><td>${job}</td><td>${l}</td><td class="sub">${esc(r.uptime)}</td></tr>`;
+  });
+  document.getElementById('runners').innerHTML='<table><tr><th>Runner</th><th>State</th><th>Current job</th><th>Last job</th><th>Container</th></tr>'+rows.join('')+'</table>';
 }
 function renderWorkflows(d){
   const sec=document.getElementById('wfsyncsec');
