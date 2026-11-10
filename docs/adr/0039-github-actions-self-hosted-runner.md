@@ -17,7 +17,7 @@ model weights, the unlocked LUKS volume and `docker/.env`.
   holds the Azure credentials, and PR code must not run on the machine that can deploy.
 - **Runner = Compose service `gh-runner`** (`docker/gh-runner/`, profile `runner`, opt-in):
   Playwright noble base image (browser OS deps, no host `apt`), pinned runner release with
-  checksum, uid 10002, `cap_drop: ALL`, `no-new-privileges`, 4 CPUs / 8 GiB / 1024 pids,
+  checksum, uid 10002, `cap_drop: ALL`, `no-new-privileges`, 2 replicas, each 3 CPUs / 6 GiB / 1024 pids,
   `/tmp` tmpfs, **no published ports, no host mounts, no Docker socket**.
 - **Ephemeral:** `entrypoint.sh` fetches a fresh registration token, registers
   `--ephemeral`, runs one job, and loops. Every job starts from a clean container
@@ -37,7 +37,7 @@ model weights, the unlocked LUKS volume and `docker/.env`.
   blast radius limited to a resource-capped container.
 - Negative / trade-offs: the PAT can administer runners on `binit` (cannot read code with
   this permission alone); jobs share the host kernel; Chromium and Strata (`flash` pins
-  about 72 GiB RAM) compete for RAM/CPU, so the 8 GiB cap is a hard limit; GitHub has
+  about 72 GiB RAM) compete for RAM/CPU, so the 6 GiB per-replica cap is a hard limit; GitHub has
   announced a per-minute platform charge for self-hosted runners, so check current billing.
 - Follow-ups / things to watch: private repos only (never a public repo or fork PRs);
   jobs that build images need a rootless builder, not the host socket; re-pin

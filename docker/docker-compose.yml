@@ -237,7 +237,8 @@ services:
     build:
       context: ./gh-runner
     image: ai-server/gh-runner:2.338.2
-    container_name: gh-runner
+    deploy:
+      replicas: 2
     restart: unless-stopped
     user: "10002:10002"
     environment:
@@ -248,9 +249,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cpus: 4
-    mem_limit: 8g
-    memswap_limit: 8g
+    cpus: 3
+    mem_limit: 6g
+    memswap_limit: 6g
     pids_limit: 1024
     shm_size: 1gb
     tmpfs:
