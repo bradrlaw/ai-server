@@ -227,6 +227,38 @@ services:
     networks:
       - ai
 
+  # GitHub Actions self-hosted runner for bradrlaw/binit (ADR-0039). Opt-in profile:
+  # `docker compose --profile runner up -d --build gh-runner` (not part of a plain
+  # `up -d`). Ephemeral: one job per registration, then a fresh runner. Egress only,
+  # no published ports, NO docker socket, no host mounts. Needs GH_RUNNER_PAT in
+  # ./.env (fine-grained, binit only, Administration: read/write — see runbook).
+  gh-runner:
+    profiles: ["runner"]
+    build:
+      context: ./gh-runner
+    image: ai-server/gh-runner:2.338.2
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+    user: "10002:10002"
+    environment:
+      GH_REPO: "bradrlaw/binit"
+      GH_RUNNER_PAT: "${GH_RUNNER_PAT:-}"
+      RUNNER_LABELS: "binit-runner"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cpus: 3
+    mem_limit: 6g
+    memswap_limit: 6g
+    pids_limit: 1024
+    shm_size: 1gb
+    tmpfs:
+      - /tmp:size=2g
+    networks:
+      - ai
+
   # OpenClaw — self-hosted multi-channel personal-assistant gateway (Node daemon).
   # Talks to the native models through the LiteLLM gateway (host :4000) via its
   # dedicated `litellm` provider (config in the state dir). Control UI + API on

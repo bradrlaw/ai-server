@@ -55,6 +55,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0036](0036-v100-pcie-x16-and-tensor-split.md) | V100 PCIe x16 and `-sm tensor` for `big`: measurements | Accepted |
 | [0037](0037-fan-failure-protection-and-alerts.md) | Fan-failure protection (power cap, thermal shutdown) and ntfy alerts | Accepted |
 | [0038](0038-nvme-boot-disk-clone.md) | Bootable WD Green clone of the Intel boot NVMe, weekly rsync | Proposed |
+| [0039](0039-github-actions-self-hosted-runner.md) | Ephemeral containerised GitHub Actions runner for bradrlaw/binit (E2E + a11y only) | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.
