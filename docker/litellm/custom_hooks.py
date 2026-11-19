@@ -86,6 +86,21 @@ loaded evicts it, and the next ``flash`` request evicts ``big`` again (the
 2026-11-03 swap thrash that preceded a kernel hang, ADR-0035). The hook asks
 llama-swap what is loaded and routes to ``flash`` if it is, otherwise ``big``
 (loading it if neither is). Any lookup failure falls back to ``big``.
+
+apply_reasoning_effort
+----------------------
+``drop_params: true`` silently strips ``reasoning_effort`` for our
+``openai/<local>`` models, so each slot runs at its server-side default
+(``coding``/``big`` medium, ``flash`` high). Two opt-in ways to choose it per
+request (both add ``reasoning_effort`` to ``allowed_openai_params`` so LiteLLM
+forwards it; llama.cpp and Strata honour it, ``none`` turns thinking off):
+
+* model ``<model>@<effort>`` (e.g. ``flash@low``): the suffix is removed before
+  routing. ``scripts/copilot-byok.sh`` maps its ``flash-low``-style /model
+  entries to this, because the Copilot CLI picker can't show BYOK effort levels.
+* header ``X-AIServer-Reasoning: passthrough``: a body ``reasoning_effort`` is
+  kept (Copilot CLI ``--reasoning-effort``). Without the header it is dropped as
+  before, so Open WebUI, Hermes and OpenClaw can't override the pinned defaults.
 """
 
 import asyncio
@@ -235,6 +250,42 @@ def _is_owui_task(messages):
     return False
 
 
+# Reasoning-effort passthrough (Copilot CLI BYOK): drop_params strips
+# reasoning_effort for our openai/<local> models, so honour it only on explicit opt-in.
+_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+_EFFORT_HEADER = "x-aiserver-reasoning"
+
+
+def _request_headers(data):
+    req = data.get("proxy_server_request") or {}
+    hdrs = req.get("headers") or {}
+    return {str(k).lower(): v for k, v in hdrs.items()}
+
+
+def _apply_reasoning_effort(data):
+    """`<model>@<effort>` (e.g. flash@low) selects <model> with that effort. Otherwise a
+    caller-sent reasoning_effort is kept only when the request carries
+    `X-AIServer-Reasoning: passthrough`; without it the field is dropped as before."""
+    model = data.get("model")
+    effort = None
+    if isinstance(model, str) and "@" in model:
+        base, _, suffix = model.rpartition("@")
+        if base and suffix in _EFFORTS:
+            data["model"], effort = base, suffix
+    if effort is None:
+        if str(_request_headers(data).get(_EFFORT_HEADER, "")).lower() != "passthrough":
+            return
+        effort = data.get("reasoning_effort")
+        if effort not in _EFFORTS:
+            return
+    data["reasoning_effort"] = effort
+    allowed = data.get("allowed_openai_params")
+    allowed = list(allowed) if isinstance(allowed, list) else []
+    if "reasoning_effort" not in allowed:
+        allowed.append("reasoning_effort")
+    data["allowed_openai_params"] = allowed
+
+
 class AIServerHooks(CustomLogger):
     async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
         try:
@@ -242,6 +293,10 @@ class AIServerHooks(CustomLogger):
                 data["model"] = await asyncio.to_thread(_pick_v100_model)
         except Exception:
             data["model"] = "big"
+        try:
+            _apply_reasoning_effort(data)
+        except Exception:
+            pass
         try:
             messages = data.get("messages")
             if isinstance(messages, list):
