@@ -65,6 +65,8 @@ model_list:
 
 litellm_settings:
   # llama-server may not accept every OpenAI param; drop unknowns instead of erroring.
+  # This also drops reasoning_effort; custom_hooks.py re-allows it on opt-in (model@effort
+  # or the X-AIServer-Reasoning: passthrough header).
   drop_params: true
   # Model loads can take ~30-70s (cold + BF16). Don't time out early.
   request_timeout: 600
