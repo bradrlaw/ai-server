@@ -46,7 +46,7 @@
   "log": "/srv/ai/var/strata/flash.log",
   "host": "127.0.0.1",
   "port": 8080,
-  "reasoning_effort": "medium",
+  "reasoning_effort": "high",
   "env": {},
   "vision": {
     "exe": "/srv/ai/src/strata-vision/build-cuda/bin/strata-vision",
