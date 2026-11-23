@@ -112,7 +112,9 @@ Everything from §3 onward assumes `nvidia-smi` works and all GPUs are detected.
 
 ## 3. NVIDIA Driver — GOOD, keep it
 
-- Installed: **`nvidia-driver-580-server`** (580.159.03), DKMS.
+- Installed: **`nvidia-driver-580-server`**, DKMS. 580.159.03 at setup; 580.173.02 since an
+  unattended upgrade on 2026-07-25. All 16 `*580-server*` packages are now `apt-mark hold`ed and
+  automatic updates are off (ADR-0040); update the OS with "OS updates and kernel upgrades" below.
 - `nvidia-smi` works; all 3 GPUs detected correctly.
 - **Driver and CUDA toolkit are decoupled.** The 580 driver is CUDA-13-capable and
   is fully backward compatible with CUDA 12.x toolkits. **Do NOT touch the driver.**
@@ -710,6 +712,41 @@ sudo efibootmgr -o 0004,0000
 sudo systemctl reboot
 sudo systemctl poweroff
 ```
+
+### OS updates and kernel upgrades (ADR-0040)
+Automatic updates are **off** and the NVIDIA 580-server driver is **held**: an unattended driver bump
+on 2026-07-25 left the loaded module and `nvidia-smi` on different versions until a reboot. Update by
+hand in a planned window (monthly, or sooner for an exploited CVE). `scripts/os-update-check.sh` is
+read-only and needs no sudo; stop at any `FAIL`.
+
+1. **Refresh and check:** `sudo apt update`, then `scripts/os-update-check.sh pre`. It simulates
+   `apt full-upgrade` and fails if a held driver package, another NVIDIA driver or a CUDA 13 toolkit
+   would be touched. Read its WARN list (dkms, docker/containerd, container toolkit, cuDNN, removals).
+2. **Fallback disk:** `sudo /srv/ai/scripts/backup-clone.sh sync` (ADR-0038), so the WD clone holds
+   the pre-upgrade system.
+3. **Quiesce GPUs:** let ComfyUI/agent jobs finish, then `curl -s 127.0.0.1:9090/unload`.
+4. **Upgrade:** `sudo apt full-upgrade`. Held packages show as "kept back"; that is expected. A Docker
+   upgrade restarts every container.
+5. **Before rebooting:** `scripts/os-update-check.sh ready` must show the NVIDIA module built at the
+   held version for the new kernel (DKMS runs during the install; on failure see
+   `/var/lib/dkms/nvidia-srv/<ver>/build/make.log`). Never reboot into a kernel without it.
+6. **Reboot right away:** `sudo systemctl reboot`. Don't leave a new driver/library or kernel sitting
+   unbooted.
+7. **After the reboot:**
+   - `sudo /srv/ai/scripts/storage-crypt.sh unlock` (manual LUKS unlock; starts `comfyui-secure`).
+   - `scripts/os-update-check.sh post` (module == userspace, 3 GPUs, fan daemon, services, containers).
+   - `python3 scripts/llama-swap-mode.py set daily` to re-warm the models.
+   - Check power caps and temps on the status page (`:9095`).
+8. **Keep the old kernel** for a few days: no `sudo apt autoremove` until the new one has run cleanly.
+
+**Rollback.** GRUB is hidden with a 0 s timeout (`GRUB_DEFAULT=0`), so there is no menu on a headless
+boot. If the new kernel boots but the GPUs or a service fail, boot the old kernel from SSH:
+`sudo grep -o "menuentry '[^']*'" /boot/grub/grub.cfg` to get the exact title, then set
+`GRUB_DEFAULT="Advanced options for Ubuntu>Ubuntu, with Linux <old>-generic"` in
+`/etc/default/grub`, `sudo update-grub`, reboot. Put it back to `0` once fixed. If the box doesn't
+come back on the network at all: attach a console and hold `Esc` at boot for the GRUB menu, or pick
+the WD clone in the UEFI boot menu. A driver change is a separate deliberate step: `apt-mark unhold`
+the 580-server packages, upgrade them, re-hold, reboot immediately, then run the `post` check.
 
 ## llama.cpp usage notes (learned during bring-up)
 - **Build:** `scripts/build-llama.sh` — clean build of archs `52;60;61;70` (ccache on).

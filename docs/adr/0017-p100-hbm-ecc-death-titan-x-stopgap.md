@@ -45,7 +45,7 @@ climb, and the V100s appearing "unavailable" even though they were fine.
   the P100 ran clean on 580.173.02 for two days (including the morning of the
   failure); "Unknown Error" first appeared only at a later reboot. Same driver
   before and after ⇒ not a software regression. (Auto-updates have since been
-  disabled and the driver `apt-mark hold`ed regardless — see the auto-update memory.)
+  disabled and the driver `apt-mark hold`ed regardless — see ADR-0040.)
 * **Cooling:** our thermals were fine. The P100 never throttled — it settled
   ~70-75 °C at the 200 W cap with the pump-fan curve, ~15 °C under limit, and the
   fan was operating normally right up to the failure. (When physically pulled the
