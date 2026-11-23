@@ -1255,16 +1255,54 @@ Requirements (both verified through the full stack 2026-07-02): **tool calling**
 `--jinja` → `finish_reason: tool_calls`) and **streaming** (SSE). Docs recommend a ≥128k context
 window for best results; all of the models below meet that.
 
-Env vars (see `scripts/copilot-byok.sh`, which sources the key from `docker/.env`):
+On the server just run `/srv/ai/scripts/copilot-byok.sh` (`COPILOT_MODEL=flash ...` to pick
+the start model). From another machine (e.g. the Mac over Tailscale), copy the script and run:
 
-    export COPILOT_PROVIDER_BASE_URL=http://<host>:4000/v1   # e.g. Tailscale <tailscale-ip>
-    export COPILOT_PROVIDER_TYPE=openai
-    export COPILOT_PROVIDER_API_KEY=$LITELLM_MASTER_KEY
-    export COPILOT_MODEL=coding        # or chat / big / coder-next / small
-    copilot
+    security add-generic-password -s aiserver-litellm -a "$USER" -w   # once; paste the LiteLLM key
+    AISERVER_BASE_URL=http://<tailscale-ip>:4000/v1 COPILOT_MODEL=flash ./copilot-byok.sh
 
-On the server just run `/srv/ai/scripts/copilot-byok.sh`. If the endpoint 404s, try the base URL
-without the trailing `/v1`.
+If the endpoint 404s, try the base URL without the trailing `/v1`.
+
+### providers.json mode (default since 2026-11-19)
+
+The script writes every local model to `$COPILOT_HOME/aiserver-providers.json` (0600; points
+`COPILOT_PROVIDERS_CONFIG` at it) and starts `copilot --model aiserver/<model>`. `/model` then
+lists and switches all local models (`aiserver/coding`, `aiserver/flash`, ...).
+
+Why: on CLI **1.0.114** the legacy env vars (`COPILOT_PROVIDER_BASE_URL/TYPE/API_KEY` +
+`COPILOT_MODEL`) are overridden by the account's managed `model` policy ("An
+administrator-managed setting replaced model "flash" with "gpt-6.1-sol""); a providers.json
+provider is not (verified on 1.0.107 and 1.0.114). The "Model catalog ownership cannot be
+verified ... omitting model ID completions" line is a harmless warning in both modes.
+
+- **Key:** the file holds an `apiKeyCommand`, never the key. Source order:
+  `AISERVER_API_KEY_COMMAND`, then `COPILOT_PROVIDER_API_KEY` (exported, read via `printenv`),
+  then `docker/.env` on the server, then the macOS keychain item `aiserver-litellm`, then
+  Linux `secret-tool lookup service aiserver-litellm`.
+- **Legacy:** `COPILOT_BYOK_LEGACY=1` keeps the old single-model env-var launch. The script
+  falls back to it automatically when the CLI's help doesn't mention providers.json (the
+  server's own 1.0.75 install). `COPILOT_BIN=<path>` picks a different CLI binary.
+- Any other LiteLLM model id (e.g. `COPILOT_MODEL=v100-auto`) gets its own entry.
+
+### Reasoning effort
+
+The `/model` picker can't show effort levels for BYOK models (its Reasoning column shows "—"
+whatever the providers.json entry says; tested `capabilities.supports.reasoningEffort`,
+metadata and `modelId` variants), and `effortLevel` in settings is not sent for them. And
+LiteLLM's `drop_params: true` silently strips `reasoning_effort` for our local models, so
+every slot always ran at its server default (`coding`/`big` medium, `flash` high).
+
+Now (hook `apply_reasoning_effort` in `docker/litellm/custom_hooks.py`):
+
+- **Effort entries in `/model`:** each reasoning model also gets `<model>-<effort>` entries
+  (`flash-low`, `coding-high`, `big-none`, ...; `chat-none` etc. for the on/off models). They
+  send `<model>@<effort>` to LiteLLM, which strips the suffix and forwards the effort. The plain
+  entry (`flash (effort high)`) keeps the server default. `none` turns thinking off.
+- **`--reasoning-effort <level>`** at launch also works: the provider sends the header
+  `X-AIServer-Reasoning: passthrough`, and only requests with that header keep a body
+  `reasoning_effort`. Other clients (Open WebUI, Hermes, OpenClaw) still get the pinned
+  defaults. Avoid `xhigh` on `coding`/`big` (40k+ reasoning tokens on codegen).
+- The legacy mode maps `COPILOT_MODEL=flash-low` to `flash@low` as well.
 
 ### Per-model token budgets (`COPILOT_PROVIDER_MAX_*`)
 
@@ -1297,7 +1335,10 @@ Notes:
   slot **131072** ctx — hence the 98304+32768 budget fits a single slot. A prompt above ~131k
   would exceed a slot and error/truncate.
 - Any value exported in the environment overrides the per-model default, e.g.
-  `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`.
+  `COPILOT_MODEL=coding COPILOT_PROVIDER_MAX_PROMPT_TOKENS=65536 copilot-byok.sh`. In
+  providers.json mode the override applies to the selected model and its effort entries.
+- `flash` (not in the table): ctx 524288, prompt 262144 / output 32768. Prefill is ~900 tok/s
+  at depth, so the prompt cap is kept well below ctx.
 
 ### Subagent model routing (GPU-tiered)
 
@@ -1317,7 +1358,9 @@ right GPU, so no server-side change is needed — only the client picks the per-
 
 **What works where (verified live 2026-07-18, CLI 1.0.71 / `@github/copilot-sdk@1.0.7`):**
 
-1. **Env-var BYOK (`copilot-byok.sh`) — single model only.** `copilot help providers`
+1. **Env-var BYOK (`copilot-byok.sh` legacy mode) — single model only.** (The providers.json
+   mode, 2026-11-19, registers every local model; whether `/agents` then lets subagents pick
+   them is untested.) `copilot help providers`
    confirms the env-var path (`COPILOT_PROVIDER_BASE_URL` + `COPILOT_MODEL`) registers
    exactly one BYOK model, so the `/agents` picker can't offer `chat`/`small` to subagents.
    `SEARCH_SUBAGENT_MODEL=small` is set in the launcher but is **inert**: the search
@@ -1377,7 +1420,7 @@ right GPU, so no server-side change is needed — only the client picks the per-
    family, so it likely won't pair. Worth a quick `/experimental` test but not relied upon.)
 
 **Bottom line:** per-subagent local models are **not** achievable through `copilot-byok.sh`
-env-var BYOK alone (single model). Use either the **SDK host** (proven, deterministic
+env-var BYOK alone (single model; providers.json mode is untested for this). Use either the **SDK host** (proven, deterministic
 per-agent pinning) or the **desktop app's multi-model BYOK** (proven for parallel reviews —
 mind the two gotchas above). For the desktop app, see the paste-ready global-instructions
 mapping and multi-session parallelism recipe in **`docs/copilot-app-instructions.md`**.
@@ -1396,7 +1439,7 @@ client — including a Mac with no Python/`uv` — can use its tools with zero l
   Install (needs sudo): `sudo /srv/ai/scripts/install-plan-build-mcp-service.sh`
 - **Client registration:** `copilot-byok.sh` auto-registers it (idempotent) via
   `copilot mcp add --transport http plan-build <url>`, deriving the URL from
-  `COPILOT_PROVIDER_BASE_URL` (same host, port 9100, `/mcp`). Override with
+  `AISERVER_BASE_URL` / `COPILOT_PROVIDER_BASE_URL` (same host, port 9100, `/mcp`). Override with
   `PLAN_BUILD_MCP_URL`/`PLAN_BUILD_MCP_PORT`, or opt out with `COPILOT_PLAN_BUILD_MCP=0`.
   Manual: `copilot mcp add --transport http plan-build http://<host-or-tailscale>:9100/mcp`.
 - **`caller_gpu` over a shared endpoint:** the guard (see mcpo section) normally requires each
