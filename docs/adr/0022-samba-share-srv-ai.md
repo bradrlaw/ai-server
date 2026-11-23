@@ -11,7 +11,7 @@ to mount `/srv/ai` from macOS Finder and Windows Explorer using their native fil
 managers, which speak **SMB3** first-class.
 
 Relevant state at time of writing:
-- The box (`aipcub`, `100.97.143.29`) already runs **Tailscale**; the owner's Mac
+- The box (`aipcub`) already runs **Tailscale**; the owner's Mac
   (`bradi9mac-2`) and Windows (`bradeb`) machines are on the same tailnet.
 - LAN: `eno1` = `192.168.4.57/22`. Docker bridges (`docker0`, `br-*`) also present.
 - `ufw` is installed. No Samba installed yet.
@@ -71,12 +71,12 @@ loopback + `tailscale0` + `eno1` only.**
 ## Addendum 2026-10-15: listen on all addresses, filter sources (audit B4)
 
 **Finding.** SMB over Tailscale never worked: smbd listened on loopback and the LAN
-only, never on `100.97.143.29`. Two Samba behaviours (4.19.5) defeated
+only, never on its tailnet IP. Two Samba behaviours (4.19.5) defeated
 `bind interfaces only = yes`:
 - **`tailscale0` is skipped.** It is a point-to-point interface without
   `IFF_BROADCAST`, and Samba's interface probe (`source3/lib/interface.c`,
   `add_interface`) drops such interfaces ("not adding non-broadcast interface") even
-  when they are listed by name. Listing the address as `100.97.143.29/32` doesn't
+  when they are listed by name. Listing the address as `<tailscale-ip>/32` doesn't
   help: it resolves back to the same probed interface and is dropped again.
 - **Addresses are bound once, at startup.** smbd opens one socket per address when
   it starts and never re-binds. `eno1` uses IPv6 privacy addresses, which rotate
@@ -98,7 +98,7 @@ drops the legacy NetBIOS session port 139 (nmbd was already disabled).
 adds its own IPv4-only ufw rules (ADR-0028 owns the firewall). It now checks that
 smbd really listens on the wildcard addresses after the restart.
 
-Rejected alternatives: keep the binding and add `100.97.143.29/10` (a wide mask makes
+Rejected alternatives: keep the binding and add `<tailscale-ip>/10` (a wide mask makes
 Samba synthesize a broadcast interface). That still leaves stale IPv6 listeners, needs
 smbd ordered after `tailscaled`, and breaks if the tailnet IP changes. Dropping
 Tailscale from the docs was also rejected, because remote access is the point.
