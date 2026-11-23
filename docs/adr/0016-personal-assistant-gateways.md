@@ -143,3 +143,20 @@ openclaw.mjs security audit --deep` inside the container: **0 critical, 1 warn**
 (`gateway.auth_no_rate_limit`, no `gateway.auth.rateLimit` configured) is a different,
 pre-existing finding, not part of this fix — noted for a future pass if LAN-reachability
 is ever restored for this gateway.
+
+## Addendum 2026-11-23: patched Node inside the pinned OpenClaw image
+- **Why:** the Brotli decompression bug CVE-2026-111497 (fixed in Node 22.23.4 / 24.22.1 / 26.12.1)
+  is reachable from any Node process that decompresses untrusted HTTP responses. OpenClaw
+  (2026.7.1, Node 24.16.0) is the only container that actually runs Node. Hermes, mcpo and LiteLLM
+  ship old Node, but no Node process runs in them (checked via `/proc/*/exe`), so they wait for
+  their own planned upgrades.
+- **Decision:** keep OpenClaw 2026.7.1 and copy `/usr/local/bin/node` from `node:24.22.3-bookworm-slim`
+  into the local image extension (`NODE_IMAGE` build arg, image tag `2026.7.1-node24.22.3`). Same
+  major and module ABI (137), same Debian 12 base; gateway, plugins and skill binaries verified.
+- **Rejected:** upgrading to OpenClaw 2026.11.7, which already ships Node 24.22.1. That's four months
+  of releases, including plugin SDK breaking changes, too much to take as an urgent security fix.
+  Do it as a normal planned upgrade and drop the override then.
+- **Same pass:** the binit runner base moved `mcr.microsoft.com/playwright` v1.58.2 to v1.64.1-noble
+  (Node 24.13.0 to 26.13.0, matching binit's `@playwright/test` 1.64.1). The runner's bundled
+  node24 (24.22.1) was already patched.
+

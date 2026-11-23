@@ -281,7 +281,8 @@ services:
       dockerfile: Dockerfile
       args:
         BASE_IMAGE: ghcr.io/openclaw/openclaw:2026.7.1
-    image: ai-server/openclaw:2026.7.1
+        NODE_IMAGE: node:24.22.3-bookworm-slim
+    image: ai-server/openclaw:2026.7.1-node24.22.3
     container_name: openclaw
     restart: unless-stopped
     init: true
