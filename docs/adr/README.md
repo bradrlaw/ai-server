@@ -56,6 +56,7 @@ sessions) don't re-litigate settled choices or lose the reasoning behind them.
 | [0037](0037-fan-failure-protection-and-alerts.md) | Fan-failure protection (power cap, thermal shutdown) and ntfy alerts | Accepted |
 | [0038](0038-nvme-boot-disk-clone.md) | Bootable WD Green clone of the Intel boot NVMe, weekly rsync | Proposed |
 | [0039](0039-github-actions-self-hosted-runner.md) | Ephemeral containerised GitHub Actions runner for bradrlaw/binit (E2E + a11y only) | Accepted |
+| [0040](0040-manual-os-updates-nvidia-hold.md) | Manual OS updates only, NVIDIA driver held, checked kernel upgrades | Accepted |
 
 ## Template
 Copy [`template.md`](template.md) for new records.

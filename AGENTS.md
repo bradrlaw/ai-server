@@ -35,6 +35,10 @@ Read this first, then the detailed docs:
     sm_70 kernels and **crashes on the llama.cpp MTP `draft-mtp` path**, so all idx0 (`small*`) models run
     dense Gemma-4-12B with the MTP draft stripped and reduced ctx (see `config/llama-swap.base.yaml`).
     Restore the 26B MoE + draft + full ctx when a 16 GB+ card (P100/V100) returns to idx0.
+- **No automatic updates (ADR-0040).** unattended-upgrades is off and the NVIDIA `*580-server*` stack
+  is `apt-mark hold`ed (an unattended driver bump on 2026-07-25 broke NVML until a reboot). Never
+  unhold it or re-enable auto-updates. OS/kernel updates are manual: follow "OS updates and kernel
+  upgrades" in `docs/server-setup.md`, gated by the read-only `scripts/os-update-check.sh pre|ready|post`.
 - **CUDA 12.x only** — 13.x dropped Maxwell/Pascal/Volta (sm_52/sm_60/sm_70). sm_70 also means **no fp8 /
   FlashAttention-2 / SageAttention**; use `sdpa` attention and avoid `*_fast` fp8 paths in ComfyUI.
 - **Keep GPUs under thermal limits** via power caps applied at boot by the `gpu-fan-control`
