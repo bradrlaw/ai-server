@@ -30,6 +30,13 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 mcp = FastMCP("browser-fetch", host=os.environ.get("BF_MCP_HOST", "0.0.0.0"),
               port=int(os.environ.get("BF_MCP_PORT", "9130")))
 _sem = asyncio.Semaphore(int(os.environ.get("BF_MAX_CONCURRENT", "2")))
+# Chromium's sandbox needs the AppArmor profile config/apparmor/srv-ai-playwright-chromium
+# (Ubuntu 24.04 blocks unprivileged user namespaces). BF_CHROMIUM_SANDBOX=0 is an
+# emergency override only: agents send this browser to arbitrary pages.
+_SANDBOX = os.environ.get("BF_CHROMIUM_SANDBOX", "1") != "0"
+_SANDBOX_HINT = ("Chromium sandbox failed: load the AppArmor profile with "
+                 "sudo /srv/ai/scripts/install-browser-fetch-mcp-service.sh "
+                 "(or set BF_CHROMIUM_SANDBOX=0 to run unsandboxed).")
 _pw = None
 _browser = None
 _lock = asyncio.Lock()
@@ -54,7 +61,12 @@ async def _get_browser():
         if _browser is None or not _browser.is_connected():
             if _pw is None:
                 _pw = await async_playwright().start()
-            _browser = await _pw.chromium.launch()
+            try:
+                _browser = await _pw.chromium.launch(chromium_sandbox=_SANDBOX)
+            except Exception as e:
+                if _SANDBOX and "sandbox" in str(e).lower():
+                    raise RuntimeError(_SANDBOX_HINT) from e
+                raise
         return _browser
 
 

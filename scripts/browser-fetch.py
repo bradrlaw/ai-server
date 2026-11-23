@@ -24,7 +24,14 @@ def main():
     a = ap.parse_args()
     url = a.url.replace("//old.reddit.com", "//www.reddit.com")
     with sync_playwright() as p:
-        b = p.chromium.launch()
+        # Sandbox needs config/apparmor/srv-ai-playwright-chromium; BF_CHROMIUM_SANDBOX=0 skips it.
+        try:
+            b = p.chromium.launch(chromium_sandbox=os.environ.get("BF_CHROMIUM_SANDBOX", "1") != "0")
+        except Exception as e:
+            if "sandbox" in str(e).lower():
+                sys.exit("Chromium sandbox failed: run sudo /srv/ai/scripts/install-browser-fetch-mcp-service.sh "
+                         "(loads the AppArmor profile) or set BF_CHROMIUM_SANDBOX=0.")
+            raise
         pg = b.new_context(user_agent=UA, viewport={"width": 1280, "height": 2000}).new_page()
         r = pg.goto(url, wait_until="domcontentloaded", timeout=60000)
         pg.wait_for_timeout(int(a.wait * 1000))

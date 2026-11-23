@@ -33,3 +33,24 @@ Thread and search pages returned in full (23 comments); loopback, LAN and `file:
 ## Consequences / watch
 - Scraping Reddit may break when its markup or bot detection changes; the tools return text, so the agent copes with layout drift.
 - Each call is slow (5-15 s) and uses a few hundred MB of RAM. Not for bulk crawling; respect Reddit's terms.
+
+## Addendum 2026-11-23: Chromium sandbox enabled
+- **Why:** Playwright launches Chromium with `--no-sandbox` by default, so a renderer exploit (e.g. the
+  exploited CVE-2026-125350, patched the same day by moving to Chrome 159.0.8154.6) would run as `brad` with
+  full access to `/srv/ai`. Simply passing `chromium_sandbox=True` fails on Ubuntu 24.04
+  ("Chromium sandboxing failed!") because `kernel.apparmor_restrict_unprivileged_userns=1` blocks the
+  unprivileged user namespaces the sandbox needs.
+- **Decision:** ship `config/apparmor/srv-ai-playwright-chromium`, modelled on Ubuntu's own
+  `/etc/apparmor.d/chrome`: an `unconfined` profile that only adds `userns`, attached to
+  `/srv/ai/venvs/browser/pw/chromium{,_headless_shell}-*/...` (both full Chromium and the headless shell, any
+  build number so Playwright upgrades keep working). `install-browser-fetch-mcp-service.sh` installs it to
+  `/etc/apparmor.d/` and runs `apparmor_parser -r` before restarting the service. Both launchers
+  (`browser_fetch_mcp.py`, `scripts/browser-fetch.py`) pass `chromium_sandbox=True`;
+  `BF_CHROMIUM_SANDBOX=0` restores the old behaviour for emergencies.
+- **Rejected:** a global `sysctl kernel.apparmor_restrict_unprivileged_userns=0` (re-opens userns to every
+  program on the host); Chromium's setuid `chrome_sandbox` helper (Playwright ships it as a plain brad-owned file;
+  making it root-owned setuid inside a brad-writable tree is riskier, and every upgrade would need sudo again).
+- **Caveat:** `venvs/browser/pw` is owned by `brad`, so any binary `brad` places at a matching path gets
+  `userns`. That only matters to an attacker who already runs code as `brad`, and is much narrower than the
+  sysctl. A local `/etc/apparmor.d/local/srv-ai-playwright-chromium` is included if present.
+

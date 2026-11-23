@@ -1507,9 +1507,15 @@ generated `config/llama-swap.yaml`; llama-swap's `-watch-config` reloads it, so
 - Native service `scripts/browser-fetch-mcp.service` on `0.0.0.0:9130/mcp`, venv `venvs/browser` (Playwright + `mcp<2`, Chromium in
   `venvs/browser/pw`). SSRF-guarded to public hosts. Install + firewall + restart steps: ADR-0034.
 - Reaches clients via mcpo (`http://mcpo:8000/browser-fetch`) and Hermes (`mcp_servers` in `hermes/config.yaml`).
-- **Patch Chromium promptly.** Agents point it at arbitrary pages, and Playwright runs it with `--no-sandbox`
-  (Ubuntu 24.04's `kernel.apparmor_restrict_unprivileged_userns=1` makes `chromium_sandbox=True` fail), so a
-  browser bug runs code as `brad`. Update (no sudo; `venvs/browser` is a uv venv with no pip):
+- **Chromium sandbox is on** (2026-11-23). Playwright defaults to `--no-sandbox`, and Ubuntu 24.04's
+  `kernel.apparmor_restrict_unprivileged_userns=1` makes `chromium_sandbox=True` fail, so the installer loads
+  `config/apparmor/srv-ai-playwright-chromium` (unconfined + `userns` for the Playwright Chromium binaries).
+  Both launchers pass `chromium_sandbox=True`; `BF_CHROMIUM_SANDBOX=0` is an emergency override only. If the
+  service logs "Chromium sandbox failed", the profile isn't loaded: re-run the installer. Check:
+  `sudo aa-status | grep srv-ai-playwright` and no `--no-sandbox` in the chrome processes' `/proc/<pid>/cmdline`.
+  After a Playwright upgrade, confirm the new binary paths still match the profile's glob.
+- **Patch Chromium promptly.** Agents point it at arbitrary pages, so a browser bug is the main risk even
+  with the sandbox. Update (no sudo; `venvs/browser` is a uv venv with no pip):
   `/srv/ai/venvs/comfyui/bin/uv pip install --python venvs/browser/bin/python -U playwright`, then
   `PLAYWRIGHT_BROWSERS_PATH=/srv/ai/venvs/browser/pw venvs/browser/bin/python -m playwright install chromium`
   (removes the old build), then `sudo systemctl restart browser-fetch-mcp`. Check the version with
