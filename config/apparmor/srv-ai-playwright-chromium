@@ -1,0 +1,16 @@
+# Lets Playwright's Chromium for the browser-fetch MCP (ADR-0034) create the user
+# namespaces its sandbox needs. Ubuntu 24.04 blocks unprivileged userns
+# (kernel.apparmor_restrict_unprivileged_userns=1), so without this profile
+# chromium_sandbox=True fails and Chromium would have to run with --no-sandbox.
+# Modelled on Ubuntu's /etc/apparmor.d/chrome: unconfined, only adds `userns`.
+# The globs survive Playwright upgrades (chromium-<rev> directories).
+# Installed by scripts/install-browser-fetch-mcp-service.sh.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile srv-ai-playwright-chromium /srv/ai/venvs/browser/pw/chromium{,_headless_shell}-*/chrome{-linux64/chrome,-headless-shell-linux64/chrome-headless-shell} flags=(unconfined) {
+  userns,
+
+  include if exists <local/srv-ai-playwright-chromium>
+}

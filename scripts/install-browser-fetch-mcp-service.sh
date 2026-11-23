@@ -3,6 +3,8 @@
 # (0.0.0.0:9130, endpoint /mcp). See docker/mcpo/browser_fetch_mcp.py and ADR-0034.
 # Prereq (non-privileged, already done by the agent): venvs/browser with playwright,
 # mcp<2 and Chromium under venvs/browser/pw.
+# Also loads the AppArmor profile that lets Chromium's sandbox create user namespaces
+# (config/apparmor/srv-ai-playwright-chromium; Ubuntu 24.04 blocks them otherwise).
 # Then re-run the firewall so containers can reach :9130 (ADR-0028):
 #   sudo /srv/ai/scripts/setup-firewall.sh
 # RUN WITH SUDO:  sudo /srv/ai/scripts/install-browser-fetch-mcp-service.sh
@@ -13,11 +15,18 @@ PY=/srv/ai/venvs/browser/bin/python
 APP=/srv/ai/docker/mcpo/browser_fetch_mcp.py
 UNIT_SRC=/srv/ai/scripts/browser-fetch-mcp.service
 UNIT=/etc/systemd/system/browser-fetch-mcp.service
+AA_SRC=/srv/ai/config/apparmor/srv-ai-playwright-chromium
+AA=/etc/apparmor.d/srv-ai-playwright-chromium
 
 [[ -x "$PY" ]]       || { echo "venv python missing at $PY"; exit 1; }
 [[ -d /srv/ai/venvs/browser/pw ]] || { echo "Chromium missing: PLAYWRIGHT_BROWSERS_PATH=/srv/ai/venvs/browser/pw $PY -m playwright install chromium"; exit 1; }
 [[ -f "$APP" ]]      || { echo "MCP server missing at $APP"; exit 1; }
 [[ -f "$UNIT_SRC" ]] || { echo "unit file missing at $UNIT_SRC"; exit 1; }
+[[ -f "$AA_SRC" ]]   || { echo "AppArmor profile missing at $AA_SRC"; exit 1; }
+
+install -m644 "$AA_SRC" "$AA"
+apparmor_parser -r "$AA"
+echo "Loaded AppArmor profile srv-ai-playwright-chromium (Chromium sandbox userns)."
 
 install -m644 "$UNIT_SRC" "$UNIT"
 systemctl daemon-reload
