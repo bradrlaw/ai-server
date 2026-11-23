@@ -85,10 +85,12 @@ else
 fi
 
 echo
+ts_ip=$(tailscale ip -4 2>/dev/null | head -n1 || true)
+ts_ip=${ts_ip:-<tailscale-ip>}
 echo "Done. Mount from a device on the tailnet or LAN:"
-echo "  macOS  Finder -> Go -> Connect to Server ->  smb://100.97.143.29/srv-ai"
+echo "  macOS  Finder -> Go -> Connect to Server ->  smb://${ts_ip}/srv-ai"
 echo "                                          (or  smb://192.168.4.57/srv-ai )"
-echo "  Windows Explorer address bar ->  \\\\100.97.143.29\\srv-ai"
+echo "  Windows Explorer address bar ->  \\\\${ts_ip}\\srv-ai"
 echo "  Log in as '$SHARE_USER' with the SMB password set above."
 echo
 echo "Check that the credential stores are hidden (read-only, no sudo needed):"

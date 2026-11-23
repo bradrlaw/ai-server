@@ -20,7 +20,7 @@ Read this first, then the detailed docs:
     uncommitted) and add no new `!` lines for them in `.gitignore`.
 - **Keep all work under `/srv/ai`.** Record design decisions as ADRs in `docs/adr/`.
 - **Commits:** append the trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
-- Remote: `github.com/bradrlaw/ai-server` (private).
+- Remote: `github.com/bradrlaw/ai-server` (**public** — keep secrets, tailnet IPs and other host identifiers out of tracked files).
 
 ## Critical operational facts (avoid these traps)
 - **Agents cannot `sudo`.** Anything privileged (systemd install/restart, apt) must be
