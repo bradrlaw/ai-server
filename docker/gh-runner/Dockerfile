@@ -1,6 +1,8 @@
 # Ephemeral GitHub Actions runner on the Playwright base image (ADR-0039):
 # browser OS dependencies come preinstalled, so nothing is apt-installed on the host.
-ARG PLAYWRIGHT_TAG=v1.58.2-noble
+# Keep in step with binit's @playwright/test version. v1.64.1 ships Node 26.13.0 (patched
+# for CVE-2026-111497; v1.58.2 had 24.13.0).
+ARG PLAYWRIGHT_TAG=v1.64.1-noble
 FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_TAG}
 
 ARG RUNNER_VERSION=2.338.2

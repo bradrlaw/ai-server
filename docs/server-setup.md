@@ -1931,7 +1931,7 @@ MCPs). See **ADR-0016** for the layered decision and framework comparison
 
 | Service   | Image                                  | Access                | Purpose |
 |-----------|----------------------------------------|-----------------------|---------|
-| openclaw  | `ai-server/openclaw:2026.7.1` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
+| openclaw  | `ai-server/openclaw:2026.7.1-node24.22.3` (built from `ghcr.io/openclaw/openclaw:2026.7.1` + patched Node + skill-dep binaries, see `docker/openclaw/Dockerfile`) | `http://localhost:18789` over an SSH tunnel (`ssh -N -L 18789:127.0.0.1:18789 <user>@<host>`) — the Control UI needs a secure context (see below) | Multi-channel assistant gateway + Control UI |
 | hermes    | nousresearch/hermes-agent:latest       | `http://<host>:9119` (dashboard), `:8642` (API) | Agentic assistant (self-improving skills) |
 
 **Model wiring (both):** primary `chat` (always-warm MoE), fallback `coding`,
@@ -2027,6 +2027,14 @@ and injects the LiteLLM key into Hermes' live config.
   places together: compose `build.args.BASE_IMAGE` (this is the value used, since a build arg
   overrides the Dockerfile's default), compose `image:`, and the Dockerfile's
   `ARG BASE_IMAGE`. Then `docker compose build openclaw`.
+- **Node is overridden in the image** (2026-11-23): OpenClaw 2026.7.1 ships Node 24.16.0, hit by
+  the Brotli decompression bug CVE-2026-111497 (fixed in 24.22.1), and OpenClaw is the only container
+  that actually runs Node. Rather than a four-month OpenClaw jump, the Dockerfile copies
+  `/usr/local/bin/node` from `node:<NODE_IMAGE>` (same major 24, module ABI 137, so native modules
+  still load). For a Node fix, bump `NODE_IMAGE` (compose `build.args`, the Dockerfile default and
+  the `-node<ver>` suffix on compose `image:`), then build and `docker compose up -d openclaw`.
+  When bumping `BASE_IMAGE`, drop the override if upstream's Node is already newer
+  (`docker run --rm --entrypoint node <image> -v`).
 
 **Hermes** (`nousresearch/hermes-agent`, Nous Research; s6-overlay PID 1):
 - **TUI-first** but runs headless here via `command: ["gateway", "run"]`; the web
